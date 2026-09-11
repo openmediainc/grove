@@ -134,6 +134,114 @@ describe.skipIf(!hasDb)("api integration", () => {
     });
     expect(allowed.statusCode).toBe(200);
   });
+
+  it("creates a private campus and copies public rooms", async () => {
+    const server = await boot();
+    const email = `world-${Date.now()}@example.com`;
+    const magic = await server.inject({
+      method: "POST",
+      url: "/api/v1/humans/session",
+      payload: { email, invite_code: "grove-alpha", age_attested: true },
+    });
+    const token = new URL((magic.json() as { dev_login_url?: string }).dev_login_url ?? "http://x?token=").searchParams.get(
+      "token",
+    );
+    const consumed = await server.inject({
+      method: "POST",
+      url: "/api/v1/humans/session/consume",
+      payload: { token },
+    });
+    const cookie = consumed.headers["set-cookie"];
+    const cookieHeader = Array.isArray(cookie) ? cookie[0] : cookie;
+    const slug = `grove-itest-${Date.now()}`;
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/v1/worlds",
+      headers: { cookie: cookieHeader ?? "" },
+      payload: { name: "Itest Campus", slug },
+    });
+    expect(created.statusCode).toBe(201);
+    const world = (created.json() as { world: { id: string; slug: string } }).world;
+    expect(world.slug).toBe(slug);
+    const entered = await server.inject({
+      method: "POST",
+      url: `/api/v1/worlds/${world.id}/enter`,
+      headers: { cookie: cookieHeader ?? "" },
+    });
+    expect(entered.statusCode).toBe(200);
+    const plaza = await server.inject({
+      method: "GET",
+      url: "/api/v1/rooms/plaza",
+      headers: { cookie: cookieHeader ?? "", "x-grove-world": world.id },
+    });
+    expect(plaza.statusCode).toBe(200);
+    const room = (plaza.json() as { room: { id: string; slug: string; world_id: string } }).room;
+    expect(room.slug).toBe("plaza");
+    expect(room.world_id).toBe(world.id);
+    expect(room.id).not.toBe("plaza");
+  });
+
+  it("AWN join inhabits home room and action maps to say/heartbeat", async () => {
+    const server = await boot();
+    const ping = await server.inject({ method: "GET", url: "/peer/ping" });
+    expect(ping.statusCode).toBe(200);
+    expect((ping.json() as { world: string }).world).toBe("aetheria-prime");
+    const announced = await server.inject({ method: "POST", url: "/peer/announce" });
+    expect(announced.statusCode).toBe(204);
+
+    const email = `awn-${Date.now()}@example.com`;
+    const magic = await server.inject({
+      method: "POST",
+      url: "/api/v1/humans/session",
+      payload: { email, invite_code: "grove-alpha", age_attested: true },
+    });
+    const token = new URL((magic.json() as { dev_login_url?: string }).dev_login_url ?? "http://x?token=").searchParams.get(
+      "token",
+    );
+    const consumed = await server.inject({
+      method: "POST",
+      url: "/api/v1/humans/session/consume",
+      payload: { token },
+    });
+    const cookie = consumed.headers["set-cookie"];
+    const cookieHeader = Array.isArray(cookie) ? cookie[0] : cookie;
+    const uniqueIp = `203.0.113.${(Date.now() % 200) + 1}`;
+    const reg = await server.inject({
+      method: "POST",
+      url: "/api/v1/agents/register",
+      headers: { "x-forwarded-for": uniqueIp },
+      payload: { name: "awnbot", description: "bridge" },
+    });
+    const regBody = reg.json() as { agent_id: string; api_key: string };
+    await server.inject({
+      method: "POST",
+      url: `/api/v1/agents/${regBody.agent_id}/claim`,
+      headers: { cookie: cookieHeader ?? "" },
+    });
+    const joined = await server.inject({
+      method: "POST",
+      url: "/awn/join",
+      headers: { authorization: `Bearer ${regBody.api_key}` },
+      payload: { alias: "Awn Bot" },
+    });
+    expect(joined.statusCode).toBe(200);
+    const presence = (joined.json() as { presence: { room_id: string } }).presence;
+    expect(presence.room_id).toBe("plaza");
+    const beat = await server.inject({
+      method: "POST",
+      url: "/awn/action",
+      headers: { authorization: `Bearer ${regBody.api_key}` },
+      payload: { action: "heartbeat" },
+    });
+    expect(beat.statusCode).toBe(200);
+    const said = await server.inject({
+      method: "POST",
+      url: "/awn/action",
+      headers: { authorization: `Bearer ${regBody.api_key}` },
+      payload: { action: "say", body: "hello from the bridge", channel: "room_say" },
+    });
+    expect(said.statusCode).toBe(200);
+  });
 });
 
 describe("integration skip contract", () => {

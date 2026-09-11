@@ -16,6 +16,8 @@ import { mapAgent, mapHuman, policyToJson, privacyToJson } from "../mappers.js";
 import { avatarFor, mintAgentKey, randomToken, sanitizeAgentName, sanitizeHandle, verifyAgentKey } from "../crypto.js";
 import type { QuotaService } from "./quota.js";
 import type { FlagService } from "./flags.js";
+import type { Mailer } from "../mailer.js";
+import { isProduction } from "../config.js";
 
 const SESSION_TTL = 30 * 24 * 3600;
 const MAGIC_TTL = 15 * 60;
@@ -27,6 +29,7 @@ export class IdentityService {
     private store: GroveStore,
     private quota: QuotaService,
     private flags: FlagService,
+    private mailer?: Mailer,
   ) {}
 
   async requestMagicLink(input: {
@@ -60,7 +63,15 @@ export class IdentityService {
     if (this.store.config.magicLinkStdout) {
       console.log(`[grove] magic link for ${email}: ${url}`);
     }
-    return { token, devLoginUrl: this.store.config.magicLinkStdout ? url : undefined };
+    try {
+      await this.mailer?.sendMagicLink(email, url);
+    } catch (err) {
+      console.warn("[grove] mailer failed:", (err as Error).message);
+    }
+    const includeDevUrl =
+      this.store.config.magicLinkStdout &&
+      (!isProduction(this.store.config) || process.env.GROVE_MAGIC_LINK_STDOUT === "1");
+    return { token, devLoginUrl: includeDevUrl ? url : undefined };
   }
 
   async consumeMagicLink(token: string): Promise<{ human: Human; sessionId: string }> {
@@ -426,6 +437,13 @@ export class IdentityService {
       ],
     );
     return mapAgent(rows[0] as Record<string, unknown>);
+  }
+
+  async patchSelf(agent: Agent, patch: { displayName?: string; avatarId?: string }): Promise<void> {
+    await this.store.pg.query(
+      `UPDATE agents SET display_name = COALESCE($2, display_name), avatar_id = COALESCE($3, avatar_id) WHERE id = $1`,
+      [agent.id, patch.displayName ?? null, patch.avatarId ?? null],
+    );
   }
 
   async requireOwned(agentId: string, owner: Human): Promise<Agent> {

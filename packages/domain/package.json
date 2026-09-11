@@ -15,11 +15,14 @@
     "@grove/protocol": "workspace:*",
     "argon2": "^0.41.1",
     "ioredis": "^5.4.2",
+    "nodemailer": "^6.9.16",
+    "openai": "^4.77.0",
     "pg": "^8.13.1",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.10",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",

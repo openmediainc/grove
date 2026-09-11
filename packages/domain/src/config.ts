@@ -30,6 +30,12 @@ export interface GroveConfig {
   bootstrapOperator: boolean;
   nodeEnv: string;
   apiPort: number;
+  xaiApiKey: string | null;
+  xaiBaseUrl: string;
+  xaiModel: string;
+  resendApiKey: string | null;
+  mailFrom: string | null;
+  smtpUrl: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
@@ -39,12 +45,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
     redisUrl: env.REDIS_URL ?? "redis://localhost:6379",
     publicUrl: env.GROVE_PUBLIC_URL ?? "http://localhost:3000",
     webOrigin: env.GROVE_WEB_ORIGIN ?? "http://localhost:3000",
-    magicLinkStdout: env.GROVE_MAGIC_LINK_STDOUT === "1" || nodeEnv === "development",
+    magicLinkStdout:
+      env.GROVE_MAGIC_LINK_STDOUT === "1" ||
+      ((nodeEnv === "development" || nodeEnv === "test") && env.GROVE_MAGIC_LINK_STDOUT !== "0"),
     inviteBootstrap: env.INVITE_BOOTSTRAP ?? "grove-alpha",
     operatorEmail: env.GROVE_DEV_OPERATOR_EMAIL?.toLowerCase() ?? null,
     bootstrapOperator: env.GROVE_BOOTSTRAP_OPERATOR === "1",
     nodeEnv,
     apiPort: Number(env.GROVE_API_PORT ?? 3001),
+    xaiApiKey: env.XAI_API_KEY || null,
+    xaiBaseUrl: env.XAI_BASE_URL ?? "https://api.x.ai/v1",
+    xaiModel: env.XAI_MODEL ?? "grok-4.6",
+    resendApiKey: env.RESEND_API_KEY || null,
+    mailFrom: env.GROVE_MAIL_FROM || null,
+    smtpUrl: env.GROVE_SMTP_URL || null,
   };
 }
 

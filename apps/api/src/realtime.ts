@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import type { GroveApp } from "@grove/domain";
-import { GroveError } from "@grove/domain";
+import { GroveError, randomToken } from "@grove/domain";
 import type { SpeechChannel } from "@grove/protocol";
 import { COOKIE } from "./http.js";
 import { bearer } from "./http.js";
@@ -52,8 +52,8 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
     });
   });
 
-  const humanSockets = new Map<string, Set<WebSocket>>();
-  const agentSockets = new Map<string, WebSocket>();
+  const humanSockets = new Map<string, Map<string, WebSocket>>();
+  const agentSockets = new Map<string, { token: string; socket: WebSocket }>();
 
   app.get("/api/v1/ws/human", { websocket: true }, (socket, req) => {
     void (async () => {
@@ -73,14 +73,27 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
         socket.close(1008, "unauthorized");
         return;
       }
-      const set = humanSockets.get(human.id) ?? new Set();
-      if (set.size >= 2) {
-        const oldest = set.values().next().value;
-        oldest?.close(4000, "kicked");
-        if (oldest) set.delete(oldest);
+      const connToken = randomToken(12);
+      const key = `ws:human:${human.id}`;
+      await grove.store.redis.sadd(key, connToken);
+      await grove.store.redis.expire(key, 7 * 86400);
+      const members = await grove.store.redis.smembers(key);
+      if (members.length > 2) {
+        const kick = members.find((m) => m !== connToken);
+        if (kick) {
+          await grove.store.redis.srem(key, kick);
+          await grove.store.redis.publish(`ws:kick:${human.id}`, kick);
+        }
       }
-      set.add(socket);
-      humanSockets.set(human.id, set);
+      const local = humanSockets.get(human.id) ?? new Map<string, WebSocket>();
+      local.set(connToken, socket);
+      humanSockets.set(human.id, local);
+
+      const kickSub = grove.store.redis.duplicate();
+      await kickSub.subscribe(`ws:kick:${human.id}`);
+      kickSub.on("message", (_ch, message) => {
+        if (message === connToken) socket.close(4000, "kicked");
+      });
 
       const sub = grove.store.redis.duplicate();
       const p = await grove.presence.getPresence(human.id);
@@ -146,8 +159,10 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
 
       socket.on("close", () => {
         clearInterval(ping);
-        set.delete(socket);
+        local.delete(connToken);
+        void grove.store.redis.srem(key, connToken);
         void sub.quit();
+        void kickSub.quit();
       });
     })();
   });
@@ -160,9 +175,21 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
         socket.close(1008, "unauthorized");
         return;
       }
-      const prev = agentSockets.get(auth.agent.id);
-      if (prev && prev !== socket) prev.close(4000, "kicked");
-      agentSockets.set(auth.agent.id, socket);
+      const connToken = randomToken(12);
+      const prevTok = await grove.store.redis.getset(`ws:agent:${auth.agent.id}`, connToken);
+      await grove.store.redis.expire(`ws:agent:${auth.agent.id}`, 7 * 86400);
+      if (prevTok && prevTok !== connToken) {
+        await grove.store.redis.publish(`ws:kick:${auth.agent.id}`, prevTok);
+      }
+      const existing = agentSockets.get(auth.agent.id);
+      if (existing && existing.socket !== socket) existing.socket.close(4000, "kicked");
+      agentSockets.set(auth.agent.id, { token: connToken, socket });
+
+      const kickSub = grove.store.redis.duplicate();
+      await kickSub.subscribe(`ws:kick:${auth.agent.id}`);
+      kickSub.on("message", (_ch, message) => {
+        if (message === connToken) socket.close(4000, "kicked");
+      });
 
       const sub = grove.store.redis.duplicate();
       const p = await grove.presence.getPresence(auth.agent.id);
@@ -228,8 +255,16 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
 
       socket.on("close", () => {
         clearInterval(ping);
-        if (agentSockets.get(auth.agent.id) === socket) agentSockets.delete(auth.agent.id);
+        const cur = agentSockets.get(auth.agent.id);
+        if (cur?.socket === socket) agentSockets.delete(auth.agent.id);
+        void grove.store.redis.eval(
+          `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end`,
+          1,
+          `ws:agent:${auth.agent.id}`,
+          connToken,
+        );
         void sub.quit();
+        void kickSub.quit();
       });
     })();
   });

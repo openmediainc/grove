@@ -20,6 +20,15 @@ async function main() {
     void grove.identity.purgeExpiredUnclaimed();
   }, 60_000);
 
+  setInterval(() => {
+    void grove.jobs.processDue();
+  }, 15_000);
+
+  setInterval(() => {
+    if (!config.xaiApiKey) return;
+    void grove.brains.tick();
+  }, 20_000);
+
   const app = await buildApp(grove);
   await app.listen({ port: config.apiPort, host: "0.0.0.0" });
   console.log(`[grove] api http://localhost:${config.apiPort}`);
