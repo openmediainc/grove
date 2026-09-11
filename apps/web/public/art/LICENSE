@@ -1,0 +1,11 @@
+Grove original art
+==================
+
+All files under apps/web/public/art/ are original work created for Grove
+(code name Aetheria). Geometric avatars and CSS campus scenery in this
+repository are original. They are not derived from Metro City, LimeZu,
+Star Office World, Pixel Agents, or any third-party sprite pack.
+
+License: Apache-2.0, same as the Grove repository, unless a file says otherwise.
+
+Do not add third-party commercial-restricted sprite packs to this directory.
