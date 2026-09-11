@@ -7,6 +7,35 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: grove
+          POSTGRES_PASSWORD: grove
+          POSTGRES_DB: grove
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grove"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://grove:grove@localhost:5432/grove
+      REDIS_URL: redis://localhost:6379
+      GROVE_MAGIC_LINK_STDOUT: "1"
+      GROVE_WEB_ORIGIN: http://localhost:3000
+      GROVE_PUBLIC_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -16,5 +45,10 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - run: pnpm install --frozen-lockfile
+      - run: pnpm migrate
       - run: pnpm test
+      - run: pnpm typecheck

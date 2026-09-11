@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { WebSocket } from "ws";
 import type { GroveApp } from "@grove/domain";
 import { GroveError } from "@grove/domain";
 import type { SpeechChannel } from "@grove/protocol";
@@ -51,8 +52,8 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
     });
   });
 
-  const humanSockets = new Map<string, Set<WebSocketLike>>();
-  const agentSockets = new Map<string, WebSocketLike>();
+  const humanSockets = new Map<string, Set<WebSocket>>();
+  const agentSockets = new Map<string, WebSocket>();
 
   app.get("/api/v1/ws/human", { websocket: true }, (socket, req) => {
     void (async () => {
@@ -233,12 +234,6 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
     })();
   });
 }
-
-type WebSocketLike = {
-  send: (data: string) => void;
-  close: (code?: number, reason?: string) => void;
-  on: (ev: string, cb: (...args: never[]) => void) => void;
-};
 
 function cookieValue(header: string | undefined, name: string): string | undefined {
   if (!header) return undefined;

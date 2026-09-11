@@ -1,6 +1,7 @@
 import type { AgentId, RoomId } from "./ids.js";
 import type { Agent, NearbyActor } from "./actor.js";
-import type { Instruction, SpeechChannel } from "./speech.js";
+import type { SpeechChannel } from "./ids.js";
+import type { Instruction } from "./speech.js";
 import type { PermissionPolicy } from "./policy.js";
 import type { Room } from "./room.js";
 
