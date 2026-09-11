@@ -1,8 +1,9 @@
 import type { FastifyRequest } from "fastify";
 import type { Agent, Human } from "@grove/protocol";
+import { WORLD_ID } from "@grove/protocol";
 import type { GroveApp } from "@grove/domain";
-import { GroveError } from "@grove/domain";
-import { bearer, COOKIE } from "./http.js";
+import { GroveError, resolveWorldId } from "@grove/domain";
+import { bearer, COOKIE, WORLD_COOKIE } from "./http.js";
 
 export async function requireHuman(req: FastifyRequest, grove: GroveApp): Promise<Human> {
   const sid = req.cookies[COOKIE];
@@ -38,4 +39,8 @@ export async function requireActor(
 
 export function requireOperator(human: Human): void {
   if (human.role !== "operator") throw new GroveError("NOT_FOUND", "Not found.", { httpStatus: 404 });
+}
+
+export function currentWorldId(req: FastifyRequest): string {
+  return resolveWorldId(req.headers["x-grove-world"], req.cookies[WORLD_COOKIE] ?? WORLD_ID);
 }

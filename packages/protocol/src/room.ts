@@ -11,6 +11,7 @@ export interface Room {
   spectatorVisible: boolean;
   sayLimitPerMin: number | null;
   ownerHumanId?: HumanId | null;
+  worldId?: string;
 }
 
 export const PUBLIC_ROOMS: Array<Pick<Room, "id" | "slug" | "name" | "kind" | "capacity" | "spectatorVisible" | "sayLimitPerMin">> = [

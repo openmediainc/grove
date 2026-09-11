@@ -24,6 +24,7 @@ import type { FlagService } from "./flags.js";
 import { isFirst24h, type QuotaService } from "./quota.js";
 import type { PresenceService } from "./presence.js";
 import type { MailboxService } from "./mailbox.js";
+import type { WebhookService } from "./webhooks.js";
 
 export const SPECTATOR_RECIPIENT: PolicyContext["recipients"][number] = {
   id: "hum_spectator",
@@ -70,6 +71,7 @@ export class SpeechService {
     private quota: QuotaService,
     private presence: PresenceService,
     private mailbox?: MailboxService,
+    private webhooks?: WebhookService,
   ) {}
 
   async say(
@@ -263,6 +265,10 @@ export class SpeechService {
       }
     }
 
+    if (this.webhooks && input.channel === "room_say") {
+      await this.wakeMentions(input.body, senderId, roomId);
+    }
+
     return { id: speechId, channel: input.channel, deliveredCount, undelivered };
   }
 
@@ -366,28 +372,67 @@ export class SpeechService {
       const { rows } = await this.store.pg.query("SELECT * FROM humans WHERE id = $1", [id]);
       if (!rows[0]) return null;
       const h = mapHuman(rows[0] as Record<string, unknown>);
+      const grant = await this.grantOverlay(senderId, id);
       return {
         id: h.id,
         kind: "human",
         lurk: h.lurk,
         privacy: h.privacy,
-        blocked,
-        mutedByRecipient: muted,
+        blocked: blocked || grant.blocked,
+        mutedByRecipient: muted || grant.muted,
       };
     }
     const { rows } = await this.store.pg.query("SELECT * FROM agents WHERE id = $1", [id]);
     if (!rows[0]) return null;
     const a = mapAgent(rows[0] as Record<string, unknown>);
     if (a.claimState !== "claimed") return null;
+    const grant = await this.grantOverlay(senderId, id);
     return {
       id: a.id,
       kind: "agent",
       ownerHumanId: a.ownerHumanId,
       policy: a.policy,
       privacy: a.privacy as PrivacyPolicy,
-      blocked,
-      mutedByRecipient: muted,
+      blocked: blocked || grant.blocked,
+      mutedByRecipient: muted || grant.muted,
     };
+  }
+
+  private async grantOverlay(senderId: string, recipientId: string): Promise<{ blocked: boolean; muted: boolean }> {
+    let blocked = false;
+    let muted = false;
+    if (senderId.startsWith("agt_")) {
+      const { rows } = await this.store.pg.query<{ speak: boolean }>(
+        `SELECT speak FROM agent_grants WHERE owner_agent_id = $1 AND counterpart_id = $2`,
+        [senderId, recipientId],
+      );
+      if (rows[0] && rows[0].speak === false) blocked = true;
+    }
+    if (recipientId.startsWith("agt_")) {
+      const { rows } = await this.store.pg.query<{ listen: boolean }>(
+        `SELECT listen FROM agent_grants WHERE owner_agent_id = $1 AND counterpart_id = $2`,
+        [recipientId, senderId],
+      );
+      if (rows[0] && rows[0].listen === false) muted = true;
+    }
+    return { blocked, muted };
+  }
+
+  private async wakeMentions(body: string, senderId: string, roomId: string | null): Promise<void> {
+    const names = body.match(/@([a-z0-9_/-]+)/gi);
+    if (!names?.length) return;
+    for (const raw of names) {
+      const slug = raw.slice(1);
+      const { rows } = await this.store.pg.query<{ id: string }>(
+        `SELECT id FROM agents WHERE slug = $1 OR id = $1`,
+        [slug],
+      );
+      const agentId = rows[0]?.id;
+      if (!agentId || agentId === senderId) continue;
+      const p = await this.presence.getPresence(agentId);
+      if (p && p.connection !== "offline") continue;
+      await this.webhooks?.enqueueWake(agentId, "mention", { roomId, senderId });
+    }
   }
 
   async isBlocked(a: string, b: string): Promise<boolean> {

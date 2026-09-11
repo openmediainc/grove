@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { GroveApp } from "@grove/domain";
 import { GroveError } from "@grove/domain";
 import { EMOTE_ENUM, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
-import { optionalHuman, requireActor, requireAgent, requireHuman, requireOperator } from "./auth.js";
+import { currentWorldId, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator } from "./auth.js";
 import { COOKIE, clientIp, sendOk } from "./http.js";
 
 function body(req: { body: unknown }): Record<string, unknown> {
@@ -223,12 +223,12 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
 
   app.get("/api/v1/world", async (req, reply) => {
     await requireActor(req, grove);
-    const world = await grove.world.world();
+    const world = await grove.world.world(currentWorldId(req));
     return sendOk(reply, { world });
   });
 
-  app.get("/api/v1/world/public", async (_req, reply) => {
-    const world = await grove.world.world();
+  app.get("/api/v1/world/public", async (req, reply) => {
+    const world = await grove.world.world(currentWorldId(req));
     return sendOk(reply, { world });
   });
 
@@ -237,10 +237,11 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     if (agent.claimState !== "claimed") {
       throw new GroveError("UNCLAIMED", "Unclaimed agents cannot inhabit.");
     }
+    const worldId = currentWorldId(req);
     const result = await grove.presence.enter(
       { id: agent.id, kind: "agent", ownerHumanId: agent.ownerHumanId },
       agent.homeRoomId || "plaza",
-      { connection: "async", mode: "autonomous", activity: "idle", overflowPlaza: true },
+      { connection: "async", mode: "autonomous", activity: "idle", overflowPlaza: true, worldId },
     );
     return sendOk(reply, { room: result.room, presence: result.presence, overflowed: result.overflowed });
   });
@@ -256,6 +257,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
         activity: "idle",
         overflowPlaza: true,
         consumeEnter: true,
+        worldId: currentWorldId(req),
       },
     );
     return sendOk(reply, { room: result.room, presence: result.presence, overflowed: result.overflowed });
@@ -281,6 +283,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
         mode: human?.lurk ? "lurk" : actor.kind === "agent" ? "autonomous" : "active",
         activity: "idle",
         overflowPlaza: slug === "plaza",
+        worldId: currentWorldId(req),
       },
     );
     return sendOk(reply, { room: result.room, presence: result.presence, overflowed: result.overflowed });
@@ -293,7 +296,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     if (resolved.startsWith("lounge_") && actor.kind === "human") {
       await grove.presence.ensureLounge(actor.human);
     }
-    const room = await grove.presence.getRoom(resolved);
+    const room = await grove.presence.getRoom(resolved, currentWorldId(req));
     if (!room) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
     if (room.kind === "owner_lounge") {
       const uid = actor.kind === "human" ? actor.human.id : actor.agent.ownerHumanId;
@@ -309,7 +312,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
   app.get("/api/v1/rooms/:slug/transcript", async (req, reply) => {
     const actor = await requireActor(req, grove);
     const slug = (req.params as { slug: string }).slug;
-    const room = await grove.presence.getRoom(slug);
+    const room = await grove.presence.getRoom(slug, currentWorldId(req));
     if (!room) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
     const q = req.query as { cursor?: string; limit?: string };
     const sender = actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };

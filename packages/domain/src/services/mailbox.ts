@@ -1,6 +1,7 @@
 import type { GroveStore } from "../store.js";
 import { newId } from "../ids.js";
 import type { PresenceService } from "./presence.js";
+import type { WebhookService } from "./webhooks.js";
 
 export interface MailboxItem {
   id: string;
@@ -15,6 +16,7 @@ export class MailboxService {
   constructor(
     private store: GroveStore,
     private presence: PresenceService,
+    private webhooks?: WebhookService,
   ) {}
 
   async enqueue(agentId: string, kind: string, payload: Record<string, unknown>): Promise<string> {
@@ -30,7 +32,9 @@ export class MailboxService {
     if (!agentId.startsWith("agt_")) return null;
     const p = await this.presence.getPresence(agentId);
     if (p && p.connection !== "offline") return null;
-    return this.enqueue(agentId, kind, payload);
+    const id = await this.enqueue(agentId, kind, payload);
+    await this.webhooks?.enqueueWake(agentId, kind, { mailboxId: id });
+    return id;
   }
 
   async unreadCount(agentId: string): Promise<number> {

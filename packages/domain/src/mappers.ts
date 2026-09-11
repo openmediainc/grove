@@ -74,6 +74,7 @@ export function mapRoom(row: Record<string, unknown>): Room {
     spectatorVisible: Boolean(c.spectatorVisible),
     sayLimitPerMin: c.sayLimitPerMin == null ? null : Number(c.sayLimitPerMin),
     ownerHumanId: (c.ownerHumanId as string | null) ?? null,
+    worldId: String(c.worldId ?? "aetheria-prime"),
   };
 }
 

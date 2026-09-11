@@ -58,6 +58,16 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   devLoginUrl: "dev_login_url",
   suggestedRoom: "suggested_room",
   occupancy: "occupancy",
+  worldId: "world_id",
+  cadenceMinutes: "cadence_minutes",
+  holderAgentId: "holder_agent_id",
+  assignedAt: "assigned_at",
+  startsAt: "starts_at",
+  endsAt: "ends_at",
+  createdBy: "created_by",
+  tokenBudgetMonth: "token_budget_month",
+  tokensUsedMonth: "tokens_used_month",
+  lastTickAt: "last_tick_at",
 };
 
 const SNAKE_TO_CAMEL: Record<string, string> = Object.fromEntries(

@@ -26,6 +26,11 @@ export const ID_PREFIX = {
   session: "ses_",
   mailbox: "mbx_",
   notice: "nte_",
+  world: "wld_",
+  event: "evt_",
+  role: "rol_",
+  webhook: "whk_",
+  job: "job_",
 } as const;
 
 export function isHumanId(id: string): id is HumanId {

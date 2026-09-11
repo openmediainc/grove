@@ -25,6 +25,7 @@ export interface ObservationPacket {
   mailboxUnread: number;
   cooldowns: { sayMs: number; moveMs: number };
   suggestedActions: Array<{ tool: string; reason: string }>;
+  briefings?: Array<{ role: string; prompt: string; message: string }>;
 }
 
 export interface PendingObservation {

@@ -17,12 +17,13 @@ export class WorldService {
     private mailbox?: MailboxService,
   ) {}
 
-  async world() {
-    const rooms = await this.presence.listPublicRooms();
+  async world(worldId: string = WORLD_ID) {
+    const rooms = await this.presence.listPublicRooms(worldId);
     const flags = await this.flags.getAll();
+    const { rows } = await this.store.pg.query<{ name: string }>(`SELECT name FROM worlds WHERE id = $1`, [worldId]);
     return {
-      id: WORLD_ID,
-      name: WORLD_PUBLIC_NAME,
+      id: worldId,
+      name: rows[0]?.name ?? WORLD_PUBLIC_NAME,
       codeName: "Aetheria",
       rooms,
       flags,

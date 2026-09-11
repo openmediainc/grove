@@ -1,4 +1,5 @@
 import type { Agent, Human, Presence, PresenceActivity, PresenceMode, Room } from "@grove/protocol";
+import { WORLD_ID } from "@grove/protocol";
 import { badges } from "@grove/policy";
 import type { GroveStore } from "../store.js";
 import { GroveError } from "../errors.js";
@@ -30,21 +31,27 @@ export class PresenceService {
     private identity: IdentityService,
   ) {}
 
-  async getRoom(slug: string): Promise<Room | null> {
-    const { rows } = await this.store.pg.query("SELECT * FROM rooms WHERE slug = $1 OR id = $1", [slug]);
-    return rows[0] ? mapRoom(rows[0] as Record<string, unknown>) : null;
+  async getRoom(slug: string, worldId: string = WORLD_ID): Promise<Room | null> {
+    const { rows: bySlug } = await this.store.pg.query(
+      "SELECT * FROM rooms WHERE slug = $1 AND world_id = $2",
+      [slug, worldId],
+    );
+    if (bySlug[0]) return mapRoom(bySlug[0] as Record<string, unknown>);
+    const { rows: byId } = await this.store.pg.query("SELECT * FROM rooms WHERE id = $1", [slug]);
+    return byId[0] ? mapRoom(byId[0] as Record<string, unknown>) : null;
   }
 
-  async listPublicRooms(): Promise<Array<Room & { occupancy: number }>> {
+  async listPublicRooms(worldId: string = WORLD_ID): Promise<Array<Room & { occupancy: number }>> {
     const { rows } = await this.store.pg.query(
       `SELECT r.*, count(p.actor_id)::int AS occupancy
        FROM rooms r
        LEFT JOIN presence p ON p.room_id = r.id
-       WHERE r.kind <> 'owner_lounge'
+       WHERE r.kind <> 'owner_lounge' AND r.world_id = $1
        GROUP BY r.id
-       ORDER BY CASE r.id
+       ORDER BY CASE r.slug
          WHEN 'plaza' THEN 0 WHEN 'library' THEN 1 WHEN 'workshop' THEN 2
          WHEN 'stage' THEN 3 WHEN 'garden' THEN 4 WHEN 'board' THEN 5 ELSE 9 END`,
+      [worldId],
     );
     return rows.map((r) => ({
       ...mapRoom(r as Record<string, unknown>),
@@ -62,10 +69,10 @@ export class PresenceService {
     const existing = await this.getRoom(id);
     if (existing) return existing;
     await this.store.pg.query(
-      `INSERT INTO rooms (id, slug, name, kind, capacity, allows_room_say, allows_whisper, spectator_visible, owner_human_id)
-       VALUES ($1,$2,$3,'owner_lounge',8,TRUE,TRUE,FALSE,$4)
+      `INSERT INTO rooms (id, slug, name, kind, capacity, allows_room_say, allows_whisper, spectator_visible, owner_human_id, world_id)
+       VALUES ($1,$2,$3,'owner_lounge',8,TRUE,TRUE,FALSE,$4,$5)
        ON CONFLICT (id) DO NOTHING`,
-      [id, id, `${human.handle}'s lounge`, human.id],
+      [id, id, `${human.handle}'s lounge`, human.id, WORLD_ID],
     );
     const room = await this.getRoom(id);
     if (!room) throw new GroveError("NOT_FOUND", "Lounge could not be provisioned.");
@@ -81,8 +88,10 @@ export class PresenceService {
       activity: PresenceActivity;
       overflowPlaza?: boolean;
       consumeEnter?: boolean;
+      worldId?: string;
     },
   ): Promise<{ room: Room; presence: Presence; overflowed: boolean }> {
+    const worldId = opts.worldId ?? WORLD_ID;
     await this.flags.assertNotFrozen("freeze.enter", "Entering the campus is frozen.");
     await this.identity.assertActive(actor.id);
     if (opts.consumeEnter && actor.kind === "human") await this.quota.consumeEnter(actor.id);
@@ -102,7 +111,7 @@ export class PresenceService {
       }
     }
 
-    let room = await this.getRoom(targetSlug);
+    let room = await this.getRoom(targetSlug, worldId);
     if (!room) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
 
     let overflowed = false;
@@ -119,8 +128,8 @@ export class PresenceService {
       await this.publishJoin(actor, room, presence);
       return { room, presence, overflowed };
     } catch (err) {
-      if (err instanceof GroveError && err.code === "ROOM_FULL" && opts.overflowPlaza && room.id === "plaza") {
-        const garden = await this.getRoom("garden");
+      if (err instanceof GroveError && err.code === "ROOM_FULL" && opts.overflowPlaza && room.slug === "plaza") {
+        const garden = await this.getRoom("garden", worldId);
         if (garden) {
           try {
             const presence = await tryEnter(garden);
@@ -136,7 +145,7 @@ export class PresenceService {
         }
       }
       if (err instanceof GroveError && err.code === "ROOM_FULL") {
-        throw new GroveError("ROOM_FULL", `${room.name} is full.`, { suggestedRoom: room.id === "plaza" ? "garden" : "board" });
+        throw new GroveError("ROOM_FULL", `${room.name} is full.`, { suggestedRoom: room.slug === "plaza" ? "garden" : "board" });
       }
       throw err;
     }
@@ -196,7 +205,7 @@ export class PresenceService {
       if (prev.roomId === "plaza") {
         await this.store.redis.publish(
           "sse:plaza",
-          JSON.stringify({ type: "actor_leave", actor_id: actorId, room_id: "plaza" }),
+          JSON.stringify({ type: "actor_leave", actor_id: actorId, room_id: prev.roomId }),
         );
       }
     }
@@ -220,6 +229,20 @@ export class PresenceService {
     return mapPresence(rows[0] as Record<string, unknown>);
   }
 
+  async setState(
+    actorId: string,
+    patch: { activity?: PresenceActivity; statusText?: string | null },
+  ): Promise<Presence> {
+    const presence = await this.touch(actorId, patch.activity ? { activity: patch.activity } : undefined);
+    if (patch.statusText !== undefined) {
+      await this.store.pg.query(`UPDATE agents SET status_text = $2 WHERE id = $1`, [
+        actorId,
+        patch.statusText,
+      ]);
+    }
+    return presence;
+  }
+
   async heartbeat(actor: Agent | Human, kind: "human" | "agent", connection: Presence["connection"]): Promise<void> {
     if (kind === "agent") {
       const agent = actor as Agent;
@@ -235,15 +258,29 @@ export class PresenceService {
     }
   }
 
-  async evictStale(): Promise<void> {
+  async evictStale(): Promise<number> {
     await this.store.pg.query(
       `UPDATE presence SET connection = 'offline'
        WHERE connection = 'live' AND last_seen_at < now() - interval '5 minutes'`,
     );
-    await this.store.pg.query(
-      `UPDATE presence SET connection = 'offline'
-       WHERE connection = 'async' AND last_seen_at < now() - interval '10 minutes'`,
+    const { rows } = await this.store.pg.query<{ actor_id: string; room_id: string }>(
+      `DELETE FROM presence
+       WHERE last_seen_at < now() - interval '10 minutes'
+       RETURNING actor_id, room_id`,
     );
+    for (const row of rows) {
+      await this.store.redis.publish(
+        `pubsub:room:${row.room_id}`,
+        JSON.stringify({ type: "actor_leave", actor_id: row.actor_id, room_id: row.room_id }),
+      );
+      if (row.room_id === "plaza") {
+        await this.store.redis.publish(
+          "sse:plaza",
+          JSON.stringify({ type: "actor_leave", actor_id: row.actor_id, room_id: "plaza" }),
+        );
+      }
+    }
+    return rows.length;
   }
 
   async nearby(roomId: string, viewerId?: string): Promise<NearbyRow[]> {
@@ -313,7 +350,9 @@ export class PresenceService {
       presence,
     });
     await this.store.redis.publish(`pubsub:room:${room.id}`, payload);
-    if (room.id === "plaza") await this.store.redis.publish("sse:plaza", payload);
+    if (room.id === "plaza" && (room.worldId ?? WORLD_ID) === WORLD_ID) {
+      await this.store.redis.publish("sse:plaza", payload);
+    }
   }
 }
 

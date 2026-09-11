@@ -46,3 +46,4 @@ export function bearer(req: FastifyRequest): string | undefined {
 }
 
 export const COOKIE = "grove_session";
+export const WORLD_COOKIE = "grove_world";

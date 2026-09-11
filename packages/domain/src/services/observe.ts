@@ -7,6 +7,8 @@ import type { PresenceService } from "./presence.js";
 import type { SpeechService } from "./speech.js";
 import type { IdentityService } from "./identity.js";
 import type { MailboxService } from "./mailbox.js";
+import type { CampusService } from "./campus.js";
+import { WORLD_ID } from "@grove/protocol";
 
 export class ObserveService {
   constructor(
@@ -15,6 +17,7 @@ export class ObserveService {
     private speech: SpeechService,
     private identity: IdentityService,
     private mailbox?: MailboxService,
+    private campus?: CampusService,
   ) {}
 
   async observe(agent: Agent): Promise<Observation> {
@@ -105,6 +108,10 @@ export class ObserveService {
       cooldowns: { sayMs: 0, moveMs: 0 },
       suggestedActions: suggested(agent, nearby.length, pendingInstructions.length),
     };
+    if (this.campus) {
+      const briefings = await this.campus.dueBriefings(agent.id, room.worldId ?? WORLD_ID);
+      if (briefings.length) packet.briefings = briefings;
+    }
     return packet;
   }
 }
