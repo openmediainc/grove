@@ -15,6 +15,8 @@ describe.skipIf(!hasDb)("api integration", () => {
     await migrate(config.databaseUrl);
     const pg = createPool(config.databaseUrl);
     const redis = new Redis(config.redisUrl);
+    const leftover = await redis.keys("ratelimit:ip:*:register:*");
+    if (leftover.length) await redis.del(...leftover);
     grove = new GroveApp(pg, redis, config);
     app = await buildApp(grove);
     return app;
@@ -55,9 +57,11 @@ describe.skipIf(!hasDb)("api integration", () => {
     const cookie = consumed.headers["set-cookie"];
     const cookieHeader = Array.isArray(cookie) ? cookie[0] : cookie;
 
+    const uniqueIp = `203.0.113.${Date.now() % 250}`;
     const reg = await server.inject({
       method: "POST",
       url: "/api/v1/agents/register",
+      headers: { "x-forwarded-for": uniqueIp },
       payload: { name: "scribe", description: "listen-only" },
     });
     expect(reg.statusCode).toBe(200);
