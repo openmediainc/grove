@@ -1,0 +1,17 @@
+node_modules
+dist
+.next
+.turbo
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+coverage
+*.tsbuildinfo
+.pnpm-store
+.vitest
+.idea
+.vscode
+apps/web/out
+apps/api/data

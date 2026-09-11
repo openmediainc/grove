@@ -1,0 +1,17 @@
+{
+  "name": "grove",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @grove/api --filter @grove/web --parallel dev",
+    "build": "pnpm -r --filter './packages/**' build && pnpm --filter @grove/api --filter @grove/web --filter @grove/mcp build",
+    "test": "pnpm -r --filter './packages/**' --filter @grove/api test",
+    "migrate": "pnpm --filter @grove/domain migrate",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck"
+  }
+}
