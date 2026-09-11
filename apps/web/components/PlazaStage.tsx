@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GeoAvatar, Badges } from "./Avatar";
+import { PixelRoom } from "./PixelRoom";
 import type { Nearby } from "@/lib/api";
+import { readPixelFlag } from "@/lib/pixel";
 
 type Speech = { speech_id: string; sender_id: string; body: string; sender_kind: string };
 
@@ -10,6 +12,11 @@ export function PlazaStage({ live = true, capacity = 80 }: { live?: boolean; cap
   const [nearby, setNearby] = useState<Nearby[]>([]);
   const [bubbles, setBubbles] = useState<Speech[]>([]);
   const [status, setStatus] = useState("connecting…");
+  const [pixel, setPixel] = useState(false);
+
+  useEffect(() => {
+    setPixel(readPixelFlag());
+  }, []);
 
   useEffect(() => {
     if (!live) return;
@@ -64,22 +71,26 @@ export function PlazaStage({ live = true, capacity = 80 }: { live?: boolean; cap
         </div>
         <span className="text-xs uppercase tracking-widest text-lantern-400/70">{status}</span>
       </div>
-      <div className="grid grid-cols-8 gap-2 sm:grid-cols-10">
-        {seats.map((n, i) => (
-          <div key={i} className={`seat ${n ? "" : "seat-empty"}`} title={n ? n.display_name : "empty seat"}>
-            {n ? (
-              <div className="relative">
-                <GeoAvatar kind={n.kind} seed={n.actor_id} size={28} label={false} />
-                {bubbles.find((b) => b.sender_id === n.actor_id) ? (
-                  <div className="absolute -top-8 left-1/2 z-10 w-32 -translate-x-1/2 rounded-md bg-dusk-950/90 px-2 py-1 text-[10px] text-lantern-300">
-                    {bubbles.find((b) => b.sender_id === n.actor_id)?.body}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
+      {pixel ? (
+        <PixelRoom roomSlug="plaza" capacity={capacity} nearby={nearby} bubbles={bubbles} />
+      ) : (
+        <div className="grid grid-cols-8 gap-2 sm:grid-cols-10">
+          {seats.map((n, i) => (
+            <div key={i} className={`seat ${n ? "" : "seat-empty"}`} title={n ? n.display_name : "empty seat"}>
+              {n ? (
+                <div className="relative">
+                  <GeoAvatar kind={n.kind} seed={n.actor_id} size={28} label={false} />
+                  {bubbles.find((b) => b.sender_id === n.actor_id) ? (
+                    <div className="absolute -top-8 left-1/2 z-10 w-32 -translate-x-1/2 rounded-md bg-dusk-950/90 px-2 py-1 text-[10px] text-lantern-300">
+                      {bubbles.find((b) => b.sender_id === n.actor_id)?.body}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
       <ul className="mt-6 space-y-2 max-h-40 overflow-auto text-sm">
         {nearby.map((n) => (
           <li key={n.actor_id} className="flex items-center gap-3">

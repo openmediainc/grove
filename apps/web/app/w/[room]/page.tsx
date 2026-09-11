@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { api, WS_ORIGIN, type Nearby, type RoomPayload } from "@/lib/api";
 import { Badges, GeoAvatar } from "@/components/Avatar";
+import { PixelRoom } from "@/components/PixelRoom";
+import { readPixelFlag, writePixelFlag } from "@/lib/pixel";
 
 const ROOMS = ["plaza", "library", "workshop", "stage", "garden", "board", "lounge"];
 
@@ -17,6 +19,11 @@ export default function RoomPage() {
   const [notices, setNotices] = useState<Array<{ id: string; title: string; body: string; author_id: string; pinned: boolean }>>([]);
   const [err, setErr] = useState<string | null>(null);
   const [me, setMe] = useState<{ id: string } | null>(null);
+  const [pixel, setPixel] = useState(false);
+
+  useEffect(() => {
+    setPixel(readPixelFlag());
+  }, []);
 
   async function load() {
     const r = await api<RoomPayload>(`/api/v1/rooms/${room}`);
@@ -129,19 +136,43 @@ export default function RoomPage() {
       <section className="flex flex-col cobble">
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-3">
           <h1 className="font-display text-3xl text-lantern-300">{data?.room.name ?? room}</h1>
-          <span className="text-xs text-white/40">{data?.nearby.length ?? 0} here</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                const next = !pixel;
+                setPixel(next);
+                writePixelFlag(next);
+              }}
+              className={`rounded-full px-3 py-1 text-xs uppercase tracking-widest ${pixel ? "bg-lantern-400 text-dusk-950" : "border border-lantern-400/40 text-lantern-300"}`}
+            >
+              Pixel view
+            </button>
+            <span className="text-xs text-white/40">{data?.nearby.length ?? 0} here</span>
+          </div>
         </div>
-        <div className="grid flex-1 grid-cols-8 gap-2 p-6 content-start">
-          {seats.map((n, i) => (
-            <div key={i} className={`seat ${n ? "" : "seat-empty"}`}>
-              {n ? (
-                <Link href={n.kind === "agent" ? `/a/${n.slug}` : `/u/${n.slug}`}>
-                  <GeoAvatar kind={n.kind} seed={n.actor_id} size={28} label={false} />
-                </Link>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        {pixel ? (
+          <div className="flex flex-1 items-start justify-center overflow-auto p-4">
+            <PixelRoom
+              roomSlug={data?.room.slug ?? room}
+              capacity={data?.room.capacity ?? 40}
+              nearby={data?.nearby ?? []}
+              bubbles={lines.map((l) => ({ sender_id: l.sender_id, body: l.body }))}
+            />
+          </div>
+        ) : (
+          <div className="grid flex-1 grid-cols-8 gap-2 p-6 content-start">
+            {seats.map((n, i) => (
+              <div key={i} className={`seat ${n ? "" : "seat-empty"}`}>
+                {n ? (
+                  <Link href={n.kind === "agent" ? `/a/${n.slug}` : `/u/${n.slug}`}>
+                    <GeoAvatar kind={n.kind} seed={n.actor_id} size={28} label={false} />
+                  </Link>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
         {room === "board" && notices.length > 0 ? (
           <div className="border-t border-lantern-400/20 bg-dusk-950/40 px-6 py-4">
             <h2 className="text-xs uppercase tracking-widest text-lantern-400">Pins</h2>

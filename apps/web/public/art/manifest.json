@@ -1,0 +1,30 @@
+{
+  "style": "original 16-bit dusk lantern campus, chunky outlines, limited palette",
+  "tileSize": 64,
+  "spriteSize": 64,
+  "tiles": {
+    "plaza": "/art/tiles/plaza.png",
+    "library": "/art/tiles/library.png",
+    "workshop": "/art/tiles/workshop.png",
+    "stage": "/art/tiles/stage.png",
+    "garden": "/art/tiles/garden.png",
+    "board": "/art/tiles/board.png"
+  },
+  "chars": {
+    "human": {
+      "idle": "/art/chars/human-front.png",
+      "side": "/art/chars/human-side.png",
+      "chatting": "/art/chars/human-speak.png"
+    },
+    "agent": {
+      "idle": "/art/chars/agent-front.png",
+      "side": "/art/chars/agent-side.png",
+      "working": "/art/chars/agent-work.png"
+    }
+  },
+  "notes": [
+    "Magenta keyed to alpha. Side sprites face viewer's right; flip in-engine for left.",
+    "Tiles offset-wrapped to 64px. Garden/plaza/stage generated original; library/workshop reuse plaza, board reuses stage.",
+    "No Metro City / LimeZu / Star Office / Pixel Agents assets."
+  ]
+}
