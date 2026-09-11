@@ -14,8 +14,14 @@ export { MailboxService } from "./services/mailbox.js";
 export { NoticeService } from "./services/notices.js";
 export { FlagService } from "./services/flags.js";
 export { QuotaService, RedisRateLimiter, MemoryRateLimiter, isFirst24h } from "./services/quota.js";
+export { CampusService } from "./services/campus.js";
+export { WebhookService, JobService } from "./services/webhooks.js";
+export { HostedBrainService, type ResponsesClient, type XaiClientFactory } from "./services/brains.js";
 export { mapAgent, mapHuman, mapRoom, mapPresence } from "./mappers.js";
 export { mintAgentKey, verifyAgentKey, flagPromptInjection, randomToken } from "./crypto.js";
+export { signWebhookBody, verifyWebhookSignature } from "./webhook-sign.js";
+export { createMailer, type Mailer } from "./mailer.js";
+export { resolveWorldId, WORLD_COOKIE, WORLD_HEADER } from "./world-scope.js";
 
 import type Redis from "ioredis";
 import type { GroveConfig } from "./config.js";
@@ -30,6 +36,10 @@ import { MailboxService } from "./services/mailbox.js";
 import { NoticeService } from "./services/notices.js";
 import { FlagService } from "./services/flags.js";
 import { QuotaService, RedisRateLimiter } from "./services/quota.js";
+import { CampusService } from "./services/campus.js";
+import { WebhookService, JobService } from "./services/webhooks.js";
+import { HostedBrainService } from "./services/brains.js";
+import { createMailer } from "./mailer.js";
 import type { GroveStore } from "./store.js";
 
 export class GroveApp {
@@ -44,18 +54,27 @@ export class GroveApp {
   world: WorldService;
   notices: NoticeService;
   moderation: ModerationService;
+  campus: CampusService;
+  webhooks: WebhookService;
+  jobs: JobService;
+  brains: HostedBrainService;
 
   constructor(pg: Pool, redis: Redis, config: GroveConfig) {
     this.store = { pg, redis, config };
     this.flags = new FlagService(this.store);
     this.quota = new QuotaService(new RedisRateLimiter(redis));
-    this.identity = new IdentityService(this.store, this.quota, this.flags);
+    const mailer = createMailer(config);
+    this.identity = new IdentityService(this.store, this.quota, this.flags, mailer);
     this.presence = new PresenceService(this.store, this.flags, this.quota, this.identity);
-    this.mailbox = new MailboxService(this.store, this.presence);
-    this.speech = new SpeechService(this.store, this.flags, this.quota, this.presence, this.mailbox);
-    this.observe = new ObserveService(this.store, this.presence, this.speech, this.identity, this.mailbox);
+    this.campus = new CampusService(this.store);
+    this.webhooks = new WebhookService(this.store);
+    this.jobs = new JobService(this.store);
+    this.mailbox = new MailboxService(this.store, this.presence, this.webhooks);
+    this.speech = new SpeechService(this.store, this.flags, this.quota, this.presence, this.mailbox, this.webhooks);
+    this.observe = new ObserveService(this.store, this.presence, this.speech, this.identity, this.mailbox, this.campus);
     this.world = new WorldService(this.store, this.presence, this.identity, this.flags, this.mailbox);
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);
     this.moderation = new ModerationService(this.store, this.quota, this.identity, this.flags, this.presence);
+    this.brains = new HostedBrainService(this.store, this.observe, this.speech, this.identity);
   }
 }

@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
       { source: "/skill.json", destination: `${api}/skill.json` },
       { source: "/health", destination: `${api}/health` },
       { source: "/ready", destination: `${api}/ready` },
+      { source: "/peer/:path*", destination: `${api}/peer/:path*` },
+      { source: "/awn/:path*", destination: `${api}/awn/:path*` },
+      { source: "/world/agents", destination: `${api}/world/agents` },
     ];
   },
 };

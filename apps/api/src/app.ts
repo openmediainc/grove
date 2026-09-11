@@ -7,6 +7,8 @@ import { registerRoutes } from "./routes.js";
 import { registerRealtime } from "./realtime.js";
 import { registerMcp } from "./mcp.js";
 import { registerDocs } from "./docs.js";
+import { registerPlatform } from "./platform.js";
+import { registerAwn } from "./awn.js";
 import { sendError } from "./http.js";
 
 export async function buildApp(grove: GroveApp) {
@@ -29,6 +31,8 @@ export async function buildApp(grove: GroveApp) {
   app.setErrorHandler((err, _req, reply) => sendError(reply, err));
 
   await registerRoutes(app, grove);
+  await registerPlatform(app, grove);
+  await registerAwn(app, grove);
   await registerRealtime(app, grove);
   await registerMcp(app, grove);
   await registerDocs(app);

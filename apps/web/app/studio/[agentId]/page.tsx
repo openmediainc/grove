@@ -32,6 +32,7 @@ export default function StudioAgent() {
   const [thread, setThread] = useState<Array<{ id: string; body: string; channel?: string; kind?: string; sender_id?: string }>>([]);
   const [keys, setKeys] = useState<Array<{ id: string; prefix: string; revoked_at: string | null; last_used_at: string | null }>>([]);
   const [reply, setReply] = useState("");
+  const [brain, setBrain] = useState<{ enabled: boolean; token_budget_month: number; tokens_used_month: number } | null>(null);
 
   async function refresh() {
     const one = await api<{ agent: NonNullable<typeof agent> }>(`/api/v1/agents/${agentId}`);
@@ -40,6 +41,8 @@ export default function StudioAgent() {
     setThread([...(t.instructions ?? []), ...(t.speech ?? [])]);
     const k = await api<{ keys: typeof keys }>(`/api/v1/agents/${agentId}/keys`);
     setKeys(k.keys);
+    const hb = await api<{ hosted_brain: typeof brain }>(`/api/v1/agents/${agentId}/hosted-brain`);
+    setBrain(hb.hosted_brain);
   }
 
   useEffect(() => {
@@ -168,6 +171,28 @@ export default function StudioAgent() {
             Send
           </button>
         </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="font-display text-2xl text-lantern-300">Hosted brain</h2>
+        <p className="text-sm text-white/50">Runs on Grove&apos;s xAI worker. The website never sees API keys.</p>
+        <button
+          onClick={async () => {
+            await api(`/api/v1/agents/${agentId}/hosted-brain`, {
+              method: "PATCH",
+              body: JSON.stringify({ enabled: !brain?.enabled, token_budget_month: brain?.token_budget_month ?? 200000 }),
+            });
+            await refresh();
+          }}
+          className={`mt-3 rounded-full px-4 py-1 text-sm ${brain?.enabled ? "bg-lantern-400 text-dusk-950" : "border border-white/15"}`}
+        >
+          {brain?.enabled ? "on" : "off"}
+        </button>
+        {brain ? (
+          <p className="mt-2 text-xs text-white/40">
+            {brain.tokens_used_month} / {brain.token_budget_month} tokens this month
+          </p>
+        ) : null}
       </section>
 
       <section className="mt-8">
