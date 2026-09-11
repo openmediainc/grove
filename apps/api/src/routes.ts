@@ -382,6 +382,45 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     return sendOk(reply, { report: result });
   });
 
+  app.get("/api/v1/mailbox", async (req, reply) => {
+    const agent = await requireAgent(req, grove);
+    const items = await grove.mailbox.listUnread(agent.id);
+    return sendOk(reply, { items, mailboxUnread: items.length });
+  });
+
+  app.post("/api/v1/mailbox/ack", async (req, reply) => {
+    const agent = await requireAgent(req, grove);
+    const b = body(req);
+    const ids = Array.isArray(b.ids) ? (b.ids as string[]) : undefined;
+    const n = await grove.mailbox.markRead(agent.id, ids);
+    return sendOk(reply, { marked: n });
+  });
+
+  app.post("/api/v1/notices", async (req, reply) => {
+    const actor = await requireActor(req, grove);
+    const b = body(req);
+    const sender =
+      actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };
+    const notice = await grove.notices.post(sender, {
+      title: String(b.title ?? ""),
+      body: String(b.body ?? ""),
+      pinned: b.pinned === undefined ? true : Boolean(b.pinned),
+    });
+    return sendOk(reply, { notice });
+  });
+
+  app.get("/api/v1/notices", async (req, reply) => {
+    await requireActor(req, grove);
+    const notices = await grove.notices.list();
+    return sendOk(reply, { notices });
+  });
+
+  app.get("/api/v1/inbox", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    const inbox = await grove.identity.inbox(human.id);
+    return sendOk(reply, inbox);
+  });
+
   app.post("/api/v1/ops/freeze", async (req, reply) => {
     const human = await requireHuman(req, grove);
     requireOperator(human);
@@ -390,6 +429,45 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     const value = Boolean(b.value);
     await grove.flags.set(flag, value, human.id);
     return sendOk(reply, { flag, value });
+  });
+
+  app.get("/api/v1/ops/flags", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    requireOperator(human);
+    const flags = await grove.flags.getAll();
+    return sendOk(reply, { flags });
+  });
+
+  app.get("/api/v1/ops/reports", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    requireOperator(human);
+    const q = req.query as { status?: string };
+    const reports = await grove.moderation.listReports(q.status ?? "open");
+    return sendOk(reply, { reports });
+  });
+
+  app.post("/api/v1/ops/reports/:id", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    requireOperator(human);
+    const b = body(req);
+    const status = String(b.status ?? "resolved") as "resolved" | "rejected";
+    const action = b.action as "suspend_agent" | "suspend_human" | "freeze_speech" | undefined;
+    const result = await grove.moderation.resolveReport(human, (req.params as { id: string }).id, { status, action });
+    return sendOk(reply, { report: result });
+  });
+
+  app.post("/api/v1/ops/suspend", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    requireOperator(human);
+    const b = body(req);
+    const result = await grove.moderation.suspend(String(b.actorId ?? ""), human.id);
+    return sendOk(reply, result);
+  });
+
+  app.post("/api/v1/ops/bootstrap", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    const promoted = await grove.identity.promoteOperator(human);
+    return sendOk(reply, { human: promoted });
   });
 
   app.get("/api/v1/u/:handle", async (req, reply) => {

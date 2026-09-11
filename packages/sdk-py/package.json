@@ -1,0 +1,8 @@
+{
+  "name": "@grove/sdk-py",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "python3 -m unittest discover -s tests -p 'test_*.py'"
+  }
+}

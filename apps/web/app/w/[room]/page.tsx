@@ -13,6 +13,8 @@ export default function RoomPage() {
   const [data, setData] = useState<RoomPayload | null>(null);
   const [lines, setLines] = useState<Array<{ id: string; body: string; sender_id: string; sender_kind: string }>>([]);
   const [draft, setDraft] = useState("");
+  const [noticeTitle, setNoticeTitle] = useState("");
+  const [notices, setNotices] = useState<Array<{ id: string; title: string; body: string; author_id: string; pinned: boolean }>>([]);
   const [err, setErr] = useState<string | null>(null);
   const [me, setMe] = useState<{ id: string } | null>(null);
 
@@ -21,6 +23,10 @@ export default function RoomPage() {
     setData(r);
     const t = await api<{ transcript: typeof lines }>(`/api/v1/rooms/${r.room.slug}/transcript`);
     setLines(t.transcript);
+    if (r.room.slug === "board" || room === "board") {
+      const n = await api<{ notices: typeof notices }>("/api/v1/notices");
+      setNotices(n.notices ?? []);
+    }
   }
 
   useEffect(() => {
@@ -82,6 +88,21 @@ export default function RoomPage() {
     }
   }
 
+  async function pinNotice() {
+    setErr(null);
+    try {
+      await api("/api/v1/notices", {
+        method: "POST",
+        body: JSON.stringify({ title: noticeTitle || draft.slice(0, 80), body: draft }),
+      });
+      setDraft("");
+      setNoticeTitle("");
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
   const seats = useMemo(() => {
     const cap = Math.min(data?.room.capacity ?? 30, 48);
     const nearby = data?.nearby ?? [];
@@ -121,13 +142,34 @@ export default function RoomPage() {
             </div>
           ))}
         </div>
+        {room === "board" && notices.length > 0 ? (
+          <div className="border-t border-lantern-400/20 bg-dusk-950/40 px-6 py-4">
+            <h2 className="text-xs uppercase tracking-widest text-lantern-400">Pins</h2>
+            <ul className="mt-2 space-y-2">
+              {notices.map((n) => (
+                <li key={n.id} className="rounded-lg border border-lantern-400/20 bg-dusk-800/80 p-3">
+                  <div className="font-semibold text-lantern-300">{n.title}</div>
+                  <p className="mt-1 text-sm text-white/70">{n.body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="border-t border-white/10 p-4">
+          {room === "board" ? (
+            <input
+              className="mb-2 w-full rounded-lg bg-dusk-800 px-3 py-2 ring-1 ring-white/10"
+              value={noticeTitle}
+              onChange={(e) => setNoticeTitle(e.target.value)}
+              placeholder="Pin title"
+            />
+          ) : null}
           <div className="flex gap-2">
             <input
               className="flex-1 rounded-lg bg-dusk-800 px-3 py-2 ring-1 ring-white/10"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Speak in this room…"
+              placeholder={room === "board" ? "Notice body or room say…" : "Speak in this room…"}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void say();
               }}
@@ -135,6 +177,11 @@ export default function RoomPage() {
             <button onClick={say} className="rounded-full bg-lantern-400 px-4 font-semibold text-dusk-950">
               Say
             </button>
+            {room === "board" ? (
+              <button onClick={pinNotice} className="rounded-full border border-lantern-400/40 px-4 text-lantern-300">
+                Pin
+              </button>
+            ) : null}
           </div>
           {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
         </div>

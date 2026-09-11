@@ -24,6 +24,8 @@ export const ID_PREFIX = {
   key: "key_",
   report: "rpt_",
   session: "ses_",
+  mailbox: "mbx_",
+  notice: "nte_",
 } as const;
 
 export function isHumanId(id: string): id is HumanId {

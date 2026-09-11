@@ -5,6 +5,7 @@ import { newId } from "../ids.js";
 import type { PresenceService } from "./presence.js";
 import type { IdentityService } from "./identity.js";
 import type { FlagService } from "./flags.js";
+import type { MailboxService } from "./mailbox.js";
 import { WORLD_ID, WORLD_PUBLIC_NAME } from "@grove/protocol";
 
 export class WorldService {
@@ -13,6 +14,7 @@ export class WorldService {
     private presence: PresenceService,
     private identity: IdentityService,
     private flags: FlagService,
+    private mailbox?: MailboxService,
   ) {}
 
   async world() {
@@ -73,6 +75,12 @@ export class WorldService {
       `pubsub:actor:${agent.id}`,
       JSON.stringify({ type: "instruction", id, kind: input.kind, body: input.body }),
     );
+    await this.mailbox?.enqueueIfOffline(agent.id, "owner_instruction", {
+      instructionId: id,
+      kind: input.kind,
+      body: input.body,
+      ownerHumanId: owner.id,
+    });
     return { id, kind: input.kind };
   }
 

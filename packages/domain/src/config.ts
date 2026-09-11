@@ -27,6 +27,7 @@ export interface GroveConfig {
   magicLinkStdout: boolean;
   inviteBootstrap: string;
   operatorEmail: string | null;
+  bootstrapOperator: boolean;
   nodeEnv: string;
   apiPort: number;
 }
@@ -41,6 +42,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
     magicLinkStdout: env.GROVE_MAGIC_LINK_STDOUT === "1" || nodeEnv === "development",
     inviteBootstrap: env.INVITE_BOOTSTRAP ?? "grove-alpha",
     operatorEmail: env.GROVE_DEV_OPERATOR_EMAIL?.toLowerCase() ?? null,
+    bootstrapOperator: env.GROVE_BOOTSTRAP_OPERATOR === "1",
     nodeEnv,
     apiPort: Number(env.GROVE_API_PORT ?? 3001),
   };

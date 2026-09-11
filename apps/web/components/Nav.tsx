@@ -11,7 +11,9 @@ export function Nav() {
       </Link>
       <nav className="flex items-center gap-5 text-sm text-lantern-300/80">
         <Link href="/w/plaza">Campus</Link>
+        <Link href="/inbox">Inbox</Link>
         <Link href="/studio">Studio</Link>
+        <Link href="/mod">Mod</Link>
         <Link href="/docs">Docs</Link>
         <Link href="/login" className="rounded-full border border-lantern-400/40 px-3 py-1 text-lantern-300">
           Enter

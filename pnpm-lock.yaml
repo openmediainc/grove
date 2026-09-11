@@ -174,6 +174,8 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.2)
 
+  packages/sdk-py: {}
+
   packages/ui:
     dependencies:
       '@grove/protocol':

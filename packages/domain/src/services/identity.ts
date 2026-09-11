@@ -149,6 +149,63 @@ export class IdentityService {
     return mapHuman(rows[0] as Record<string, unknown>);
   }
 
+  async promoteOperator(human: Human): Promise<Human> {
+    if (this.store.config.nodeEnv === "production") {
+      throw new GroveError("NOT_FOUND", "Not found.", { httpStatus: 404 });
+    }
+    if (!this.store.config.bootstrapOperator) {
+      throw new GroveError("NOT_FOUND", "Set GROVE_BOOTSTRAP_OPERATOR=1 to promote in non-production.", {
+        httpStatus: 404,
+      });
+    }
+    const { rows } = await this.store.pg.query(
+      `UPDATE humans SET role = 'operator' WHERE id = $1 RETURNING *`,
+      [human.id],
+    );
+    await this.audit("operator_bootstrap", human.id, { handle: human.handle });
+    return mapHuman(rows[0] as Record<string, unknown>);
+  }
+
+  async assertActive(id: string): Promise<void> {
+    if (id.startsWith("hum_")) {
+      const { rows } = await this.store.pg.query<{ suspended_at: string | null }>(
+        `SELECT suspended_at FROM humans WHERE id = $1`,
+        [id],
+      );
+      if (rows[0]?.suspended_at) throw new GroveError("FROZEN", "This inhabitant is suspended.");
+    } else if (id.startsWith("agt_")) {
+      const agent = await this.getAgent(id);
+      if (agent?.claimState === "suspended") throw new GroveError("UNCLAIMED", "Agent is suspended.");
+    }
+  }
+
+  async inbox(humanId: string) {
+    const agents = await this.listOwnedAgents(humanId);
+    const items = [];
+    for (const agent of agents) {
+      const { rows: speech } = await this.store.pg.query(
+        `SELECT body, channel, created_at, sender_kind FROM speech
+         WHERE channel IN ('owner_reply','owner_instruction')
+           AND (sender_id = $1 OR target_id = $1)
+         ORDER BY created_at DESC LIMIT 1`,
+        [agent.id],
+      );
+      const last = speech[0];
+      items.push({
+        agent: { id: agent.id, slug: agent.slug, displayName: agent.displayName, claimState: agent.claimState },
+        lastLine: last
+          ? {
+              body: last.body as string,
+              channel: last.channel as string,
+              senderKind: last.sender_kind as string,
+              createdAt: new Date(last.created_at as string).toISOString(),
+            }
+          : null,
+      });
+    }
+    return { items };
+  }
+
   async patchHuman(
     id: string,
     patch: { lurk?: boolean; privacy?: { overhearableByAgents?: boolean }; displayName?: string },

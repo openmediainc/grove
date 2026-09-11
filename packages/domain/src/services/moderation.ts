@@ -4,6 +4,8 @@ import { GroveError } from "../errors.js";
 import { newId } from "../ids.js";
 import type { QuotaService } from "./quota.js";
 import type { IdentityService } from "./identity.js";
+import type { FlagService, FreezeFlag } from "./flags.js";
+import type { PresenceService } from "./presence.js";
 
 const REPORT_CATEGORIES = ["harassment", "spam", "illegal", "prompt_injection", "impersonation", "other"] as const;
 
@@ -12,6 +14,8 @@ export class ModerationService {
     private store: GroveStore,
     private quota: QuotaService,
     private identity: IdentityService,
+    private flags?: FlagService,
+    private presence?: PresenceService,
   ) {}
 
   async block(human: Human, targetId: string) {
@@ -80,5 +84,65 @@ export class ModerationService {
         createdAt: new Date(r.created_at as string).toISOString(),
       })),
     };
+  }
+
+  async listReports(status = "open") {
+    const { rows } = await this.store.pg.query(
+      `SELECT * FROM reports WHERE ($1 = 'all' OR status = $1) ORDER BY created_at DESC LIMIT 100`,
+      [status],
+    );
+    return rows.map((r) => ({
+      id: r.id as string,
+      reporterId: r.reporter_id as string,
+      targetId: r.target_id as string,
+      category: r.category as string,
+      details: r.details as string | null,
+      snapshot: r.snapshot,
+      createdAt: new Date(r.created_at as string).toISOString(),
+      status: r.status as string,
+    }));
+  }
+
+  async resolveReport(
+    operator: Human,
+    reportId: string,
+    input: { status: "resolved" | "rejected"; action?: "suspend_agent" | "suspend_human" | "freeze_speech" },
+  ) {
+    const { rows } = await this.store.pg.query(`SELECT * FROM reports WHERE id = $1`, [reportId]);
+    if (!rows[0]) throw new GroveError("NOT_FOUND", "Report not found.", { httpStatus: 404 });
+    await this.store.pg.query(`UPDATE reports SET status = $2 WHERE id = $1`, [reportId, input.status]);
+    if (input.action === "suspend_agent" || input.action === "suspend_human") {
+      await this.suspend(rows[0].target_id as string, operator.id);
+    }
+    if (input.action === "freeze_speech") {
+      await this.flags?.set("freeze.speech" as FreezeFlag, true, operator.id);
+    }
+    await this.identity.audit("report_resolved", operator.id, {
+      reportId,
+      status: input.status,
+      action: input.action ?? null,
+    });
+    return { id: reportId, status: input.status, action: input.action ?? null };
+  }
+
+  async suspend(actorId: string, by: string) {
+    if (actorId.startsWith("agt_")) {
+      const { rowCount } = await this.store.pg.query(
+        `UPDATE agents SET claim_state = 'suspended' WHERE id = $1`,
+        [actorId],
+      );
+      if (!rowCount) throw new GroveError("NOT_FOUND", "Actor not found.", { httpStatus: 404 });
+    } else if (actorId.startsWith("hum_")) {
+      const { rowCount } = await this.store.pg.query(
+        `UPDATE humans SET suspended_at = now() WHERE id = $1`,
+        [actorId],
+      );
+      if (!rowCount) throw new GroveError("NOT_FOUND", "Actor not found.", { httpStatus: 404 });
+    } else {
+      throw new GroveError("INVALID", "actor_id must be hum_ or agt_.");
+    }
+    await this.presence?.leave(actorId);
+    await this.identity.audit("suspended", actorId, { by });
+    return { actorId, suspended: true };
   }
 }

@@ -23,6 +23,7 @@ import { flagPromptInjection } from "../crypto.js";
 import type { FlagService } from "./flags.js";
 import { isFirst24h, type QuotaService } from "./quota.js";
 import type { PresenceService } from "./presence.js";
+import type { MailboxService } from "./mailbox.js";
 
 export const SPECTATOR_RECIPIENT: PolicyContext["recipients"][number] = {
   id: "hum_spectator",
@@ -68,6 +69,7 @@ export class SpeechService {
     private flags: FlagService,
     private quota: QuotaService,
     private presence: PresenceService,
+    private mailbox?: MailboxService,
   ) {}
 
   async say(
@@ -76,6 +78,9 @@ export class SpeechService {
   ): Promise<SayAck> {
     if (!input.idempotencyKey) {
       throw new GroveError("IDEMPOTENCY_REQUIRED", "Header Idempotency-Key is required.");
+    }
+    if (sender.kind === "agent" && sender.agent.claimState === "suspended") {
+      throw new GroveError("UNCLAIMED", "Agent is suspended.");
     }
     const count = graphemeCount(input.body);
     if (count > SPEECH_GRAPHEME_LIMIT) {
@@ -183,6 +188,19 @@ export class SpeechService {
       if (allow) {
         deliveredCount += 1;
         allowedIds.push(d.recipientId);
+        if (
+          this.mailbox &&
+          (input.channel === "whisper" || input.channel === "owner_instruction") &&
+          d.recipientId.startsWith("agt_")
+        ) {
+          await this.mailbox.enqueueIfOffline(d.recipientId, input.channel, {
+            speechId,
+            senderId,
+            senderKind: sender.kind,
+            body: input.body,
+            channel: input.channel,
+          });
+        }
       } else {
         undelivered.push({
           actorId: d.recipientId,
@@ -335,6 +353,10 @@ export class SpeechService {
       quota,
       isOwnerChannel,
     };
+  }
+
+  async loadRecipientPublic(id: string, senderId: string): Promise<PolicyContext["recipients"][number] | null> {
+    return this.loadRecipient(id, senderId);
   }
 
   private async loadRecipient(id: string, senderId: string): Promise<PolicyContext["recipients"][number] | null> {

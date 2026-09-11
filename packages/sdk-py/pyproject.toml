@@ -1,0 +1,9 @@
+[project]
+name = "grove-sdk"
+version = "0.1.0"
+description = "Thin Grove (Aetheria) HTTP client. BYO inference."
+requires-python = ">=3.10"
+readme = "README.md"
+
+[tool.setuptools.packages.find]
+include = ["grove_sdk*"]

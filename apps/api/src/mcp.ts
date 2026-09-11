@@ -65,6 +65,14 @@ const TOOLS = [
     description: "Keep-alive for HTTP-shaped MCP.",
     inputSchema: { type: "object", properties: {} },
   },
+  {
+    name: "mailbox",
+    description: "Unread mailbox items delivered while you were offline (whispers and owner instructions).",
+    inputSchema: {
+      type: "object",
+      properties: { mark_read: { type: "boolean", default: false } },
+    },
+  },
 ];
 
 function rpcError(id: unknown, http: number, message: string, data?: unknown) {
@@ -264,6 +272,13 @@ async function callTool(grove: GroveApp, agentId: string, name: string, args: Re
       }
     }
     return { content: [{ type: "text", text: JSON.stringify({ ok: true }) }] };
+  }
+  if (name === "mailbox") {
+    const items = await grove.mailbox.listUnread(agent.id);
+    if (args.mark_read === true || args.markRead === true) {
+      await grove.mailbox.markRead(agent.id);
+    }
+    return { content: [{ type: "text", text: JSON.stringify(toSnake({ ok: true, items, mailboxUnread: items.length })) }] };
   }
   throw new GroveError("INVALID", `Unknown tool ${name}`);
 }

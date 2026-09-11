@@ -6,6 +6,7 @@ import { GroveError } from "../errors.js";
 import type { PresenceService } from "./presence.js";
 import type { SpeechService } from "./speech.js";
 import type { IdentityService } from "./identity.js";
+import type { MailboxService } from "./mailbox.js";
 
 export class ObserveService {
   constructor(
@@ -13,6 +14,7 @@ export class ObserveService {
     private presence: PresenceService,
     private speech: SpeechService,
     private identity: IdentityService,
+    private mailbox?: MailboxService,
   ) {}
 
   async observe(agent: Agent): Promise<Observation> {
@@ -99,7 +101,7 @@ export class ObserveService {
       heard,
       pendingInstructions,
       standingOrders,
-      mailboxUnread: 0,
+      mailboxUnread: this.mailbox ? await this.mailbox.unreadCount(agent.id) : 0,
       cooldowns: { sayMs: 0, moveMs: 0 },
       suggestedActions: suggested(agent, nearby.length, pendingInstructions.length),
     };
