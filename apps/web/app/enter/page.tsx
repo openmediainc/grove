@@ -16,7 +16,7 @@ export default function EnterPage() {
         body: JSON.stringify({ lurk, privacy: { overhearable_by_agents: overhear } }),
       });
       await api("/api/v1/world/enter", { method: "POST", body: "{}" });
-      window.location.href = "/w/plaza";
+      window.location.href = "/grove/w/plaza";
     } catch (e) {
       setErr((e as Error).message);
     }

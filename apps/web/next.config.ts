@@ -1,9 +1,12 @@
 import type { NextConfig } from "next";
 
-const api = process.env.GROVE_API_ORIGIN ?? "http://localhost:3001";
+const api = process.env.GROVE_API_ORIGIN ?? "http://127.0.0.1:3511";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@grove/protocol", "@grove/ui", "@grove/policy"],
+  basePath: "/grove",
+  skipTrailingSlashRedirect: true,
+  allowedDevOrigins: ["q-ai.tail735569.ts.net", "127.0.0.1", "localhost"],
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${api}/api/:path*` },

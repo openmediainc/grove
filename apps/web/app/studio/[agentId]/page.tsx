@@ -47,7 +47,7 @@ export default function StudioAgent() {
 
   useEffect(() => {
     void refresh().catch((e) => {
-      if ((e as { status?: number }).status === 401) window.location.href = "/login";
+      if ((e as { status?: number }).status === 401) window.location.href = "/grove/login";
     });
   }, [agentId]);
 

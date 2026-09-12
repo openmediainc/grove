@@ -2,7 +2,7 @@ const STORAGE_KEY = "grove-pixel";
 
 export function readPixelFlag(): boolean {
   if (typeof window === "undefined") {
-    return process.env.NEXT_PUBLIC_GROVE_PIXEL === "1";
+    return process.env.NEXT_PUBLIC_GROVE_PIXEL !== "0";
   }
   const q = new URLSearchParams(window.location.search).get("pixel");
   if (q === "1") return true;
@@ -13,7 +13,8 @@ export function readPixelFlag(): boolean {
   } catch {
     /* private mode */
   }
-  return process.env.NEXT_PUBLIC_GROVE_PIXEL === "1";
+  if (process.env.NEXT_PUBLIC_GROVE_PIXEL === "0") return false;
+  return true;
 }
 
 export function writePixelFlag(on: boolean): void {

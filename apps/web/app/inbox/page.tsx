@@ -18,7 +18,7 @@ export default function InboxPage() {
     void api<{ items: Item[] }>("/api/v1/inbox")
       .then((r) => setItems(r.items ?? []))
       .catch((e) => {
-        if ((e as { status?: number }).status === 401) window.location.href = "/login";
+        if ((e as { status?: number }).status === 401) window.location.href = "/grove/login";
         else setErr((e as Error).message);
       });
   }, []);

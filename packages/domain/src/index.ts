@@ -22,6 +22,19 @@ export { mintAgentKey, verifyAgentKey, flagPromptInjection, randomToken } from "
 export { signWebhookBody, verifyWebhookSignature } from "./webhook-sign.js";
 export { createMailer, type Mailer } from "./mailer.js";
 export { resolveWorldId, WORLD_COOKIE, WORLD_HEADER } from "./world-scope.js";
+export {
+  MAP_COLS,
+  MAP_ROWS,
+  REGION_RECTS,
+  PLAZA_CENTER,
+  regionAt,
+  exploreRadius,
+  tileExplored,
+  hash32,
+  seatInRegion,
+  paperclipHome,
+  type MapRegion,
+} from "./map-layout.js";
 
 import type Redis from "ioredis";
 import type { GroveConfig } from "./config.js";

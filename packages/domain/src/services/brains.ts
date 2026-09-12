@@ -101,6 +101,9 @@ export class HostedBrainService {
       throw err;
     }
     if (observation.kind !== "inhabited") return;
+    const nearby = (observation as { nearby?: unknown[] }).nearby ?? [];
+    const pending = (observation as { pendingInstructions?: unknown[] }).pendingInstructions ?? [];
+    if (nearby.length === 0 && pending.length === 0) return;
     const input = [
       PROMPT_HEAD,
       "",

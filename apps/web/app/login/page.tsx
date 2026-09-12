@@ -18,7 +18,7 @@ function LoginForm() {
     void (async () => {
       try {
         await api("/api/v1/humans/session/consume", { method: "POST", body: JSON.stringify({ token }) });
-        window.location.href = "/enter";
+        window.location.href = "/grove/enter";
       } catch (e) {
         setMsg((e as Error).message);
       }

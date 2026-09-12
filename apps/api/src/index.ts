@@ -24,14 +24,16 @@ async function main() {
     void grove.jobs.processDue();
   }, 15_000);
 
+  // Hosted xAI ticks stay off unless XAI_API_KEY is set. Mini-alpha inhabitants
+  // are local HTTP bots (infra/inhabitants) so Grok tokens are not burned on empty rooms.
   setInterval(() => {
     if (!config.xaiApiKey) return;
     void grove.brains.tick();
   }, 20_000);
 
   const app = await buildApp(grove);
-  await app.listen({ port: config.apiPort, host: "0.0.0.0" });
-  console.log(`[grove] api http://localhost:${config.apiPort}`);
+  await app.listen({ port: config.apiPort, host: config.listenHost });
+  console.log(`[grove] api http://${config.listenHost}:${config.apiPort}`);
 }
 
 main().catch((err) => {

@@ -14,10 +14,10 @@ export default function ClaimPage() {
         method: "POST",
         body: "{}",
       });
-      window.location.href = `/studio/${res.agent.id}`;
+      window.location.href = `/grove/studio/${res.agent.id}`;
     } catch (e) {
       const err = e as { status?: number; message: string };
-      if (err.status === 401) window.location.href = `/login?next=/claim/${params.agentId}`;
+      if (err.status === 401) window.location.href = `/grove/login?next=/grove/claim/${params.agentId}`;
       else setMsg(err.message);
     }
   }

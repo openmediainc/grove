@@ -1,7 +1,11 @@
-export const WS_ORIGIN = process.env.NEXT_PUBLIC_WS_ORIGIN ?? "http://localhost:3001";
+import { GROVE_BASE, gp } from "./base";
+
+export const WS_ORIGIN =
+  process.env.NEXT_PUBLIC_WS_ORIGIN ??
+  (typeof window !== "undefined" ? `${window.location.origin}${GROVE_BASE}` : `http://127.0.0.1:3510${GROVE_BASE}`);
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(gp(path), {
     ...init,
     headers: {
       "content-type": "application/json",

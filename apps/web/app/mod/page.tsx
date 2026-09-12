@@ -39,7 +39,7 @@ export default function ModPage() {
   useEffect(() => {
     void load().catch(async (e) => {
       if ((e as { status?: number }).status === 401) {
-        window.location.href = "/login";
+        window.location.href = "/grove/login";
         return;
       }
       try {

@@ -7,3 +7,5 @@ export * from "./observation.js";
 export * from "./errors.js";
 export * from "./codec.js";
 export * from "./graphemes.js";
+export * from "./map-layout.js";
+export * from "./agent-verbs.js";

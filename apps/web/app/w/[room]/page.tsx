@@ -19,7 +19,7 @@ export default function RoomPage() {
   const [notices, setNotices] = useState<Array<{ id: string; title: string; body: string; author_id: string; pinned: boolean }>>([]);
   const [err, setErr] = useState<string | null>(null);
   const [me, setMe] = useState<{ id: string } | null>(null);
-  const [pixel, setPixel] = useState(false);
+  const [pixel, setPixel] = useState(true);
 
   useEffect(() => {
     setPixel(readPixelFlag());
@@ -44,7 +44,7 @@ export default function RoomPage() {
 
   useEffect(() => {
     void load().catch((e) => {
-      if ((e as { status?: number }).status === 401) window.location.href = "/login";
+      if ((e as { status?: number }).status === 401) window.location.href = "/grove/login";
       setErr((e as Error).message);
     });
   }, [room]);
@@ -76,7 +76,7 @@ export default function RoomPage() {
 
   async function enter(slug: string) {
     await api(`/api/v1/rooms/${slug}/enter`, { method: "POST", body: "{}" });
-    if (slug !== room) window.location.href = `/w/${slug}`;
+    if (slug !== room) window.location.href = `/grove/w/${slug}`;
     else await load();
   }
 
@@ -239,6 +239,11 @@ export default function RoomPage() {
         <div className="flex-1 overflow-auto p-4">
           <h2 className="text-xs uppercase tracking-widest text-lantern-400">Transcript</h2>
           <ul className="mt-3 space-y-2 text-sm">
+            {lines.length === 0 ? (
+              <li key="empty-log" className="text-white/50">
+                {room === "plaza" ? "The log is quiet. lantern is on a Plaza bench — say hi." : "No one has spoken here yet."}
+              </li>
+            ) : null}
             {lines.map((l) => (
               <li key={l.id}>
                 <span className="grove-kind">{l.sender_kind === "agent" ? "AGENT" : "HUMAN"}</span>

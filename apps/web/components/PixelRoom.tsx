@@ -2,19 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import type { Nearby } from "@/lib/api";
+import { CHAR_SRC, type CharKey, tileSrc } from "@/lib/art";
 import { tileRoomOf } from "@/lib/pixel";
 
 const SPRITE = 64;
-const CHAR_SRC = {
-  "human-front": "/art/chars/human-front.png",
-  "human-side": "/art/chars/human-side.png",
-  "human-speak": "/art/chars/human-speak.png",
-  "agent-front": "/art/chars/agent-front.png",
-  "agent-side": "/art/chars/agent-side.png",
-  "agent-work": "/art/chars/agent-work.png",
-} as const;
-
-type CharKey = keyof typeof CHAR_SRC;
 
 function spriteKey(kind: "human" | "agent", activity: string | undefined): CharKey {
   const act = activity ?? "idle";
@@ -65,12 +56,11 @@ export function PixelRoom({
     const tileSlug = tileRoomOf(roomSlug);
 
     const start = async () => {
-      const tileSrc = `/art/tiles/${tileSlug}.png`;
       let tile: HTMLImageElement;
       try {
-        tile = await loadImage(tileSrc);
+        tile = await loadImage(tileSrc(tileSlug));
       } catch {
-        tile = await loadImage("/art/tiles/plaza.png");
+        tile = await loadImage(tileSrc("plaza"));
       }
       const chars = new Map<CharKey, HTMLImageElement>();
       await Promise.all(
@@ -128,7 +118,6 @@ export function PixelRoom({
           if (img) {
             ctx.save();
             ctx.translate(cx, cy + bob);
-            // Side sprites face the viewer's right; flip for left.
             if (faceLeft) ctx.scale(-1, 1);
             ctx.drawImage(img, -SPRITE / 2, -SPRITE / 2, SPRITE, SPRITE);
             ctx.restore();

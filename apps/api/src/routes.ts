@@ -4,6 +4,7 @@ import { GroveError } from "@grove/domain";
 import { EMOTE_ENUM, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
 import { currentWorldId, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator } from "./auth.js";
 import { COOKIE, clientIp, sendOk } from "./http.js";
+import { fetchPaperclipAgents } from "./paperclip.js";
 
 function body(req: { body: unknown }): Record<string, unknown> {
   return (toCamel(req.body ?? {}) as Record<string, unknown>) ?? {};
@@ -230,6 +231,15 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
   app.get("/api/v1/world/public", async (req, reply) => {
     const world = await grove.world.world(currentWorldId(req));
     return sendOk(reply, { world });
+  });
+
+  app.get("/api/v1/world/minimap", async (req, reply) => {
+    const campus = await grove.world.minimap(currentWorldId(req));
+    const paperclip = await fetchPaperclipAgents();
+    return sendOk(reply, {
+      ...campus,
+      paperclip,
+    });
   });
 
   app.post("/api/v1/world/join", async (req, reply) => {

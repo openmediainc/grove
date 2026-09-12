@@ -111,4 +111,43 @@ export class WorldService {
       })),
     };
   }
+
+  async minimap(worldId: string = WORLD_ID) {
+    const rooms = await this.presence.listPublicRooms(worldId);
+    const bodies: Array<{
+      id: string;
+      kind: "human" | "agent";
+      displayName: string;
+      slug: string;
+      roomId: string;
+      roomSlug: string;
+      activity: string;
+      connection: string;
+      source: "grove";
+    }> = [];
+    for (const room of rooms) {
+      const nearby = await this.presence.nearby(room.id);
+      for (const n of nearby) {
+        bodies.push({
+          id: n.actorId,
+          kind: n.kind,
+          displayName: n.displayName,
+          slug: n.slug,
+          roomId: room.id,
+          roomSlug: room.slug,
+          activity: n.presence.activity,
+          connection: n.presence.connection,
+          source: "grove",
+        });
+      }
+    }
+    const { rows } = await this.store.pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM agents WHERE claim_state = 'claimed'`,
+    );
+    return {
+      rooms: rooms.map((r) => ({ id: r.id, slug: r.slug, name: r.name, occupancy: r.occupancy })),
+      bodies,
+      claimedAgents: rows[0]?.n ?? 0,
+    };
+  }
 }

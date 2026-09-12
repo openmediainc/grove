@@ -30,6 +30,7 @@ export interface GroveConfig {
   bootstrapOperator: boolean;
   nodeEnv: string;
   apiPort: number;
+  listenHost: string;
   xaiApiKey: string | null;
   xaiBaseUrl: string;
   xaiModel: string;
@@ -52,7 +53,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
     operatorEmail: env.GROVE_DEV_OPERATOR_EMAIL?.toLowerCase() ?? null,
     bootstrapOperator: env.GROVE_BOOTSTRAP_OPERATOR === "1",
     nodeEnv,
-    apiPort: Number(env.GROVE_API_PORT ?? 3001),
+    apiPort: Number(env.GROVE_API_PORT ?? 3511),
+    listenHost: env.GROVE_LISTEN_HOST ?? "127.0.0.1",
     xaiApiKey: env.XAI_API_KEY || null,
     xaiBaseUrl: env.XAI_BASE_URL ?? "https://api.x.ai/v1",
     xaiModel: env.XAI_MODEL ?? "grok-4.6",

@@ -8,11 +8,15 @@ import { readPixelFlag } from "@/lib/pixel";
 
 type Speech = { speech_id: string; sender_id: string; body: string; sender_kind: string };
 
+function actorIdOf(n: { actor_id?: string; actorId?: string } | null | undefined): string {
+  return String(n?.actor_id ?? n?.actorId ?? "");
+}
+
 export function PlazaStage({ live = true, capacity = 80 }: { live?: boolean; capacity?: number }) {
   const [nearby, setNearby] = useState<Nearby[]>([]);
   const [bubbles, setBubbles] = useState<Speech[]>([]);
   const [status, setStatus] = useState("connecting…");
-  const [pixel, setPixel] = useState(false);
+  const [pixel, setPixel] = useState(true);
 
   useEffect(() => {
     setPixel(readPixelFlag());
@@ -20,23 +24,24 @@ export function PlazaStage({ live = true, capacity = 80 }: { live?: boolean; cap
 
   useEffect(() => {
     if (!live) return;
-    const es = new EventSource("/api/v1/sse/plaza");
+    const es = new EventSource("/grove/api/v1/sse/plaza");
     es.addEventListener("state", (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as { nearby?: Nearby[] };
-      setNearby(data.nearby ?? []);
+      setNearby((data.nearby ?? []).filter((n) => actorIdOf(n)));
       setStatus("live plaza");
     });
     es.addEventListener("actor_join", (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as { actor_id: string; kind: Nearby["kind"]; presence: Nearby["presence"] };
       setNearby((cur) => {
-        if (cur.some((n) => n.actor_id === data.actor_id)) return cur;
+        const joinId = actorIdOf(data);
+        if (!joinId || cur.some((n) => actorIdOf(n) === joinId)) return cur;
         return [
           ...cur,
           {
-            actor_id: data.actor_id,
+            actor_id: joinId,
             kind: data.kind,
-            display_name: data.actor_id.slice(0, 8),
-            slug: data.actor_id,
+            display_name: joinId.slice(0, 8),
+            slug: joinId,
             badges: [],
             presence: data.presence,
           },
@@ -45,7 +50,7 @@ export function PlazaStage({ live = true, capacity = 80 }: { live?: boolean; cap
     });
     es.addEventListener("actor_leave", (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as { actor_id: string };
-      setNearby((cur) => cur.filter((n) => n.actor_id !== data.actor_id));
+      setNearby((cur) => cur.filter((n) => actorIdOf(n) !== actorIdOf(data)));
     });
     es.addEventListener("speech", (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as Speech;
@@ -92,9 +97,9 @@ export function PlazaStage({ live = true, capacity = 80 }: { live?: boolean; cap
         </div>
       )}
       <ul className="mt-6 space-y-2 max-h-40 overflow-auto text-sm">
-        {nearby.map((n) => (
-          <li key={n.actor_id} className="flex items-center gap-3">
-            <GeoAvatar kind={n.kind} seed={n.actor_id} size={22} label={false} />
+        {nearby.map((n, i) => (
+          <li key={actorIdOf(n) || `nearby-${i}`} className="flex items-center gap-3">
+            <GeoAvatar kind={n.kind} seed={actorIdOf(n) || `nearby-${i}`} size={22} label={false} />
             <span className={`grove-kind ${n.kind === "agent" ? "grove-nameplate-agent" : "grove-nameplate-human"}`.replace("grove-nameplate-", "")} />
             <span className="grove-nameplate">
               <span className={n.kind === "agent" ? "grove-nameplate-agent" : "grove-nameplate-human"}>
@@ -106,7 +111,11 @@ export function PlazaStage({ live = true, capacity = 80 }: { live?: boolean; cap
             <Badges badges={n.badges ?? []} />
           </li>
         ))}
-        {nearby.length === 0 ? <li className="text-white/40">The Plaza is quiet. Lanterns wait.</li> : null}
+        {nearby.length === 0 ? (
+          <li key="plaza-empty" className="text-white/40">
+            The Plaza is quiet. Lanterns wait.
+          </li>
+        ) : null}
       </ul>
     </div>
   );

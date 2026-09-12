@@ -10,12 +10,17 @@ const allowedOrigins = (origin: string | undefined, webOrigin: string) => {
   if (!origin) return false;
   const allow = new Set([
     webOrigin,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3001",
+    "http://127.0.0.1:3510",
+    "http://localhost:3510",
+    "https://q-ai.tail735569.ts.net",
+    "https://q-ai.tail735569.ts.net:3510",
   ]);
   return allow.has(origin);
 };
+
+function subscriber(redis: GroveApp["store"]["redis"]) {
+  return redis.duplicate({ enableReadyCheck: false, maxRetriesPerRequest: null });
+}
 
 export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
   app.get("/api/v1/sse/plaza", async (req, reply) => {
@@ -32,7 +37,7 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
     };
     const snap = await grove.world.plazaSnapshot();
     send("state", snap);
-    const sub = grove.store.redis.duplicate();
+    const sub = subscriber(grove.store.redis);
     await sub.subscribe("sse:plaza");
     sub.on("message", (_ch, message) => {
       try {
@@ -89,13 +94,13 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
       local.set(connToken, socket);
       humanSockets.set(human.id, local);
 
-      const kickSub = grove.store.redis.duplicate();
+      const kickSub = subscriber(grove.store.redis);
       await kickSub.subscribe(`ws:kick:${human.id}`);
       kickSub.on("message", (_ch, message) => {
         if (message === connToken) socket.close(4000, "kicked");
       });
 
-      const sub = grove.store.redis.duplicate();
+      const sub = subscriber(grove.store.redis);
       const p = await grove.presence.getPresence(human.id);
       const channels = [`pubsub:actor:${human.id}`];
       if (p) channels.push(`pubsub:room:${p.roomId}`);
@@ -185,13 +190,13 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
       if (existing && existing.socket !== socket) existing.socket.close(4000, "kicked");
       agentSockets.set(auth.agent.id, { token: connToken, socket });
 
-      const kickSub = grove.store.redis.duplicate();
+      const kickSub = subscriber(grove.store.redis);
       await kickSub.subscribe(`ws:kick:${auth.agent.id}`);
       kickSub.on("message", (_ch, message) => {
         if (message === connToken) socket.close(4000, "kicked");
       });
 
-      const sub = grove.store.redis.duplicate();
+      const sub = subscriber(grove.store.redis);
       const p = await grove.presence.getPresence(auth.agent.id);
       const channels = [`pubsub:actor:${auth.agent.id}`];
       if (p) channels.push(`pubsub:room:${p.roomId}`);

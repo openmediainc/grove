@@ -21,7 +21,13 @@ export async function buildApp(grove: GroveApp) {
 
   await app.register(cookie);
   await app.register(cors, {
-    origin: [grove.store.config.webOrigin, "http://localhost:3000"],
+    origin: [
+      grove.store.config.webOrigin,
+      "http://127.0.0.1:3510",
+      "http://localhost:3510",
+      "https://q-ai.tail735569.ts.net",
+      "https://q-ai.tail735569.ts.net:3510",
+    ],
     credentials: true,
   });
   await app.register(websocket);
