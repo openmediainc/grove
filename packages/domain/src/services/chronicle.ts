@@ -518,7 +518,40 @@ SELECT floor(extract(epoch FROM COALESCE(
          created_at)) / $9::int)::bigint AS bucket,
        type, count(*)::int AS n
 FROM visible
+-- A line this viewer was not delivered is not counted: the live room feed
+-- (realtime.roomFrameFor) never showed them that frame at all, so a spike in
+-- the histogram must not either.
+WHERE type <> 'speech' OR body_allowed
 GROUP BY 1, 2`;
+
+/**
+ * Tool-call spans (migration 020) overlapping a window, for replay. Not ledger
+ * rows, but gated by the ledger's rule for the same kind of fact: a retained
+ * series of what an agent ran is its working day, so rule 7 applies — the
+ * owner and operators only. The live minimap shows one instant of a span to
+ * anyone in the world; the history of them is not the world's.
+ *
+ * On top of rule 7, the world gate (rule 1) applies to the room the call ran
+ * in, operators included, so a private space's work stays inside it.
+ *
+ * $1 viewer  $2 operator  $3 since  $4 until  $5 world  $6 commons  $7 limit
+ */
+const TOOL_CALLS_SQL = `
+SELECT t.actor_id, t.call_id, t.name, t.args, t.started_at, t.updated_at, t.finished_at,
+       t.outcome, t.progress, t.progress_done, t.progress_total, t.result
+FROM tool_calls t
+LEFT JOIN rooms r ON r.id = t.room_id
+JOIN worlds w ON w.id = COALESCE(r.world_id, $6::text)
+WHERE ($2::bool OR ($1::text IS NOT NULL AND t.actor_id IN
+        (SELECT id FROM agents WHERE owner_human_id = $1::text)))
+  AND w.id = $5::text
+  AND (w.policy_preset <> 'private'
+       OR ($1::text IS NOT NULL AND (w.owner_human_id = $1::text
+            OR EXISTS (SELECT 1 FROM world_members m WHERE m.world_id = w.id AND m.human_id = $1::text))))
+  AND t.started_at < $4::timestamptz
+  AND (t.finished_at IS NULL OR t.finished_at >= $3::timestamptz)
+ORDER BY t.started_at, t.id
+LIMIT $7::int`;
 
 const TOTALS_SQL = `${VISIBLE_CTE}
 SELECT type, count(*)::int AS n FROM visible GROUP BY type`;
@@ -636,6 +669,26 @@ export class ChronicleService {
     ]);
     const names = await this.resolveNames(rows);
     return rows.map((r) => this.toEntry(r as Record<string, unknown>, names));
+  }
+
+  /** Tool-call spans overlapping a window, gated as described on TOOL_CALLS_SQL. Raw rows. */
+  async toolCallHistory(
+    viewer: ChronicleViewer,
+    query: { since: string; until: string; worldId: string; limit?: number },
+  ): Promise<Array<Record<string, unknown>>> {
+    const since = parseTime(query.since, "since");
+    const until = parseTime(query.until, "until");
+    const limit = Math.max(1, Math.min(5000, Math.trunc(query.limit ?? 5000)));
+    const { rows } = await this.store.pg.query(TOOL_CALLS_SQL, [
+      viewer.humanId,
+      viewer.isOperator,
+      since,
+      until,
+      query.worldId,
+      WORLD_ID,
+      limit,
+    ]);
+    return rows as Array<Record<string, unknown>>;
   }
 
   /** Visible events per bucket over a window. Same gate as every other read here. */
