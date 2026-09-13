@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { asPermissionBadges, consequenceOf, STANCES, type Rect, type Speaker } from "@grove/ui";
-import { AWAY_ALPHA, describeToolCall, type ToolCallView } from "@grove/protocol";
+import { AWAY_ALPHA, describeToolCall, normaliseMarks, type SpaceMark, type ToolCallView } from "@grove/protocol";
 import { api } from "@/lib/api";
 import {
   BUILDING,
@@ -271,6 +271,8 @@ type SpaceView = {
   occupancy: number;
   /** Bound orgs. Empty for a redacted row, exactly like name and owner. */
   orgs?: OrgBadge[];
+  /** Achievement mark keys (030). Empty for a redacted row. */
+  marks?: string[];
 };
 
 type Plot = {
@@ -283,6 +285,8 @@ type Plot = {
   ownerHandle: string | null;
   occupancy: number;
   orgs: OrgBadge[];
+  /** Achievement marks, keys only. Always empty on a private plot. */
+  marks: SpaceMark[];
 };
 
 /*
@@ -1375,6 +1379,9 @@ export function WorldMap() {
             // Redacted rows arrive with no orgs at all, so there is nothing to
             // leak here — the server already decided what this viewer may see.
             orgs: (sp.orgs ?? []).map((o) => ({ id: o.id, name: o.name, colour: o.colour })),
+            // The server already sends none for a private plot; dropped here too
+            // so a stale or hand-made payload still cannot mark a held plot.
+            marks: (sp.policy_preset ?? sp.policyPreset) === "private" ? [] : normaliseMarks(sp.marks),
           };
         });
         plotRef.current = plots;
@@ -1884,6 +1891,11 @@ export function WorldMap() {
           ownerHandle: plot.ownerHandle,
           occupancy: plot.occupancy,
           orgs: plot.orgs,
+          marks:
+            plot.preset === "private"
+              ? []
+              : plot.marks.map((m) => chosenRef.current.lexicon.marks[m]),
+          marksHeading: chosenRef.current.lexicon.marks.heading,
           share: { at: { tx: (plot.rect.x0 + plot.rect.x1) / 2, ty: (plot.rect.y0 + plot.rect.y1) / 2 } },
         };
       }

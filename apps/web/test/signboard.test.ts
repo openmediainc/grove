@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   LOD_SIGNBOARD,
   fitSignText,
+  MARK_R,
   layoutSignboard,
   signContent,
   signboardVisible,
@@ -26,6 +27,7 @@ describe("signboard content", () => {
     expect(c.detail).toBe(`${AOE_LEXICON.access.public_write.label} · 2 here`);
     expect(c.orgLine).toBe("Acme");
     expect(c.tint).toBe("#34d399");
+    expect(c.marks).toEqual([]);
   });
 
   it("never names a private plot, even when the server sent the name", () => {
@@ -36,6 +38,7 @@ describe("signboard content", () => {
       detail: AOE_LEXICON.access.private.label,
       orgLine: null,
       tint: null,
+      marks: [],
     });
     const board = layoutSignboard(c, { x: 100, y: 100 }, 1, measure)!;
     const text = board.lines.map((l) => l.text).join(" ");
@@ -96,5 +99,38 @@ describe("signboard layout", () => {
   it("fitSignText leaves short text alone and returns empty when nothing fits", () => {
     expect(fitSignText("Hi", 100, 11, measure)).toBe("Hi");
     expect(fitSignText("Hello", 3, 11, measure)).toBe("");
+  });
+});
+
+describe("signboard marks", () => {
+  it("hangs one medallion per held mark under a public board, in canonical order, unknown keys dropped", () => {
+    const c = signContent({ ...base, marks: ["week_streak", "top_ten", "thousand_calls"] }, AOE_LEXICON);
+    expect(c.marks).toEqual(["thousand_calls", "week_streak"]);
+    const board = layoutSignboard(c, { x: 200, y: 150 }, 1, measure)!;
+    expect(board.marks.map((m) => m.key)).toEqual(["thousand_calls", "week_streak"]);
+    const [a, b] = board.marks;
+    // Centred under the board, below its middle, same fixed size at every zoom.
+    expect(Math.abs((a!.x + b!.x) / 2 - (board.x0 + board.x1) / 2)).toBeLessThanOrEqual(1);
+    expect(a!.y).toBeGreaterThan(board.y1 - MARK_R);
+    expect(a!.r).toBe(MARK_R);
+    expect(layoutSignboard(c, { x: 200, y: 150 }, 2, measure)!.marks[0]!.r).toBe(MARK_R);
+  });
+
+  it("never marks a private plot, even when the server sent marks", () => {
+    const c = signContent({ preset: "private", name: null, occupancy: 0, orgs: [], marks: ["thousand_calls", "week_streak"] }, AOE_LEXICON);
+    expect(c.marks).toEqual([]);
+    expect(layoutSignboard(c, { x: 0, y: 0 }, 1, measure)!.marks).toEqual([]);
+    // Held wins over the content, too.
+    const forged = layoutSignboard({ ...c, marks: ["thousand_calls"] }, { x: 0, y: 0 }, 1, measure)!;
+    expect(forged.marks).toEqual([]);
+  });
+
+  it("every theme names both marks, with no numbers that could read as a score", () => {
+    for (const lex of [AOE_LEXICON, SPACE_LEXICON, CITY_LEXICON, SCIFI_LEXICON]) {
+      expect(lex.marks.heading).toBeTruthy();
+      expect(lex.marks.thousand_calls).toBeTruthy();
+      expect(lex.marks.week_streak).toBeTruthy();
+      expect(`${lex.marks.heading} ${lex.marks.thousand_calls} ${lex.marks.week_streak}`).not.toMatch(/points|rank|score|level/i);
+    }
   });
 });

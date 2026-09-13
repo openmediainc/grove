@@ -19,6 +19,7 @@ import type { PresenceService } from "./presence.js";
 import { STALL_AFTER_SECONDS } from "./presence.js";
 import type { QuotaService } from "./quota.js";
 import type { FollowHooks } from "./follows.js";
+import { MarkService } from "./marks.js";
 
 /** Finished spans older than this are pruned by sweep(). */
 export const TOOL_CALL_RETENTION_DAYS = 7;
@@ -87,12 +88,16 @@ export function toToolCallView(r: Row, now: number = Date.now()): ToolCallView {
 export class ToolCallService {
   /** Late-bound by GroveApp: followers hear a long call finish or error (028). */
   follows?: FollowHooks;
+  /** Plot marks (030): the prune folds spans into their durable tally. */
+  readonly marks: MarkService;
 
   constructor(
     private store: GroveStore,
     private quota: QuotaService,
     private presence: PresenceService,
-  ) {}
+  ) {
+    this.marks = new MarkService(store);
+  }
 
   async start(actorId: string, input: StartToolCall): Promise<ToolCallView> {
     const name = normaliseToolName(input.name);
@@ -233,7 +238,9 @@ export class ToolCallService {
    *    presence row any more, is closed as `stalled`. It ends at
    *    updated_at + STALL_AFTER_SECONDS — the last moment anything was known —
    *    not at whenever this sweep happened to run.
-   *  - Finished spans past retention are deleted.
+   *  - Finished spans past retention are deleted, each folded into its
+   *    space's durable daily tally in the same statement (030), and marks a
+   *    space has newly earned are awarded (throttled; see MarkService).
    */
   async sweep(): Promise<{ stalled: number; pruned: number }> {
     const { rowCount: stalled } = await this.store.pg.query(
@@ -245,10 +252,8 @@ export class ToolCallService {
               OR NOT EXISTS (SELECT 1 FROM presence p WHERE p.actor_id = t.actor_id))`,
       [STALL_AFTER_SECONDS, TOOL_CALL_ABANDON_SECONDS],
     );
-    const { rowCount: pruned } = await this.store.pg.query(
-      `DELETE FROM tool_calls WHERE finished_at < now() - make_interval(days => $1)`,
-      [TOOL_CALL_RETENTION_DAYS],
-    );
+    const pruned = await this.marks.pruneIntoTally(TOOL_CALL_RETENTION_DAYS);
+    await this.marks.maybeEvaluate().catch(() => {});
     return { stalled: stalled ?? 0, pruned: pruned ?? 0 };
   }
 

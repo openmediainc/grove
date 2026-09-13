@@ -21,6 +21,7 @@ export {
   type PulseItemResult,
   type PulseRefusalCode,
 } from "./services/pulse-batch.js";
+export { MarkService, MARK_EVALUATE_EVERY_MS } from "./services/marks.js";
 export { ToolCallService, TOOL_CALL_ABANDON_SECONDS, TOOL_CALL_RETENTION_DAYS, toToolCallView } from "./services/tool-calls.js";
 export { type WhisperCheck } from "./services/speech.js";
 export { SpeechService, spectatorMayHear, SPECTATOR_RECIPIENT, assertValidOwnerChannelFlag } from "./services/speech.js";

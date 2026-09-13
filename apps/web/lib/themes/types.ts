@@ -20,6 +20,7 @@
  */
 
 import type { AgentVerb } from "@/lib/agent-verbs";
+import type { SpaceMark } from "@grove/protocol";
 import type {
   AccessLevel,
   CharKey,
@@ -187,7 +188,16 @@ export type Signboard = {
   held: boolean;
   /** The first bound org's colour, or null. Always null when held. */
   tint: string | null;
+  /**
+   * Achievement marks (030), laid out as medallions hanging under the board,
+   * SCREEN px. Always empty when held. The SHAPE of each mark's glyph is fixed
+   * (kit `drawSignMark`); a theme only chooses what the medallion is made of.
+   */
+  marks: readonly SignMark[];
 };
+
+/** One laid-out mark medallion: centre and radius, SCREEN px. */
+export type SignMark = { key: SpaceMark; x: number; y: number; r: number };
 
 /** A laid-out bubble as the renderer hands it to a theme. SCREEN px. */
 export type SpeechBubble = {
@@ -360,6 +370,12 @@ export interface ThemeLexicon {
    * `greeting` + `world` is the caption's title; `replay` tags a picture of the past.
    */
   postcard: { button: string; buttonTitle: string; greeting: string; world: string; replay: string };
+
+  /**
+   * Achievement marks on a plot (030), named for the space peek card. Plain
+   * statements of work done, never a score: no numbers beyond the rule itself.
+   */
+  marks: { heading: string } & Record<SpaceMark, string>;
 }
 
 export interface Theme {

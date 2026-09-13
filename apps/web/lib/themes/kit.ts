@@ -18,7 +18,7 @@
  */
 
 import { VERB_RING, type AgentVerb } from "@/lib/agent-verbs";
-import { HAZARD_COLOUR, type Ctx, type HazardTone, type Signboard, type SpeechBubble } from "./types";
+import { HAZARD_COLOUR, type Ctx, type HazardTone, type SignMark, type Signboard, type SpeechBubble } from "./types";
 
 export type { Ctx } from "./types";
 
@@ -244,7 +244,87 @@ export type SignStyle = {
   fixings?: (ctx: Ctx, x0: number, y0: number, w: number, h: number) => void;
   /** Over the board, under the text: rivets, corner marks. */
   trim?: (ctx: Ctx, x0: number, y0: number, w: number, h: number, held: boolean) => void;
+  /**
+   * What an achievement-mark medallion is made of. The glyph's SHAPE is not the
+   * theme's: a thousand calls is always a four-point star, a week streak always
+   * a ring of seven studs (see drawSignMark). Never the hazard colours.
+   */
+  mark: SignMarkStyle;
 };
+
+export type SignMarkStyle = {
+  plate: string;
+  rim: string;
+  glyph: string;
+  /** Round coin, square rivet plate, shield, or hexagon chip. */
+  shape: "round" | "square" | "shield" | "hex";
+};
+
+/**
+ * One achievement-mark medallion, SCREEN space. The outline is the theme's; the
+ * glyph inside says which mark it is by shape alone, the same in every theme:
+ *   thousand_calls  a four-point star (much work, lifetime)
+ *   week_streak     seven studs in a ring (seven days running)
+ */
+export function drawSignMark(ctx: Ctx, m: SignMark, style: SignMarkStyle): void {
+  const { x, y, r } = m;
+  ctx.save();
+  ctx.beginPath();
+  if (style.shape === "round") {
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+  } else if (style.shape === "square") {
+    ctx.rect(x - r + 0.5, y - r + 0.5, r * 2 - 1, r * 2 - 1);
+  } else if (style.shape === "shield") {
+    ctx.moveTo(x - r, y - r);
+    ctx.lineTo(x + r, y - r);
+    ctx.lineTo(x + r, y + r * 0.2);
+    ctx.lineTo(x, y + r * 1.15);
+    ctx.lineTo(x - r, y + r * 0.2);
+    ctx.closePath();
+  } else {
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI / 6 + (i * Math.PI) / 3;
+      const px = x + Math.cos(a) * r;
+      const py = y + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+  ctx.fillStyle = "rgba(7,8,20,0.55)";
+  ctx.save();
+  ctx.translate(0, 1.5);
+  ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = style.plate;
+  ctx.fill();
+  ctx.strokeStyle = style.rim;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = style.glyph;
+  if (m.key === "thousand_calls") {
+    const o = r * 0.72;
+    const i = r * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(x, y - o);
+    ctx.lineTo(x + i, y - i);
+    ctx.lineTo(x + o, y);
+    ctx.lineTo(x + i, y + i);
+    ctx.lineTo(x, y + o);
+    ctx.lineTo(x - i, y + i);
+    ctx.lineTo(x - o, y);
+    ctx.lineTo(x - i, y - i);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    const ring = r * 0.58;
+    for (let k = 0; k < 7; k++) {
+      const a = -Math.PI / 2 + (k * Math.PI * 2) / 7;
+      ctx.fillRect(Math.round(x + Math.cos(a) * ring) - 0.5, Math.round(y + Math.sin(a) * ring) - 0.5, 1.5, 1.5);
+    }
+  }
+  ctx.restore();
+}
 
 /**
  * A plot signboard, SCREEN space. Shape rules every theme keeps: the text is
@@ -294,6 +374,8 @@ export function drawSignboard(ctx: Ctx, b: Signboard, style: SignStyle): void {
     }
   }
   if (b.held) lockMark(ctx, x0 + w - 3, y0 + 1, style.lock.body, style.lock.shackle);
+  // A held board never carries a mark, whatever the layout was handed.
+  else for (const m of b.marks) drawSignMark(ctx, m, style.mark);
   ctx.restore();
 }
 

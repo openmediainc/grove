@@ -551,6 +551,7 @@ const SIGN_STYLE: SignStyle = {
   lock: { body: CHROME, shackle: "#c4b5fd" },
   font: MONO,
   radius: 0,
+  mark: { plate: "rgba(4,10,14,0.92)", rim: "rgba(45,226,230,0.85)", glyph: "#c4b5fd", shape: "hex" },
   tintAt: "underline",
   fixings(ctx, x0, y0, w) {
     ctx.fillStyle = "rgba(45,226,230,0.55)";
@@ -732,6 +733,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
     theme: "Theme",
   },
   postcard: { button: "Capture", buttonTitle: "Capture this view as a PNG on this device. Nothing leaves it.", greeting: "Frame captured on", world: "the Aetheria Grid", replay: "Playback" },
+  marks: { heading: "Badges", thousand_calls: "1k tool calls executed on this node", week_streak: "Seven-cycle uptime streak" },
 };
 
 export const SCIFI_PALETTE: ThemePalette = {

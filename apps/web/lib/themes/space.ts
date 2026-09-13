@@ -545,6 +545,7 @@ const SIGN_STYLE: SignStyle = {
   heldTitle: "rgba(203,213,225,0.7)",
   lock: { body: HULL_DARK, shackle: "#e2e8f0" },
   radius: 0,
+  mark: { plate: "#1e3a5f", rim: "rgba(103,232,249,0.8)", glyph: "#e0f2fe", shape: "round" },
   tintAt: "left",
   fixings(ctx, x0, y0, w) {
     ctx.fillStyle = HULL_DARK;
@@ -686,6 +687,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
     theme: "Theme",
   },
   postcard: { button: "Postcard", buttonTitle: "Save a still of this view to this device. Nothing is transmitted.", greeting: "Transmission from", world: "Aetheria Station", replay: "Archive" },
+  marks: { heading: "Mission patches", thousand_calls: "A thousand tool calls logged aboard", week_streak: "Seven consecutive days on shift" },
 };
 
 export const SPACE_PALETTE: ThemePalette = {

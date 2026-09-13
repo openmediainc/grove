@@ -64,6 +64,9 @@ export type Peek =
       ownerHandle: string | null;
       occupancy: number;
       orgs: OrgBadge[];
+      /** Achievement marks held, already in the theme's words. Empty when redacted. */
+      marks: string[];
+      marksHeading: string;
       share: ShareTarget;
     }
   | {
@@ -319,6 +322,16 @@ function SpacePeek({
                 <Chip key={o.id} org={o} />
               ))}
             </p>
+          ) : null}
+          {peek.marks.length ? (
+            <div className="mt-2">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/60">{peek.marksHeading}</p>
+              <ul className="mt-1 space-y-0.5 text-xs text-white/60">
+                {peek.marks.map((m) => (
+                  <li key={m}>{m}</li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           <CardFields card={card} lex={lex} compact />
           <CardActions

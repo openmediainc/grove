@@ -11,9 +11,15 @@
  * headcount — not even when the viewer is its owner and the server sent the
  * name. The world map is watched on kiosks and TV; a private plot reads
  * "Held plot" (the theme's `heldPlot`) and its closed access label, nothing else.
+ * The same rule covers achievement marks: a held board never carries one.
+ *
+ * Marks (030) hang under the board as small medallions, one per mark the space
+ * holds, in the protocol's fixed order. There is no count and no ranking to
+ * draw: a space holds a mark or it does not.
  */
 
-import type { Signboard, SignLine, ThemeLexicon } from "@/lib/themes/types";
+import { normaliseMarks, type SpaceMark } from "@grove/protocol";
+import type { Signboard, SignLine, SignMark, ThemeLexicon } from "@/lib/themes/types";
 
 /** Below this zoom a signboard is dropped: the text would be wider than its building. */
 export const LOD_SIGNBOARD = 0.55;
@@ -25,6 +31,8 @@ export type SignPlot = {
   name: string | null;
   occupancy: number;
   orgs: ReadonlyArray<{ name: string; colour: string }>;
+  /** Mark keys the server published. Ignored for a private plot. */
+  marks?: readonly string[];
 };
 
 export type SignContent = {
@@ -33,6 +41,7 @@ export type SignContent = {
   detail: string;
   orgLine: string | null;
   tint: string | null;
+  marks: SpaceMark[];
 };
 
 export function signboardVisible(zoom: number): boolean {
@@ -46,7 +55,7 @@ export function signContent(
 ): SignContent {
   const access = (lexicon.access as Record<string, { label: string } | undefined>)[plot.preset]?.label ?? plot.preset;
   if (plot.preset === "private") {
-    return { held: true, title: lexicon.heldPlot, detail: access, orgLine: null, tint: null };
+    return { held: true, title: lexicon.heldPlot, detail: access, orgLine: null, tint: null, marks: [] };
   }
   const name = plot.name?.trim();
   return {
@@ -55,6 +64,7 @@ export function signContent(
     detail: `${access}${plot.occupancy ? ` · ${plot.occupancy} here` : ""}`,
     orgLine: plot.orgs.length ? plot.orgs.map((o) => o.name).join(" · ") : null,
     tint: plot.orgs[0]?.colour ?? null,
+    marks: normaliseMarks(plot.marks),
   };
 }
 
@@ -86,6 +96,17 @@ const MIN_W = 44;
 const MAX_W = 150;
 /** A 3x3 building is this many layout px wide; the board keeps inside ~80% of it. */
 const BUILDING_W = 3 * 64;
+/** Mark medallion radius and the gap between two, SCREEN px. Fixed like the text. */
+export const MARK_R = 6;
+const MARK_GAP = 3;
+
+/** Medallions in a row, centred under the board's bottom edge, overlapping it by a third. */
+export function layoutSignMarks(marks: readonly SpaceMark[], cx: number, bottom: number): SignMark[] {
+  const step = MARK_R * 2 + MARK_GAP;
+  const first = cx - ((marks.length - 1) * step) / 2;
+  const y = Math.round(bottom + MARK_R - 4);
+  return marks.map((key, i) => ({ key, x: Math.round(first + i * step), y, r: MARK_R }));
+}
 
 /**
  * Lay out a board centred on (ax, ay), the SCREEN point on the building's
@@ -129,5 +150,6 @@ export function layoutSignboard(
     lines: placed,
     held: content.held,
     tint: content.tint,
+    marks: content.held ? [] : layoutSignMarks(content.marks, x0 + w / 2, y0 + h),
   };
 }

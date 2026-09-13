@@ -533,6 +533,7 @@ const SIGN_STYLE: SignStyle = {
   heldTitle: "rgba(250,250,249,0.7)",
   lock: { body: "#71717a", shackle: "#fafaf9" },
   radius: 4,
+  mark: { plate: "#a16207", rim: "#fafaf9", glyph: "#fefce8", shape: "square" },
   tintAt: "bottom",
   fixings(ctx, x0, y0, w) {
     ctx.fillStyle = "#6b7280";
@@ -668,6 +669,7 @@ export const CITY_LEXICON: ThemeLexicon = {
     theme: "Theme",
   },
   postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Wish you were here, from", world: "Aetheria City", replay: "Rerun" },
+  marks: { heading: "Plaques", thousand_calls: "A thousand tool calls on this lot", week_streak: "Seven straight working days" },
 };
 
 export const CITY_PALETTE: ThemePalette = {

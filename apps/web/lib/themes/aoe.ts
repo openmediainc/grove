@@ -99,6 +99,7 @@ const SIGN_STYLE: SignStyle = {
   heldTitle: "rgba(244,209,154,0.62)",
   lock: { body: "#8b6a3e", shackle: "#d6c3a0" },
   radius: 1,
+  mark: { plate: "#b08a3e", rim: "#24160a", glyph: "#fff1cc", shape: "shield" },
   tintAt: "top",
   fixings(ctx, x0, y0, w) {
     ctx.strokeStyle = "rgba(20,12,4,0.9)";
@@ -297,6 +298,7 @@ export const AOE_LEXICON: ThemeLexicon = {
     theme: "Theme",
   },
   postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Greetings from", world: "Aetheria", replay: "Replay" },
+  marks: { heading: "Marks", thousand_calls: "A thousand tool calls worked here", week_streak: "Seven days of work in a row" },
 };
 
 export const AOE_PALETTE: ThemePalette = {

@@ -1,4 +1,4 @@
-import { EMOTE_ENUM, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
+import { EMOTE_ENUM, normaliseMarks, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
 import type { GroveStore } from "../store.js";
 import { GroveError } from "../errors.js";
 import { newId } from "../ids.js";
@@ -308,7 +308,10 @@ export class WorldService {
                         WHERE wo.world_id = w.id), '[]'::json) AS orgs,
               -- SPC-07: rooms opened to non-members. Shown even on a private
               -- plot: a public lobby shows ONLY itself, never the space around it.
-              ${OPEN_ROOMS_SQL} AS open_rooms
+              ${OPEN_ROOMS_SQL} AS open_rooms,
+              -- 030: which achievement marks the space holds. Keys only, never
+              -- a count, so there is nothing to rank by.
+              (SELECT array_agg(sm.mark) FROM space_marks sm WHERE sm.world_id = w.id) AS marks
        FROM worlds w LEFT JOIN humans h ON h.id = w.owner_human_id
        WHERE w.plot_index IS NOT NULL
        ORDER BY w.plot_index`,
@@ -328,6 +331,9 @@ export class WorldService {
         // so it redacts with the name and the owner rather than separately.
         orgs: open ? ((r.orgs as OrgBadge[] | null) ?? []) : [],
         openRooms: mapOpenRooms(r.open_rooms),
+        // A private plot never shows marks: what was done behind a closed door
+        // is part of what is behind it, like its name.
+        marks: open ? normaliseMarks(r.marks) : [],
       };
     });
 
