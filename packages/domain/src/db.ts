@@ -3,12 +3,22 @@ import pg from "pg";
 export type Pool = pg.Pool;
 export type PoolClient = pg.PoolClient;
 
+function forCloudPostgres(databaseUrl: string): boolean {
+  return databaseUrl.includes("supabase.co") || databaseUrl.includes("pooler.supabase.com");
+}
+
+/** Strip sslmode so pg's newer verify-full default cannot override our ssl config. */
+function connectionString(databaseUrl: string): string {
+  return databaseUrl.replace(/[?&]sslmode=[^&]*/g, "").replace(/\?$/, "").replace("?&", "?");
+}
+
 export function createPool(databaseUrl: string): pg.Pool {
-  const supabase = databaseUrl.includes("supabase.co") || databaseUrl.includes("pooler.supabase.com");
+  const cloud = forCloudPostgres(databaseUrl);
   return new pg.Pool({
-    connectionString: databaseUrl,
+    connectionString: connectionString(databaseUrl),
     max: Number(process.env.PG_POOL_MAX ?? (process.env.VERCEL ? 3 : 20)),
-    ssl: supabase ? { rejectUnauthorized: false } : undefined,
+    ssl: cloud ? { rejectUnauthorized: false } : undefined,
+    connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS ?? 8000),
   });
 }
 

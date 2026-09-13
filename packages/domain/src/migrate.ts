@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import pg from "pg";
+import { createPool, type Pool } from "./db.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(here, "../migrations");
@@ -21,7 +21,7 @@ function migrationFiles(): string[] {
  * empty set rather than creating it, so a caller that only wants to *look* (see
  * pendingMigrations) never writes to the database it is inspecting.
  */
-async function appliedIds(pool: pg.Pool): Promise<Set<string>> {
+async function appliedIds(pool: Pool): Promise<Set<string>> {
   const exists = await pool.query<{ reg: string | null }>(
     "SELECT to_regclass('public.schema_migrations') AS reg",
   );
@@ -38,7 +38,7 @@ async function appliedIds(pool: pg.Pool): Promise<Set<string>> {
  * tell an operator, by id, what a deliberate `pnpm migrate` would apply.
  */
 export async function pendingMigrations(databaseUrl: string): Promise<string[]> {
-  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const pool = createPool(databaseUrl);
   try {
     const done = await appliedIds(pool);
     return migrationFiles().filter((file) => !done.has(file));
@@ -48,7 +48,7 @@ export async function pendingMigrations(databaseUrl: string): Promise<string[]> 
 }
 
 export async function migrate(databaseUrl: string): Promise<void> {
-  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const pool = createPool(databaseUrl);
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (

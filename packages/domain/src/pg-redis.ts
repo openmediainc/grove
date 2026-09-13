@@ -201,9 +201,13 @@ export class PgRedis extends EventEmitter {
   private async ensureListen(): Promise<void> {
     if (this.listenReady) return this.listenReady;
     this.listenReady = (async () => {
+      const cloud =
+        this.connectionString.includes("supabase.co") ||
+        this.connectionString.includes("pooler.supabase.com");
+      const url = this.connectionString.replace(/[?&]sslmode=[^&]*/g, "").replace(/\?$/, "");
       const client = new pg.Client({
-        connectionString: this.connectionString,
-        ssl: this.connectionString.includes("supabase.co") ? { rejectUnauthorized: false } : undefined,
+        connectionString: url,
+        ssl: cloud ? { rejectUnauthorized: false } : undefined,
       });
       await client.connect();
       client.on("notification", async (msg) => {
