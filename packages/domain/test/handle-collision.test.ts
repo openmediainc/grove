@@ -98,6 +98,38 @@ describe.skipIf(!hasDb)("signup survives a long email local part", () => {
     expect(third.handle).not.toBe(second.handle);
   });
 
+  it("gives concurrent signups that clip to one handle a handle each, instead of a 23505", async () => {
+    // The collision loop above is check-then-insert: every signup racing for
+    // the same handle reads it free, and all but one INSERT died on
+    // humans_handle_key. That is the error a parallel suite run kept hitting
+    // (speech-wiring's "agents-only-bystander-<tag>" clips its random tag off
+    // entirely, so it is the SAME handle on every run), and it is what two real
+    // people with the same local part signing up in the same moment would get.
+    const stem = `racinglocalpart${tag()}same`;
+    expect(stem.length).toBeGreaterThan(HANDLE_MAX);
+    const humans = await Promise.all(
+      Array.from({ length: 6 }, (_, i) => signUp(`${stem}-${i}@example.com`)),
+    );
+    const handles = humans.map((h) => h.handle);
+    expect(new Set(handles).size).toBe(humans.length);
+    for (const h of handles) expect(h.length).toBeLessThanOrEqual(HANDLE_MAX);
+  });
+
+  it("lets one email's two magic links race to the same human", async () => {
+    // Same check-then-insert, on email: both consumes found no human and the
+    // second INSERT died on humans_email_key. Whoever loses the race is the
+    // same person and should simply be signed in.
+    const email = `twolinks${tag()}@example.com`;
+    await redis.del(`ratelimit:email:${email}:magic:hour`);
+    const links = await Promise.all([
+      grove.identity.requestMagicLink({ email, inviteCode: "grove-alpha", ageAttested: true }),
+      grove.identity.requestMagicLink({ email, inviteCode: "grove-alpha", ageAttested: true }),
+    ]);
+    const [a, b] = await Promise.all(links.map((l) => grove.identity.consumeMagicLink(l.token)));
+    madeHumans.push(a!.human.id, b!.human.id);
+    expect(a!.human.id).toBe(b!.human.id);
+  });
+
   it("does not change the handle a short email already gets", async () => {
     const local = `bob${tag()}`;
     expect(local.length).toBeLessThan(HANDLE_MAX);
