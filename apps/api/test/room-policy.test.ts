@@ -59,6 +59,21 @@ describe.skipIf(!hasDb)("room policy routes", () => {
     return { cookie, id: human.id, handle: human.handle };
   }
 
+  async function spaceWith(owner: { cookie: string }, preset: "private" | "public_view" | "public_write") {
+    const server = await boot();
+    const slug = `grove-pub-${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/v1/worlds",
+      headers: { cookie: owner.cookie },
+      payload: { name: `Public ${slug}`, slug, policy_preset: preset },
+    });
+    expect(created.statusCode).toBe(201);
+    const world = (created.json() as { world: { id: string } }).world;
+    fixtures.trackWorld(world.id);
+    return world;
+  }
+
   async function privateSpace(owner: { cookie: string }) {
     const server = await boot();
     const created = await server.inject({
@@ -147,6 +162,54 @@ describe.skipIf(!hasDb)("room policy routes", () => {
     expect(plot.name).toBeNull();
     expect(plot.open_rooms.map((r) => r.slug)).toEqual(["garden"]);
     expect(JSON.stringify(plot)).not.toContain(world.name);
+  });
+
+  it("public presets let a non-member walk in as a visitor at the preset's level; private stays shut", async () => {
+    const server = await boot();
+    const owner = await signIn("pbo");
+    const visitor = await signIn("pbv");
+    // A second visitor for public_write: a brand-new human's first-day say
+    // limits would otherwise count the refused public_view attempt against it.
+    const talker = await signIn("pbt");
+    const say = (who: { cookie: string }, worldId: string, body: string) =>
+      server.inject({
+        method: "POST",
+        url: "/api/v1/say",
+        headers: { cookie: who.cookie, "x-grove-world": worldId, "idempotency-key": `pb-${Date.now()}-${body}` },
+        payload: { channel: "room_say", body },
+      });
+
+    // public_view: in without joining, can listen, cannot speak.
+    const view = await spaceWith(owner, "public_view");
+    const inView = await server.inject({ method: "POST", url: `/api/v1/worlds/${view.id}/enter`, headers: { cookie: visitor.cookie }, payload: {} });
+    expect(inView.statusCode).toBe(200);
+    expect((inView.json() as { room: { id: string } }).room.id).toBe(`${view.id}:plaza`);
+    expect(await grove!.campus.isMember(view.id, visitor.id)).toBe(false);
+    expect((await server.inject({ method: "GET", url: "/api/v1/rooms/plaza", headers: { cookie: visitor.cookie, "x-grove-world": view.id } })).statusCode).toBe(200);
+    const muted = await say(visitor, view.id, "hi-view");
+    expect(muted.statusCode).toBe(403);
+    expect((muted.json() as { error: Record<string, unknown> }).error).toMatchObject({ code: "PERMISSION_DENIED", membership: "non_member" });
+
+    // public_write: in, and may speak.
+    const write = await spaceWith(owner, "public_write");
+    expect((await server.inject({ method: "POST", url: `/api/v1/worlds/${write.id}/enter`, headers: { cookie: talker.cookie }, payload: {} })).statusCode).toBe(200);
+    expect((await say(talker, write.id, "hi-write")).statusCode).toBe(200);
+    expect(await grove!.campus.isMember(write.id, talker.id)).toBe(false);
+
+    // A private room inside a public space stays closed.
+    const closed = await server.inject({
+      method: "PATCH",
+      url: `/api/v1/worlds/${write.id}/rooms/library`,
+      headers: { cookie: owner.cookie },
+      payload: { room_preset: "private" },
+    });
+    expect(closed.statusCode).toBe(200);
+    expect((await server.inject({ method: "POST", url: `/api/v1/worlds/${write.id}/enter`, headers: { cookie: visitor.cookie }, payload: { room: "library" } })).statusCode).toBe(403);
+    expect((await server.inject({ method: "GET", url: "/api/v1/rooms/library", headers: { cookie: visitor.cookie, "x-grove-world": write.id } })).statusCode).toBe(403);
+
+    // A private space admits nobody who is not a member.
+    const priv = await spaceWith(owner, "private");
+    expect((await server.inject({ method: "POST", url: `/api/v1/worlds/${priv.id}/enter`, headers: { cookie: visitor.cookie }, payload: {} })).statusCode).toBe(403);
   });
 
   it("owner-only: a stranger, a foreign room and bad input are refused without confirming anything", async () => {

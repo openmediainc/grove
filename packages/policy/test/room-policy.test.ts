@@ -5,6 +5,7 @@ import {
   OPEN_SPACE_POLICY,
   resolveCeiling,
   roomAdmitsNonMembers,
+  roomAdmitsVisitors,
   spacePolicyForPreset,
   type CeilingLayers,
   type PermissionPolicy,
@@ -383,5 +384,23 @@ describe("roomAdmitsNonMembers — only an explicit, non-private room override o
     expect(roomAdmitsNonMembers("private")).toBe(false);
     expect(roomAdmitsNonMembers("public_view")).toBe(true);
     expect(roomAdmitsNonMembers("public_write")).toBe(true);
+  });
+});
+
+describe("roomAdmitsVisitors — the door rule: a room override replaces the space", () => {
+  const view = spacePolicyForPreset("public_view");
+  const write = spacePolicyForPreset("public_write");
+  const priv = spacePolicyForPreset("private");
+  it("an inheriting room follows its space: public presets admit, private does not", () => {
+    expect(roomAdmitsVisitors(null, view)).toBe(true);
+    expect(roomAdmitsVisitors(null, write)).toBe(true);
+    expect(roomAdmitsVisitors(null, priv)).toBe(false);
+    expect(roomAdmitsVisitors(undefined, undefined)).toBe(false);
+  });
+  it("a private room stays closed inside a public space; a lobby opens on a private plot", () => {
+    expect(roomAdmitsVisitors("private", write)).toBe(false);
+    expect(roomAdmitsVisitors("private", view)).toBe(false);
+    expect(roomAdmitsVisitors("public_view", priv)).toBe(true);
+    expect(roomAdmitsVisitors("public_write", priv)).toBe(true);
   });
 });

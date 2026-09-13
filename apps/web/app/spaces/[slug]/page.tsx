@@ -76,11 +76,14 @@ export default function SpaceDetail() {
     void load().catch((e) => setErr((e as Error).message));
   }, [load]);
 
-  async function enter() {
+  async function enter(room?: string) {
     setErr(null);
     try {
-      await api(`/api/v1/worlds/${d!.world.id}/enter`, { method: "POST", body: "{}" });
-      window.location.href = gp("/w/plaza");
+      await api(`/api/v1/worlds/${d!.world.id}/enter`, {
+        method: "POST",
+        body: JSON.stringify(room ? { room } : {}),
+      });
+      window.location.href = gp(`/w/${room ?? "plaza"}`);
     } catch (e) {
       setErr((e as Error).message);
     }
@@ -99,6 +102,10 @@ export default function SpaceDetail() {
   if (!d) return <main className="mx-auto max-w-3xl px-4 py-8 text-white/40 sm:px-6 sm:py-12">Loading…</main>;
 
   const copy = presetCopy(d.world.policy_preset);
+  // A non-member walks in as a visitor through an open door: the plaza when it
+  // is open, else the first open room. Joining stays a separate ask.
+  const openRooms = d.rooms.filter((r) => r.admits_non_members);
+  const visitRoom = openRooms.find((r) => r.slug === "plaza") ?? openRooms[0] ?? null;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
@@ -124,13 +131,23 @@ export default function SpaceDetail() {
         </div>
         {d.is_member ? (
           <button
-            onClick={enter}
+            onClick={() => void enter()}
             className="shrink-0 rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 sm:py-2"
           >
             Enter this space
           </button>
         ) : (
-          <AskToJoin worldId={d.world.id} />
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {visitRoom ? (
+              <button
+                onClick={() => void enter(visitRoom.slug)}
+                className="rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 sm:py-2"
+              >
+                {d.world.policy_preset === "public_view" ? "Visit and watch" : "Visit"}
+              </button>
+            ) : null}
+            <AskToJoin worldId={d.world.id} />
+          </div>
         )}
       </div>
 

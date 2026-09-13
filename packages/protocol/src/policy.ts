@@ -189,17 +189,42 @@ export function resolveCeiling(layers: CeilingLayers | undefined, isMember: bool
 }
 
 /**
- * Does this room's own override let a NON-member through the space's door?
- *
- * The space's preset never admits a non-member to a non-core space (that gate is
- * membership, `assertWorldAccess`). A room override that grants any capability
- * is the owner deliberately opening THAT room — a lobby — and only that room.
- * `private` (or no override) admits nobody new.
+ * Does this room's own override grant a NON-member anything? (An explicit
+ * lobby.) `private` or no override grants nothing by itself; whether an
+ * inheriting room admits visitors is `roomAdmitsVisitors`, which also reads the
+ * space.
  */
 export function roomAdmitsNonMembers(roomPreset: SpacePolicyPreset | null | undefined): boolean {
   if (!roomPreset) return false;
   const p = SPACE_POLICY_PRESETS[roomPreset];
   return Boolean(p && (p.listenToAgents || p.listenToHumans || p.speakToAgents || p.speakToHumans));
+}
+
+/** Whether a non-member ceiling grants any capability at all. */
+export function ceilingAdmits(ceiling: SpacePolicy | null | undefined): boolean {
+  return Boolean(
+    ceiling && (ceiling.listenToAgents || ceiling.listenToHumans || ceiling.speakToAgents || ceiling.speakToHumans),
+  );
+}
+
+/**
+ * THE door rule for a non-member of a space. The same precedence as
+ * `resolveCeiling`'s non-member side: a room override REPLACES the space.
+ *
+ * - An explicit room override decides for that room: `private` keeps a room of a
+ *   public space closed; any other preset opens it as a lobby, even on a private
+ *   plot.
+ * - With no override the room inherits the space: `public_view` / `public_write`
+ *   admit a non-member (who is then held to that ceiling — listen-only, or
+ *   speak), `private` admits nobody.
+ *
+ * Admission is never membership: a visitor sits at the non-member ceiling.
+ */
+export function roomAdmitsVisitors(
+  roomPreset: SpacePolicyPreset | null | undefined,
+  spaceCeiling: SpacePolicy | null | undefined,
+): boolean {
+  return roomPreset ? roomAdmitsNonMembers(roomPreset) : ceilingAdmits(spaceCeiling);
 }
 
 /**

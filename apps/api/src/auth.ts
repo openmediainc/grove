@@ -192,13 +192,15 @@ export async function assertWorldAccess(
 }
 
 /**
- * SPC-07 — `assertWorldAccess`, widened by exactly ONE room.
+ * `assertWorldAccess`, widened to the rooms whose door is open to non-members.
  *
- * A space owner may open a single room to non-members (a public lobby on a
- * private plot). A non-member asking for THAT room, in the world they named, is
- * let through as a `visitor`; every other room of the space answers with the
- * very same refusal a non-member always got, whether the room is closed or does
- * not exist — so the widening leaks nothing about the rooms behind the door.
+ * A room is open when the space is `public_view` / `public_write` and the room
+ * has no `private` override, or when the owner opened it as a lobby on a private
+ * plot (SPC-07) — `roomAdmitsVisitors` in @grove/protocol. A non-member asking
+ * for such a room, in the world they named, is let through as a `visitor` held
+ * to the non-member ceiling; every other room answers with the very same
+ * refusal a non-member always got, whether the room is closed or does not
+ * exist — so the widening leaks nothing about the rooms behind the door.
  *
  * Only reads and the room's own enter call this. World-level routes (the
  * minimap, /world, the civic board) keep `assertWorldAccess` untouched: a

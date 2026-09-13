@@ -4,7 +4,7 @@ import {
   SPACE_POLICY_PRESETS,
   WORLD_ID,
   parseCeiling,
-  roomAdmitsNonMembers,
+  roomAdmitsVisitors,
   spacePolicyForPreset,
   type CeilingLayers,
   type Human,
@@ -418,11 +418,13 @@ export class CampusService {
   async roomsOf(worldId: string): Promise<SpaceRoomRow[]> {
     const { rows } = await this.store.pg.query(
       `SELECT r.id, r.slug, r.name, r.kind, r.capacity, r.room_preset, r.member_policy,
+              w.policy_preset AS space_preset, w.space_policy,
               (SELECT count(*)::int FROM presence p WHERE p.room_id = r.id) AS occupancy
-       FROM rooms r WHERE r.world_id = $1 ORDER BY r.name`,
+       FROM rooms r JOIN worlds w ON w.id = r.world_id WHERE r.world_id = $1 ORDER BY r.name`,
       [worldId],
     );
     return rows.map((r) => {
+      const spaceCeiling = worldId === WORLD_ID ? undefined : spaceCeilingOf(r);
       const roomPreset = isSpacePolicyPreset(r.room_preset) ? r.room_preset : null;
       return {
         id: String(r.id),
@@ -433,7 +435,7 @@ export class CampusService {
         occupancy: Number(r.occupancy),
         roomPreset,
         memberPolicy: ceilingFromRow(r.member_policy),
-        admitsNonMembers: roomAdmitsNonMembers(roomPreset),
+        admitsNonMembers: worldId !== WORLD_ID && roomAdmitsVisitors(roomPreset, spaceCeiling),
       };
     });
   }
@@ -536,6 +538,11 @@ export class CampusService {
       throw new GroveError("INVALID", "name, policy_preset, member_policy or org_render_mode is required.");
     }
 
+    const openBefore = new Set(
+      input.policyPreset !== undefined
+        ? (await this.roomsOf(world.id)).filter((r) => r.admitsNonMembers).map((r) => r.id)
+        : [],
+    );
     const { rows } = await this.store.pg.query(
       `UPDATE worlds SET ${sets.join(", ")} WHERE id = $1 RETURNING *`,
       params,
@@ -546,6 +553,11 @@ export class CampusService {
     // them today, because a runtime may be mid-move.
     if (input.policyPreset !== undefined || input.memberPolicy !== undefined) {
       for (const room of await this.roomsOf(world.id)) {
+        // A space closing its doors closes every room that inherited them: the
+        // non-members standing inside go, exactly as when one lobby closes.
+        if (openBefore.has(room.id) && !room.admitsNonMembers) {
+          await this.evictNonMembers(world.id, room.id);
+        }
         await this.publishRoomPolicy(after, room, "space");
       }
     }
@@ -707,14 +719,15 @@ export class CampusService {
   async visitableRoom(worldId: string, slugOrId: string): Promise<Room | null> {
     if (worldId === WORLD_ID) return null;
     const { rows } = await this.store.pg.query(
-      `SELECT r.* FROM rooms r JOIN worlds w ON w.id = r.world_id
+      `SELECT r.*, w.policy_preset AS space_preset, w.space_policy
+       FROM rooms r JOIN worlds w ON w.id = r.world_id
        WHERE r.world_id = $1 AND (r.slug = $2 OR r.id = $2) AND w.archived_at IS NULL
        LIMIT 1`,
       [worldId, slugOrId],
     );
     if (!rows[0]) return null;
     const room = mapRoom(rows[0] as Record<string, unknown>);
-    return roomAdmitsNonMembers(room.roomPreset) ? room : null;
+    return roomAdmitsVisitors(room.roomPreset, spaceCeilingOf(rows[0] as Record<string, unknown>)) ? room : null;
   }
 
   async createWorld(
@@ -1595,6 +1608,14 @@ export class CampusService {
     }
     return out;
   }
+}
+
+/** A space's non-member ceiling from a row carrying `space_policy` + `space_preset`/`policy_preset`. */
+function spaceCeilingOf(r: Record<string, unknown>): SpacePolicy {
+  return (
+    toSpacePolicy(r.space_policy) ??
+    spacePolicyForPreset(((r.space_preset ?? r.policy_preset) as SpacePolicyPreset) ?? DEFAULT_SPACE_POLICY_PRESET)
+  );
 }
 
 function mapWorld(r: Record<string, unknown>): WorldRow {
