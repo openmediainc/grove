@@ -306,4 +306,28 @@ describe.skipIf(!hasDb)("room policy (SPC-07 / SPC-10)", () => {
     expect(bodies).toContain("said after opening");
     expect(bodies).not.toContain("said while private");
   });
+  it("public presets admit non-members to every inheriting room; a private room and a private space do not", async () => {
+    const view = await makeSpace("public_view");
+    const write = await makeSpace("public_write");
+    const priv = await makeSpace("private");
+    expect((await grove.campus.visitableRoom(view.space.id, "plaza"))?.id).toBe(`${view.space.id}:plaza`);
+    expect((await grove.campus.visitableRoom(write.space.id, "library"))?.id).toBe(`${write.space.id}:library`);
+    expect(await grove.campus.visitableRoom(priv.space.id, "plaza")).toBeNull();
+    expect((await grove.campus.roomsOf(view.space.id)).every((r) => r.admitsNonMembers)).toBe(true);
+    await grove.campus.updateRoomAccess(write.owner, write.space.id, "library", { roomPreset: "private" });
+    expect(await grove.campus.visitableRoom(write.space.id, "library")).toBeNull();
+    expect((await grove.campus.roomsOf(write.space.id)).find((r) => r.slug === "library")?.admitsNonMembers).toBe(false);
+  });
+
+  it("a public space turned private returns its visitors out and keeps members", async () => {
+    const { owner, space } = await makeSpace("public_write");
+    const outsider = await newHuman("rpspc");
+    const visitor = await newAgent(outsider, `sv${tag()}`);
+    const host = await newAgent(owner, `sh${tag()}`);
+    await place(visitor, space.id, "plaza");
+    await place(host, space.id, "plaza");
+    await grove.campus.updateWorld(owner, space.id, { policyPreset: "private" });
+    expect(await grove.presence.getPresence(visitor.id)).toBeNull();
+    expect((await grove.presence.getPresence(host.id))?.roomId).toBe(`${space.id}:plaza`);
+  });
 });

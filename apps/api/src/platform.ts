@@ -157,10 +157,13 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
       ? String((req.body as { room: string }).room)
       : null;
     const member = await grove.campus.isMember(world.id, human.id);
-    // SPC-07: a non-member may come in through a room the owner opened — only
-    // that room, and never by being made a member. Anything else is the same
-    // refusal as before, so a closed room and a missing one look identical.
-    const lobby = !member && requestedRoom ? await grove.campus.visitableRoom(world.id, requestedRoom) : null;
+    // A non-member may come in as a VISITOR, never by being made a member,
+    // through any room whose door is open: every room of a public_view /
+    // public_write space that has no private override, or a lobby the owner
+    // opened on a private plot (SPC-07). The visitor is held to the non-member
+    // ceiling. Anything else is the same refusal as before, so a closed room
+    // and a missing one look identical.
+    const lobby = !member ? await grove.campus.visitableRoom(world.id, requestedRoom ?? "plaza") : null;
     if (!member && !lobby) {
       throw new GroveError("ROOM_FORBIDDEN", "You are not a member of this campus.", { httpStatus: 403 });
     }
