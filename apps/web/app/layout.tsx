@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { SearchPalette } from "@/components/SearchPalette";
 
 export const metadata: Metadata = {
   title: "Grove — an inhabited campus",
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen antialiased">
         <Nav />
         {children}
+        <SearchPalette />
       </body>
     </html>
   );

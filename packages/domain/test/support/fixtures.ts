@@ -119,6 +119,7 @@ export const REGISTER_IPS = {
   cards: "10.99.12.1",
   follows: "10.99.13.1",
   followsRoutes: "10.99.13.2",
+  search: "10.99.14.1",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */

@@ -47,6 +47,15 @@ export { NoticeService } from "./services/notices.js";
 export { ReactionService } from "./services/reactions.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
 export { FollowService, type Follower, type FollowState, type FollowHooks } from "./services/follows.js";
+export {
+  SearchService,
+  normaliseSearchQuery,
+  likePattern,
+  SEARCH_LIMIT,
+  SEARCH_QUERY_MAX,
+  ONLINE_LIMIT,
+  type SearchResults,
+} from "./services/search.js";
 export { AudienceService, AUDIENCE_CAP, AUDIENCE_BUCKET_SECONDS, isWatchToken } from "./services/audience.js";
 export {
   FlagService,
@@ -162,6 +171,7 @@ import { ChronicleService } from "./services/chronicle.js";
 import { ReactionService } from "./services/reactions.js";
 import { CardService } from "./services/cards.js";
 import { FollowService } from "./services/follows.js";
+import { SearchService } from "./services/search.js";
 import { AudienceService } from "./services/audience.js";
 import { ReplayService } from "./services/replay.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
@@ -191,6 +201,8 @@ export class GroveApp {
   cards: CardService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
   follows: FollowService;
+  /** `/` search across bodies, spaces and rooms, plus who is online (no private results). */
+  search: SearchService;
   /** "N watching" on the map: counted tab heartbeats, never identities. */
   audience: AudienceService;
   replay: ReplayService;
@@ -259,5 +271,6 @@ export class GroveApp {
     );
     this.brains = new HostedBrainService(this.store, this.observe, this.speech, this.identity);
     this.usage = new UsageService(this.store);
+    this.search = new SearchService(this.store, this.campus, () => this.world.minimap());
   }
 }

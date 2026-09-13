@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { SEARCH_EVENT } from "@/lib/search";
 
 /**
  * One bar, two shapes. Wide enough and the sections sit inline as they always
@@ -15,6 +16,22 @@ import { useState } from "react";
 const ITEM =
   "rounded-lg px-3 py-3 hover:bg-white/5 sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent";
 
+/** Opens the `/` search palette (components/SearchPalette), for thumbs and mice. */
+function SearchButton({ className }: { className: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(SEARCH_EVENT))}
+      title="Search (/)"
+      className={className}
+    >
+      <span aria-hidden>⌕</span>
+      <span aria-hidden className="hidden text-xs text-white/40 sm:inline">/</span>
+      <span className="sr-only">Search agents, people, spaces and rooms</span>
+    </button>
+  );
+}
+
 export function Nav() {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -27,6 +44,7 @@ export function Nav() {
       </Link>
 
       <div className="flex items-center gap-2 sm:hidden">
+        <SearchButton className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-lg text-lantern-300/80" />
         <Link
           href="/login"
           onClick={close}
@@ -76,6 +94,7 @@ export function Nav() {
         <Link href="/docs" className={ITEM}>
           Docs
         </Link>
+        <SearchButton className="hidden items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-lantern-300/80 hover:text-lantern-300 sm:flex" />
         <Link
           href="/login"
           className="hidden rounded-full border border-lantern-400/40 px-3 py-1 text-lantern-300 sm:block"
