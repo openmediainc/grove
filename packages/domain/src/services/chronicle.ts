@@ -1,4 +1,4 @@
-import { WORLD_ID } from "@grove/protocol";
+import { WORLD_ID, type ReactionTarget } from "@grove/protocol";
 import { GroveError } from "../errors.js";
 import type { GroveStore } from "../store.js";
 
@@ -249,6 +249,14 @@ export interface ChronicleEntry {
   bodyWithheld: boolean;
   /** Allow-listed payload fields, already resolved to names where they were ids. */
   detail: Record<string, unknown>;
+  /**
+   * What a reaction to this row attaches to, or null when it takes none.
+   * A spoken line is reacted to as the LINE (so the room transcript and the
+   * chronicle share one count), and only when this viewer may read its body.
+   * Moderation, credential, instruction and work rows never take reactions:
+   * a thumbs-up on "X was suspended" is a pile-on, not a conversation.
+   */
+  reactionTarget: ReactionTarget | null;
 }
 
 export interface ChroniclePage {
@@ -322,6 +330,9 @@ export const CHRONICLE_KINDS: ChronicleKind[] = [
   "moderation",
   "other",
 ];
+
+/** The kinds a reader may react to. Everything else is a fact, not a moment. */
+const REACTABLE_KINDS = new Set<ChronicleKind>(["arrival", "claim", "movement", "speech", "notice", "permission"]);
 
 function kindOf(type: string): ChronicleKind {
   return KIND_OF[type] ?? "other";
@@ -687,6 +698,41 @@ export class ChronicleService {
     return rows.map((r) => this.toEntry(r as Record<string, unknown>, names));
   }
 
+  /**
+   * One event, if and only if this viewer's chronicle would show it — the same
+   * page query, narrowed to the row's own millisecond and keyset. There is no
+   * second visibility rule: a row this returns is a row `read()` returns.
+   * Null for "not yours to see" and "never existed" alike.
+   */
+  async entryById(viewer: ChronicleViewer, eventId: string): Promise<ChronicleEntry | null> {
+    if (!/^\d{1,18}$/.test(eventId)) return null;
+    const { rows } = await this.store.pg.query(`SELECT created_at FROM world_events WHERE id = $1::bigint`, [eventId]);
+    if (!rows[0]) return null;
+    const ms = new Date(rows[0].created_at as string).getTime();
+    const page = await this.read(
+      viewer,
+      {
+        since: new Date(ms).toISOString(),
+        until: new Date(ms + 1).toISOString(),
+        cursor: (BigInt(eventId) + 1n).toString(),
+        limit: 1,
+      },
+      { withTotals: false },
+    );
+    const entry = page.entries[0];
+    return entry && entry.id === eventId ? entry : null;
+  }
+
+  /** The ledger row a room line wrote, as this viewer's chronicle shows it. */
+  async speechEntry(viewer: ChronicleViewer, speechId: string): Promise<ChronicleEntry | null> {
+    const { rows } = await this.store.pg.query(
+      `SELECT id FROM world_events WHERE type = 'speech' AND payload->>'speechId' = $1 ORDER BY id LIMIT 1`,
+      [speechId],
+    );
+    if (!rows[0]) return null;
+    return this.entryById(viewer, String(rows[0].id));
+  }
+
   /** Tool-call spans overlapping a window, gated as described on TOOL_CALLS_SQL. Raw rows. */
   async toolCallHistory(
     viewer: ChronicleViewer,
@@ -791,6 +837,13 @@ export class ChronicleService {
     const roomName = row.room_name ? String(row.room_name) : null;
     const isSpeech = type === "speech";
     const body = row.body === null || row.body === undefined ? null : String(row.body);
+    const kind = kindOf(type);
+    let reactionTarget: ReactionTarget | null = null;
+    if (isSpeech) {
+      if (body !== null && typeof payload.speechId === "string") reactionTarget = { kind: "speech", id: payload.speechId };
+    } else if (REACTABLE_KINDS.has(kind)) {
+      reactionTarget = { kind: "event", id: String(row.id) };
+    }
 
     return {
       id: String(row.id),
@@ -806,6 +859,7 @@ export class ChronicleService {
       body,
       bodyWithheld: isSpeech && body === null,
       detail: detailFor(type, payload, names),
+      reactionTarget,
     };
   }
 }

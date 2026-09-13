@@ -127,7 +127,7 @@ export function undeliveredFor(recipientId: ActorId, decision: PolicyDecision): 
 
 export function assertValidOwnerChannelFlag(ctx: PolicyContext): void {
   if (!ctx.isOwnerChannel) return;
-  if (!OWNER_CHANNELS.includes(ctx.channel)) {
+  if (!OWNER_CHANNELS.includes(ctx.channel as SpeechChannel)) {
     throw new GroveError("INVALID", "isOwnerChannel is only valid on owner channels.");
   }
   if (ctx.recipients.length !== 1) {
@@ -174,6 +174,11 @@ export class SpeechService {
     }
     if (sender.kind === "agent" && sender.agent.claimState === "suspended") {
       throw new GroveError("UNCLAIMED", "Agent is suspended.");
+    }
+    // `reaction` is a kernel channel, not a speech channel: it has no speech row.
+    // The route casts whatever string it was sent, so refuse it here by value.
+    if ((input.channel as string) === "reaction") {
+      throw new GroveError("INVALID", "Use POST /api/v1/reactions to react.");
     }
     const count = graphemeCount(input.body);
     if (count > SPEECH_GRAPHEME_LIMIT) {

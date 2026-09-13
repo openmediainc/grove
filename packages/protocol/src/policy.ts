@@ -365,7 +365,7 @@ export interface PolicyContext {
     /** Member of ctx.room. Already-fetched, like quota. Absent ⇒ not a member. */
     isSpaceMember?: boolean;
   }>;
-  channel: SpeechChannel;
+  channel: PolicyChannel;
   requestedTargetId?: ActorId | null;
   room?: {
     id: RoomId;
@@ -389,6 +389,15 @@ export interface PolicyContext {
   quota: QuotaSnapshot;
   isOwnerChannel: boolean;
 }
+
+/**
+ * Every act the kernel judges. The speech channels, plus `reaction`: an emoji
+ * put on a line or event. A reaction is never a row in `speech` and never a
+ * `SpeechChannel` — `say()` cannot be asked to store one — but it is decided by
+ * the same `authorize()` so it cannot grow a second, drifting rule.
+ * Recipients on a reaction are the target's author (at most one).
+ */
+export type PolicyChannel = SpeechChannel | "reaction";
 
 export interface AuthorizeResult {
   emit: PolicyDecision;

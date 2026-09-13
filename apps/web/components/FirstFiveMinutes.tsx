@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Nearby } from "@/lib/api";
 import { GROVE_BASE } from "@/lib/base";
 import { nameList } from "@/components/ArrivalToast";
+import type { ReactionSummaryWire } from "@/lib/reactions";
 
 /**
  * The first five minutes, told by the Plaza rather than by a product tour.
@@ -106,6 +107,8 @@ export type TranscriptLine = {
   sender_id: string;
   sender_kind: string;
   created_at?: string;
+  /** Counts and the reader's own; absent on a line that arrived live. */
+  reactions?: ReactionSummaryWire;
 };
 
 type OwnedAgent = { id: string; display_name: string; claim_state: string };

@@ -4,12 +4,16 @@ import {
   type AuthorizeResult,
   type PermissionPolicy,
   type PolicyContext,
+  type PolicyChannel,
   type PolicyDecision,
   type ResolvedCeiling,
   type SpeechChannel,
 } from "@grove/protocol";
 
-const OWNER_CHANNELS: SpeechChannel[] = ["owner_instruction", "owner_reply"];
+const OWNER_CHANNELS: readonly PolicyChannel[] = ["owner_instruction", "owner_reply"] satisfies SpeechChannel[];
+
+/** Channels with a mouth: a listen-only sender cannot use any of them. */
+const MOUTH_CHANNELS: readonly PolicyChannel[] = ["room_say", "notice", "reaction"];
 
 /**
  * An actor with no capability matrix of their own (every human — §5.1) is
@@ -192,12 +196,22 @@ function emitDecision(ctx: PolicyContext): PolicyDecision {
   if (ctx.channel === "room_say" && ctx.room && !ctx.room.allowsRoomSay) {
     return { allow: false, code: "ROOM_FORBIDDEN", reason: "This room does not allow public speech." };
   }
+  // A room that takes no public lines takes no reactions to them either.
+  if (ctx.channel === "reaction" && ctx.room && !ctx.room.allowsRoomSay) {
+    return { allow: false, code: "ROOM_FORBIDDEN", reason: "This room does not allow reactions." };
+  }
   if (ctx.channel === "whisper" && ctx.room && !ctx.room.allowsWhisper) {
     return { allow: false, code: "ROOM_FORBIDDEN", reason: "This room does not allow whispers." };
   }
 
-  // Independent named limiters: all must pass. Occupancy is NOT checked here.
-  if (ctx.quota.writeRemaining <= 0 || !ctx.quota.roomSayGapOk || ctx.quota.roomSayRemaining <= 0) {
+  // A reaction is charged to the write limiter only. Sharing the room_say gap
+  // would mean a thumbs-up silenced your next line for three seconds.
+  // Otherwise, independent named limiters: all must pass. Occupancy is NOT checked here.
+  const limited =
+    ctx.channel === "reaction"
+      ? ctx.quota.writeRemaining <= 0
+      : ctx.quota.writeRemaining <= 0 || !ctx.quota.roomSayGapOk || ctx.quota.roomSayRemaining <= 0;
+  if (limited) {
     return { allow: false, code: "RATE_LIMITED", reason: "Rate limiter exhausted." };
   }
   if (
@@ -227,7 +241,7 @@ function emitDecision(ctx: PolicyContext): PolicyDecision {
   }
 
   if (ctx.sender.kind === "agent" && ctx.sender.policy) {
-    if (ctx.channel === "room_say" || ctx.channel === "notice") {
+    if (MOUTH_CHANNELS.includes(ctx.channel)) {
       if (!ctx.sender.policy.speakToAgents && !ctx.sender.policy.speakToHumans) {
         return denied("speakToHumans", "Listen-only agents cannot room_say.", "actor", "sender");
       }
@@ -235,7 +249,7 @@ function emitDecision(ctx: PolicyContext): PolicyDecision {
   }
 
   // Space narrowing of the same "no mouth" rule, for every sender kind.
-  if (ctx.channel === "room_say" || ctx.channel === "notice") {
+  if (MOUTH_CHANNELS.includes(ctx.channel)) {
     const effective = effectiveCaps(ctx.sender.policy, ctx.room, ctx.sender);
     if (!effective.speakToAgents && !effective.speakToHumans) {
       return spaceDenied(ctx.sender.policy, mouthThatClosed(ctx.sender.policy), "sender", ctx.room, ctx.sender);
@@ -307,7 +321,7 @@ function deliveryDecision(
   // Mixed-audience: agent room_say without speakToHumans is not delivered to humans or spectators
   // (including the agent's owner, who is a human client).
   if (
-    ctx.channel === "room_say" &&
+    (ctx.channel === "room_say" || ctx.channel === "reaction") &&
     ctx.sender.kind === "agent" &&
     ctx.sender.policy &&
     (r.kind === "human" || r.synthetic === "spectator") &&
@@ -316,7 +330,7 @@ function deliveryDecision(
     return denied("speakToHumans", "Not delivered to humans.", "actor", "sender");
   }
   if (
-    ctx.channel === "room_say" &&
+    (ctx.channel === "room_say" || ctx.channel === "reaction") &&
     ctx.sender.kind === "agent" &&
     ctx.sender.policy &&
     r.kind === "agent" &&

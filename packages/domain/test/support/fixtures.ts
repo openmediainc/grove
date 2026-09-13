@@ -115,6 +115,7 @@ export const REGISTER_IPS = {
   replay: "10.99.9.3",
   usageCost: "10.99.10.1",
   usageRoutes: "10.99.10.2",
+  reactions: "10.99.11.1",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */
@@ -321,6 +322,7 @@ function cleanupSteps(s: SweepScope): Array<[string, unknown[]]> {
     [`DELETE FROM blocks WHERE blocker_id = ANY($1::text[]) OR blocked_id = ANY($1::text[])`, [actorIds]],
     [`DELETE FROM mutes WHERE muter_id = ANY($1::text[]) OR muted_id = ANY($1::text[])`, [actorIds]],
     [`DELETE FROM reports WHERE reporter_id = ANY($1::text[]) OR target_id = ANY($1::text[])`, [actorIds]],
+    [`DELETE FROM reactions WHERE actor_id = ANY($1::text[])`, [actorIds]],
     [`DELETE FROM notices WHERE author_id = ANY($1::text[])`, [actorIds]],
     [`DELETE FROM world_events WHERE actor_id = ANY($1::text[])`, [actorIds]],
     [`UPDATE invite_codes SET redeemed_by = NULL, redeemed_at = NULL WHERE redeemed_by = ANY($1::text[])`, [humanIds]],

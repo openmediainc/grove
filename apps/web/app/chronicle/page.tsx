@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { GeoAvatar } from "@/components/Avatar";
+import { Reactions } from "@/components/Reactions";
+import type { ReactionSummaryWire, ReactionTargetWire } from "@/lib/reactions";
 
 /**
  * The chronicle: the world_events ledger read back as an account of what
@@ -31,6 +33,9 @@ type Entry = {
   body: string | null;
   body_withheld: boolean;
   detail: Record<string, unknown>;
+  /** Null when the row takes no reactions (or its line is not yours to read). */
+  reaction_target: ReactionTargetWire | null;
+  reactions: ReactionSummaryWire | null;
 };
 
 type Page = {
@@ -182,7 +187,7 @@ function ActorFace({ entry }: { entry: Entry }) {
   return <GeoAvatar kind={kind} seed={seed} size={22} label={false} />;
 }
 
-function Row({ entry, onActor }: { entry: Entry; onActor: (id: string) => void }) {
+function Row({ entry, onActor, signedIn }: { entry: Entry; onActor: (id: string) => void; signedIn: boolean }) {
   const chips = detailChips(entry);
   return (
     <li className="flex gap-3 py-2">
@@ -217,6 +222,9 @@ function Row({ entry, onActor }: { entry: Entry; onActor: (id: string) => void }
           <p className="mt-1 border-l-2 border-white/10 pl-3 text-xs italic text-white/30">
             You were not among the recipients, so the line is not yours to read.
           </p>
+        ) : null}
+        {entry.reaction_target ? (
+          <Reactions target={entry.reaction_target} summary={entry.reactions} canReact={signedIn} />
         ) : null}
         {chips.length ? (
           <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-white/35">
@@ -428,13 +436,13 @@ export default function ChroniclePage() {
                   </span>
                   <span className="ml-auto text-[11px] text-white/30">{open ? "hide" : "show"}</span>
                 </button>
-                {open ? <ul className="pl-2">{b.entries.map((e) => <Row key={e.id} entry={e} onActor={setActorId} />)}</ul> : null}
+                {open ? <ul className="pl-2">{b.entries.map((e) => <Row key={e.id} entry={e} onActor={setActorId} signedIn={Boolean(meta?.viewer.signed_in)} />)}</ul> : null}
               </div>
             );
           }
           return (
             <ul key={b.key} className="border-t border-white/5">
-              <Row entry={b.entry} onActor={setActorId} />
+              <Row entry={b.entry} onActor={setActorId} signedIn={Boolean(meta?.viewer.signed_in)} />
             </ul>
           );
         })}

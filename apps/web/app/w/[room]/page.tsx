@@ -9,6 +9,7 @@ import type { RefusalInput } from "@grove/ui";
 import { GeoAvatar } from "@/components/Avatar";
 import { FirstFiveMinutes, noteSpoke, type TranscriptLine } from "@/components/FirstFiveMinutes";
 import { PixelRoom } from "@/components/PixelRoom";
+import { Reactions } from "@/components/Reactions";
 import { RefusalNotice, toRefusalInput } from "@/components/RefusalNotice";
 import { RoomSignpost, type SignpostRoom } from "@/components/RoomSignpost";
 import {
@@ -815,6 +816,14 @@ export default function RoomPage() {
                       (l.sender_kind === "agent" ? "an agent, since gone" : "someone, since gone")}
                 </span>
                 {l.body}
+                <Reactions
+                  target={{ kind: "speech", id: l.id }}
+                  summary={l.reactions}
+                  canReact={Boolean(me)}
+                  onChange={(next) =>
+                    setLines((cur) => cur.map((x) => (x.id === l.id ? { ...x, reactions: next } : x)))
+                  }
+                />
               </li>
               );
             })}

@@ -684,7 +684,14 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     const data = await grove.speech.transcript(room.id, sender, q.cursor, q.limit ? Number(q.limit) : 50, {
       deliveredOnly: access.visitor,
     });
-    return sendOk(reply, { transcript: data.items, nextCursor: data.nextCursor });
+    // Counts ride only on lines the transcript already decided this reader hears.
+    const viewerId = actor.kind === "human" ? actor.human.id : actor.agent.id;
+    const sums = await grove.reactions.summaries(
+      viewerId,
+      data.items.map((i) => ({ kind: "speech" as const, id: String(i.id) })),
+    );
+    const transcript = data.items.map((i) => ({ ...i, reactions: sums.get(`speech:${String(i.id)}`) }));
+    return sendOk(reply, { transcript, nextCursor: data.nextCursor });
   });
 
   app.get("/api/v1/observe", async (req, reply) => {
@@ -708,6 +715,27 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       idempotencyKey: typeof idem === "string" ? idem : (b.idempotencyKey as string | undefined),
     });
     return sendOk(reply, { speech });
+  });
+
+  /**
+   * React to a room line (`target_kind: speech`) or a chronicle event
+   * (`target_kind: event`) with one of REACTION_KEYS. `on: false` removes your
+   * own. Judged by the permission kernel on the `reaction` channel; a target the
+   * caller cannot see answers 404 whether or not it exists. See
+   * packages/domain/src/services/reactions.ts.
+   */
+  app.post("/api/v1/reactions", async (req, reply) => {
+    const actor = await requireActor(req, grove);
+    const b = body(req);
+    const reactor =
+      actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };
+    const result = await grove.reactions.react(reactor, {
+      targetKind: String(b.targetKind ?? ""),
+      targetId: String(b.targetId ?? ""),
+      emoji: String(b.emoji ?? ""),
+      on: b.on === undefined ? true : b.on !== false,
+    });
+    return sendOk(reply, { reaction: result });
   });
 
   /**
@@ -885,8 +913,16 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
         limit: q.limit ? Number(q.limit) : null,
       },
     );
+    // Counts only on rows the page already decided this viewer may see, and only
+    // where the row takes reactions at all (see ChronicleEntry.reactionTarget).
+    const reactorId = actor === null ? null : actor.kind === "human" ? actor.human.id : actor.agent.id;
+    const targets = page.entries.flatMap((e) => (e.reactionTarget ? [e.reactionTarget] : []));
+    const sums = await grove.reactions.summaries(reactorId, targets);
     return sendOk(reply, {
-      entries: page.entries,
+      entries: page.entries.map((e) => ({
+        ...e,
+        reactions: e.reactionTarget ? sums.get(`${e.reactionTarget.kind}:${e.reactionTarget.id}`) ?? null : null,
+      })),
       nextCursor: page.nextCursor,
       window: page.window,
       totals: page.totals,

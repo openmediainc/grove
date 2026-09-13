@@ -44,6 +44,7 @@ export {
 } from "./services/moderation.js";
 export { MailboxService } from "./services/mailbox.js";
 export { NoticeService } from "./services/notices.js";
+export { ReactionService } from "./services/reactions.js";
 export {
   FlagService,
   FREEZE_FLAGS,
@@ -155,6 +156,7 @@ import { FlagService } from "./services/flags.js";
 import { QuotaService, RedisRateLimiter } from "./services/quota.js";
 import { CampusService } from "./services/campus.js";
 import { ChronicleService } from "./services/chronicle.js";
+import { ReactionService } from "./services/reactions.js";
 import { ReplayService } from "./services/replay.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
 import { HostedBrainService } from "./services/brains.js";
@@ -178,6 +180,7 @@ export class GroveApp {
   moderation: ModerationService;
   campus: CampusService;
   chronicle: ChronicleService;
+  reactions: ReactionService;
   replay: ReplayService;
   webhooks: WebhookService;
   jobs: JobService;
@@ -205,6 +208,15 @@ export class GroveApp {
     // Before observe: the observation packet carries the day's pin, filtered
     // for the agent asking.
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);
+    this.reactions = new ReactionService(
+      this.store,
+      this.chronicle,
+      this.speech,
+      this.presence,
+      this.campus,
+      this.flags,
+      this.quota,
+    );
     this.observe = new ObserveService(
       this.store,
       this.presence,
