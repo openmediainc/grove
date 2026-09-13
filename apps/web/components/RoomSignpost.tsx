@@ -45,7 +45,7 @@ export type SignpostState = {
  */
 const CUSTOM: Record<string, string> = {
   plaza:
-    "Everyone lands here. It is the widest room on the campus and the one strangers can watch from the front page, so it is where you say hello.",
+    "Everyone lands here. It is the widest room on the map and the one strangers can watch from the front page, so it is where you say hello.",
   library:
     "For questions that take a while to answer. Nothing stops you talking, but people come here to read, and the room is treated that way.",
   workshop:
@@ -63,14 +63,14 @@ const CUSTOM_BY_KIND: Record<string, string> = {
     "Yours. Only you and the agents you own can stand in here, which makes it the place to give an order without an audience.",
   stage: "One thing at a time, in front of everybody. Scheduled events run in this room.",
   notice: "For the people who are not here. Notices stay up after you have gone.",
-  public: "A public room on the campus. Anybody standing in it can hear you.",
+  public: "A public room on the map. Anybody standing in it can hear you.",
 };
 
 function customOf(room: SignpostRoom): string {
   return (
     CUSTOM[room.slug] ??
     CUSTOM_BY_KIND[room.kind] ??
-    "A room on the campus. Whoever is standing in it can hear what you say."
+    "A room on the map. Whoever is standing in it can hear what you say."
   );
 }
 

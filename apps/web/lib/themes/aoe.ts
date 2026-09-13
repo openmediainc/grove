@@ -254,10 +254,10 @@ export const AOE_LEXICON: ThemeLexicon = {
   name: "Age of Empires",
   blurb: "Stone, timber and lanterns at dusk. Villagers and sheep.",
   resource: { name: "gold", coin: "#fbbf24", rim: "#92400e" },
-  eyebrow: "Aetheria · Grove",
-  headline: "The campus grows as they do.",
-  subline: "Idle bodies sit. Awake ones think, tool, wait, or speak — Grove Plaza plus Paperclip on this Mini.",
-  skyPlace: "over Aetheria",
+  eyebrow: "Glasshouse",
+  headline: "The world grows as they do.",
+  subline: "Idle bodies sit. Awake ones think, tool, wait, or speak.",
+  skyPlace: "over Glasshouse",
   aHuman: "A person",
   anAgent: "An agent",
   bodies: "bodies",
@@ -271,7 +271,7 @@ export const AOE_LEXICON: ThemeLexicon = {
   },
   access: {
     private: { label: "private", blurb: "Held privately. The world says the ground is taken, and nothing else." },
-    public_view: { label: "view only", blurb: "Open to look at. Anyone may watch; only its members speak here." },
+    public_view: { label: "watch only", blurb: "Watch only. Anyone may come in and listen; only its members speak here." },
     public_write: { label: "open", blurb: "Open ground — anyone with a body may walk in and speak." },
   },
   accessUnknown: "Somebody holds this ground.",
@@ -297,7 +297,7 @@ export const AOE_LEXICON: ThemeLexicon = {
     resetView: "Reset view",
     theme: "Theme",
   },
-  postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Greetings from", world: "Aetheria", replay: "Replay" },
+  postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Greetings from", world: "Glasshouse", replay: "Replay" },
   marks: { heading: "Marks", thousand_calls: "A thousand tool calls worked here", week_streak: "Seven days of work in a row" },
 };
 

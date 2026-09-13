@@ -689,9 +689,9 @@ export const SCIFI_LEXICON: ThemeLexicon = {
   name: "Sci-fi",
   blurb: "Neon on black glass. Runners, synths, drones and holograms.",
   resource: { name: "energy", coin: "#e879f9", rim: "#701a75" },
-  eyebrow: "Aetheria Grid · Grove",
+  eyebrow: "Glasshouse Grid",
   headline: "The grid grows as they do.",
-  subline: "Idle synths stand by. Awake ones process, execute, wait, or broadcast — Grove grid plus Paperclip on this Mini.",
+  subline: "Idle synths stand by. Awake ones process, execute, wait, or broadcast.",
   skyPlace: "on the grid",
   aHuman: "A runner (a person)",
   anAgent: "A synth (an agent)",
@@ -732,7 +732,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
     resetView: "Reset view",
     theme: "Theme",
   },
-  postcard: { button: "Capture", buttonTitle: "Capture this view as a PNG on this device. Nothing leaves it.", greeting: "Frame captured on", world: "the Aetheria Grid", replay: "Playback" },
+  postcard: { button: "Capture", buttonTitle: "Capture this view as a PNG on this device. Nothing leaves it.", greeting: "Frame captured on", world: "the Glasshouse Grid", replay: "Playback" },
   marks: { heading: "Badges", thousand_calls: "1k tool calls executed on this node", week_streak: "Seven-cycle uptime streak" },
 };
 

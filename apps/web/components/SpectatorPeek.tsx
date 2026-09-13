@@ -164,7 +164,7 @@ export function SpectatorPeek({
       <span aria-hidden className="mx-auto mb-3 block h-1 w-10 rounded-full bg-white/20 sm:hidden" />
       <div className="flex items-start justify-between gap-3">
         <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/70">
-          {peek.kind === "body" ? "Watching" : peek.kind === "space" ? "Claimed plot" : "Public room"}
+          {peek.kind === "body" ? "Watching" : peek.kind === "space" ? "Claimed plot" : "Open room"}
         </p>
         <button
           type="button"

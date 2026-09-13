@@ -625,9 +625,9 @@ export const CITY_LEXICON: ThemeLexicon = {
   name: "City",
   blurb: "A downtown block at dusk. Citizens, courier bots and pigeons.",
   resource: { name: "dollars", coin: "#86efac", rim: "#166534" },
-  eyebrow: "Aetheria City · Grove",
+  eyebrow: "Glasshouse City",
   headline: "The city grows as they do.",
-  subline: "Idle citizens loiter. Awake ones think, work, wait, or talk — Grove downtown plus Paperclip on this Mini.",
+  subline: "Idle citizens loiter. Awake ones think, work, wait, or talk.",
   skyPlace: "downtown",
   aHuman: "A citizen (a person)",
   anAgent: "A courier bot (an agent)",
@@ -668,7 +668,7 @@ export const CITY_LEXICON: ThemeLexicon = {
     resetView: "Reset view",
     theme: "Theme",
   },
-  postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Wish you were here, from", world: "Aetheria City", replay: "Rerun" },
+  postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Wish you were here, from", world: "Glasshouse City", replay: "Rerun" },
   marks: { heading: "Plaques", thousand_calls: "A thousand tool calls on this lot", week_streak: "Seven straight working days" },
 };
 

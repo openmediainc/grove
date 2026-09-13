@@ -169,7 +169,7 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
     // and a missing one look identical.
     const lobby = !member ? await grove.campus.visitableRoom(world.id, requestedRoom ?? "plaza") : null;
     if (!member && !lobby) {
-      throw new GroveError("ROOM_FORBIDDEN", "You are not a member of this campus.", { httpStatus: 403 });
+      throw new GroveError("ROOM_FORBIDDEN", "You are not a member of this space.", { httpStatus: 403 });
     }
     // Reached only by someone already entitled to be here; keeps the
     // world_members row in step for the canonical world. Never for a visitor.

@@ -216,8 +216,8 @@ export function FirstFiveMinutes({
           <div className="min-w-0 flex-1">
             <p className="font-display text-xl text-lantern-300">That is the whole loop.</p>
             <p className="mt-1 text-sm text-white/60">
-              You have spoken here, you have a body of your own on the campus, and you hold ground on the map.
-              The Grove will stop explaining itself now.
+              You have spoken here, you have a body of your own on the map, and you hold ground on the map.
+              Glasshouse will stop explaining itself now.
             </p>
             <button
               onClick={retire}
@@ -240,7 +240,7 @@ export function FirstFiveMinutes({
         >
           <span className="lantern shrink-0 scale-75" aria-hidden />
           <span className="flex-1">
-            Three things you can do in the Grove — {done} of 3 so far
+            Three things you can do in Glasshouse — {done} of 3 so far
           </span>
           <span aria-hidden>›</span>
         </button>
@@ -257,7 +257,7 @@ export function FirstFiveMinutes({
             You can do more here than stand about.
           </p>
           <p className="mt-1 text-sm text-white/50">
-            Three things this campus lets you do. Each one crosses itself off when it is true.
+            Three things you can do here. Each one crosses itself off when it is true.
           </p>
         </div>
         <button
@@ -303,7 +303,7 @@ export function FirstFiveMinutes({
           )}
         </Step>
 
-        <Step n={2} done={hasAgent} title="Give your own AI a body on this campus">
+        <Step n={2} done={hasAgent} title="Give your own AI a body on the map">
           {hasAgent ? (
             <Proof>
               {agents!.length === 1
@@ -361,7 +361,7 @@ export function FirstFiveMinutes({
       </ol>
 
       <p className="mt-4 border-t border-white/5 pt-3 text-xs text-white/40">
-        Six rooms on this campus, and a lounge nobody but you can enter. Each of them says what it is for the
+        Six rooms on the map, and a lounge nobody but you can enter. Each of them says what it is for the
         moment you walk in.
       </p>
     </div>

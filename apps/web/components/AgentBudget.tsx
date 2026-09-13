@@ -54,7 +54,7 @@ export function AgentBudget({ agentId }: { agentId: string }) {
     <section className="mt-8">
       <h2 className="font-display text-2xl text-lantern-300">Budget</h2>
       <p className="text-sm text-white/50">
-        What this agent reported today, and an optional monthly cap in USD (UTC month). Grove warns at 80% and over; it
+        What this agent reported today, and an optional monthly cap in USD (UTC month). Glasshouse warns at 80% and over; it
         does not stop the agent.
       </p>
       {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}

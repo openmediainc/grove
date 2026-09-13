@@ -28,6 +28,7 @@ import {
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
+import { themedAccess } from "@/lib/access";
 import { MotionDirector, mergeSpan, spanFromWire, OUTCOME_MARK_MS } from "@/lib/motion/director";
 import { drawOutcomeMark, drawRestingMark, drawStanceMark, drawWorkBar, RESTING_MARK_COLOUR, scaffoldStageFor } from "@/lib/motion/marks";
 import { restingBodies, type RestingBody, type RestingWire } from "@/lib/resting";
@@ -313,7 +314,7 @@ type Plot = {
  * when the space's contents are not.
  */
 function accessLabel(theme: Theme, preset: string): string {
-  return (theme.lexicon.access as Record<string, { label: string } | undefined>)[preset]?.label ?? preset;
+  return themedAccess((theme.lexicon.access as Record<string, { label: string } | undefined>)[preset]?.label, preset);
 }
 function accessBlurb(theme: Theme, preset: string): string {
   return (
@@ -1600,8 +1601,8 @@ export function WorldMap() {
           replaying
             ? replay.view.label
             : data.paperclip?.ok
-              ? "live campus + paperclip"
-              : "live campus · paperclip quiet",
+              ? "live map + paperclip"
+              : "live map · paperclip quiet",
         );
       } catch {
         if (!cancelled) setStatus("map stream paused");
@@ -1957,7 +1958,7 @@ export function WorldMap() {
         if (stance) facts.push(`Stance: ${stance.label}. ${stance.blurb} ${stance.enforcementNote}`);
         const consequence = badgeConsequence(body.badges);
         if (consequence) facts.push(consequence);
-        if (body.source === "paperclip") facts.push("Runs on Paperclip next door, so it has no Grove body to answer you.");
+        if (body.source === "paperclip") facts.push("Runs on Paperclip next door, so it has no Glasshouse body to answer you.");
         return {
           kind: "body",
           title: body.name,
@@ -3201,7 +3202,7 @@ export function WorldMap() {
         ref={canvasRef}
         className="absolute inset-0 h-full w-full"
         style={{ imageRendering: "pixelated", touchAction: "none" }}
-        aria-label="Grove world map"
+        aria-label="Glasshouse world map"
       />
       {/* Replay frames the whole map in amber, so even a screenshot says it. */}
       {replaying ? (
@@ -3233,7 +3234,7 @@ export function WorldMap() {
           data-speech-avoid
           data-headcount={hud.live ? "" : undefined}
           className="pointer-events-auto flex max-w-full items-center gap-2 truncate rounded-full border border-lantern-400/20 bg-dusk-950/80 px-3 py-1.5 text-[11px] tabular-nums text-lantern-200 sm:text-xs"
-          title="Bodies on the map right now, how many open maps have checked in over the last minute (counted, never named), and the campus hour in UTC."
+          title="Bodies on the map right now, how many open maps have checked in over the last minute (counted, never named), and the world clock in UTC."
         >
           {hud.live ? (
             <span aria-hidden className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-400 motion-reduce:animate-none" />

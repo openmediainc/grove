@@ -139,7 +139,7 @@ export function SearchPalette() {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Search Grove"
+        aria-label="Search Glasshouse"
         onMouseDown={(e) => e.stopPropagation()}
         className="flex max-h-[80svh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-lantern-400/25 bg-dusk-950/[0.97] text-sm shadow-2xl"
       >

@@ -229,7 +229,7 @@ export function Nav() {
     <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/5 bg-dusk-950/50 px-4 py-2.5 backdrop-blur-md sm:px-6 sm:py-3">
       <Link href="/" onClick={close} className="flex items-center gap-3 py-1.5 sm:py-0">
         <span className="lantern" />
-        <span className="font-display text-xl tracking-wide text-lantern-300">Grove</span>
+        <span className="font-display text-xl tracking-wide text-lantern-300">Glasshouse</span>
       </Link>
 
       <div className="flex items-center gap-2 sm:hidden">
@@ -269,7 +269,7 @@ export function Nav() {
         } w-full basis-full flex-col items-stretch gap-0.5 pb-2 text-sm text-lantern-300/80 sm:flex sm:w-auto sm:basis-auto sm:flex-row sm:items-center sm:gap-5 sm:pb-0`}
       >
         <Link href={campusHref(viewer)} className={ITEM}>
-          Campus
+          World
         </Link>
         <Link href="/explore" className={ITEM}>
           Explore

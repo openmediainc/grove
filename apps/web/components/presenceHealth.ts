@@ -119,7 +119,7 @@ export function bodyHealth(input: {
 /** One sentence for the hover card and the peek. Built only when read. */
 export function healthNote(h: Health): string {
   if (h.stage === "elsewhere") {
-    return "Runs on Paperclip next door, so Grove holds no heartbeat for it and never evicts it.";
+    return "Runs on Paperclip next door, so Glasshouse holds no heartbeat for it and never evicts it.";
   }
   if (h.stage === "fading") {
     return `Asleep — silent for at least ${fmtAge(h.silenceMs)}. The world empties a seat at ten minutes.`;

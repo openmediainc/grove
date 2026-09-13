@@ -306,11 +306,11 @@ export interface ThemeLexicon {
    */
   resource?: { name: string; coin: string; rim: string };
 
-  /** HUD heading. */
+  /** HUD heading. Product name only; the Mini-only Paperclip line is added by `mapSubline()`, never baked in. */
   eyebrow: string;
   headline: string;
   subline: string;
-  /** "over Aetheria" — completes the clock's tooltip. */
+  /** "over Glasshouse" — completes the clock's tooltip. */
   skyPlace: string;
 
   /** Peek card subtitle openers. */

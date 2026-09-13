@@ -36,4 +36,4 @@ export const PUBLIC_ROOMS: Array<Pick<Room, "id" | "slug" | "name" | "kind" | "c
 ];
 
 export const WORLD_ID = "aetheria-prime";
-export const WORLD_PUBLIC_NAME = "Grove";
+export const WORLD_PUBLIC_NAME = "Glasshouse";

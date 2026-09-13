@@ -157,7 +157,7 @@ export class IdentityService {
     ageAttested: boolean;
   }): Promise<{ devLoginUrl?: string; token: string; sendStatus: SendStatus }> {
     if (!input.ageAttested) {
-      throw new GroveError("AGE_GATE", "Grove is 18+. Attest your age to continue.");
+      throw new GroveError("AGE_GATE", "Glasshouse is 18+. Attest your age to continue.");
     }
     const email = input.email.trim().toLowerCase();
     if (!email.includes("@")) throw new GroveError("INVALID", "A valid email is required.");
@@ -1595,20 +1595,20 @@ export function parseReachUrl(raw: unknown): string {
   }
   if (url.protocol !== "https:") {
     throw adapterInvalid(
-      `url must be https; "${url.protocol}" is not a scheme Grove will dial.`,
-      "Grove reaches an agent on this machine through the paperclip adapter, not through a local URL.",
+      `url must be https; "${url.protocol}" is not a scheme Glasshouse will dial.`,
+      "Glasshouse reaches an agent on this machine through the paperclip adapter, not through a local URL.",
     );
   }
   if (url.username || url.password) {
     throw adapterInvalid(
       "url must not carry userinfo (user:password@host).",
-      "Grove never stores a credential in an adapter config, including one hidden in a URL.",
+      "Glasshouse never stores a credential in an adapter config, including one hidden in a URL.",
     );
   }
   if (url.search) {
     throw adapterInvalid(
       "url must not carry a query string.",
-      "Grove authenticates itself with a signature header it mints; nothing needs to travel in a parameter. Multiplex with a path instead.",
+      "Glasshouse authenticates itself with a signature header it mints; nothing needs to travel in a parameter. Multiplex with a path instead.",
     );
   }
   if (url.hash) {
@@ -1617,7 +1617,7 @@ export function parseReachUrl(raw: unknown): string {
   if (url.port && url.port !== "443") {
     throw adapterInvalid(
       `url must be on port 443; "${url.port}" is not reachable from the adapter registry.`,
-      "A registry that accepted arbitrary ports would be a port scanner with Grove's source address.",
+      "A registry that accepted arbitrary ports would be a port scanner with Glasshouse's source address.",
     );
   }
   const host = url.hostname.toLowerCase();
@@ -1642,7 +1642,7 @@ export function parseReachUrl(raw: unknown): string {
     );
   }
   if (RESERVED_TLDS.has(tld)) {
-    throw adapterInvalid(`".${tld}" is a reserved or internal top-level name and is not routable from Grove.`);
+    throw adapterInvalid(`".${tld}" is a reserved or internal top-level name and is not routable from Glasshouse.`);
   }
   if (host.length > 253) throw adapterInvalid("url host is too long to be a DNS name.");
   for (const label of labels) {
@@ -1673,7 +1673,7 @@ export function parsePaperclipAgentId(raw: unknown): string {
   if (!PAPERCLIP_AGENT_ID.test(value)) {
     throw adapterInvalid(
       "agentId must be a Paperclip agent UUID.",
-      "The paperclip adapter deliberately takes no URL: the origin is Grove's own configuration, not yours.",
+      "The paperclip adapter deliberately takes no URL: the origin is Glasshouse's own configuration, not yours.",
     );
   }
   return value;
@@ -1698,8 +1698,8 @@ export function validateAdapterConfig(kind: AdapterKind, raw: unknown): Record<s
   for (const key of Object.keys(input)) {
     if (looksLikeCredential(key)) {
       throw adapterInvalid(
-        `config may not contain "${key}": Grove never stores a credential for an adapter.`,
-        "Grove signs its own outbound requests so the far end can verify Grove without holding a shared secret. See docs/ADAPTERS.md.",
+        `config may not contain "${key}": Glasshouse never stores a credential for an adapter.`,
+        "Glasshouse signs its own outbound requests so the far end can verify Glasshouse without holding a shared secret. See docs/ADAPTERS.md.",
       );
     }
     if (!allowed.includes(key)) {

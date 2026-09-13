@@ -750,7 +750,7 @@ export class CampusService {
       .slice(0, 40);
     if (!name || slug.length < 2) throw new GroveError("INVALID", "name and slug are required.");
     if (slug === WORLD_ID || slug === "grove") {
-      throw new GroveError("SLUG_TAKEN", "That campus slug is reserved.");
+      throw new GroveError("SLUG_TAKEN", "That space slug is reserved.");
     }
     const id = newId("world");
     const preset: SpacePolicyPreset = input.preset ?? DEFAULT_SPACE_POLICY_PRESET;
@@ -787,7 +787,7 @@ export class CampusService {
       return mapWorld(rows[0] as Record<string, unknown>);
     } catch (err) {
       if (isUniqueViolationOn(err, "worlds_slug_key")) {
-        throw new GroveError("SLUG_TAKEN", "That campus slug is taken.");
+        throw new GroveError("SLUG_TAKEN", "That space slug is taken.");
       }
       throw err;
     }

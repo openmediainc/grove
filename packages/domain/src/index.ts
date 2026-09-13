@@ -165,7 +165,7 @@ export {
 } from "./crypto.js";
 export type { ProofViewer } from "./services/identity.js";
 export { signWebhookBody, verifyWebhookSignature } from "./webhook-sign.js";
-export { createMailer, MailSendError, type Mailer, type MailTransport } from "./mailer.js";
+export { createMailer, MAGIC_LINK_SUBJECT, MailSendError, type Mailer, type MailTransport } from "./mailer.js";
 export {
   EmailDeliveryService,
   assessEmailHealth,

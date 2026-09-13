@@ -57,3 +57,15 @@ export const ROOM_DOOR_CHOICES: Array<{ key: string; value: SpacePolicyPreset | 
 export function roomDoorWord(roomPreset: string | null, spacePreset: string): AccessWord {
   return accessWord(roomPreset ?? spacePreset);
 }
+
+/**
+ * A theme may reskin the access word on the map and in the room drawer
+ * ("sealed", "glass lobby"), never replace it: the peek shows the theme's word
+ * with the one vocabulary beside it, so "sealed (Private)" still says Private.
+ * An unknown preset reads as Private and never shows its wire name.
+ */
+export function themedAccess(themeLabel: string | null | undefined, preset: string | null | undefined): string {
+  const word = accessWord(preset);
+  const label = isPreset(preset) ? themeLabel?.trim() : null;
+  return !label || label.toLowerCase() === word.toLowerCase() ? word : `${label} (${word})`;
+}

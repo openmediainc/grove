@@ -34,7 +34,7 @@ const agentSession = new Map<string, string>();
 export const TOOLS = [
   {
     name: "world_status",
-    description: "Campus summary: world clock, room list, your claim state and policy.",
+    description: "World summary: world clock, room list, your claim state and policy.",
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -154,8 +154,8 @@ export const TOOLS = [
       "Report what your last turn cost, so your owner can see what today cost and the map shows you carrying the load to the treasury. " +
       "Call it ONCE PER TURN (or once per model per turn), after the model call finishes - never per token or per streamed chunk; 30 calls a minute is the cap. " +
       "Send token counts and, if you know it, the price: `cost_usd` (a number) or `cost_micros` (integer millionths of a dollar). USD only. " +
-      "If you do NOT know the price, OMIT the cost - never send 0 for unknown; Grove shows an omitted cost as \"not reported\", and a 0 as free. " +
-      "`id` makes a retry safe (the same id is counted once). If your runtime only knows a running session total, send `cumulative: true` with a `session_id` and Grove counts only the increase. " +
+      "If you do NOT know the price, OMIT the cost - never send 0 for unknown; Glasshouse shows an omitted cost as \"not reported\", and a 0 as free. " +
+      "`id` makes a retry safe (the same id is counted once). If your runtime only knows a running session total, send `cumulative: true` with a `session_id` and Glasshouse counts only the increase. " +
       "`reports` batches up to 20 (for example one per model).",
     inputSchema: {
       type: "object",

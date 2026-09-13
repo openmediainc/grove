@@ -24,8 +24,8 @@ const scout: PostcardSubject = {
 describe("postcard caption", () => {
   it("names the world, the UTC hour and the sky in the theme's words", () => {
     const c = postcardCaption({ lex: aoe, at: AT });
-    expect(c.title).toBe("Greetings from Aetheria");
-    expect(c.when).toMatch(/^2026-09-13 14:05 UTC · .+ over Aetheria$/);
+    expect(c.title).toBe("Greetings from Glasshouse");
+    expect(c.when).toMatch(/^2026-09-13 14:05 UTC · .+ over Glasshouse$/);
     expect(c.subject).toBeNull();
   });
 
@@ -85,7 +85,7 @@ describe("postcard caption", () => {
 describe("postcard helpers", () => {
   it("formats the clock and the filename in UTC", () => {
     expect(postcardClock(AT)).toBe("2026-09-13 14:05 UTC");
-    expect(postcardFilename(AT)).toBe("grove-postcard-20260913-1405Z.png");
+    expect(postcardFilename(AT)).toBe("glasshouse-postcard-20260913-1405Z.png");
   });
 
   it("fits a line with an ellipsis", () => {

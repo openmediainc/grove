@@ -643,9 +643,9 @@ export const SPACE_LEXICON: ThemeLexicon = {
   name: "Space",
   blurb: "An orbital station on a rock. Crew in suits, robots, drifting satellites.",
   resource: { name: "credits", coin: "#67e8f9", rim: "#155e75" },
-  eyebrow: "Aetheria Station · Grove",
+  eyebrow: "Glasshouse Station",
   headline: "The station grows as they do.",
-  subline: "Idle crew hold station. Awake ones compute, fabricate, wait, or transmit — Grove deck plus Paperclip on this Mini.",
+  subline: "Idle crew hold station. Awake ones compute, fabricate, wait, or transmit.",
   skyPlace: "on station time",
   aHuman: "Crew (a person)",
   anAgent: "Service unit (an agent)",
@@ -686,7 +686,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
     resetView: "Reset view",
     theme: "Theme",
   },
-  postcard: { button: "Postcard", buttonTitle: "Save a still of this view to this device. Nothing is transmitted.", greeting: "Transmission from", world: "Aetheria Station", replay: "Archive" },
+  postcard: { button: "Postcard", buttonTitle: "Save a still of this view to this device. Nothing is transmitted.", greeting: "Transmission from", world: "Glasshouse Station", replay: "Archive" },
   marks: { heading: "Mission patches", thousand_calls: "A thousand tool calls logged aboard", week_streak: "Seven consecutive days on shift" },
 };
 

@@ -186,7 +186,7 @@ export async function assertWorldAccess(
         ? resolved.human.id
         : resolved.agent.ownerHumanId;
   if (!humanId || !(await grove.campus.isMember(worldId, humanId))) {
-    throw new GroveError("ROOM_FORBIDDEN", "You are not a member of this campus.", { httpStatus: 403 });
+    throw new GroveError("ROOM_FORBIDDEN", "You are not a member of this space.", { httpStatus: 403 });
   }
   return worldId;
 }

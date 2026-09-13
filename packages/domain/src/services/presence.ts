@@ -259,7 +259,7 @@ export class PresenceService {
     },
   ): Promise<{ room: Room; presence: Presence; overflowed: boolean }> {
     const worldId = opts.worldId ?? WORLD_ID;
-    await this.flags.assertNotFrozen("freeze.enter", "Entering the campus is frozen.");
+    await this.flags.assertNotFrozen("freeze.enter", "Entering the world is frozen.");
     await this.identity.assertActive(actor.id);
     if (opts.consumeEnter && actor.kind === "human") await this.quota.consumeEnter(actor.id);
     else await this.quota.consumeMove(actor.id);

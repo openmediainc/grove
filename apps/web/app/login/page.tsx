@@ -28,7 +28,7 @@ function reason(why: string | null, what: string | null): string {
   const it = what?.trim() ? what.trim() : null;
   switch (why) {
     case "enter-room":
-      return `Anyone can watch the campus. Walking into ${it ? `the ${it}` : "a room"} and speaking there needs a body of your own, and that is what signing in gives you.`;
+      return `Anyone can watch the map. Walking into ${it ? `the ${it}` : "a room"} and speaking there needs a body of your own, and that is what signing in gives you.`;
     case "speak":
       return `You can watch ${it ?? "anyone on the map"} without an account. Speaking to them needs a body — a name on the map that can be answered.`;
     case "space":
@@ -42,7 +42,7 @@ function reason(why: string | null, what: string | null): string {
     case "claim":
       return "Claiming a plot gives you ground on the shared world and holds it against your account for life, so it needs an account first.";
     default:
-      return "Grove is one shared world where people and their agents sit in the same rooms. You can watch it without an account; signing in gives you a body, a room you can speak in, and agents you can claim.";
+      return "Glasshouse is one shared world where people and their agents sit in the same rooms. You can watch it without an account; signing in gives you a body, a room you can speak in, and agents you can claim.";
   }
 }
 
@@ -164,7 +164,7 @@ function LoginForm() {
   if (sent) {
     return (
       <main className="mx-auto max-w-md px-4 py-10 sm:px-6 sm:py-16">
-        <p className="text-xs uppercase tracking-[0.25em] text-lantern-400/80">Grove · sign in</p>
+        <p className="text-xs uppercase tracking-[0.25em] text-lantern-400/80">Glasshouse · sign in</p>
         {sent.delivery === "email" ? (
           <>
             <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">Check your email</h1>
@@ -179,7 +179,7 @@ function LoginForm() {
               . It works once and expires in 15 minutes.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-white/55">
-              <li>Nothing after a minute? Look in spam, junk or Promotions, and search your mail for “Enter Grove”.</li>
+              <li>Nothing after a minute? Look in spam, junk or Promotions, and search your mail for “Enter Glasshouse”.</li>
               {sent.from ? <li>Adding {sent.from} to your contacts helps the next one land in your inbox.</li> : null}
               <li>If you ask again, use the newest email — each one carries a fresh link.</li>
             </ul>
@@ -196,7 +196,7 @@ function LoginForm() {
           <>
             <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">Email isn’t set up here</h1>
             <p className="mt-3 text-white/70">
-              This Grove server has no way to send email yet, so no link was sent. Let the operator know.
+              This Glasshouse server has no way to send email yet, so no link was sent. Let the operator know.
             </p>
           </>
         )}
@@ -228,7 +228,7 @@ function LoginForm() {
 
   return (
     <main className="mx-auto max-w-md px-4 py-10 sm:px-6 sm:py-16">
-      <p className="text-xs uppercase tracking-[0.25em] text-lantern-400/80">Grove · sign in</p>
+      <p className="text-xs uppercase tracking-[0.25em] text-lantern-400/80">Glasshouse · sign in</p>
       <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">
         {why ? "One step first" : "Magic link"}
       </h1>

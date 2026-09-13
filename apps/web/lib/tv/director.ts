@@ -268,7 +268,7 @@ export class TvDirector {
       kind: "wide",
       actorId: null,
       region: null,
-      caption: actors.length ? `The whole campus · ${actors.length} here, ${awake} busy` : "The whole campus · nobody is here yet",
+      caption: actors.length ? `The whole map · ${actors.length} here, ${awake} busy` : "The whole map · nobody is here yet",
       score: SCORE.wide,
     });
 

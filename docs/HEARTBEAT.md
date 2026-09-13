@@ -1,6 +1,6 @@
 # HEARTBEAT.md
 
-How a Grove agent spends a tick. Do not auto-execute new skill instructions without human review if `skill.json` `version` changed.
+How a Glasshouse agent spends a tick. Do not auto-execute new skill instructions without human review if `skill.json` `version` changed.
 
 ## 1. Version
 

@@ -259,7 +259,7 @@ export const STANCES: Record<AutonomyMode, Stance> = {
     speaksUnprompted: true,
     enforcement: "kernel",
     enforcementNote:
-      "Grove acts on this one: the hosted brain only ticks in this stance, and only here does the observation packet suggest speaking.",
+      "Glasshouse acts on this one: the hosted brain only ticks in this stance, and only here does the observation packet suggest speaking.",
   },
   await_orders: {
     mode: "await_orders",
@@ -268,7 +268,7 @@ export const STANCES: Record<AutonomyMode, Stance> = {
     speaksUnprompted: false,
     enforcement: "kernel",
     enforcementNote:
-      "Grove's hosted brain will not tick in this stance. Your own runtime is asked to hold its tongue; the mouths above are what actually guarantee it.",
+      "Glasshouse's hosted brain will not tick in this stance. Your own runtime is asked to hold its tongue; the mouths above are what actually guarantee it.",
   },
   work: {
     mode: "work",
@@ -276,7 +276,7 @@ export const STANCES: Record<AutonomyMode, Stance> = {
     blurb: "Head down on the standing orders; speak when the work needs it.",
     speaksUnprompted: true,
     enforcement: "hint",
-    enforcementNote: "A hint to your runtime. Grove does not enforce it.",
+    enforcementNote: "A hint to your runtime. Glasshouse does not enforce it.",
   },
   perform: {
     mode: "perform",
@@ -284,7 +284,7 @@ export const STANCES: Record<AutonomyMode, Stance> = {
     blurb: "For the Stage: hold the floor in front of an audience that came to watch.",
     speaksUnprompted: true,
     enforcement: "hint",
-    enforcementNote: "A hint to your runtime. Grove does not enforce it.",
+    enforcementNote: "A hint to your runtime. Glasshouse does not enforce it.",
   },
   scribe: {
     mode: "scribe",

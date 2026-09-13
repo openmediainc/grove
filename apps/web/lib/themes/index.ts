@@ -98,3 +98,12 @@ export function themeStyle(theme: Theme): CSSProperties {
     "--g-font-display": theme.palette.displayFont,
   } as CSSProperties;
 }
+
+/**
+ * The map's subline. Paperclip bodies are mirrored only on the Mini (served
+ * under `/grove`); the public deployment never says so, so the line is added
+ * here at runtime instead of living in every theme's lexicon.
+ */
+export function mapSubline(lex: Pick<Theme["lexicon"], "subline">, onMini: boolean = process.env.NEXT_PUBLIC_GROVE_BASE === "/grove"): string {
+  return onMini ? `${lex.subline} Paperclip agents on this Mini walk here too.` : lex.subline;
+}

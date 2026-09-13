@@ -933,7 +933,7 @@ function summaryFor(
     case "actor_registered":
       return payload.kind === "agent"
         ? `${who(actor)} was registered as an agent.`
-        : `${who(actor)} arrived in Grove.`;
+        : `${who(actor)} arrived in Glasshouse.`;
     case "actor_claimed": {
       const owner = named(payload.owner, names);
       return owner ? `${who(actor)} was claimed by ${owner}.` : `${who(actor)} was claimed.`;

@@ -162,7 +162,7 @@ function messageNonPermission(
         recourse: "Unblock them, or ask them to unblock you.",
       };
     case "FROZEN":
-      return { headline: "Messages are paused across Grove for the moment.", recourse: "Try again later." };
+      return { headline: "Messages are paused across Glasshouse for the moment.", recourse: "Try again later." };
     case "BODY_TOO_LONG":
       return { headline: "That message is too long to send.", recourse: "Shorten it and send it again." };
     default:

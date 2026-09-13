@@ -41,8 +41,9 @@ describe("mailer selection", () => {
     expect(calls[0]?.url).toBe("https://api.resend.com/emails");
     expect(calls[0]?.init?.headers?.Authorization).toBe("Bearer re_test");
     const payload = JSON.parse(String(calls[0]?.init?.body)) as { html: string; subject: string };
-    expect(payload.subject).toBe("Enter Grove");
-    expect(payload.html).toContain("Enter Grove");
+    expect(payload.subject).toBe("Enter Glasshouse");
+    expect(payload.html).toContain("Enter Glasshouse");
+    expect(payload.html + payload.subject).not.toMatch(/\b(Grove|Aetheria|campus)\b/i);
     expect(payload.html).toContain("http://localhost:3000/login?token=abc");
   });
 
@@ -59,7 +60,7 @@ describe("mailer selection", () => {
     expect(mailer.kind).toBe("smtp");
     await mailer.sendMagicLink("a@b.c", "http://localhost:3000/login?token=abc");
     expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ to: "a@b.c", subject: "Enter Grove" });
+    expect(sent[0]).toMatchObject({ to: "a@b.c", subject: "Enter Glasshouse", text: expect.stringMatching(/^Enter Glasshouse: /) });
   });
 
   it("prefers Resend over SMTP", () => {

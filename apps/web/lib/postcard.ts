@@ -91,10 +91,10 @@ export function postcardCaption(input: PostcardInput): PostcardCaption {
   return { title, when, subject: parts.join(" · ") };
 }
 
-/** "grove-postcard-20260913-1405Z.png". */
+/** "glasshouse-postcard-20260913-1405Z.png". */
 export function postcardFilename(at: number): string {
   const d = new Date(at);
-  return `grove-postcard-${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z.png`;
+  return `glasshouse-postcard-${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z.png`;
 }
 
 /** Shorten a line with an ellipsis until `measure` says it fits. */
