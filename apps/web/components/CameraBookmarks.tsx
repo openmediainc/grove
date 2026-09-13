@@ -32,15 +32,18 @@ export type Bookmark = {
 export function CameraBookmarks({
   items,
   onGo,
+  goToLabel = "go to",
 }: {
   items: readonly Bookmark[];
   onGo: (key: string) => void;
+  /** The row's lead-in, from the active theme's lexicon. */
+  goToLabel?: string;
 }) {
   if (items.length === 0) return null;
   return (
     <>
       <div className="pointer-events-auto hidden flex-wrap items-center justify-end gap-1.5 sm:flex">
-        <span className="pr-1 text-[10px] uppercase tracking-widest text-white/30">go to</span>
+        <span className="pr-1 text-[10px] uppercase tracking-widest text-white/30">{goToLabel}</span>
         {items.map((b) => (
           <button
             key={b.key}

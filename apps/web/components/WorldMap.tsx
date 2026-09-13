@@ -14,7 +14,18 @@ import {
   type ItemKey,
   type ScaffoldStage,
 } from "@/lib/art";
-import { THEMES, DEFAULT_THEME, type Theme } from "@/lib/themes";
+import {
+  DEFAULT_THEME,
+  THEME_IDS,
+  THEME_QUERY,
+  THEMES,
+  readThemeChoice,
+  themeStyle,
+  writeThemeChoice,
+  type Theme,
+  type ThemeId,
+} from "@/lib/themes";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
 import {
@@ -244,28 +255,22 @@ type Plot = {
   orgs: OrgBadge[];
 };
 
-/** Access level is public even when the space's contents are not. The tint lives in the theme. */
-const PRESET_LABEL: Record<string, string> = {
-  private: "private",
-  public_view: "view only",
-  public_write: "open",
-};
-/** The same access level, said in a sentence a spectator can act on. */
-const PRESET_BLURB: Record<string, string> = {
-  private: "Held privately. The world says the ground is taken, and nothing else.",
-  public_view: "Open to look at. Anyone may watch; only its members speak here.",
-  public_write: "Open ground — anyone with a body may walk in and speak.",
-};
-const REGION_TITLE: Record<string, string> = {
-  plaza: "Plaza",
-  library: "Library",
-  workshop: "Workshop",
-  stage: "Stage",
-  garden: "Garden",
-  board: "Board",
-};
-function regionTitle(region: string): string {
-  return REGION_TITLE[region] ?? region;
+/*
+ * Access-level words, room names and every other UI word the map says now come
+ * from the active theme's lexicon (lib/themes). Access level is public even
+ * when the space's contents are not.
+ */
+function accessLabel(theme: Theme, preset: string): string {
+  return (theme.lexicon.access as Record<string, { label: string } | undefined>)[preset]?.label ?? preset;
+}
+function accessBlurb(theme: Theme, preset: string): string {
+  return (
+    (theme.lexicon.access as Record<string, { blurb: string } | undefined>)[preset]?.blurb ??
+    theme.lexicon.accessUnknown
+  );
+}
+function regionTitle(theme: Theme, region: string): string {
+  return (theme.lexicon.regions as Record<string, { title: string } | undefined>)[region]?.title ?? region;
 }
 
 type Minimap = {
@@ -685,6 +690,15 @@ export function WorldMap() {
    * re-skins the next frame with no remount; see lib/themes for the contract.
    */
   const themeRef = useRef<Theme>(THEMES[DEFAULT_THEME]);
+  /**
+   * The theme the viewer CHOSE. The chrome follows it at once; the canvas
+   * follows it as soon as its art is prepared, so a switch never paints a
+   * frame of missing sprites.
+   */
+  const [themeId, setThemeId] = useState<ThemeId>(DEFAULT_THEME);
+  const chosenRef = useRef<Theme>(THEMES[DEFAULT_THEME]);
+  const theme = THEMES[themeId];
+  const lex = theme.lexicon;
   const controlsRef = useRef<{
     zoomBy: (f: number) => void;
     reset: () => void;
@@ -735,6 +749,44 @@ export function WorldMap() {
   const zoomIn = useCallback(() => controlsRef.current?.zoomBy(1.25), []);
   const zoomOut = useCallback(() => controlsRef.current?.zoomBy(1 / 1.25), []);
   const resetView = useCallback(() => controlsRef.current?.reset(), []);
+  /**
+   * Re-skin the world live. `persist` is false for the choice read on mount
+   * (it is already wherever it came from) and true for a viewer's click. If
+   * the URL is pinning a theme, the pin is moved too, so the address bar never
+   * disagrees with what is on screen.
+   */
+  const applyTheme = useCallback((id: ThemeId, persist: boolean) => {
+    const next = THEMES[id];
+    chosenRef.current = next;
+    setThemeId(id);
+    void next.art.prepare().then(() => {
+      if (chosenRef.current === next) themeRef.current = next;
+    });
+    if (!persist) return;
+    writeThemeChoice(id);
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has(THEME_QUERY)) {
+        url.searchParams.set(THEME_QUERY, id);
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    } catch {
+      /* the theme still switches */
+    }
+  }, []);
+  const themeKeyRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    themeKeyRef.current = () => {
+      const i = THEME_IDS.indexOf(chosenRef.current.id);
+      applyTheme(THEME_IDS[(i + 1) % THEME_IDS.length]!, true);
+    };
+  }, [applyTheme]);
+  // Deliberately after mount: the server renders the default, and a stored
+  // choice that differed would otherwise be a hydration mismatch.
+  useEffect(() => {
+    applyTheme(readThemeChoice(), false);
+  }, [applyTheme]);
+
   const stopFollowing = useCallback(() => {
     followRef.current = null;
     setFollowing(null);
@@ -870,14 +922,13 @@ export function WorldMap() {
   }, [jumpTo]);
 
   const bookmarks: Bookmark[] = [
-    { key: "1", label: "Plaza", title: "Plaza — where the world talks" },
-    { key: "2", label: "Library", title: "Library — where bodies read" },
-    { key: "3", label: "Workshop", title: "Workshop — where the tools run" },
-    { key: "4", label: "Stage", title: "Stage — what is on" },
-    { key: "5", label: "Garden", title: "Garden — where idle bodies go" },
-    { key: "6", label: "Board", title: "Board — faults and notices" },
-    { key: "b", label: "Busiest", title: "Busiest room right now" },
-    ...(hasMySpace ? [{ key: "m", label: "My space", title: "My space — ground I hold" }] : []),
+    ...BOOKMARK_REGIONS.map(({ key, region }) => ({
+      key,
+      label: lex.regions[region].title,
+      title: lex.regions[region].bookmark,
+    })),
+    { key: "b", label: lex.controls.busiest, title: lex.controls.busiestTitle },
+    ...(hasMySpace ? [{ key: "m", label: lex.controls.mySpace, title: lex.controls.mySpaceTitle }] : []),
   ];
 
   // Who is watching. Deliberately its own effect, deliberately not awaited by
@@ -1408,8 +1459,8 @@ export function WorldMap() {
         return {
           kind: "body",
           title: body.name,
-          subtitle: `${body.kind === "human" ? "A person" : "An agent"} · ${body.detail ?? VERB_LABEL[body.verb]}`,
-          region: regionTitle(body.region),
+          subtitle: `${body.kind === "human" ? chosenRef.current.lexicon.aHuman : chosenRef.current.lexicon.anAgent} · ${body.detail ?? VERB_LABEL[body.verb]}`,
+          region: regionTitle(chosenRef.current, body.region),
           facts,
           org:
             body.orgColour && body.orgName
@@ -1430,8 +1481,8 @@ export function WorldMap() {
           name: plot.name,
           slug: plot.slug,
           plotIndex: plot.plotIndex,
-          access: PRESET_LABEL[plot.preset] ?? plot.preset,
-          accessBlurb: PRESET_BLURB[plot.preset] ?? "Somebody holds this ground.",
+          access: accessLabel(chosenRef.current, plot.preset),
+          accessBlurb: accessBlurb(chosenRef.current, plot.preset),
           ownerHandle: plot.ownerHandle,
           occupancy: plot.occupancy,
           orgs: plot.orgs,
@@ -1442,7 +1493,7 @@ export function WorldMap() {
       return {
         kind: "region",
         region,
-        title: regionTitle(region),
+        title: regionTitle(chosenRef.current, region),
         here: actorsRef.current
           .filter((a) => a.region === region)
           .map((a) => ({ name: a.name, detail: a.detail ?? VERB_LABEL[a.verb] })),
@@ -1522,6 +1573,8 @@ export function WorldMap() {
       else if (ev.key === "-" || ev.key === "_") controlsRef.current?.zoomBy(1 / 1.25);
       else if (ev.key === "0") reset();
       else if (ev.key === "k" || ev.key === "K") kioskModeRef.current(!kioskRef.current);
+      // T walks the themes. Works in kiosk mode too, where there is no switcher.
+      else if ((ev.key === "t" || ev.key === "T") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) themeKeyRef.current();
       // The bookmarks. A modified key is somebody else's shortcut — cmd-1 is a
       // browser tab, not the Plaza — so only the bare keystroke jumps.
       else if (!ev.metaKey && !ev.ctrlKey && !ev.altKey && BOOKMARK_KEYS.has(ev.key.toLowerCase()))
@@ -1850,11 +1903,11 @@ export function WorldMap() {
           ctx.textAlign = "center";
           ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
           ctx.fillStyle = pal.plotName;
-          ctx.fillText(plot.name ?? "claimed", lx, ly - 2);
+          ctx.fillText(plot.name ?? theme.lexicon.claimedPlot, lx, ly - 2);
           ctx.font = "9px ui-sans-serif, system-ui, sans-serif";
           ctx.fillStyle = tint.replace(/[\d.]+\)$/, "0.95)");
           ctx.fillText(
-            `${PRESET_LABEL[plot.preset] ?? plot.preset}${plot.occupancy ? ` · ${plot.occupancy} here` : ""}`,
+            `${accessLabel(theme, plot.preset)}${plot.occupancy ? ` · ${plot.occupancy} here` : ""}`,
             lx,
             ly + 10,
           );
@@ -2307,13 +2360,15 @@ export function WorldMap() {
         }
         const hover = hoverRef.current;
         if (hover) {
-          const lines: string[] = [`${hover.name} · ${hover.detail ?? hover.verb} · ${hover.region}`];
+          const lines: string[] = [
+            `${hover.name} · ${hover.detail ?? hover.verb} · ${regionTitle(theme, hover.region)}`,
+          ];
           if (hover.flagged) lines.push("Flagged for prompt injection — the chronicle holds the record.");
           if (hover.stalled) lines.push("Stopped reporting — it says it is working, but has gone quiet.");
           if (hover.errorText) lines.push(`Fault: ${hover.errorText.slice(0, 90)}`);
           const hoverHealth = healthOf(hover);
           if (healthVisible(hoverHealth)) lines.push(healthNote(hoverHealth));
-          if (hover.url) lines.push(hover.url.slice(0, 90));
+          if (hover.url) lines.push(`${theme.lexicon.construction} · ${hover.url.slice(0, 90)}`);
           if (hover.orgName) lines.push(`Flying ${hover.orgName} colours here.`);
           const consequence = badgeConsequence(hover.badges);
           if (consequence) lines.push(consequence);
@@ -2350,6 +2405,8 @@ export function WorldMap() {
 
   return (
     <section
+      data-grove-theme={theme.id}
+      style={themeStyle(theme)}
       className={`relative overflow-hidden bg-dusk-950 ${
         kiosk ? "min-h-[100svh]" : "min-h-[calc(100svh-56px)]"
       }`}
@@ -2377,12 +2434,12 @@ export function WorldMap() {
         }`}
       >
         <div className="min-w-0 sm:max-w-xl">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/80 sm:text-xs">Aetheria · Grove</p>
+          <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/80 sm:text-xs">{lex.eyebrow}</p>
           <h1 className="font-display mt-1 text-2xl leading-tight text-lantern-300 sm:text-4xl md:text-5xl">
-            The campus grows as they do.
+            {lex.headline}
           </h1>
           <p className="mt-2 hidden max-w-xl text-sm text-white/70 sm:block">
-            Idle bodies sit. Awake ones think, tool, wait, or speak — Grove Plaza plus Paperclip on this Mini.
+            {lex.subline}
           </p>
           {signedIn === false ? (
             <p className="mt-1 max-w-xl text-xs text-white/60 sm:text-white/45">
@@ -2398,29 +2455,24 @@ export function WorldMap() {
                 two people watching it from two continents are watching the
                 same hour of it, whatever their own clocks say. */}
             {sky ? (
-              <span className="shrink-0 tabular-nums text-lantern-300/70" title={`${sky.label} over Aetheria`}>
+              <span className="shrink-0 tabular-nums text-lantern-300/70" title={`${sky.label} ${lex.skyPlace}`}>
                 {sky.clock} <span className="text-white/40">UTC</span>
               </span>
             ) : null}
           </div>
           {sky ? <div className="mt-0.5 text-[10px] text-white/40">{sky.label}</div> : null}
           <div className="mt-1 text-white/60">
-            {hud.awake} awake · {hud.asleep} asleep · fog {hud.radius}
-            {hud.world ? ` · world ${hud.world}` : ""}
-            {hud.spaces ? ` · ${hud.spaces} claimed` : ""}
+            {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep} · {lex.hud.fog} {hud.radius}
+            {hud.world ? ` · ${lex.hud.world} ${hud.world}` : ""}
+            {hud.spaces ? ` · ${hud.spaces} ${lex.hud.claimed}` : ""}
           </div>
           <div className="mt-1 truncate text-[11px] normal-case tracking-normal text-white/45 sm:mt-2 sm:max-w-[240px]">
-            {hud.lastHeard || "nobody has spoken here recently"}
+            {hud.lastHeard || lex.hud.quiet}
           </div>
           <div className="mt-2 hidden flex-wrap gap-2 text-[10px] normal-case tracking-normal text-white/50 sm:flex">
-            <span>tool</span>
-            <span>think</span>
-            <span>speak</span>
-            <span>wait</span>
-            <span>blocked</span>
-            <span>fault</span>
-            <span>asleep</span>
-            <span>fading</span>
+            {lex.legend.map((word) => (
+              <span key={word}>{word}</span>
+            ))}
           </div>
           {hud.orgs.length ? (
             <div className="mt-2 hidden flex-wrap items-center gap-2 border-t border-white/10 pt-2 text-[10px] normal-case tracking-normal text-white/55 sm:flex">
@@ -2451,17 +2503,19 @@ export function WorldMap() {
           kiosk ? "pb-16 sm:pb-20" : ""
         }`}
       >
-        {kiosk ? null : <CameraBookmarks items={bookmarks} onGo={jumpTo} />}
-        <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} />
+        {kiosk ? null : <CameraBookmarks items={bookmarks} onGo={jumpTo} goToLabel={lex.controls.goTo} />}
+        <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} />
         {following ? (
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-lantern-400/40 bg-dusk-950/90 py-1.5 pl-4 pr-1.5 text-xs text-lantern-300">
-            <span className="truncate">Following {following}</span>
+            <span className="truncate">
+              {lex.controls.following} {following}
+            </span>
             <button
               type="button"
               onClick={stopFollowing}
               className="shrink-0 rounded-full border border-white/20 px-4 py-2.5 text-white/80 sm:px-3 sm:py-1"
             >
-              Release
+              {lex.controls.release}
             </button>
           </div>
         ) : null}
@@ -2501,7 +2555,7 @@ export function WorldMap() {
               title="Back to the core (0)"
               className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
             >
-              Reset view
+              {lex.controls.resetView}
             </button>
             <button
               type="button"
@@ -2509,8 +2563,9 @@ export function WorldMap() {
               title="Kiosk mode: the world with no chrome, for a wall display (K). Escape leaves."
               className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
             >
-              Kiosk
+              {lex.controls.kiosk}
             </button>
+            <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />
           </div>
         </div>
       </div>
@@ -2519,7 +2574,7 @@ export function WorldMap() {
           a wall rather than of a heading on a page. */}
       {kiosk && sky ? (
         <div className="pointer-events-none absolute bottom-4 left-4 text-[11px] tabular-nums tracking-wide text-white/35">
-          {sky.clock} UTC · {sky.label} · {hud.awake} awake · {hud.asleep} asleep
+          {sky.clock} UTC · {sky.label} · {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep}
         </div>
       ) : null}
     </section>
