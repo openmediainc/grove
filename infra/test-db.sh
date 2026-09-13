@@ -34,4 +34,4 @@ docker exec -i infra-postgres-1 psql -U grove -d postgres \
 export DATABASE_URL="$TEST_URL"
 export REDIS_URL="${GROVE_TEST_REDIS_URL:-redis://localhost:6379/1}"
 pnpm migrate >/dev/null
-exec pnpm -r --filter './packages/**' --filter @grove/api test "$@"
+exec pnpm -r --filter './packages/**' --filter @grove/api --filter @grove/web test "$@"

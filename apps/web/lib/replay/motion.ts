@@ -9,14 +9,20 @@
  * a slow one.
  *
  * So replay injects the clock and fixes the cadence. Historical time is cut
- * into REPLAY_TICK_MS ticks; at every tick the director is synced if (and only
- * if) the signals changed, then every body is framed at that tick. The state at
- * any tick is therefore a function of the window alone. A seek backwards, or
- * forwards by more than the warm-up, rebuilds a fresh director from
- * REPLAY_WARMUP_MS before the target — longer than any motion timer
- * (commit 1.2s, dwell 4s, linger 2.5s, trip ≤3.5s), so a seek lands where
- * playing up to it would have, and the first sync there places bodies where
- * their signals put them, exactly as a page load does live.
+ * into REPLAY_TICK_MS ticks, and the tick sequence is a function of the window
+ * alone: from the window's start, and after every signal change for
+ * REPLAY_SETTLE_MS (longer than any motion timer: commit 1.2s + dwell 4s +
+ * linger 2.5s + trip ≤3.5s), the director is synced on a change and every body
+ * is framed at every tick. Once settled, nothing in the model can move until
+ * the next signal change, so the clock jumps straight to it.
+ *
+ * Motion has memory a warm-up cannot recover — "silence freezes": a stalled
+ * body stays wherever it was working, hours later — so a seek does not start
+ * over. The director is checkpointed every REPLAY_CHECKPOINT_MS of history as
+ * the simulation passes, and a seek resumes from the nearest checkpoint at or
+ * before the target, running the identical tick sequence from there. Seeking
+ * to t and playing to t therefore produce the same frame, which the web test
+ * suite asserts.
  */
 import type { Tile } from "@grove/protocol";
 import { MotionDirector, spanFromWire, type BodyFrame, type MotionActor } from "@/lib/motion/director";
@@ -24,13 +30,38 @@ import { groveVerb, VERB_LABEL, type AgentVerb } from "@/lib/agent-verbs";
 import type { ReplayWireBody } from "./controller";
 
 export const REPLAY_TICK_MS = 100;
-export const REPLAY_WARMUP_MS = 60_000;
+export const REPLAY_SETTLE_MS = 15_000;
+export const REPLAY_CHECKPOINT_MS = 30_000;
 
 export interface ReplayMotionSource {
+  /** Changes when the loaded window changes. */
+  readonly epoch: number;
   /** Changes exactly when the motion inputs change. */
   signalKey(t: number): string;
   /** Minimap-shaped bodies at historical time t. */
   bodiesAt(t: number): ReplayWireBody[];
+  /** The first instant after t at which signalKey changes, or null. */
+  nextSignalChange(t: number): number | null;
+  /** Where the loaded window starts. */
+  readonly windowStart: number;
+}
+
+/** A deep copy of a director. Its state is plain data (Maps, Sets, objects); the grid is shared. */
+function cloneDirector(d: MotionDirector): MotionDirector {
+  const copy = Object.create(MotionDirector.prototype) as MotionDirector;
+  for (const [k, v] of Object.entries(d)) {
+    (copy as unknown as Record<string, unknown>)[k] = k === "grid" ? v : structuredClone(v);
+  }
+  return copy;
+}
+
+interface MotionCheckpoint {
+  at: number;
+  key: string;
+  ids: string[];
+  homes: ReadonlyMap<string, Tile>;
+  settleUntil: number;
+  director: MotionDirector;
 }
 
 /**
@@ -57,6 +88,9 @@ export class ReplayMotion {
   private key = "";
   private ids: string[] = [];
   private homes: ReadonlyMap<string, Tile> = new Map();
+  private settleUntil = -Infinity;
+  private epoch = -1;
+  private checkpoints: MotionCheckpoint[] = [];
 
   constructor(
     private source: ReplayMotionSource,
@@ -72,23 +106,91 @@ export class ReplayMotion {
     this.key = "";
     this.ids = [];
     this.homes = new Map();
+    this.settleUntil = -Infinity;
+    this.checkpoints = [];
   }
 
   static tickOf(t: number): number {
     return Math.floor(t / REPLAY_TICK_MS) * REPLAY_TICK_MS;
   }
 
+  private startTick(): number {
+    return ReplayMotion.tickOf(this.source.windowStart) - REPLAY_TICK_MS;
+  }
+
+  private restore(cp: MotionCheckpoint): void {
+    this.at = cp.at;
+    this.key = cp.key;
+    this.ids = cp.ids;
+    this.homes = cp.homes;
+    this.settleUntil = cp.settleUntil;
+    this.director = cloneDirector(cp.director);
+  }
+
+  private checkpoint(): void {
+    const last = this.checkpoints[this.checkpoints.length - 1];
+    if (last && last.at >= this.at!) return;
+    this.checkpoints.push({
+      at: this.at!,
+      key: this.key,
+      ids: this.ids,
+      homes: this.homes,
+      settleUntil: this.settleUntil,
+      director: cloneDirector(this.director),
+    });
+  }
+
   /** Bring the director to the tick containing `t`. */
   advanceTo(t: number): void {
-    const target = ReplayMotion.tickOf(t);
-    if (this.at === target) return;
-    if (this.at === null || target < this.at || target - this.at > REPLAY_WARMUP_MS) {
+    if (this.epoch !== this.source.epoch) {
       this.reset();
-      this.at = target - REPLAY_WARMUP_MS - REPLAY_TICK_MS;
+      this.epoch = this.source.epoch;
+    }
+    const target = Math.max(ReplayMotion.tickOf(t), this.startTick());
+    if (this.at === target) return;
+    if (this.at === null || target < this.at) {
+      // Resume from the nearest checkpoint at or before the target, else the start.
+      let cp: MotionCheckpoint | null = null;
+      for (let i = this.checkpoints.length - 1; i >= 0; i--) {
+        if (this.checkpoints[i]!.at <= target) {
+          cp = this.checkpoints[i]!;
+          break;
+        }
+      }
+      if (cp) this.restore(cp);
+      else {
+        this.director = new MotionDirector();
+        this.at = this.startTick();
+        this.key = "";
+        this.ids = [];
+        this.homes = new Map();
+        this.settleUntil = -Infinity;
+      }
+    } else {
+      // Going forwards past saved history: continue from the furthest checkpoint
+      // if it is ahead of where we stand (a seek into ground already simulated).
+      const last = this.checkpoints[this.checkpoints.length - 1];
+      if (last && last.at > this.at && last.at <= target) this.restore(last);
     }
     while (this.at! < target) {
-      this.at! += REPLAY_TICK_MS;
-      this.step(this.at!);
+      let next = this.at! + REPLAY_TICK_MS;
+      if (next > this.settleUntil) {
+        // Settled: nothing can move until the signals change. Jump to the tick
+        // before the change, stopping at checkpoint boundaries on the way.
+        const change = this.source.nextSignalChange(this.at!);
+        const changeTick = change === null ? Infinity : Math.ceil(change / REPLAY_TICK_MS) * REPLAY_TICK_MS;
+        const boundary = (Math.floor(this.at! / REPLAY_CHECKPOINT_MS) + 1) * REPLAY_CHECKPOINT_MS;
+        const jump = Math.min(target, changeTick - REPLAY_TICK_MS, boundary);
+        if (jump > this.at!) {
+          this.at = jump;
+          if (this.at % REPLAY_CHECKPOINT_MS === 0) this.checkpoint();
+          continue;
+        }
+        next = this.at! + REPLAY_TICK_MS;
+      }
+      this.at = next;
+      this.step(next);
+      if (next % REPLAY_CHECKPOINT_MS === 0) this.checkpoint();
     }
   }
 
@@ -100,16 +202,30 @@ export class ReplayMotion {
       this.homes = this.homesFor(bodies);
       this.ids = bodies.map((b) => b.id);
       this.director.sync(bodies.map(motionActorOf), this.homes, tick);
+      this.settleUntil = tick + REPLAY_SETTLE_MS;
     }
     const reduced = this.reducedMotion();
     for (const id of this.ids) this.director.frame(id, this.homes.get(id) ?? { x: 0, y: 0 }, tick, reduced);
   }
 
-  /** What the renderer draws for one body at `t`. Framed at the tick, so it is idempotent. */
+  /**
+   * What the renderer draws for one body at `t`. Read-only: the director is
+   * advanced on the fixed tick sequence and then asked for a frame on a COPY,
+   * so however often the renderer asks, the simulation is never nudged.
+   */
   frame(id: string, home: Tile, t: number): BodyFrame {
     this.advanceTo(t);
-    return this.director.frame(id, home, this.at!, this.reducedMotion());
+    if (!this.peek || this.peekAt !== this.at || this.peekKey !== this.key) {
+      this.peek = cloneDirector(this.director);
+      this.peekAt = this.at;
+      this.peekKey = this.key;
+    }
+    return this.peek.frame(id, home, this.at!, this.reducedMotion());
   }
+
+  private peek: MotionDirector | null = null;
+  private peekAt: number | null = null;
+  private peekKey = "";
 
   /** The injected clock the renderer uses for anything motion-timed (outcome marks). */
   get now(): number {

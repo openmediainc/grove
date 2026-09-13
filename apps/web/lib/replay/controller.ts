@@ -245,6 +245,8 @@ export class ReplayController {
   private keyframe: ReplayKeyframeBodyInput[] = [];
   private spansByActor = new Map<string, HistoricalSpan[]>();
   private spanEdges: number[] = [];
+  /** Bumped whenever the loaded window changes, so motion knows to start over. */
+  epoch = 0;
   private listeners = new Set<() => void>();
   private raf = 0;
   private lastTick = 0;
@@ -291,6 +293,7 @@ export class ReplayController {
   loadWindow(input: { since: number; until: number; timeline: ReplayTimeline; spans?: ReadonlyArray<Record<string, unknown>> }): void {
     this.timeline = input.timeline;
     this.loadSpans(input.spans ?? []);
+    this.epoch++;
     this.emit({ active: true, loading: false, since: input.since, until: input.until, playhead: input.since, markers: input.timeline.markers });
   }
 
@@ -370,6 +373,7 @@ export class ReplayController {
         keyframe: this.keyframe,
         entries: this.entries,
       });
+      this.epoch++;
       this.emit({ loading: false, markers: this.timeline.markers });
       this.onFrame();
     } catch (err) {
@@ -384,6 +388,7 @@ export class ReplayController {
     this.pause();
     this.timeline = null;
     this.entries = [];
+    this.epoch++;
     this.emit({ active: false, loading: false, error: null, playing: false, markers: [], density: [] });
     this.onFrame();
   }
@@ -449,6 +454,21 @@ export class ReplayController {
   signalKey(t: number): string {
     if (!this.timeline) return "empty";
     return `${this.timeline.stepIndexAt(t)}|${countAtOrBefore(this.spanEdges, t)}`;
+  }
+
+  /** The first instant after `t` at which `signalKey` changes, or null. */
+  nextSignalChange(t: number): number | null {
+    const step = this.timeline?.nextStepAfter(t) ?? null;
+    const i = countAtOrBefore(this.spanEdges, t);
+    const edge = i < this.spanEdges.length ? this.spanEdges[i]! : null;
+    if (step === null) return edge;
+    if (edge === null) return step;
+    return Math.min(step, edge);
+  }
+
+  /** The loaded window's start. */
+  get windowStart(): number {
+    return this.view.since;
   }
 
   /**

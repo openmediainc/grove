@@ -59,6 +59,9 @@ import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { AttentionBell } from "./AttentionBell";
 import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
+import { ReplayBadge, ReplayBar, ReplayEntry } from "./ReplayBar";
+import { ReplayController, startVisitClock, type LiveContext } from "@/lib/replay/controller";
+import { ReplayMotion } from "@/lib/replay/motion";
 import { ResourceBar } from "./ResourceBar";
 import { CostCarry } from "./costCarry";
 import { resourceTerms } from "@/lib/cost";
@@ -769,6 +772,44 @@ export function WorldMap() {
   });
   const [status, setStatus] = useState("charting the dusk…");
 
+  /* --- replay (MAP-04) ----------------------------------------------- *
+   * Replay swaps the SOURCE of the minimap payload and the CLOCK, nothing
+   * else: pull() draws the ledger at the playhead instead of the live map, and
+   * bodies are moved by the same MotionDirector stepped on historical time
+   * (lib/replay/motion). Same seating, verbs, bubbles, spans and theme as live.
+   * ------------------------------------------------------------------- */
+  const pullRef = useRef<() => void>(() => {});
+  const lastLiveRef = useRef<LiveContext | null>(null);
+  const [replay] = useState(() => new ReplayController(() => pullRef.current()));
+  const [replayMotion] = useState(
+    () =>
+      new ReplayMotion(
+        replay,
+        (bodies) =>
+          assignSeats(
+            bodies.map((b) => {
+              const room = b.room_slug as MapRegion;
+              const region =
+                room === "plaza" || room === "library" || room === "workshop" || room === "stage" || room === "garden" || room === "board"
+                  ? room
+                  : "plaza";
+              return { id: b.id, name: b.id, kind: b.kind, region, activity: b.activity, verb: "idle", source: "grove" } as Actor;
+            }),
+          ),
+        () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      ),
+  );
+  const [replaying, setReplaying] = useState(false);
+  useEffect(() => {
+    const off = replay.subscribe(() => setReplaying(replay.view.active));
+    const stopClock = startVisitClock();
+    return () => {
+      off();
+      stopClock();
+      replay.dispose();
+    };
+  }, [replay]);
+
   const zoomIn = useCallback(() => controlsRef.current?.zoomBy(1.25), []);
   const zoomOut = useCallback(() => controlsRef.current?.zoomBy(1 / 1.25), []);
   const resetView = useCallback(() => controlsRef.current?.reset(), []);
@@ -981,16 +1022,33 @@ export function WorldMap() {
 
   useEffect(() => {
     let cancelled = false;
+    /** Which source the last pull drew from, so a switch can drop the old walks. */
+    let lastSource: "live" | "replay" = "live";
     const pull = async () => {
       try {
-        const data = await api<Minimap>("/api/v1/world/minimap");
+        const replaying = replay.view.active;
+        const data: Minimap = replaying
+          ? (replay.snapshot(lastLiveRef.current) as unknown as Minimap)
+          : await api<Minimap>("/api/v1/world/minimap");
         if (cancelled) return;
+        // A live poll that was in flight when replay began must not paint over it.
+        if (replay.view.active !== replaying) return;
+        if (!replaying) lastLiveRef.current = data as unknown as LiveContext;
+        const source = replaying ? "replay" : "live";
+        if (source !== lastSource) {
+          // Entering or leaving replay is a cut, not a walk: nobody strolls from
+          // where they stood at 09:14 to where they stand now.
+          lastSource = source;
+          actorsRef.current = [];
+          departedRef.current.clear();
+          motionRef.current = new MotionDirector();
+        }
         // Injection flags come from the chronicle, not the minimap, and cost a
         // real query, so they are refreshed every fourth poll rather than every
         // one. The chronicle decides in SQL who may see a moderation row: a
         // signed-out spectator gets an empty page, and the count is then
         // honestly zero rather than withheld.
-        if (pullNoRef.current % 4 === 0) {
+        if (!replaying && pullNoRef.current % 4 === 0) {
           try {
             const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
             const flags = await api<{ entries: Array<{ actor: { id: string } | null }> }>(
@@ -1005,7 +1063,7 @@ export function WorldMap() {
           }
         }
         pullNoRef.current += 1;
-        const flaggedIds = flaggedRef.current;
+        const flaggedIds = replaying ? new Set<string>() : flaggedRef.current;
         const orgList = (data.orgs ?? []).map((o) => ({ id: o.id, name: o.name, colour: o.colour }));
         const orgById = new Map(orgList.map((o) => [o.id, o]));
         const orgMode = data.org_render_mode ?? data.orgRenderMode ?? "shared";
@@ -1019,7 +1077,11 @@ export function WorldMap() {
           // but only while it is fresh — a dead runtime must not look busy forever.
           const pulsedAt = b.pulsed_at ?? b.pulsedAt ?? null;
           const fresh =
-            Boolean(pulsedAt) && Date.now() - Date.parse(String(pulsedAt)) < PULSE_FRESH_MS;
+            // In replay a body carries a verb only while a historical span covers
+            // the playhead, so it is current by construction.
+            replaying
+              ? Boolean(b.verb)
+              : Boolean(pulsedAt) && Date.now() - Date.parse(String(pulsedAt)) < PULSE_FRESH_MS;
           const pulsed = fresh && b.verb && b.verb in VERB_LABEL ? (b.verb as AgentVerb) : null;
           const verb = pulsed ?? groveVerb(b.activity, b.connection);
           // The tint is already resolved server-side (own org when the space is
@@ -1167,7 +1229,8 @@ export function WorldMap() {
           : null;
         actorsRef.current = actors;
         seatsRef.current = assignSeats(actors);
-        motionRef.current?.sync(actors, seatsRef.current, Date.now());
+        // Replay syncs its own director on historical ticks (lib/replay/motion).
+        if (!replaying) motionRef.current?.sync(actors, seatsRef.current, Date.now());
         const claimed = data.claimed_agents ?? data.claimedAgents ?? 0;
         const awake = actors.filter((a) => isActiveVerb(a.verb)).length;
         const asleep = actors.length - awake;
@@ -1190,15 +1253,25 @@ export function WorldMap() {
           orgMode,
           attn,
         });
-        setStatus(data.paperclip?.ok ? "live campus + paperclip" : "live campus · paperclip quiet");
+        setStatus(
+          replaying
+            ? replay.view.label
+            : data.paperclip?.ok
+              ? "live campus + paperclip"
+              : "live campus · paperclip quiet",
+        );
       } catch {
         if (!cancelled) setStatus("map stream paused");
       }
     };
+    pullRef.current = () => void pull();
     void pull();
-    const t = window.setInterval(() => void pull(), 8000);
+    const t = window.setInterval(() => {
+      if (!replay.view.active) void pull();
+    }, 8000);
     const es = new EventSource(gp("/api/v1/sse/plaza"));
     es.addEventListener("pulse", (ev) => {
+      if (replay.view.active) return;
       const d = JSON.parse((ev as MessageEvent).data) as {
         actor_id?: string;
         verb?: string;
@@ -1225,6 +1298,7 @@ export function WorldMap() {
     // Tool-call spans, live (Plaza only, like every other SSE event). The next
     // poll replaces the list wholesale, so a missed event heals in 8 seconds.
     es.addEventListener("tool_call", (ev) => {
+      if (replay.view.active) return;
       const d = JSON.parse((ev as MessageEvent).data) as { actor_id?: string; tool_call?: Record<string, unknown> };
       const span = d.tool_call ? spanFromWire(d.tool_call) : null;
       if (!d.actor_id || !span) return;
@@ -1234,6 +1308,7 @@ export function WorldMap() {
       motionRef.current?.sync(actorsRef.current, seatsRef.current, Date.now());
     });
     es.addEventListener("speech", (ev) => {
+      if (replay.view.active) return;
       const data = JSON.parse((ev as MessageEvent).data) as { sender_id?: string; body?: string };
       if (!data.sender_id || !data.body) return;
       actorsRef.current = actorsRef.current.map((a) =>
@@ -1245,10 +1320,11 @@ export function WorldMap() {
     });
     return () => {
       cancelled = true;
+      pullRef.current = () => {};
       window.clearInterval(t);
       es.close();
     };
-  }, []);
+  }, [replay]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1678,7 +1754,9 @@ export function WorldMap() {
 
       /** Where a body is this frame, in (fractional) tile coords, and what it is doing about its errand. */
       const bodyAt = (id: string, seat: Seat) =>
-        motionRef.current!.frame(id, seat, Date.now(), reduceMotion.matches);
+        replay.view.active
+          ? replayMotion.frame(id, seat, replay.view.playhead)
+          : motionRef.current!.frame(id, seat, Date.now(), reduceMotion.matches);
 
       type Label = {
         x: number;
@@ -2140,7 +2218,7 @@ export function WorldMap() {
               if (!(carried && art.carry(ctx, carried, x + 11, y + 3))) art.glyph(ctx, a.verb, x, y, t);
               // Motion marks (lib/motion/marks.ts): fixed semantics, not theme art.
               if (workSpan && z >= LOD_DRESSING) drawWorkBar(ctx, workSpan, x, y, t, reduceMotion.matches);
-              if (mark) drawOutcomeMark(ctx, mark.outcome, x, y, (Date.now() - mark.at) / OUTCOME_MARK_MS, reduceMotion.matches);
+              if (mark) drawOutcomeMark(ctx, mark.outcome, x, y, ((replay.view.active ? replayMotion.now : Date.now()) - mark.at) / OUTCOME_MARK_MS, reduceMotion.matches);
               if (stance && z >= LOD_LABELS) drawStanceMark(ctx, stance, x, y);
               ctx.restore();
             },
@@ -2467,6 +2545,11 @@ export function WorldMap() {
         style={{ imageRendering: "pixelated", touchAction: "none" }}
         aria-label="Grove world map"
       />
+      {/* Replay frames the whole map in amber, so even a screenshot says it. */}
+      {replaying ? (
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-10 border-4 border-amber-400/70" />
+      ) : null}
+      <ReplayBadge controller={replay} />
       {/* Top overlay. On a phone the display heading and the HUD together used
           to eat the screen the world is supposed to fill, so at small widths the
           title drops to a readable 24px, the decorative line stands down, and
@@ -2555,6 +2638,7 @@ export function WorldMap() {
       >
         {kiosk ? null : <CameraBookmarks items={bookmarks} onGo={jumpTo} goToLabel={lex.controls.goTo} />}
         <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} />
+        <ReplayBar controller={replay} />
         {following ? (
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-lantern-400/40 bg-dusk-950/90 py-1.5 pl-4 pr-1.5 text-xs text-lantern-300">
             <span className="truncate">
@@ -2615,6 +2699,7 @@ export function WorldMap() {
             >
               {lex.controls.kiosk}
             </button>
+            <ReplayEntry controller={replay} />
             <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />
           </div>
         </div>
