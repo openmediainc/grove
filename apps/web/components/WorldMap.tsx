@@ -5,38 +5,17 @@ import { useRouter } from "next/navigation";
 import { asPermissionBadges, consequenceOf } from "@grove/ui";
 import { api } from "@/lib/api";
 import {
-  ANIMAL_KEYS,
   BUILDING,
-  CHAR_SRC,
   CIVIC,
-  CIVIC_ROOMS,
-  ITEM,
-  ITEM_KEYS,
-  PROP,
-  PROP_KEYS,
   SCAFFOLD,
   SCATTER_KEYS,
-  animalSrc,
-  buildingSrc,
-  civicSrc,
-  drawAnchored,
-  groundSrc,
-  itemSrc,
-  pathSrc,
-  propSrc,
-  scaffoldSrc,
-  scatterSrc,
-  tileSrc,
   type AccessLevel,
-  type AnimalKey,
-  type Anchored,
   type CharKey,
-  type CivicRoom,
   type ItemKey,
-  type PropKey,
   type ScaffoldStage,
-  type ScatterKey,
 } from "@/lib/art";
+import { THEMES, DEFAULT_THEME, type Theme } from "@/lib/themes";
+import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
 import {
   groveVerb,
@@ -67,7 +46,7 @@ import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { AttentionBell } from "./AttentionBell";
 import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
-import { DAYLIGHT, skyAt, type Sky } from "./skyClock";
+import { skyAt, type Sky } from "./skyClock";
 import {
   DEPART_MS,
   ELSEWHERE,
@@ -113,6 +92,15 @@ const PAN_MARGIN = 140;
 const LOD_LABELS = 0.7;
 /** Below this zoom, claimed-plot labels are dropped too. */
 const LOD_PLOTS = 0.5;
+/** Every prop is 1x1; the theme decides how tall. */
+const PROP_FOOTPRINT = { fw: 1, fh: 1 } as const;
+/** The dressing's sheep frames, named as the contract's ambient poses. */
+const AMBIENT_POSE = {
+  "sheep-graze": "graze",
+  "sheep-idle": "idle",
+  "sheep-walk-a": "walk-a",
+  "sheep-walk-b": "walk-b",
+} as const;
 /** Captions are clipped to roughly the body sprite's width. */
 const BODY_W = 40;
 const CAPTION_W = 48;
@@ -256,14 +244,7 @@ type Plot = {
   orgs: OrgBadge[];
 };
 
-/** Access level is public even when the space's contents are not. */
-const PRESET_TINT: Record<string, string> = {
-  private: "rgba(244,114,182,0.30)",
-  public_view: "rgba(56,189,248,0.26)",
-  // Amber, not green: the open land underneath is already green, and a green
-  // tint on green terrain made claimed public plots invisible.
-  public_write: "rgba(251,191,36,0.26)",
-};
+/** Access level is public even when the space's contents are not. The tint lives in the theme. */
 const PRESET_LABEL: Record<string, string> = {
   private: "private",
   public_view: "view only",
@@ -349,9 +330,6 @@ type Departure = { x: number; y: number; alpha: number; sprite: CharKey; at: num
 
 type RecentLine = { speech_id?: string; speechId?: string; sender_id?: string; senderId?: string; sender_name?: string; senderName?: string; body: string };
 
-/** A stalled body claims to be working but has stopped reporting. */
-const STALL_RING = "#f87171";
-
 /* --- hazards ------------------------------------------------------- *
  * Three states a watcher has to be able to see from across the world,
  * ranked by how much they want a human:
@@ -367,14 +345,6 @@ const STALL_RING = "#f87171";
  * drawn in screen space at a fixed size, so a faulted body is equally loud
  * whether you are looking at one room or the whole campus.
  * ------------------------------------------------------------------- */
-type HazardTone = "flag" | "fault" | "stall";
-
-const HAZARD_COLOUR: Record<HazardTone, string> = {
-  flag: "#f472b6",
-  fault: "#f87171",
-  stall: "#fb923c",
-};
-
 function hazardOf(a: Actor): HazardTone | null {
   if (a.flagged) return "flag";
   if (a.verb === "error" || a.verb === "blocked") return "fault";
@@ -414,38 +384,6 @@ function itemForActor(a: Actor): ItemKey | null {
   return null;
 }
 
-/** A pulsing warning triangle, drawn at a fixed size in SCREEN space. */
-function drawHazardMark(
-  ctx: CanvasRenderingContext2D,
-  sx: number,
-  sy: number,
-  tone: HazardTone,
-  t: number,
-): void {
-  const pulse = 0.55 + 0.45 * Math.sin(t / 240);
-  ctx.save();
-  ctx.translate(Math.round(sx), Math.round(sy));
-  ctx.globalAlpha = 0.55 + 0.45 * pulse;
-  // Dark backing first: these land on lantern-amber paving as often as on grass.
-  ctx.fillStyle = "rgba(7,8,20,0.88)";
-  ctx.beginPath();
-  ctx.moveTo(0, -14);
-  ctx.lineTo(9, 3);
-  ctx.lineTo(-9, 3);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = HAZARD_COLOUR[tone];
-  ctx.beginPath();
-  ctx.moveTo(0, -11);
-  ctx.lineTo(6.5, 1.5);
-  ctx.lineTo(-6.5, 1.5);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = "#0a0a18";
-  ctx.fillRect(-1, -7, 2, 5);
-  ctx.fillRect(-1, -1, 2, 2);
-  ctx.restore();
-}
 /**
  * Below this zoom a body is a few pixels of sprite, so its pennant would be a
  * coloured speck among hundreds. Org colour survives on the plot fences, which
@@ -493,16 +431,6 @@ const KIOSK_STOPS: ReadonlyArray<{ tx: number; ty: number; zoom: number }> = [
   }),
   { tx: PLAZA_CENTER.x, ty: PLAZA_CENTER.y, zoom: KIOSK_WIDE_ZOOM },
 ];
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.decoding = "async";
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(src));
-    img.src = src;
-  });
-}
 
 function spriteKey(kind: Actor["kind"], verb: AgentVerb): CharKey {
   if (kind === "human") {
@@ -669,57 +597,6 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxW: number): str
   return lo > 0 ? `${text.slice(0, lo)}…` : "";
 }
 
-function drawGlyph(ctx: CanvasRenderingContext2D, verb: AgentVerb, x: number, y: number, t: number) {
-  ctx.save();
-  ctx.translate(x + 16, y - 18);
-  ctx.fillStyle = VERB_RING[verb];
-  ctx.strokeStyle = VERB_RING[verb];
-  ctx.lineWidth = 1.5;
-  if (verb === "tool") {
-    for (let i = 0; i < 4; i++) {
-      const a = t / 140 + (i * Math.PI) / 2;
-      ctx.fillRect(Math.cos(a) * 7 - 1.5, Math.sin(a) * 7 - 1.5, 3, 3);
-    }
-  } else if (verb === "think") {
-    ctx.beginPath();
-    ctx.arc(0, 0, 5 + Math.sin(t / 200) * 1.5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillRect(-1, -8, 2, 2);
-    ctx.fillRect(4, -6, 2, 2);
-  } else if (verb === "wait") {
-    ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("?", 0, 4);
-  } else if (verb === "error") {
-    ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("!", 0, 4);
-  } else if (verb === "blocked") {
-    ctx.fillRect(-4, -4, 8, 8);
-  } else if (verb === "read") {
-    ctx.strokeRect(-6, -4, 12, 8);
-    ctx.beginPath();
-    ctx.moveTo(0, -4);
-    ctx.lineTo(0, 4);
-    ctx.stroke();
-  } else if (verb === "say") {
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 7, 5, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  } else if (verb === "offline") {
-    // The only rung of the idle -> asleep -> gone ladder that had no mark at
-    // all: a dimmer sprite is a difference you can only see next to a brighter
-    // one, so asleep never said anything on its own. Not drawn in the verb's
-    // own ring colour — at 0.45 alpha under a body already down at 0.4 it would
-    // be invisible, which is the problem, not the solution.
-    ctx.fillStyle = "rgba(148,163,184,0.8)";
-    ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("z", 0, 4);
-  }
-  ctx.restore();
-}
-
 /**
  * The heartbeat ring: how much of this body's seat is left.
  *
@@ -766,41 +643,6 @@ function drawHealthMark(
   ctx.restore();
 }
 
-/**
- * Org identity flies as a pennant on the body's LEFT, clear of the sprite.
- * The ring under the feet is already spoken for twice over — its colour is the
- * verb, and a dashed red one is a stall — so org colour had to take a shape and
- * a place of its own rather than a third meaning for the same ring.
- */
-function drawPennant(ctx: CanvasRenderingContext2D, colour: string, x: number, y: number) {
-  ctx.save();
-  ctx.translate(x - 22, y - 4);
-  // Dark backing first: a pale org colour has to read against pale terrain.
-  ctx.strokeStyle = "rgba(7,8,20,0.75)";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(0, -20);
-  ctx.stroke();
-  ctx.strokeStyle = colour;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(0, -20);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(-0.75, -20);
-  ctx.lineTo(-11, -16.5);
-  ctx.lineTo(-0.75, -13);
-  ctx.closePath();
-  ctx.fillStyle = colour;
-  ctx.fill();
-  ctx.strokeStyle = "rgba(7,8,20,0.75)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.restore();
-}
-
 export function WorldMap() {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -838,6 +680,11 @@ export function WorldMap() {
    *  be torn down and rebuilt every time kiosk mode is toggled. */
   const kioskModeRef = useRef<(on: boolean) => void>(() => {});
   const viewRef = useRef<View>({ zoom: 1, px: 0, py: 0 });
+  /**
+   * The theme being DRAWN. Read once per frame by the renderer, so a switch
+   * re-skins the next frame with no remount; see lib/themes for the contract.
+   */
+  const themeRef = useRef<Theme>(THEMES[DEFAULT_THEME]);
   const controlsRef = useRef<{
     zoomBy: (f: number) => void;
     reset: () => void;
@@ -1694,98 +1541,46 @@ export function WorldMap() {
     canvas.style.cursor = "grab";
 
     const start = async () => {
-      const tiles = new Map<string, HTMLImageElement>();
-      for (const slug of ["plaza", "library", "workshop", "stage", "garden", "board"]) {
-        try {
-          try {
-            tiles.set(slug, await loadImage(groundSrc(slug)));
-          } catch {
-            tiles.set(slug, await loadImage(tileSrc(slug)));
-          }
-        } catch {
-          /* missing tile */
-        }
-      }
-      if (!tiles.get("plaza")) return;
-      const chars = new Map<CharKey, HTMLImageElement>();
-      await Promise.all(
-        (Object.keys(CHAR_SRC) as CharKey[]).map(async (k) => {
-          try {
-            chars.set(k, await loadImage(CHAR_SRC[k]));
-          } catch {
-            /* keep missing */
-          }
-        }),
-      );
-      const buildings = new Map<AccessLevel, HTMLImageElement>();
-      await Promise.all(
-        (["private", "public_view", "public_write"] as AccessLevel[]).map(async (k) => {
-          try {
-            buildings.set(k, await loadImage(buildingSrc(k)));
-          } catch {
-            /* a missing building just means the plot keeps its tint */
-          }
-        }),
-      );
+      /* ---- the art, from the active theme -----------------------------
+       * Everything the map draws is asked of the theme (lib/themes). The
+       * theme's prepare() awaits what it cannot draw an honest frame without —
+       * for aoe, the ground, characters and the three access buildings — and
+       * fetches or bakes the rest behind the first frame. Every draw call below
+       * treats "not ready" as "not yet", never as an error.
+       * ---------------------------------------------------------------- */
+      await themeRef.current.art.prepare();
       if (cancelled || !canvasRef.current) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-
-      /* ---- the dressing, loaded behind the first frame ---------------
-       * Ground, characters and the three access buildings are what the map
-       * cannot draw a single honest frame without, so they are awaited above.
-       * The other 47 files are scenery: they are fetched without blocking,
-       * and every draw call below treats a missing image as "not yet" rather
-       * than as an error. The campus paints exactly as fast as it did before
-       * this pass, then fills in.
-       * ---------------------------------------------------------------- */
-      const civics = new Map<CivicRoom, HTMLImageElement>();
-      const scaffolds = new Map<ScaffoldStage, HTMLImageElement>();
-      const props = new Map<PropKey, HTMLImageElement>();
-      const paths = new Map<number, HTMLImageElement>();
-      const scatters = new Map<ScatterKey, HTMLImageElement>();
-      const items = new Map<ItemKey, HTMLImageElement>();
-      const animals = new Map<AnimalKey, HTMLImageElement>();
-      const lazy = <K,>(store: Map<K, HTMLImageElement>, key: K, src: string) =>
-        loadImage(src)
-          .then((img) => {
-            if (!cancelled) store.set(key, img);
-          })
-          .catch(() => {
-            /* a missing scenery file just means that thing never appears */
-          });
-      void Promise.all([
-        ...CIVIC_ROOMS.map((r) => lazy(civics, r, civicSrc(r))),
-        ...([1, 2, 3] as ScaffoldStage[]).map((s) => lazy(scaffolds, s, scaffoldSrc(s))),
-        ...PROP_KEYS.map((k) => lazy(props, k, propSrc(k))),
-        ...Array.from({ length: 16 }, (_, m) => lazy(paths, m, pathSrc(m))),
-        ...SCATTER_KEYS.map((k) => lazy(scatters, k, scatterSrc(k))),
-        ...ITEM_KEYS.map((k) => lazy(items, k, itemSrc(k))),
-        ...ANIMAL_KEYS.map((k) => lazy(animals, k, animalSrc(k))),
-      ]);
 
       /* ---- one lamp, drawn once -------------------------------------
        * A radial gradient is an allocation, and the campus has forty-odd lamps
        * in view at once. Building one per lamp per frame is 2,400 gradients a
        * second for a picture that never changes, so the blob is rendered ONCE
-       * into an offscreen canvas here and stamped from then on — the same
+       * per theme into an offscreen canvas and stamped from then on — the same
        * discipline the dressing follows, moved from placement to paint.
        * ---------------------------------------------------------------- */
       const GLOW_R = 64;
-      const glowSprite = document.createElement("canvas");
-      glowSprite.width = GLOW_R * 2;
-      glowSprite.height = GLOW_R * 2;
-      {
-        const g = glowSprite.getContext("2d");
+      const glowSprites = new Map<string, HTMLCanvasElement>();
+      const glowFor = (theme: Theme): HTMLCanvasElement => {
+        let sprite = glowSprites.get(theme.id);
+        if (sprite) return sprite;
+        sprite = document.createElement("canvas");
+        sprite.width = GLOW_R * 2;
+        sprite.height = GLOW_R * 2;
+        const g = sprite.getContext("2d");
         if (g) {
+          const [inner, mid, outer] = theme.palette.glow;
           const grad = g.createRadialGradient(GLOW_R, GLOW_R, 0, GLOW_R, GLOW_R, GLOW_R);
-          grad.addColorStop(0, "rgba(255,206,132,0.9)");
-          grad.addColorStop(0.32, "rgba(255,174,86,0.34)");
-          grad.addColorStop(1, "rgba(255,146,56,0)");
+          grad.addColorStop(0, inner);
+          grad.addColorStop(0.32, mid);
+          grad.addColorStop(1, outer);
           g.fillStyle = grad;
           g.fillRect(0, 0, GLOW_R * 2, GLOW_R * 2);
         }
-      }
+        glowSprites.set(theme.id, sprite);
+        return sprite;
+      };
 
       /** Where a body is this frame, in (fractional) tile coords. */
       const bodyAt = (id: string, seat: Seat, now: number): { x: number; y: number } => {
@@ -1834,6 +1629,12 @@ export function WorldMap() {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, cssW, cssH);
+        // The theme is read ONCE a frame: a switch lands on a frame boundary,
+        // never halfway down the depth list.
+        const theme = themeRef.current;
+        const art = theme.art;
+        const pal = theme.palette;
+        art.backdrop(ctx, cssW, cssH, t);
 
         // Re-clamp every frame: the viewport (and the world) can change size
         // underneath a view that was legal when it was set.
@@ -1847,7 +1648,6 @@ export function WorldMap() {
 
         const { ox, oy } = origin();
         const radius = radiusRef.current;
-        const fallback = tiles.get("plaza")!;
 
         // Only tiles inside the viewport are candidates: this is what keeps the
         // per-frame cost flat as the world grows and as people zoom out.
@@ -1873,7 +1673,6 @@ export function WorldMap() {
             if (Math.hypot(tx - PLAZA_CENTER.x, ty - PLAZA_CENTER.y) > radius + horizon) continue;
             const core = isCoreTile(tx, ty);
             const region = regionAt(tx, ty);
-            const tile = tiles.get(core && region !== "wild" ? region : "garden") ?? fallback;
             const p = iso(tx, ty);
             const x = ox + p.x;
             const y = oy + p.y;
@@ -1887,27 +1686,21 @@ export function WorldMap() {
             ctx.closePath();
             ctx.clip();
             ctx.globalAlpha = explored ? (core ? 1 : 0.55) : 0.18;
-            ctx.drawImage(tile, x - TW / 2, y, TW, TH);
+            art.ground(ctx, core ? region : "wild", x, y, tx, ty);
             // Paving, then seasoning, both still inside the tile's clip so a
             // path arm can never bleed into the diamond next door. Both are a
             // single typed-array read per tile — the whole network and every
             // pebble was decided once, at module load, from the tile grid.
             if (core && explored) {
               const mask = pathMaskAt(tx, ty);
-              if (mask >= 0) {
-                const road = paths.get(mask);
-                if (road) ctx.drawImage(road, x - TW / 2, y, TW, TH);
-              }
+              if (mask >= 0) art.path(ctx, mask, x, y);
               if (z >= LOD_SCATTER) {
                 const s = scatterAt(tx, ty);
-                if (s >= 0) {
-                  const speck = scatters.get(SCATTER_KEYS[s]!);
-                  if (speck) ctx.drawImage(speck, x - TW / 2, y, TW, TH);
-                }
+                if (s >= 0) art.scatter(ctx, SCATTER_KEYS[s]!, x, y);
               }
             }
             if (!explored) {
-              ctx.fillStyle = "rgba(4,6,16,0.72)";
+              ctx.fillStyle = pal.fog;
               ctx.fill();
             }
             ctx.restore();
@@ -1923,7 +1716,7 @@ export function WorldMap() {
                 ctx.lineTo(x, y + TH);
                 ctx.lineTo(x - TW / 2, y + TH / 2);
                 ctx.closePath();
-                ctx.strokeStyle = "rgba(167,139,250,0.38)";
+                ctx.strokeStyle = pal.plotEdge;
                 ctx.stroke();
               }
             }
@@ -1934,7 +1727,7 @@ export function WorldMap() {
               ctx.lineTo(x, y + TH);
               ctx.lineTo(x - TW / 2, y + TH / 2);
               ctx.closePath();
-              ctx.strokeStyle = "rgba(232,184,109,0.12)";
+              ctx.strokeStyle = pal.coreGrid;
               ctx.stroke();
             }
           }
@@ -1960,7 +1753,14 @@ export function WorldMap() {
         /** Generous margin: a 328px Library pokes into view from ~7 tiles off. */
         const near = (tx: number, ty: number, fw: number, fh: number) =>
           tx + fw - 1 >= vx0 - 8 && tx <= vx1 + 8 && ty + fh - 1 >= vy0 - 8 && ty <= vy1 + 8;
-        const anchored = (img: HTMLImageElement, tx: number, ty: number, a: Anchored, alpha = 1) => {
+        /** Queue a footprint-anchored draw from the theme. The footprint sets the depth; the theme draws. */
+        const anchored = (
+          paint: (px: number, py: number) => void,
+          tx: number,
+          ty: number,
+          a: { fw: number; fh: number },
+          alpha = 1,
+        ) => {
           const q = iso(tx, ty);
           const px = ox + q.x;
           const py = oy + q.y;
@@ -1968,12 +1768,12 @@ export function WorldMap() {
             s: tx + a.fw - 1 + (ty + a.fh - 1),
             draw: () => {
               if (alpha === 1) {
-                drawAnchored(ctx, img, px, py, a);
+                paint(px, py);
                 return;
               }
               ctx.save();
               ctx.globalAlpha = alpha;
-              drawAnchored(ctx, img, px, py, a);
+              paint(px, py);
               ctx.restore();
             },
           });
@@ -1983,7 +1783,9 @@ export function WorldMap() {
         for (const plot of plotRef.current) {
           const { rect } = plot;
           if (rect.x1 < vx0 || rect.x0 > vx1 || rect.y1 < vy0 || rect.y0 > vy1) continue;
-          const tint = PRESET_TINT[plot.preset] ?? PRESET_TINT.public_write!;
+          const access: AccessLevel =
+            plot.preset === "private" || plot.preset === "public_view" ? plot.preset : "public_write";
+          const tint = pal.plotTint[plot.preset as AccessLevel] ?? pal.plotTint.public_write;
           let anyExplored = false;
           for (let ty = rect.y0; ty <= rect.y1; ty++) {
             for (let tx = rect.x0; tx <= rect.x1; tx++) {
@@ -2006,9 +1808,8 @@ export function WorldMap() {
           // colonnade or an open canopy says the access level from across the
           // map, without a badge to hover or a legend to learn. The tint stays
           // underneath as the machine-readable half.
-          const shell = buildings.get(plot.preset as AccessLevel);
-          if (anyExplored && shell && z >= LOD_PLOTS) {
-            anchored(shell, rect.x0 + 2, rect.y0 + 1, BUILDING, 0.96);
+          if (anyExplored && z >= LOD_PLOTS) {
+            anchored((px, py) => art.building(ctx, access, px, py), rect.x0 + 2, rect.y0 + 1, BUILDING, 0.96);
           }
 
           // Bound orgs colour the FENCE, not the ground: the fill already says
@@ -2048,7 +1849,7 @@ export function WorldMap() {
           const ly = oy + mid.y;
           ctx.textAlign = "center";
           ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
-          ctx.fillStyle = "#f4d19a";
+          ctx.fillStyle = pal.plotName;
           ctx.fillText(plot.name ?? "claimed", lx, ly - 2);
           ctx.font = "9px ui-sans-serif, system-ui, sans-serif";
           ctx.fillStyle = tint.replace(/[\d.]+\)$/, "0.95)");
@@ -2100,8 +1901,8 @@ export function WorldMap() {
           const a = CIVIC[c.room];
           if (!near(c.tx, c.ty, a.fw, a.fh)) continue;
           if (!tileExplored(c.tx + 1, c.ty + 1, radius)) continue;
-          const img = civics.get(c.room);
-          if (img) anchored(img, c.tx, c.ty, a);
+          const room = c.room;
+          anchored((px, py) => art.landmark(ctx, room, px, py), c.tx, c.ty, a);
         }
 
         // Furniture. Fixed list, computed once from the tile grid, so the same
@@ -2110,8 +1911,8 @@ export function WorldMap() {
           for (const p of PROPS) {
             if (!near(p.tx, p.ty, 1, 1)) continue;
             if (!tileExplored(p.tx, p.ty, radius)) continue;
-            const img = props.get(p.key);
-            if (img) anchored(img, p.tx, p.ty, PROP[p.key]);
+            const key = p.key;
+            anchored((px, py) => art.prop(ctx, key, px, py), p.tx, p.ty, PROP_FOOTPRINT);
           }
         }
 
@@ -2144,23 +1945,15 @@ export function WorldMap() {
             const htx = Math.round(f.x);
             const hty = Math.round(f.y);
             if (!near(htx, hty, 1, 1) || !tileExplored(htx, hty, radius)) continue;
-            const img = animals.get(f.pose);
-            if (!img) continue;
             const q = iso(f.x, f.y);
             const sx = ox + q.x;
             const sy = oy + q.y - 18;
             const flip = f.flip;
+            const pose = AMBIENT_POSE[f.pose];
             scene.push({
               s: f.x + f.y - 0.5,
-              draw: () => {
-                ctx.save();
-                ctx.translate(sx, sy);
-                if (flip) ctx.scale(-1, 1);
-                // Animals go through the character path unchanged: 64x64 art
-                // drawn at 40x40, feet on the bottom edge of the frame.
-                ctx.drawImage(img, -20, -20, 40, 40);
-                ctx.restore();
-              },
+              // The ambient critter: a sheep in aoe, whatever idles in the theme.
+              draw: () => art.ambient(ctx, pose, sx, sy, flip, t),
             });
           }
         }
@@ -2211,10 +2004,10 @@ export function WorldMap() {
             const elapsed = nowMs - job.start;
             const stage: ScaffoldStage =
               elapsed < SCAFFOLD_STAGE_MS[0]! ? 1 : elapsed < SCAFFOLD_STAGE_MS[1]! ? 2 : 3;
-            const rig = scaffolds.get(stage);
             const sx = seat.x - 3;
             const sy = seat.y - 3;
-            if (rig && near(sx, sy, SCAFFOLD.fw, SCAFFOLD.fh)) anchored(rig, sx, sy, SCAFFOLD, 0.92);
+            if (near(sx, sy, SCAFFOLD.fw, SCAFFOLD.fh))
+              anchored((px, py) => art.scaffold(ctx, stage, px, py), sx, sy, SCAFFOLD, 0.92);
           }
 
           scene.push({
@@ -2246,24 +2039,20 @@ export function WorldMap() {
                 ctx.globalAlpha = alpha;
               }
               const key = spriteKey(a.kind === "paperclip" ? "agent" : a.kind, a.verb);
-              const img = chars.get(key) ?? chars.get("agent-front");
-              if (img) ctx.drawImage(img, x - BODY_W / 2, y - 20, BODY_W, 40);
-              else {
-                ctx.fillStyle = a.kind === "human" ? "#e8b86d" : "#7c3aed";
+              if (!art.body(ctx, key, x, y)) {
+                ctx.fillStyle = a.kind === "human" ? pal.placeholder.human : pal.placeholder.agent;
                 ctx.fillRect(x - 6, y - 6, 12, 12);
               }
               // Org before the verb glyph and the bubble: identity sits behind
               // what the body is doing and what it just said, never over them.
-              if (a.orgColour && z >= LOD_ORG) drawPennant(ctx, a.orgColour, x, y);
+              if (a.orgColour && z >= LOD_ORG) art.pennant(ctx, a.orgColour, x, y);
               // What it is doing, as a thing in its hand. The 24x24 item is
               // anchored at its grip point, placed at the sprite's right hand —
               // 11px right of centre, 3px below the waist. Where an item says
               // the verb, the abstract glyph stands down instead of saying the
               // same thing twice beside it.
               const carried = z >= LOD_DRESSING ? itemForActor(a) : null;
-              const held = carried ? items.get(carried) : undefined;
-              if (held) ctx.drawImage(held, x + 11 - ITEM.ax, y + 3 - ITEM.ay, ITEM.w, ITEM.h);
-              else drawGlyph(ctx, a.verb, x, y, t);
+              if (!(carried && art.carry(ctx, carried, x + 11, y + 3))) art.glyph(ctx, a.verb, x, y, t);
               ctx.restore();
             },
           });
@@ -2282,7 +2071,7 @@ export function WorldMap() {
               // The caption is what this body is doing: the task detail when
               // there is one, the verb only as a fallback.
               detail: a.detail ?? VERB_LABEL[a.verb],
-              nameFill: a.source === "paperclip" ? "#c4b5fd" : "#f4d19a",
+              nameFill: a.source === "paperclip" ? pal.paperclipNameFill : pal.nameFill,
               detailFill: VERB_RING[a.verb],
               alpha,
               orgColour: a.orgColour ?? null,
@@ -2318,7 +2107,6 @@ export function WorldMap() {
           // place is what says "gone"; the drift upward is only decoration.
           const gx = ox + q.x;
           const gy = oy + q.y - 18 - (reduceMotion.matches ? 0 : 10 * pr);
-          const img = chars.get(gone.sprite) ?? chars.get("agent-front");
           const startAlpha = gone.alpha;
           scene.push({
             s: gone.x + gone.y - 0.5,
@@ -2327,13 +2115,13 @@ export function WorldMap() {
               // The seat empties: a ring opening outward where the body stood,
               // which is the half of this that is still readable at 0.4x.
               ctx.globalAlpha = (1 - pr) * 0.55;
-              ctx.strokeStyle = "rgba(148,163,184,0.9)";
+              ctx.strokeStyle = pal.departRing;
               ctx.lineWidth = 1.5;
               ctx.beginPath();
               ctx.ellipse(gx, gy + 18, 10 + 24 * pr, (10 + 24 * pr) * 0.42, 0, 0, Math.PI * 2);
               ctx.stroke();
               ctx.globalAlpha = startAlpha * (1 - pr) * (1 - pr);
-              if (img) ctx.drawImage(img, gx - BODY_W / 2, gy - 20, BODY_W, 40);
+              art.body(ctx, gone.sprite, gx, gy);
               ctx.restore();
             },
           });
@@ -2370,7 +2158,7 @@ export function WorldMap() {
             ctx.save();
             ctx.globalCompositeOperation = "screen";
             ctx.globalAlpha = hour.lift;
-            ctx.fillStyle = DAYLIGHT;
+            ctx.fillStyle = pal.daylight;
             ctx.fillRect(0, 0, cssW, cssH);
             ctx.restore();
           }
@@ -2388,6 +2176,7 @@ export function WorldMap() {
           ctx.globalCompositeOperation = "lighter";
           ctx.imageSmoothingEnabled = true;
           ctx.globalAlpha = Math.min(1, hour.lamp * LAMP_GAIN);
+          const glowSprite = glowFor(theme);
           for (const l of lamps) ctx.drawImage(glowSprite, l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
           ctx.restore();
           ctx.imageSmoothingEnabled = false;
@@ -2396,17 +2185,7 @@ export function WorldMap() {
         // Speech, above the light. Painted before the nameplates so that when
         // the two would collide it is the caption that loses, not the line
         // somebody just said.
-        for (const b of bubbles) {
-          ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
-          ctx.textAlign = "center";
-          const w = Math.min(160, ctx.measureText(b.text).width + 12);
-          ctx.fillStyle = "rgba(7,8,20,0.9)";
-          ctx.beginPath();
-          ctx.roundRect(b.x - w / 2, b.y - 36, w, 16, 4);
-          ctx.fill();
-          ctx.fillStyle = "#f4d19a";
-          ctx.fillText(b.text, b.x, b.y - 24, w - 8);
-        }
+        for (const b of bubbles) art.speech(ctx, b.x, b.y, b.text);
 
         // Captions last, front-most first, skipping any that would collide:
         // a smeared pile of half-readable task titles is worse than a gap.
@@ -2449,7 +2228,7 @@ export function WorldMap() {
           const sx = h.x * z + v.px;
           const sy = h.y * z + v.py - 22;
           if (sx < -20 || sx > cssW + 20 || sy < -20 || sy > cssH + 20) continue;
-          drawHazardMark(ctx, sx, sy, h.tone, t);
+          art.hazard(ctx, sx, sy, h.tone, t);
         }
         // The heartbeat rings, at the same fixed size and for the same reason.
         // Offset to the right of the hazard slot so a body that is both faulted
@@ -2539,12 +2318,12 @@ export function WorldMap() {
           const consequence = badgeConsequence(hover.badges);
           if (consequence) lines.push(consequence);
           const boxH = 14 + lines.length * 16;
-          ctx.fillStyle = "rgba(7,8,20,0.94)";
+          ctx.fillStyle = pal.card.bg;
           ctx.fillRect(12, cssH - boxH - 12, 460, boxH);
           ctx.textAlign = "left";
           ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
           lines.forEach((ln, i) => {
-            ctx.fillStyle = i === 0 ? "#f4d19a" : hover.stalled && i === 1 ? STALL_RING : "rgba(236,231,221,0.78)";
+            ctx.fillStyle = i === 0 ? pal.card.title : hover.stalled && i === 1 ? STALL_RING : pal.card.text;
             ctx.fillText(ln, 20, cssH - boxH + 6 + i * 16);
           });
         }
