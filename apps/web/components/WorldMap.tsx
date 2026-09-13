@@ -1203,14 +1203,22 @@ export function WorldMap() {
         actor_id?: string;
         verb?: string;
         detail?: string | null;
+        presence?: { pulsed_at?: string | null; pulsedAt?: string | null };
+        batch?: { last_pulsed_at?: string | null };
       };
       if (!d.actor_id || !d.verb || !(d.verb in VERB_LABEL)) return;
       const verb = d.verb as AgentVerb;
       // A pulse just arrived, so for this body "gone quiet" is no longer true
       // until the next poll says otherwise.
-      const at = new Date().toISOString();
+      // A batch pulse (AGT-10) arrives as ONE event carrying the final state,
+      // stamped with when that phase really happened, which may already be
+      // old. Date the errand from that stamp and judge the stall from it too,
+      // rather than pretending it happened the moment the event landed.
+      const at = d.presence?.pulsed_at ?? d.presence?.pulsedAt ?? d.batch?.last_pulsed_at ?? new Date().toISOString();
+      const ageS = (Date.now() - Date.parse(at)) / 1000;
+      const stalled = isActiveVerb(verb) && Number.isFinite(ageS) && ageS > stallSecondsRef.current;
       actorsRef.current = actorsRef.current.map((a) =>
-        a.id === d.actor_id ? { ...a, verb, detail: d.detail || VERB_LABEL[verb], stalled: false, pulsedAt: at } : a,
+        a.id === d.actor_id ? { ...a, verb, detail: d.detail || VERB_LABEL[verb], stalled, pulsedAt: at } : a,
       );
       motionRef.current?.sync(actorsRef.current, seatsRef.current, Date.now());
     });
