@@ -20,6 +20,8 @@ import {
   cylinder,
   door,
   drawSpeechBubble,
+  drawEstateFence,
+  drawEstateSign,
   drawSignboard,
   drawSpeechPip,
   drawHazardTriangle,
@@ -49,6 +51,7 @@ import {
   type Baked,
   type Ctx,
   type FigureSpec,
+  type EstateStyle,
   type SignStyle,
 } from "./kit";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
@@ -549,6 +552,18 @@ export const SIGN_STYLE: SignStyle = {
   },
 };
 
+/**
+ * An estate: a city block. A civic plaque mount with a domed crest; a kerbed
+ * pavement with bollards round the block.
+ */
+export const ESTATE_STYLE: EstateStyle = {
+  frame: "#0f3d22",
+  frameEdge: "rgba(250,250,249,0.9)",
+  crest: "#fafaf9",
+  crestShape: "arch",
+  fence: { rail: "rgba(229,231,235,0.85)", post: "#52525b", width: 3 },
+};
+
 const art: ThemeArt = {
   async prepare() {
     /* Procedural: everything bakes on first use. */
@@ -619,6 +634,12 @@ const art: ThemeArt = {
   signboard(ctx, board) {
     drawSignboard(ctx, board, SIGN_STYLE);
   },
+  estateSign(ctx, board) {
+    drawEstateSign(ctx, board, SIGN_STYLE, ESTATE_STYLE);
+  },
+  estateFence(ctx, segments, accent) {
+    drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
+  },
 };
 
 export const CITY_LEXICON: ThemeLexicon = {
@@ -649,6 +670,7 @@ export const CITY_LEXICON: ThemeLexicon = {
   claimedPlot: "claimed lot",
   heldPlot: "Held lot",
   resting: "home for the night",
+  estate: { label: "Block", plots: "lots" },
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "everyone's at work" },
   hud: { hereNow: "in town", watching: "watching", awake: "at work", asleep: "off shift", fog: "limits", world: "city", claimed: "lots", quiet: "the street is quiet" },

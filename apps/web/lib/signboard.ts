@@ -163,34 +163,59 @@ export function layoutSignMarks(marks: readonly SpaceMark[], cx: number, bottom:
 }
 
 /**
+ * Board sizes. `plot` is a lone plot's board; `member` is a plot's own board
+ * inside an estate — smaller, name and access only, because the estate's
+ * shared sign carries the rest; `estate` is that shared sign (#37), a little
+ * larger, sized by its words rather than by one building.
+ */
+type BoardSpec = { titlePx: number; detailPx: number; maxW: number; minW: number; perZoom: number; extras: boolean };
+const SPECS = {
+  plot: { titlePx: TITLE_PX, detailPx: DETAIL_PX, maxW: MAX_W, minW: MIN_W, perZoom: BUILDING_W * 0.8, extras: true },
+  member: { titlePx: 10, detailPx: 8, maxW: 110, minW: 36, perZoom: BUILDING_W * 0.6, extras: false },
+  estate: { titlePx: 13, detailPx: DETAIL_PX, maxW: 200, minW: 64, perZoom: 400, extras: false },
+} as const satisfies Record<string, BoardSpec>;
+
+/**
  * Lay out a board centred on (ax, ay), the SCREEN point on the building's
- * front where it hangs. Returns null below the zoom threshold.
+ * front where it hangs. Returns null below the zoom threshold. `compact` is a
+ * plot's own board inside an estate (#37): smaller, no sign text or org line.
  */
 export function layoutSignboard(
   content: SignContent,
   anchor: { x: number; y: number },
   zoom: number,
   measure: Measure,
+  opts: { compact?: boolean } = {},
 ): Signboard | null {
   if (!signboardVisible(zoom)) return null;
-  const maxW = Math.max(MIN_W, Math.min(MAX_W, BUILDING_W * zoom * 0.8));
+  return layoutBoard(content, anchor, zoom, measure, opts.compact ? SPECS.member : SPECS.plot);
+}
+
+function layoutBoard(
+  content: SignContent,
+  anchor: { x: number; y: number },
+  zoom: number,
+  measure: Measure,
+  spec: BoardSpec,
+): Signboard {
+  const maxW = Math.max(spec.minW, Math.min(spec.maxW, spec.perZoom * zoom));
   // A held board never carries branding, whatever the content was handed.
   const emblemKey = content.held ? null : content.emblem;
   const emblemRoom = emblemKey ? EMBLEM_PX + EMBLEM_GAP : 0;
   const inner = maxW - PAD_X * 2 - emblemRoom;
   const raw: Array<{ text: string; fontPx: number; role: SignLine["role"] }> = [
-    { text: fitSignText(content.title, inner, TITLE_PX, measure), fontPx: TITLE_PX, role: "title" },
+    { text: fitSignText(content.title, inner, spec.titlePx, measure), fontPx: spec.titlePx, role: "title" },
   ];
-  if (!content.held && content.tagline) {
+  if (spec.extras && !content.held && content.tagline) {
     raw.push({ text: fitSignText(content.tagline, inner, TAGLINE_PX, measure), fontPx: TAGLINE_PX, role: "tagline" });
   }
-  raw.push({ text: fitSignText(content.detail, inner, DETAIL_PX, measure), fontPx: DETAIL_PX, role: "detail" });
-  if (content.orgLine && zoom >= LOD_SIGN_ORGS) {
+  raw.push({ text: fitSignText(content.detail, inner, spec.detailPx, measure), fontPx: spec.detailPx, role: "detail" });
+  if (spec.extras && content.orgLine && zoom >= LOD_SIGN_ORGS) {
     raw.push({ text: fitSignText(content.orgLine, inner, DETAIL_PX, measure), fontPx: DETAIL_PX, role: "org" });
   }
   const lines = raw.filter((l) => l.text);
   const textW = Math.max(0, ...lines.map((l) => measure(l.text, l.fontPx)));
-  const w = Math.round(Math.min(maxW, Math.max(MIN_W, textW + PAD_X * 2 + emblemRoom)));
+  const w = Math.round(Math.min(maxW, Math.max(spec.minW, textW + PAD_X * 2 + emblemRoom)));
   const textH = PAD_Y * 2 + lines.reduce((s, l) => s + l.fontPx + GAP, 0) - (lines.length ? GAP : 0);
   const h = Math.round(Math.max(textH, emblemKey ? EMBLEM_PX + PAD_Y * 2 : 0));
   const x0 = Math.round(anchor.x - w / 2);
@@ -221,4 +246,49 @@ export function layoutSignboard(
     tx: content.held ? x0 + w / 2 : tx,
     marks: content.held ? [] : layoutSignMarks(content.marks, x0 + w / 2, y0 + h),
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Estates (#37): one shared sign for adjacent plots of one org or owner.
+ * ------------------------------------------------------------------ */
+
+/** Below this zoom the estate sign is dropped. Lower than a plot's: an estate is bigger. */
+export const LOD_ESTATE_SIGN = 0.4;
+
+export function estateSignVisible(zoom: number): boolean {
+  return zoom >= LOD_ESTATE_SIGN;
+}
+
+export type EstateSignInput = { name: string | null; accent: string | null; plots: number };
+
+/**
+ * What the shared sign says: the estate's name (else the theme's word for an
+ * estate) and how many plots it joins. No access level: access is per plot,
+ * and each plot keeps its own board and building to say it. An estate is only
+ * ever made of public plots (protocol estates.ts), so there is nothing held.
+ */
+export function estateSignContent(e: EstateSignInput, lexicon: Pick<ThemeLexicon, "estate">): SignContent {
+  const name = e.name?.trim();
+  return {
+    held: false,
+    title: name ? name : lexicon.estate.label,
+    tagline: null,
+    detail: `${lexicon.estate.label} · ${e.plots} ${lexicon.estate.plots}`,
+    orgLine: null,
+    tint: e.accent,
+    secondaryTint: null,
+    emblem: null,
+    accent: e.accent,
+    marks: [],
+  };
+}
+
+export function layoutEstateSign(
+  content: SignContent,
+  anchor: { x: number; y: number },
+  zoom: number,
+  measure: Measure,
+): Signboard | null {
+  if (!estateSignVisible(zoom)) return null;
+  return layoutBoard({ ...content, held: false, marks: [], emblem: null }, anchor, zoom, measure, SPECS.estate);
 }

@@ -60,7 +60,8 @@ import {
 } from "@/lib/map-layout";
 import { SpectatorPeek, loginHref, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { deepLinkApplies, parseDeepLink, type DeepLink } from "@/lib/deep-link";
-import { layoutSignboard, plotBranding, plotEdgeColour, signContent, signboardVisible } from "@/lib/signboard";
+import { estateSignContent, estateSignVisible, layoutEstateSign, layoutSignboard, plotBranding, plotEdgeColour, signContent, signboardVisible } from "@/lib/signboard";
+import { estatePerimeter, estateSignTile, readEstates, type MapEstate } from "@/lib/estates";
 import { WATCH_HEADER, formatHeadcount, makeWatchToken } from "@/lib/headcount";
 import { AttentionBell } from "./AttentionBell";
 import { FirstVisitCard, MAP_KEYS, MapMenu, MapPanel, MenuHeading, MenuItem, MenuLink } from "./MapMenu";
@@ -306,6 +307,8 @@ type Plot = {
   marks: SpaceMark[];
   /** Owner branding (035), re-checked. Always null on a private plot (lib/signboard). */
   branding: SpaceBranding | null;
+  /** The estate (#37) this plot has joined, or null. Never set on a private plot (lib/estates). */
+  estateId: string | null;
 };
 
 /*
@@ -339,6 +342,8 @@ type Minimap = {
   recentSpeech?: RecentLine[];
   bodies?: GroveBody[];
   spaces?: SpaceView[];
+  /** Joined estates over public plots (#37); see lib/estates. */
+  estates?: unknown;
   /** Agents resting at their home plot (never live bodies); see lib/resting. */
   resting?: RestingWire[];
   claimed_agents?: number;
@@ -747,6 +752,7 @@ export function WorldMap() {
   const radiusRef = useRef(4);
   const plotsRef = useRef(0);
   const plotRef = useRef<Plot[]>([]);
+  const estateRef = useRef<MapEstate[]>([]);
   /** Resting at plot: drawn, never counted, followed, cut to or rung for. */
   const restingRef = useRef<RestingBody[]>([]);
   const seatsRef = useRef<Map<string, Seat>>(new Map());
@@ -1488,8 +1494,12 @@ export function WorldMap() {
             // so a stale or hand-made payload still cannot mark a held plot.
             marks: (sp.policy_preset ?? sp.policyPreset) === "private" ? [] : normaliseMarks(sp.marks),
             branding: plotBranding(sp.policy_preset ?? sp.policyPreset, sp.branding),
+            estateId: null,
           };
         });
+        const estates = readEstates(data.estates, plots);
+        for (const e of estates) for (const p of plots) if (e.plotIndices.includes(p.plotIndex)) p.estateId = e.id;
+        estateRef.current = estates;
         plotRef.current = plots;
         plotsRef.current = plots.length;
         // Resting at plot is a live-map truth ("nobody runs it now"), so replay
@@ -2400,7 +2410,8 @@ export function WorldMap() {
           // Bound orgs colour the FENCE, not the ground: the fill already says
           // who may speak here, so an org takes the edge instead of fighting it.
           // An owner's accent (035) wins the fence; the org keeps a stripe on the sign.
-          const orgColour = plotEdgeColour(plot);
+          // A plot in an estate (#37) is fenced with its estate, below.
+          const orgColour = plot.estateId ? null : plotEdgeColour(plot);
           if (anyExplored && orgColour) {
             ctx.save();
             ctx.strokeStyle = orgColour;
@@ -2435,6 +2446,33 @@ export function WorldMap() {
           if (!anyExplored || !signboardVisible(z)) continue;
           const front = iso(rect.x0 + 3.5, rect.y0 + 2.5);
           signs.push({ plot, x: ox + front.x, y: oy + front.y + 18 });
+        }
+
+        // Estates (#37): one continuous fence round the joined land, and one
+        // shared sign on a seam between member plots. Access is untouched:
+        // each plot above kept its own tint, building and (smaller) board.
+        const estateSigns: Array<{ estate: MapEstate; x: number; y: number }> = [];
+        for (const estate of estateRef.current) {
+          const rects = estate.plotIndices.map((i) => plotForIndex(i));
+          if (rects.every((r) => r.x1 < vx0 || r.x0 > vx1 || r.y1 < vy0 || r.y0 > vy1)) continue;
+          const segs: Array<readonly [number, number, number, number]> = [];
+          for (const { tx, ty, side } of estatePerimeter(rects)) {
+            if (!tileExplored(tx, ty, radius)) continue;
+            const q = iso(tx, ty);
+            const px = ox + q.x;
+            const py = oy + q.y;
+            if (side === "n") segs.push([px, py, px + TW / 2, py + TH / 2]);
+            else if (side === "e") segs.push([px + TW / 2, py + TH / 2, px, py + TH]);
+            else if (side === "s") segs.push([px, py + TH, px - TW / 2, py + TH / 2]);
+            else segs.push([px - TW / 2, py + TH / 2, px, py]);
+          }
+          if (!segs.length) continue;
+          art.estateFence(ctx, segs, estate.accent, t);
+          if (!estateSignVisible(z)) continue;
+          const at = estateSignTile(estate.plotIndices, plotForIndex);
+          if (!tileExplored(at.x, at.y, radius)) continue;
+          const q = iso(at.x, at.y);
+          estateSigns.push({ estate, x: ox + q.x, y: oy + q.y });
         }
 
         const actors = actorsRef.current;
@@ -2830,8 +2868,29 @@ export function WorldMap() {
               { x: sg.x * z + v.px, y: sg.y * z + v.py },
               z,
               measure,
+              { compact: Boolean(sg.plot.estateId) },
             );
             if (board && board.x1 > 0 && board.x0 < cssW && board.y1 > 0 && board.y0 < cssH) art.signboard(ctx, board, t);
+          }
+          ctx.restore();
+        }
+        // The estate's one shared sign, over its members' boards (#37).
+        if (estateSigns.length) {
+          ctx.save();
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          const signFamily = art.speechFont ?? "ui-sans-serif, system-ui, sans-serif";
+          const measure = (text: string, px: number) => {
+            ctx.font = `${px >= 11 ? "600 " : ""}${px}px ${signFamily}`;
+            return ctx.measureText(text).width;
+          };
+          for (const es of estateSigns) {
+            const board = layoutEstateSign(
+              estateSignContent({ name: es.estate.name, accent: es.estate.accent, plots: es.estate.plotIndices.length }, theme.lexicon),
+              { x: es.x * z + v.px, y: es.y * z + v.py },
+              z,
+              measure,
+            );
+            if (board && board.x1 > 0 && board.x0 < cssW && board.y1 > 0 && board.y0 < cssH) art.estateSign(ctx, board, t);
           }
           ctx.restore();
         }

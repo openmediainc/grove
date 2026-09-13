@@ -169,6 +169,21 @@ export interface ThemeArt {
    * only above the signboard zoom threshold.
    */
   signboard(ctx: Ctx, board: Signboard, t: number): void;
+  /**
+   * SCREEN space. An estate's ONE shared sign (#37): adjacent public plots of
+   * one org or owner, laid out by lib/signboard `layoutEstateSign` (name, plot
+   * count, the estate's accent as `tint`). It must read as a grander cousin of
+   * the theme's plot board, never as a permission: access stays on each plot's
+   * own building and board. Never held, never in the hazard colours.
+   */
+  estateSign(ctx: Ctx, board: Signboard, t: number): void;
+  /**
+   * LAYOUT space, under the bodies. The continuous fence or path around an
+   * estate's outer edge: `segments` are tile-diamond faces as [ax, ay, bx, by].
+   * `accent` is the estate's colour, or null for the theme's own. One stroke
+   * pass per estate; no per-segment gradients.
+   */
+  estateFence(ctx: Ctx, segments: ReadonlyArray<readonly [number, number, number, number]>, accent: string | null, t: number): void;
 }
 
 /** One fitted line on a signboard. `y` is the vertical middle, SCREEN px. */
@@ -335,6 +350,8 @@ export interface ThemeLexicon {
    * Must read as not working. The dim and the moon mark beside it are fixed.
    */
   resting: string;
+  /** An estate (#37): joined neighbouring plots of one org or owner. `label` names it, `plots` counts its plots. */
+  estate: { label: string; plots: string };
 
   /** What a work site is called: prefixes the url on the hover card. */
   construction: string;

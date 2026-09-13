@@ -1,4 +1,4 @@
-import { EMOTE_ENUM, normaliseMarks, readStoredBranding, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
+import { EMOTE_ENUM, normaliseMarks, publicEstates, readStoredBranding, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
 import type { SupporterService } from "./supporters.js";
 import type { GroveStore } from "../store.js";
 import { visibleOccupancySql } from "../visibility.js";
@@ -319,7 +319,14 @@ export class WorldService {
               -- a count, so there is nothing to rank by.
               (SELECT array_agg(sm.mark) FROM space_marks sm WHERE sm.world_id = w.id) AS marks,
               -- 035: the owner's accent, sign text and emblem.
-              w.branding
+              w.branding,
+              -- #37 estates: the chosen names, and the primary org by id. Used
+              -- to group and name estates here; never published per plot.
+              h.estate_name AS owner_estate_name,
+              (SELECT json_build_object('id', o.id, 'estateName', o.estate_name)
+                 FROM world_orgs wo JOIN orgs o ON o.id = wo.org_id
+                WHERE wo.world_id = w.id
+                ORDER BY wo.created_at, o.id LIMIT 1) AS primary_org
        FROM worlds w LEFT JOIN humans h ON h.id = w.owner_human_id
        WHERE w.plot_index IS NOT NULL
        ORDER BY w.plot_index`,
@@ -354,6 +361,29 @@ export class WorldService {
       };
     });
 
+    // #37: adjacent plots of one org or one owner join as an estate. Grouped
+    // from the raw rows (owner and org ids), published without them; private
+    // plots never join, bridge or appear (protocol estates.ts).
+    const estates = publicEstates(
+      spaceRows.map((r, i) => {
+        const space = spaces[i]!;
+        const primary = r.primary_org as { id?: string; estateName?: string | null } | null;
+        const org = space.orgs[0];
+        return {
+          plotIndex: space.plotIndex,
+          preset: space.policyPreset,
+          ownerId: (r.owner_human_id as string | null) ?? null,
+          ownerHandle: space.ownerHandle,
+          ownerEstateName: (r.owner_estate_name as string | null) ?? null,
+          orgId: primary?.id ?? null,
+          orgName: org?.name ?? null,
+          orgColour: org?.colour ?? null,
+          orgEstateName: primary?.estateName ?? null,
+          accent: space.branding?.accent ?? null,
+        };
+      }),
+    );
+
     // Org colour for the bodies standing in THIS world. Safe to publish: the
     // caller already had to pass the world gate to get a minimap at all, so a
     // private space's membership never reaches someone outside it — and the
@@ -377,6 +407,8 @@ export class WorldService {
       rooms: rooms.map((r) => ({ id: r.id, slug: r.slug, name: r.name, occupancy: r.occupancy })),
       bodies,
       spaces,
+      /** Joined estates over the public plots above (#37). Access stays per plot. */
+      estates,
       /**
        * Agents resting at their home plot while nobody runs them. Deliberately
        * NOT in `bodies`: everything that counts or watches live bodies (the

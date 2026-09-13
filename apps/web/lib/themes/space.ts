@@ -21,6 +21,8 @@ import {
   dome,
   door,
   drawSpeechBubble,
+  drawEstateFence,
+  drawEstateSign,
   drawSignboard,
   drawSpeechPip,
   drawHazardTriangle,
@@ -48,6 +50,7 @@ import {
   type Baked,
   type Ctx,
   type FigureSpec,
+  type EstateStyle,
   type SignStyle,
 } from "./kit";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
@@ -565,6 +568,18 @@ export const SIGN_STYLE: SignStyle = {
   },
 };
 
+/**
+ * An estate: a station, modules docked together. A hull mount with a mission
+ * banner crest; a lit perimeter walkway of beacons.
+ */
+export const ESTATE_STYLE: EstateStyle = {
+  frame: "rgba(30,41,59,0.96)",
+  frameEdge: "rgba(103,232,249,0.7)",
+  crest: "#a5f3fc",
+  crestShape: "chevron",
+  fence: { rail: "rgba(103,232,249,0.75)", post: "#e0f2fe", width: 2, dash: [6, 4] },
+};
+
 const art: ThemeArt = {
   async prepare() {
     /* Procedural: everything bakes on first use. */
@@ -637,6 +652,12 @@ const art: ThemeArt = {
   signboard(ctx, board) {
     drawSignboard(ctx, board, SIGN_STYLE);
   },
+  estateSign(ctx, board) {
+    drawEstateSign(ctx, board, SIGN_STYLE, ESTATE_STYLE);
+  },
+  estateFence(ctx, segments, accent) {
+    drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
+  },
 };
 
 export const SPACE_LEXICON: ThemeLexicon = {
@@ -667,6 +688,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
   claimedPlot: "claimed module",
   heldPlot: "Held module",
   resting: "docked, powered down",
+  estate: { label: "Station", plots: "modules" },
   construction: "fabricating",
   bell: { faulted: "faulted", stalled: "stalled", fading: "losing signal", idle: "idle crew", allBusy: "all crew at stations" },
   hud: { hereNow: "aboard", watching: "on the feed", awake: "on duty", asleep: "in cryo", fog: "scan", world: "sector", claimed: "modules", quiet: "no transmissions recently" },

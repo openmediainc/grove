@@ -25,6 +25,8 @@ import {
   dome,
   door,
   drawSpeechBubble,
+  drawEstateFence,
+  drawEstateSign,
   drawSignboard,
   drawSpeechPip,
   drawHazardTriangle,
@@ -51,6 +53,7 @@ import {
   type Baked,
   type Ctx,
   type FigureSpec,
+  type EstateStyle,
   type SignStyle,
 } from "./kit";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
@@ -571,6 +574,18 @@ export const SIGN_STYLE: SignStyle = {
   },
 };
 
+/**
+ * An estate: a compound. A brace-mounted holo panel and a dashed light wall of
+ * pylons round the joined nodes. Teal and violet only, never neon pink.
+ */
+export const ESTATE_STYLE: EstateStyle = {
+  frame: "rgba(8,20,26,0.9)",
+  frameEdge: "rgba(45,226,230,0.6)",
+  crest: "#2de2e6",
+  crestShape: "bracket",
+  fence: { rail: "rgba(45,226,230,0.8)", post: "#c4b5fd", width: 1.5, dash: [3, 3] },
+};
+
 const art: ThemeArt = {
   async prepare() {
     /* Procedural: everything bakes on first use. */
@@ -683,6 +698,12 @@ const art: ThemeArt = {
   signboard(ctx, board) {
     drawSignboard(ctx, board, SIGN_STYLE);
   },
+  estateSign(ctx, board) {
+    drawEstateSign(ctx, board, SIGN_STYLE, ESTATE_STYLE);
+  },
+  estateFence(ctx, segments, accent) {
+    drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
+  },
 };
 
 export const SCIFI_LEXICON: ThemeLexicon = {
@@ -713,6 +734,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
   claimedPlot: "claimed node",
   heldPlot: "Held node",
   resting: "standby at home node",
+  estate: { label: "Compound", plots: "nodes" },
   construction: "compiling",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle units", allBusy: "all units running" },
   hud: { hereNow: "connected", watching: "observing", awake: "online", asleep: "dormant", fog: "range", world: "grid", claimed: "nodes", quiet: "no broadcasts recently" },

@@ -40,7 +40,7 @@ import {
   type ScaffoldStage,
   type ScatterKey,
 } from "@/lib/art";
-import { drawHazardTriangle, drawPennantFlag, drawSignboard, drawSpeechBubble, drawSpeechPip, drawVerbGlyph, type SignStyle } from "./kit";
+import { drawEstateFence, drawEstateSign, drawHazardTriangle, drawPennantFlag, drawSignboard, drawSpeechBubble, drawSpeechPip, drawVerbGlyph, type EstateStyle, type SignStyle } from "./kit";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 /** Lantern text on night stone; a whisper in the violet the whisper UI rings bodies with. */
@@ -121,6 +121,18 @@ export const SIGN_STYLE: SignStyle = {
       ctx.fillRect(x0 + w - 7, y0 + 1, 2, h - 2);
     }
   },
+};
+
+/**
+ * An estate: a heavier timber mount behind the board with a gable crest, and a
+ * split-rail fence of oak posts round the joined land.
+ */
+export const ESTATE_STYLE: EstateStyle = {
+  frame: "#3b2610",
+  frameEdge: "#1a1006",
+  crest: "#f4d19a",
+  crestShape: "roof",
+  fence: { rail: "#c9a26b", post: "#4a2f14", width: 2.5 },
 };
 
 const art: ThemeArt = {
@@ -248,6 +260,12 @@ const art: ThemeArt = {
   signboard(ctx, board) {
     drawSignboard(ctx, board, SIGN_STYLE);
   },
+  estateSign(ctx, board) {
+    drawEstateSign(ctx, board, SIGN_STYLE, ESTATE_STYLE);
+  },
+  estateFence(ctx, segments, accent) {
+    drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
+  },
 };
 
 export const AOE_LEXICON: ThemeLexicon = {
@@ -278,6 +296,7 @@ export const AOE_LEXICON: ThemeLexicon = {
   claimedPlot: "claimed",
   heldPlot: "Held plot",
   resting: "resting at home",
+  estate: { label: "Estate", plots: "plots" },
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "all hands busy" },
   hud: { hereNow: "here now", watching: "watching", awake: "awake", asleep: "asleep", fog: "fog", world: "world", claimed: "claimed", quiet: "nobody has spoken here recently" },

@@ -392,6 +392,114 @@ export function drawSignboard(ctx: Ctx, b: Signboard, style: SignStyle): void {
 }
 
 /**
+ * How a theme dresses an estate (#37): its one shared sign and the fence round
+ * its outer edge. The words and box come from lib/signboard; the fence segments
+ * from lib/estates. A style only says what they are made of.
+ */
+export type EstateStyle = {
+  /** The mount behind the shared board, a few px proud of it on every side. */
+  frame: string;
+  frameEdge: string;
+  /** Ink for the crest above the board when the estate has no accent. */
+  crest: string;
+  /** roof: a gable; chevron: a banner point; arch: a dome; bracket: a holo brace. */
+  crestShape: "roof" | "chevron" | "arch" | "bracket";
+  fence: {
+    /** Rail colour when the estate has no accent. */
+    rail: string;
+    /** Posts (or bollards, pylons) along the rail. */
+    post: string;
+    width: number;
+    dash?: readonly number[];
+  };
+};
+
+/** Mount margin round an estate board, SCREEN px. */
+export const ESTATE_FRAME = 3;
+
+/**
+ * An estate's shared sign, SCREEN space: a frame a little proud of the theme's
+ * own board, the board itself (so it reads as the same family), and a crest on
+ * top in the estate's accent. Never held, never the hazard colours.
+ */
+export function drawEstateSign(ctx: Ctx, b: Signboard, sign: SignStyle, estate: EstateStyle): void {
+  const p = ESTATE_FRAME;
+  const x0 = Math.round(b.x0) - p;
+  const y0 = Math.round(b.y0) - p;
+  const w = Math.round(b.x1 - b.x0) + p * 2;
+  const h = Math.round(b.y1 - b.y0) + p * 2;
+  ctx.save();
+  ctx.fillStyle = "rgba(7,8,20,0.55)";
+  ctx.fillRect(x0 + 2, y0 + h, w - 2, 2);
+  ctx.fillStyle = estate.frame;
+  ctx.beginPath();
+  ctx.roundRect(x0, y0, w, h, (sign.radius ?? 2) + 1);
+  ctx.fill();
+  ctx.strokeStyle = estate.frameEdge;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+  drawSignboard(ctx, { ...b, held: false, marks: [], emblem: null }, sign);
+  const ink = b.tint ?? estate.crest;
+  const cx = Math.round(x0 + w / 2);
+  ctx.save();
+  ctx.fillStyle = ink;
+  ctx.strokeStyle = estate.frameEdge;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (estate.crestShape === "roof") {
+    ctx.moveTo(cx - 9, y0);
+    ctx.lineTo(cx, y0 - 7);
+    ctx.lineTo(cx + 9, y0);
+    ctx.closePath();
+  } else if (estate.crestShape === "chevron") {
+    ctx.rect(cx - 7, y0 - 6, 14, 6);
+  } else if (estate.crestShape === "arch") {
+    ctx.arc(cx, y0, 7, Math.PI, 0);
+    ctx.closePath();
+  } else {
+    ctx.rect(cx - 10, y0 - 3, 20, 2);
+    ctx.rect(cx - 10, y0 - 6, 2, 5);
+    ctx.rect(cx + 8, y0 - 6, 2, 5);
+  }
+  ctx.fill();
+  if (estate.crestShape !== "bracket") ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * An estate's fence, LAYOUT space: one rail round the outer edge in the
+ * estate's accent (else the theme's rail colour), posts at each tile corner.
+ * One path, one stroke.
+ */
+export function drawEstateFence(
+  ctx: Ctx,
+  segments: ReadonlyArray<readonly [number, number, number, number]>,
+  accent: string | null,
+  style: EstateStyle,
+): void {
+  if (!segments.length) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  for (const [ax, ay, bx, by] of segments) {
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+  }
+  ctx.strokeStyle = "rgba(7,8,20,0.45)";
+  ctx.lineWidth = style.fence.width + 2;
+  ctx.stroke();
+  ctx.strokeStyle = accent ?? style.fence.rail;
+  ctx.lineWidth = style.fence.width;
+  if (style.fence.dash) ctx.setLineDash([...style.fence.dash]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = style.fence.post;
+  for (const [ax, ay] of segments) ctx.fillRect(Math.round(ax) - 1.5, Math.round(ay) - 3, 3, 4);
+  ctx.restore();
+}
+
+/**
  * An owner's emblem (035), SCREEN space, centred on (cx, cy) in a `size` px box.
  * Sixteen original glyphs drawn from paths, the same shape in every theme (like
  * the mark glyphs): a theme's board and the owner's accent change the look,

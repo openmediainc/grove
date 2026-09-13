@@ -70,6 +70,7 @@ export { SiteFetchSession, SiteFetchError, isBlockedAddress, SITE_FETCH_USER_AGE
 export type { SiteFetchOptions, ResolvedAddress } from "./site-fetch.js";
 export { suggestBrandingFromSite, extractPageFacts, decodePng, decodeIco, dominantColour, parseCssColour } from "./site-branding.js";
 export type { SiteBrandingSuggestion } from "./site-branding.js";
+export { EstateService, type EstateNames } from "./services/estates.js";
 // Supporter plumbing (036): cosmetic, env-gated, off until the owner adds Stripe keys.
 export {
   SupporterService,
@@ -254,6 +255,7 @@ import { ReactionService } from "./services/reactions.js";
 import { GuestService } from "./services/guests.js";
 import { CardService } from "./services/cards.js";
 import { BrandingService } from "./services/branding.js";
+import { EstateService } from "./services/estates.js";
 import { SupporterService } from "./services/supporters.js";
 import { FollowService } from "./services/follows.js";
 import { SearchService } from "./services/search.js";
@@ -292,6 +294,7 @@ export class GroveApp {
   /** Working on / looking for / latest / links, for spaces and bodies (027). */
   cards: CardService;
   branding: BrandingService;
+  estates: EstateService;
   /** Cosmetic supporter tier via Stripe Checkout; inert unless all four env vars are set (036). */
   supporters: SupporterService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
@@ -339,6 +342,7 @@ export class GroveApp {
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);
     this.cards = new CardService(this.store, this.identity, this.campus);
     this.branding = new BrandingService(this.store, this.campus, this.quota);
+    this.estates = new EstateService(this.store, this.campus);
     // Written on the event: the three sources call back into this after their
     // own write. Late-bound because all three are built before speech/mailbox.
     this.follows = new FollowService(this.store, this.identity, this.campus, this.presence, this.speech, this.mailbox, this.quota);
