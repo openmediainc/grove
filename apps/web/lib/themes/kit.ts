@@ -20,6 +20,8 @@
 import { VERB_RING, type AgentVerb } from "@/lib/agent-verbs";
 import { HAZARD_COLOUR, type Ctx, type HazardTone } from "./types";
 
+export type { Ctx } from "./types";
+
 /* ------------------------------------------------------------------ *
  * 1. The marks that do not change between themes.
  * ------------------------------------------------------------------ */
@@ -189,7 +191,7 @@ function poly(g: Ctx, pts: Array<[number, number]>, fill: string, stroke?: strin
   g.fill();
   if (stroke) {
     g.strokeStyle = stroke;
-    g.lineWidth = 1;
+    g.lineWidth = 1.5;
     g.stroke();
   }
 }
@@ -593,4 +595,129 @@ export function bakeFigure(spec: FigureSpec, stance: Stance): Baked {
       px(hx + 3, 0, 1, 1, spec.antenna);
     }
   }, 1);
+}
+
+/* ---- small pixel sprites ------------------------------------------------ */
+
+export type Px = (x: number, y: number, w: number, h: number, c: string) => void;
+
+/**
+ * A pixel grid of cols x rows drawn at `scale`, anchored so that (ax, ay) in
+ * OUTPUT pixels is the sprite's origin. Items are 12x12 at 2x anchored at the
+ * grip (12, 12); critters are 20x20 at 2x anchored at the centre (20, 20).
+ */
+export function bakeGrid(cols: number, rows: number, scale: number, ax: number, ay: number, fn: (px: Px) => void): Baked {
+  return bake(cols * scale, rows * scale, ax, ay, (g) => {
+    g.translate(-ax, -ay);
+    g.scale(scale, scale);
+    fn((x, y, w, h, c) => {
+      g.fillStyle = c;
+      g.fillRect(x, y, w, h);
+    });
+  }, 1);
+}
+
+/** Fill a whole ground tile (the caller's clip keeps it a diamond). */
+export function tileFill(g: Ctx, colour: string): void {
+  g.fillStyle = colour;
+  g.fillRect(-32, 0, 64, 32);
+}
+
+/** A line in tile-local coordinates, (0,0)..(1,1) spanning the tile. */
+export function tileLine(g: Ctx, x0: number, y0: number, x1: number, y1: number, colour: string, width = 1): void {
+  const a = P(x0, y0);
+  const b = P(x1, y1);
+  g.strokeStyle = colour;
+  g.lineWidth = width;
+  g.beginPath();
+  g.moveTo(a[0], a[1]);
+  g.lineTo(b[0], b[1]);
+  g.stroke();
+}
+
+/** A filled diamond in tile-local coordinates. */
+export function tileRect(g: Ctx, x0: number, y0: number, x1: number, y1: number, colour: string): void {
+  poly(g, [P(x0, y0), P(x1, y0), P(x1, y1), P(x0, y1)], colour);
+}
+
+/** An iso ellipse lying on the ground plane (a pool, a ring, a pad). */
+export function groundEllipse(g: Ctx, cx: number, cy: number, r: number, z: number, fill: string | null, stroke?: string, width = 1): void {
+  const [sx, sy] = P(cx, cy, z);
+  g.beginPath();
+  g.ellipse(sx, sy, r * 32 * Math.SQRT2, r * 16 * Math.SQRT2, 0, 0, Math.PI * 2);
+  if (fill) {
+    g.fillStyle = fill;
+    g.fill();
+  }
+  if (stroke) {
+    g.strokeStyle = stroke;
+    g.lineWidth = width;
+    g.stroke();
+  }
+}
+
+/** A line segment in tile space with height. */
+export function seg(g: Ctx, a: [number, number, number], b: [number, number, number], colour: string, width = 1): void {
+  const p = P(a[0], a[1], a[2]);
+  const q = P(b[0], b[1], b[2]);
+  g.strokeStyle = colour;
+  g.lineWidth = width;
+  g.beginPath();
+  g.moveTo(p[0], p[1]);
+  g.lineTo(q[0], q[1]);
+  g.stroke();
+}
+
+/** The 12 edges of a box, as a wireframe. */
+export function wireBox(g: Ctx, x: number, y: number, w: number, d: number, z: number, h: number, colour: string, width = 1): void {
+  const c = (i: number, j: number, k: number): [number, number, number] => [x + i * w, y + j * d, z + k * h];
+  const edges: Array<[[number, number, number], [number, number, number]]> = [
+    [c(0, 0, 0), c(1, 0, 0)], [c(1, 0, 0), c(1, 1, 0)], [c(1, 1, 0), c(0, 1, 0)], [c(0, 1, 0), c(0, 0, 0)],
+    [c(0, 0, 1), c(1, 0, 1)], [c(1, 0, 1), c(1, 1, 1)], [c(1, 1, 1), c(0, 1, 1)], [c(0, 1, 1), c(0, 0, 1)],
+    [c(0, 0, 0), c(0, 0, 1)], [c(1, 0, 0), c(1, 0, 1)], [c(1, 1, 0), c(1, 1, 1)], [c(0, 1, 0), c(0, 1, 1)],
+  ];
+  for (const [a, b] of edges) seg(g, a, b, colour, width);
+}
+
+/** A doorway on a wall. `open` leaves it dark; closed draws a shut leaf with a bar. */
+export function door(
+  g: Ctx,
+  side: "left" | "right",
+  x: number,
+  y: number,
+  w: number,
+  d: number,
+  z: number,
+  at: number,
+  width: number,
+  height: number,
+  state: "open" | "shut" | "sealed",
+  colours: { frame: string; leaf: string; dark: string; bar: string },
+): void {
+  const u0 = at - width / 2;
+  const u1 = at + width / 2;
+  wallQuad(g, side, x, y, w, d, u0 - 0.04, u1 + 0.04, z, z + height + 3, colours.frame);
+  if (state === "open") {
+    wallQuad(g, side, x, y, w, d, u0, u1, z, z + height, colours.dark);
+    return;
+  }
+  wallQuad(g, side, x, y, w, d, u0, u1, z, z + height, colours.leaf);
+  // A horizontal bar across a shut door; two crossed bars across a sealed one.
+  wallQuad(g, side, x, y, w, d, u0, u1, z + height * 0.45, z + height * 0.58, colours.bar);
+  if (state === "sealed") {
+    wallQuad(g, side, x, y, w, d, (u0 + u1) / 2 - 0.03, (u0 + u1) / 2 + 0.03, z, z + height, colours.bar);
+  }
+}
+
+/** A padlock mark, in screen pixels around (sx, sy). The universal "closed". */
+export function lockMark(g: Ctx, sx: number, sy: number, body: string, shackle: string): void {
+  g.strokeStyle = shackle;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.arc(sx, sy - 4, 4, Math.PI, 0);
+  g.stroke();
+  g.fillStyle = body;
+  g.fillRect(sx - 6, sy - 4, 12, 9);
+  g.fillStyle = shackle;
+  g.fillRect(sx - 1, sy - 1, 2, 3);
 }
