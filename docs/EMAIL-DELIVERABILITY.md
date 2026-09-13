@@ -54,7 +54,7 @@ curl -fsS http://127.0.0.1:3511/internal/email-health
   "reasons": [{ "code": "STDOUT_ONLY", "severity": "info", "message": "…" }],
   "transport": "stdout",
   "delivery_truth": "none",
-  "hour": { "attempts": 0, "accepted": 0, "rejected": 0, "errored": 0, "send_failure_rate": null,
+  "hour": { "attempts": 0, "real_attempts": 0, "accepted": 0, "rejected": 0, "errored": 0, "send_failure_rate": null,
             "delivered": 0, "bounced": 0, "complained": 0, "redeemed": 0, "expired_unredeemed": 0,
             "recipients_in": 0, "recipients_stranded": 0, "recipient_redeem_rate": null,
             "redeem_seconds_p50": null, "last_accepted_at": null, "last_redeemed_at": null },

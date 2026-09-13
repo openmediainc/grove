@@ -75,6 +75,7 @@ export async function registerEmailHealth(app: FastifyInstance, grove: GroveApp)
 function pick(w: WindowStats) {
   return {
     attempts: w.attempts,
+    realAttempts: w.realAttempts,
     accepted: w.accepted,
     rejected: w.rejected,
     errored: w.errored,

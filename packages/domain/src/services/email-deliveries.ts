@@ -145,6 +145,8 @@ export async function checkSenderDns(
 export interface WindowStats {
   hours: number;
   attempts: number;
+  /** Attempts handed to a real transport (resend/smtp). Failure rates are over these. */
+  realAttempts: number;
   accepted: number;
   rejected: number;
   errored: number;
@@ -225,17 +227,17 @@ export function assessEmailHealth(input: EmailHealthInput): { status: EmailHealt
       message: "The last 3 magic-link sends all failed at the provider. Nobody can sign in.",
     });
   }
-  if (hour.attempts >= 3 && (hour.sendFailureRate ?? 0) >= 0.5) {
+  if (hour.realAttempts >= 3 && (hour.sendFailureRate ?? 0) >= 0.5) {
     reasons.push({
       code: "SEND_FAILURE_RATE_HIGH",
       severity: "critical",
-      message: `${Math.round((hour.sendFailureRate ?? 0) * 100)}% of sends failed in the last hour (${hour.rejected + hour.errored}/${hour.attempts}).`,
+      message: `${Math.round((hour.sendFailureRate ?? 0) * 100)}% of sends failed in the last hour (${hour.rejected + hour.errored}/${hour.realAttempts}).`,
     });
-  } else if (day.attempts >= 5 && (day.sendFailureRate ?? 0) > 0.1) {
+  } else if (day.realAttempts >= 5 && (day.sendFailureRate ?? 0) > 0.1) {
     reasons.push({
       code: "SEND_FAILURES",
       severity: "warning",
-      message: `${Math.round((day.sendFailureRate ?? 0) * 100)}% of sends failed in the last 24h.`,
+      message: `${Math.round((day.sendFailureRate ?? 0) * 100)}% of sends failed in the last 24h (${day.rejected + day.errored}/${day.realAttempts}).`,
     });
   }
   if (day.complained > 0) {
@@ -511,6 +513,7 @@ export class EmailDeliveryService {
     return {
       hours,
       attempts: n("attempts"),
+      realAttempts,
       accepted: n("accepted"),
       rejected: n("rejected"),
       errored: n("errored"),

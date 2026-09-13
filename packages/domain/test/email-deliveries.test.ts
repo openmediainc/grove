@@ -26,6 +26,7 @@ function win(over: Partial<WindowStats> = {}): WindowStats {
   return {
     hours: 24,
     attempts: 0,
+    realAttempts: 0,
     accepted: 0,
     rejected: 0,
     errored: 0,
@@ -75,12 +76,17 @@ describe("assessEmailHealth", () => {
     expect(v.reasons.map((r) => r.code)).toContain("SEND_FAILING");
   });
 
+  it("stdout rows do not dilute the failure rate: one real failure among many dev links is not down", () => {
+    const v = assessEmailHealth(input({ hour: win({ hours: 1, attempts: 200, realAttempts: 1, rejected: 1, sendFailureRate: 1 }) }));
+    expect(v.status).toBe("ok");
+  });
+
   it("one old failure behind a success is not down", () => {
     expect(assessEmailHealth(input({ recentSendStatuses: ["accepted", "rejected", "rejected"] })).status).toBe("ok");
   });
 
   it("half the last hour failing is down", () => {
-    const v = assessEmailHealth(input({ hour: win({ hours: 1, attempts: 4, rejected: 2, sendFailureRate: 0.5 }) }));
+    const v = assessEmailHealth(input({ hour: win({ hours: 1, attempts: 4, realAttempts: 4, rejected: 2, sendFailureRate: 0.5 }) }));
     expect(v.status).toBe("down");
   });
 
