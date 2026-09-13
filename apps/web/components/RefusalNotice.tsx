@@ -21,23 +21,37 @@ type ApiErrorShape = {
       hint?: string;
       source?: string;
       subject?: string;
+      /** Seconds, on a 429: the refusing limiter's own TTL (http.ts). */
+      retry_after?: number;
     };
   };
 };
 
 /** Pull the decision out of whatever `api()` threw, without trusting any of it. */
-export function toRefusalInput(err: unknown, senderKind: "human" | "agent"): RefusalInput {
+export function toRefusalInput(
+  err: unknown,
+  senderKind: "human" | "agent",
+  extra: Pick<RefusalInput, "channel" | "recipientKind"> = {},
+): RefusalInput {
   const e = (err ?? {}) as ApiErrorShape;
   const body = e.body?.error;
   const source = body?.source;
   const subject = body?.subject;
+  const code = body?.code ?? e.code;
+  // The server already says how long the limiter holds; "wait a moment" is
+  // kinder with the moment attached.
+  const retry =
+    code === "RATE_LIMITED" && typeof body?.retry_after === "number" && body.retry_after > 0
+      ? `Try again in ${body.retry_after}s.`
+      : undefined;
   return {
-    code: body?.code ?? e.code,
+    ...extra,
+    code,
     capability: body?.capability,
     source: source === "actor" || source === "space" ? source : undefined,
     subject: subject === "sender" || subject === "recipient" ? subject : undefined,
     message: body?.message ?? e.message,
-    hint: body?.hint,
+    hint: body?.hint ?? retry,
     senderKind,
   };
 }

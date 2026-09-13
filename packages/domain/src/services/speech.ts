@@ -69,6 +69,18 @@ export interface SayQuota {
 export type SayAckWithQuota = SayAck & { quota: SayQuota };
 
 /**
+ * The permission truth for one whisper, asked BEFORE it is said.
+ *
+ * `refusal` is exactly the entry `say()` would have put in `undelivered[]` (or
+ * the emit refusal it would have thrown), built by the same `undeliveredFor()`
+ * — so a mute stays unattributed here too, and the two answers cannot drift.
+ */
+export interface WhisperCheck {
+  allowed: boolean;
+  refusal: UndeliveredRecipient | null;
+}
+
+/**
  * One refused recipient, as the sender is told about it.
  *
  * THE ONE PLACE this shape is built, so the live ack and the idempotent replay
@@ -421,6 +433,50 @@ export class SpeechService {
       undelivered,
       quota: await this.remainingFor(sender, roomId),
     };
+  }
+
+  /**
+   * §4.10 B, §5.5: "talk to that one specifically" should not be shout-and-hope.
+   * Runs the same `buildContext()` + `authorize()` a whisper runs, and writes
+   * nothing: no speech row, no delivery row, no limiter charge.
+   *
+   * PERMISSIONS ONLY. The quota snapshot is replaced with an open one, because
+   * the kernel's emit check shares the room_say gap with whisper — a check made
+   * a second after a room line would otherwise answer "rate limited" about a
+   * whisper that will be allowed by the time anyone has typed it. Rate limits
+   * are reported by the send, where they are true.
+   */
+  async checkWhisper(sender: SenderActor, targetId: string): Promise<WhisperCheck> {
+    const senderId = sender.kind === "human" ? sender.human.id : sender.agent.id;
+    if (targetId === senderId) {
+      return {
+        allowed: false,
+        refusal: { actorId: targetId as ActorId, code: "NOT_FOUND", reason: "You cannot whisper to yourself." },
+      };
+    }
+    try {
+      await this.flags.assertNotFrozen("freeze.speech", "Public speech is frozen.");
+    } catch (e) {
+      if (e instanceof GroveError) {
+        return {
+          allowed: false,
+          refusal: { actorId: targetId as ActorId, code: e.code as PolicyDecision["code"], reason: e.message },
+        };
+      }
+      throw e;
+    }
+    const ctx = await this.buildContext(sender, { channel: "whisper", body: "", targetId });
+    ctx.isOwnerChannel = false;
+    ctx.quota = { roomSayRemaining: 1, roomSayGapOk: true, writeRemaining: 1, roomWindowCount: 0 };
+    const result = authorize(ctx);
+    if (!result.emit.allow) {
+      return { allowed: false, refusal: undeliveredFor(targetId as ActorId, result.emit) };
+    }
+    const refused = result.deliveries.find((d) => !d.decision.allow);
+    if (refused) {
+      return { allowed: false, refusal: undeliveredFor(refused.recipientId, refused.decision) };
+    }
+    return { allowed: true, refusal: null };
   }
 
   /**

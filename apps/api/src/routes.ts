@@ -671,6 +671,24 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     return sendOk(reply, { speech });
   });
 
+  /**
+   * Can I whisper to this one? The room compose asks before it lets you send,
+   * so a refusal is shown up front instead of after the words are gone.
+   * Writes nothing; charged as a read. The answer is the `undelivered[]` entry
+   * the whisper itself would have produced, in the same wire spelling.
+   */
+  app.get("/api/v1/whisper/check", async (req, reply) => {
+    const actor = await requireActor(req, grove);
+    await chargeRead(grove, actor);
+    const q = req.query as { target_id?: string };
+    const targetId = String(q.target_id ?? "").trim();
+    if (!targetId) throw new GroveError("RECIPIENTS_INVALID", "Whisper check requires target_id.");
+    const sender =
+      actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };
+    const check = await grove.speech.checkWhisper(sender, targetId);
+    return sendOk(reply, { check });
+  });
+
   app.post("/api/v1/emote", async (req, reply) => {
     const actor = await requireActor(req, grove);
     const b = body(req);
