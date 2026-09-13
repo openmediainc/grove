@@ -31,7 +31,7 @@ import type {
 } from "@/lib/art";
 import type { MapRegion } from "@/lib/map-layout";
 
-export type ThemeId = "aoe";
+export type ThemeId = "aoe" | "space" | "city" | "scifi";
 
 export type Ctx = CanvasRenderingContext2D;
 
