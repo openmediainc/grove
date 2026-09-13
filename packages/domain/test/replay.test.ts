@@ -154,6 +154,29 @@ describe.skipIf(!hasDb)("replay never shows what the moment refused", { timeout:
     expect(idsOf(await allPages(asHuman(stranger.id), { ...win, worldId: space.id }))).toContain(joined);
   });
 
+  it("keeps a room its owner closed (room_preset private, migration 023) members-only inside an open space", async () => {
+    const owner = await newHuman("replay-room-owner");
+    const stranger = await newHuman("replay-room-stranger");
+    const space = await grove.campus.createWorld(owner, { name: `Open ${tag()}`, slug: `open-${tag()}`, preset: "public_view" });
+    fixtures.trackWorld(space.id);
+    const resident = await newAgent(owner, `roomres${tag()}`);
+    const t0 = Date.now();
+    await grove.presence.enter({ id: resident.id, kind: "agent", ownerHumanId: owner.id }, `${space.id}:library`, {
+      connection: "async",
+      mode: "autonomous",
+      activity: "idle",
+      worldId: space.id,
+    });
+    const joined = await lastEventId("actor_joined_room", resident.id);
+    const win = { ...windowAround(t0), worldId: space.id };
+    // Open room in an open space: a stranger may watch it.
+    expect(idsOf(await allPages(asHuman(stranger.id), win))).toContain(joined);
+    await grove.campus.updateRoomAccess(owner, space.id, `${space.id}:library`, { roomPreset: "private" });
+    expect(idsOf(await allPages(asHuman(stranger.id), win))).not.toContain(joined);
+    expect(idsOf(await allPages(ANON, win))).not.toContain(joined);
+    expect(idsOf(await allPages(asHuman(owner.id), win))).toContain(joined);
+  });
+
   it("plays a spoken line only to those it was delivered to — like the room feed, not even the fact — and never a whisper", async () => {
     const speakerOwner = await newHuman("replay-speaker");
     const listenerOwner = await newHuman("replay-listener");

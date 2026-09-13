@@ -355,6 +355,15 @@ visible_worlds AS (
            OR EXISTS (SELECT 1 FROM world_members m
                        WHERE m.world_id = w.id AND m.human_id = $1::text)))
 ),
+member_worlds AS (
+  -- Worlds this viewer is inside (owner or member). Rule 1b uses it for rooms
+  -- whose own preset (migration 023) closes them to non-members.
+  SELECT w.id FROM worlds w
+  WHERE $1::text IS NOT NULL AND (
+          w.owner_human_id = $1::text
+          OR EXISTS (SELECT 1 FROM world_members m
+                      WHERE m.world_id = w.id AND m.human_id = $1::text))
+),
 ev AS (
   SELECT
     e.id,
@@ -367,6 +376,7 @@ ev AS (
     COALESCE(r.world_id, $8::text) AS world_id,
     r.id   AS room_id,
     r.name AS room_name,
+    r.room_preset AS room_preset,
     ag.claim_state    AS agent_claim_state,
     ag.owner_human_id AS agent_owner_id,
     CASE WHEN hu.id IS NOT NULL THEN 'human'
@@ -417,6 +427,12 @@ visible AS (
      OR agent_claim_state <> 'pending'
      OR $2::bool
      OR agent_owner_id = $1::text)
+    -- Rule 1b (migration 023). A room can close itself inside a space that is
+    -- open: its room_preset 'private' keeps non-members out live, so what
+    -- happened in it is members-only here too. No operator bypass, as rule 1.
+    -- (A room OPENED inside a private space is not widened: history stays at
+    -- the world gate, the stricter of the two.)
+    AND (room_preset IS DISTINCT FROM 'private' OR world_id IN (SELECT id FROM member_worlds))
     AND ($7::text IS NULL OR world_id = $7::text)
     AND CASE
       -- Public: a body appearing, an agent gaining an owner, and what an agent
@@ -545,7 +561,7 @@ JOIN worlds w ON w.id = COALESCE(r.world_id, $6::text)
 WHERE ($2::bool OR ($1::text IS NOT NULL AND t.actor_id IN
         (SELECT id FROM agents WHERE owner_human_id = $1::text)))
   AND w.id = $5::text
-  AND (w.policy_preset <> 'private'
+  AND ((w.policy_preset <> 'private' AND r.room_preset IS DISTINCT FROM 'private')
        OR ($1::text IS NOT NULL AND (w.owner_human_id = $1::text
             OR EXISTS (SELECT 1 FROM world_members m WHERE m.world_id = w.id AND m.human_id = $1::text))))
   AND t.started_at < $4::timestamptz
