@@ -18,6 +18,7 @@ import { GroveError } from "../errors.js";
 import { newId, newUlid } from "../ids.js";
 import { randomToken } from "../crypto.js";
 import { withTx } from "../db.js";
+import type { FollowHooks } from "./follows.js";
 
 export interface WorldRow {
   id: string;
@@ -301,6 +302,9 @@ function isUniqueViolationOn(err: unknown, constraint: string): boolean {
 }
 
 export class CampusService {
+  /** Late-bound by GroveApp: a space's followers hear its Stage open (028). */
+  follows?: FollowHooks;
+
   constructor(private store: GroveStore) {}
 
   async getWorld(idOrSlug: string): Promise<WorldRow | null> {
@@ -1547,6 +1551,16 @@ export class CampusService {
         ends_at: event.endsAtEffective,
       }),
     );
+    if (type === "stage.started") {
+      await this.follows?.stageStarted({
+        worldId: event.worldId,
+        roomId: event.roomId,
+        createdBy: String(r.created_by),
+        title: event.title,
+        startsAt: event.startsAt,
+        endsAt: event.endsAtEffective,
+      });
+    }
   }
 
   async assignRole(

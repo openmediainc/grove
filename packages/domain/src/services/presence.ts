@@ -8,6 +8,7 @@ import { withTx, type PoolClient } from "../db.js";
 import type { FlagService } from "./flags.js";
 import type { QuotaService } from "./quota.js";
 import type { IdentityService } from "./identity.js";
+import type { FollowHooks } from "./follows.js";
 import {
   assertBatchSize,
   normalisePulseEventId,
@@ -164,6 +165,9 @@ export interface NearbyRow {
 }
 
 export class PresenceService {
+  /** Late-bound by GroveApp: followers hear a fault (migration 028). */
+  follows?: FollowHooks;
+
   constructor(
     private store: GroveStore,
     private flags: FlagService,
@@ -445,6 +449,8 @@ export class PresenceService {
     await this.store.pg.query("UPDATE agents SET last_seen_at = now() WHERE id = $1", [actorId]);
     const presence = mapPresence(row);
     await this.publishPulse(actorId, presence, n);
+    // Followers hear a fault (028). The hook folds a fault loop and never throws.
+    if (n.verb === "error") await this.follows?.agentFaulted(actorId, presence.roomId, presence.errorText ?? null);
     return presence;
   }
 
@@ -588,6 +594,10 @@ export class PresenceService {
         // ONE realtime event per batch, carrying the final state: a watcher's
         // body jumps to where the agent is now instead of strobing through a
         // second of history. The history itself is in the chronicle.
+        const faulted = pending.some((w) => w.n.verb === "error");
+        if (faulted) {
+          await this.follows?.agentFaulted(actorId, last.presence.roomId, last.presence.errorText ?? null);
+        }
         await this.publishPulse(actorId, last.presence, last.n, {
           count: rows.length,
           firstPulsedAt: firstAt,

@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Badges, GeoAvatar } from "@/components/Avatar";
-import { CardPanel } from "@/components/Card";
+import { CardPanel, useCardLex } from "@/components/Card";
+import { FollowButton } from "@/components/Follow";
 
 export default function AgentProfile() {
   const { slug } = useParams<{ slug: string[] }>();
@@ -21,6 +22,8 @@ export default function AgentProfile() {
     };
     owner: { handle: string } | null;
   } | null>(null);
+
+  const lex = useCardLex();
 
   useEffect(() => {
     void api<NonNullable<typeof data>>(`/api/v1/a/${path}`).then(setData);
@@ -48,6 +51,9 @@ export default function AgentProfile() {
       {data.agent.status_text ? <p className="mt-2 italic text-white/50">{data.agent.status_text}</p> : null}
       <div className="mt-4">
         <Badges badges={badges} />
+      </div>
+      <div className="mt-4">
+        <FollowButton target={{ subject: "agent", slug: data.agent.slug }} signedIn={null} lex={lex} />
       </div>
       <CardPanel target={{ subject: "agent", slug: data.agent.slug }} saveId={data.agent.id} />
     </main>

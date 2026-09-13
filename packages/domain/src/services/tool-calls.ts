@@ -18,6 +18,7 @@ import { newUlid } from "../ids.js";
 import type { PresenceService } from "./presence.js";
 import { STALL_AFTER_SECONDS } from "./presence.js";
 import type { QuotaService } from "./quota.js";
+import type { FollowHooks } from "./follows.js";
 
 /** Finished spans older than this are pruned by sweep(). */
 export const TOOL_CALL_RETENTION_DAYS = 7;
@@ -84,6 +85,9 @@ export function toToolCallView(r: Row, now: number = Date.now()): ToolCallView {
  * and the 017 verb history keep working without knowing spans exist.
  */
 export class ToolCallService {
+  /** Late-bound by GroveApp: followers hear a long call finish or error (028). */
+  follows?: FollowHooks;
+
   constructor(
     private store: GroveStore,
     private quota: QuotaService,
@@ -188,7 +192,11 @@ export class ToolCallService {
     }
     const view = toToolCallView(rows[0] as Row);
     const room = await this.afterFinish(actorId, view);
-    await this.publish(actorId, room ?? String((rows[0] as Row).room_id ?? ""), "finish", view);
+    const roomId = room ?? String((rows[0] as Row).room_id ?? "");
+    await this.publish(actorId, roomId, "finish", view);
+    // The room the call ran in, not wherever the body wandered since.
+    const ranIn = String((rows[0] as Row).room_id ?? "") || roomId;
+    if (ranIn) await this.follows?.toolCallFinished(actorId, ranIn, view);
     return view;
   }
 

@@ -5,7 +5,9 @@ import { gp } from "@/lib/base";
 import { buildDeepLink } from "@/lib/deep-link";
 import { walkOverTarget, type CardTarget } from "@/lib/card";
 import type { ThemeLexicon } from "@/lib/themes/types";
+import { followTargetFromCard, type FollowTarget } from "@/lib/follow";
 import { CardFields, useCard } from "./Card";
+import { FollowButton } from "./Follow";
 
 type CardLex = ThemeLexicon["card"];
 
@@ -180,17 +182,19 @@ const ACTION =
   "flex min-h-11 items-center justify-center rounded-full border border-white/15 px-2 py-2 text-center text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:min-h-0";
 
 /**
- * Walk over, Follow and Copy link, in that order, on every card. Follow is not
- * built yet (queue item 7), so it is shown switched off and says so, rather than
- * pretending to do something.
+ * Walk over, Follow and Copy link, in that order, on every card. Follow is the
+ * heart (a space or an agent only): it hides itself for a person, or for
+ * anything the server answers 404 about, and each keeps its own grid cell.
  */
 function CardActions({
   walk,
+  follow,
   share,
   signedIn,
   lex,
 }: {
   walk: { kind: "body"; room: string; what: string } | { kind: "space"; slug: string; what: string } | null;
+  follow: FollowTarget | null;
   share: ShareTarget;
   signedIn: boolean | null;
   lex: CardLex;
@@ -208,16 +212,9 @@ function CardActions({
       ) : (
         <span aria-hidden />
       )}
-      <button
-        type="button"
-        disabled
-        aria-disabled="true"
-        title={`${lex.follow} is coming soon`}
-        className={`${ACTION} cursor-not-allowed opacity-50 hover:border-white/15 hover:text-white/70`}
-      >
-        {lex.follow}
-        <span className="ml-1 text-[10px] text-white/40">{lex.soon}</span>
-      </button>
+      <div className="min-w-0">
+        <FollowButton target={follow} signedIn={signedIn} lex={lex} className={`${ACTION} w-full gap-1`} />
+      </div>
       <CopyLink share={share} className={ACTION} />
     </div>
   );
@@ -254,6 +251,7 @@ function BodyPeek({
       {peek.card ? <CardFields card={card} lex={lex} compact /> : null}
       <CardActions
         walk={peek.speakable ? { kind: "body", room: peek.room, what: peek.region } : null}
+        follow={followTargetFromCard(peek.card)}
         share={peek.share}
         signedIn={signedIn}
         lex={lex}
@@ -313,6 +311,7 @@ function SpacePeek({
           <CardFields card={card} lex={lex} compact />
           <CardActions
             walk={{ kind: "space", slug: peek.slug!, what: peek.name ?? "" }}
+            follow={{ subject: "space", ref: peek.slug! }}
             share={peek.share}
             signedIn={signedIn}
             lex={lex}

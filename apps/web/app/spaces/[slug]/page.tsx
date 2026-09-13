@@ -7,7 +7,8 @@ import { api } from "@/lib/api";
 import { GROVE_BASE, gp } from "@/lib/base";
 import { describeRoomAccess } from "@grove/ui";
 import { PRESET_ORDER, presetCopy, presetTint, type SpacePolicyPreset } from "../presets";
-import { CardPanel } from "@/components/Card";
+import { CardPanel, useCardLex } from "@/components/Card";
+import { FollowButton } from "@/components/Follow";
 
 type WireCeiling = { speak_to_agents: boolean; speak_to_humans: boolean; listen_to_agents: boolean; listen_to_humans: boolean };
 
@@ -68,6 +69,7 @@ export default function SpaceDetail() {
   const { slug } = useParams<{ slug: string }>();
   const [d, setD] = useState<Detail | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const lex = useCardLex();
 
   const load = useCallback(async () => {
     setD(await api<Detail>(`/api/v1/worlds/${encodeURIComponent(slug)}`));
@@ -129,6 +131,9 @@ export default function SpaceDetail() {
           </p>
           <p className="mt-1 text-sm text-white/40">{copy.blurb}</p>
           <OrgChips orgs={d.orgs} mode={d.org_render_mode} />
+          <div className="mt-3">
+            <FollowButton target={{ subject: "space", ref: d.world.slug }} signedIn={null} lex={lex} />
+          </div>
         </div>
         {d.is_member ? (
           <button

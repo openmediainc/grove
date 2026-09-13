@@ -396,8 +396,15 @@ export interface PolicyContext {
  * `SpeechChannel` — `say()` cannot be asked to store one — but it is decided by
  * the same `authorize()` so it cannot grow a second, drifting rule.
  * Recipients on a reaction are the target's author (at most one).
+ *
+ * `follow_notice`: telling followers that a followed agent or space did
+ * something (see follows.ts). Sender = the subject whose activity it is,
+ * recipients = the followers, room = where it happened. It is not speech: the
+ * act already happened, so emit only refuses an owner lounge, and each delivery
+ * asks whether that follower could hear the sender in that room (blocks, mutes,
+ * the recipient's own ear, the space and room ceilings with their membership).
  */
-export type PolicyChannel = SpeechChannel | "reaction";
+export type PolicyChannel = SpeechChannel | "reaction" | "follow_notice";
 
 export interface AuthorizeResult {
   emit: PolicyDecision;

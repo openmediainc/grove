@@ -31,6 +31,7 @@ export const ID_PREFIX = {
   role: "rol_",
   webhook: "whk_",
   job: "job_",
+  followNotice: "fnt_",
 } as const;
 
 export function isHumanId(id: string): id is HumanId {

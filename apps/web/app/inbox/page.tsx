@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import { presetCopy, presetTint } from "../spaces/presets";
+import { noticeHref, noticeText, type WireFollowNotice } from "@/lib/follow";
 
 type Item = {
   agent: { id: string; slug: string; display_name: string; claim_state: string };
@@ -54,11 +55,30 @@ export default function InboxPage() {
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [notices, setNotices] = useState<{ items: WireFollowNotice[]; unread: number } | null>(null);
 
   const load = useCallback(async () => {
-    const r = await api<Inbox>("/api/v1/inbox");
+    const [r, n] = await Promise.all([
+      api<Inbox>("/api/v1/inbox"),
+      // Follow notices are their own read: the inbox still works if it fails.
+      api<{ items: WireFollowNotice[]; unread: number }>("/api/v1/follows/notices").catch(() => null),
+    ]);
     setInbox(r);
+    setNotices(n);
   }, []);
+
+  async function markNoticesRead() {
+    setErr(null);
+    setBusy("notices");
+    try {
+      await api("/api/v1/follows/notices/seen", { method: "POST", body: JSON.stringify({}) });
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   useEffect(() => {
     void load().catch((e) => {
@@ -216,6 +236,46 @@ export default function InboxPage() {
         </section>
       ) : null}
 
+      {/* The heart's half: what the spaces and agents you follow did. Every row
+          was judged by the permission kernel when it was written, so nothing
+          here comes from a room you could not have watched. */}
+      {notices?.items.length ? (
+        <section className="mt-10">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 className="font-display text-2xl text-lantern-300">
+              From what you follow{" "}
+              {notices.unread ? <span className="text-white/40">({notices.unread} new)</span> : null}
+            </h2>
+            {notices.unread ? (
+              <button
+                onClick={() => void markNoticesRead()}
+                disabled={busy === "notices"}
+                className="rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/50 disabled:opacity-40 sm:px-3 sm:py-1"
+              >
+                Mark all read
+              </button>
+            ) : null}
+          </div>
+          <ul className="mt-3 space-y-2">
+            {notices.items.map((n) => {
+              const text = noticeText(n);
+              if (!text) return null;
+              return (
+                <li
+                  key={n.id}
+                  className={`rounded-xl border p-3 ${n.read_at ? "border-white/10 bg-dusk-800/40" : "border-lantern-400/25 bg-dusk-800/70"}`}
+                >
+                  <Link href={noticeHref(n)} className={`break-words text-sm ${n.read_at ? "text-white/60" : "text-white/85"}`}>
+                    {text}
+                  </Link>
+                  <div className="mt-1 text-xs text-white/35">{new Date(n.created_at).toLocaleString()}</div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="mt-10">
         <h2 className="font-display text-2xl text-lantern-300">Agents</h2>
         <p className="mt-1 text-sm text-white/50">
@@ -245,7 +305,7 @@ export default function InboxPage() {
         {items.length === 0 ? <p className="mt-3 text-white/40">No claimed agents.</p> : null}
       </section>
 
-      {inbox && !requests.length && !answers.length && !items.length ? (
+      {inbox && !requests.length && !answers.length && !items.length && !notices?.items.length ? (
         <p className="mt-8 text-white/40">Nothing waiting.</p>
       ) : null}
       {err ? <p className="mt-4 text-red-300">{err}</p> : null}

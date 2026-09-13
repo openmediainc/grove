@@ -189,6 +189,19 @@ function emitDecision(ctx: PolicyContext): PolicyDecision {
     return { allow: true, code: "ALLOW", reason: "Owner channel is always open." };
   }
 
+  // A follow notice reports something that already happened: no mouth, no
+  // quota. It only refuses where nothing is public to report — an owner's
+  // lounge, or an agent nobody has claimed.
+  if (ctx.channel === "follow_notice") {
+    if (ctx.room?.kind === "owner_lounge") {
+      return { allow: false, code: "NOT_FOUND", reason: "Nothing in an owner lounge is reported to followers." };
+    }
+    if (ctx.sender.kind === "agent" && ctx.sender.claimState !== "claimed") {
+      return { allow: false, code: "UNCLAIMED", reason: "Unclaimed agents have no followers to tell." };
+    }
+    return { allow: true, code: "ALLOW", reason: "Followers may be told." };
+  }
+
   if (ctx.sender.kind === "agent" && ctx.sender.claimState !== "claimed") {
     return { allow: false, code: "UNCLAIMED", reason: "Unclaimed agents cannot send public speech." };
   }
@@ -316,6 +329,12 @@ function deliveryDecision(
   // a spectator is never a member, so a private space is not leaked to the SSE feed.
   if (!effectiveCaps(r.policy, ctx.room, r)[listenCap]) {
     return spaceDenied(r.policy, listenCap, "recipient", ctx.room, r);
+  }
+
+  // A follow notice is a report of activity, not a line: the sender's mouth is
+  // not in question, only whether this follower could have heard it there.
+  if (ctx.channel === "follow_notice") {
+    return { allow: true, code: "ALLOW", reason: "Follower could hear this in that room." };
   }
 
   // Mixed-audience: agent room_say without speakToHumans is not delivered to humans or spectators

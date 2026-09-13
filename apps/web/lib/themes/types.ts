@@ -326,8 +326,8 @@ export interface ThemeLexicon {
     empty: string;
     walkOver: string;
     follow: string;
-    /** Follow is not built yet: the tag on the disabled button. */
-    soon: string;
+    /** The heart once it is on: "Following" in this theme's words. */
+    following: string;
   };
 
   /** Controls. */

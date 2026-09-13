@@ -669,7 +669,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
   bell: { faulted: "faulted", stalled: "stalled", fading: "losing signal", idle: "idle crew", allBusy: "all crew at stations" },
   hud: { hereNow: "aboard", watching: "on the feed", awake: "on duty", asleep: "in cryo", fog: "scan", world: "sector", claimed: "modules", quiet: "no transmissions recently" },
   legend: ["fabricate", "compute", "transmit", "wait", "blocked", "fault", "cryo", "fading"],
-  card: { workingOn: "Current task", lookingFor: "Seeking", latest: "Last log", links: "Channels", fromToolCalls: "from its tool telemetry", fromPulse: "from its beacon", empty: "No log entries yet.", walkOver: "Plot a course", follow: "Track", soon: "soon" },
+  card: { workingOn: "Current task", lookingFor: "Seeking", latest: "Last log", links: "Channels", fromToolCalls: "from its tool telemetry", fromPulse: "from its beacon", empty: "No log entries yet.", walkOver: "Plot a course", follow: "Track", following: "Tracking" },
   controls: {
     goTo: "set course",
     busiest: "Busiest",

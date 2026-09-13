@@ -715,7 +715,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle units", allBusy: "all units running" },
   hud: { hereNow: "connected", watching: "observing", awake: "online", asleep: "dormant", fog: "range", world: "grid", claimed: "nodes", quiet: "no broadcasts recently" },
   legend: ["execute", "process", "broadcast", "wait", "blocked", "fault", "dormant", "fading"],
-  card: { workingOn: "Running", lookingFor: "Seeking", latest: "Last output", links: "Uplinks", fromToolCalls: "from its tool spans", fromPulse: "from its signal", empty: "No data on this node.", walkOver: "Jump to", follow: "Subscribe", soon: "soon" },
+  card: { workingOn: "Running", lookingFor: "Seeking", latest: "Last output", links: "Uplinks", fromToolCalls: "from its tool spans", fromPulse: "from its signal", empty: "No data on this node.", walkOver: "Jump to", follow: "Subscribe", following: "Subscribed" },
   controls: {
     goTo: "jump to",
     busiest: "Busiest",

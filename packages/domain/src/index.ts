@@ -46,6 +46,7 @@ export { MailboxService } from "./services/mailbox.js";
 export { NoticeService } from "./services/notices.js";
 export { ReactionService } from "./services/reactions.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
+export { FollowService, type Follower, type FollowState, type FollowHooks } from "./services/follows.js";
 export { AudienceService, AUDIENCE_CAP, AUDIENCE_BUCKET_SECONDS, isWatchToken } from "./services/audience.js";
 export {
   FlagService,
@@ -160,6 +161,7 @@ import { CampusService } from "./services/campus.js";
 import { ChronicleService } from "./services/chronicle.js";
 import { ReactionService } from "./services/reactions.js";
 import { CardService } from "./services/cards.js";
+import { FollowService } from "./services/follows.js";
 import { AudienceService } from "./services/audience.js";
 import { ReplayService } from "./services/replay.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
@@ -187,6 +189,8 @@ export class GroveApp {
   reactions: ReactionService;
   /** Working on / looking for / latest / links, for spaces and bodies (027). */
   cards: CardService;
+  /** Hearts on spaces and agents, and the notices they earn (028). */
+  follows: FollowService;
   /** "N watching" on the map: counted tab heartbeats, never identities. */
   audience: AudienceService;
   replay: ReplayService;
@@ -218,6 +222,12 @@ export class GroveApp {
     // for the agent asking.
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);
     this.cards = new CardService(this.store, this.identity, this.campus);
+    // Written on the event: the three sources call back into this after their
+    // own write. Late-bound because all three are built before speech/mailbox.
+    this.follows = new FollowService(this.store, this.identity, this.campus, this.presence, this.speech, this.mailbox, this.quota);
+    this.presence.follows = this.follows;
+    this.toolCalls.follows = this.follows;
+    this.campus.follows = this.follows;
     this.reactions = new ReactionService(
       this.store,
       this.chronicle,
