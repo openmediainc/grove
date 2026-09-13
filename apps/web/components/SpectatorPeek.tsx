@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { gp } from "@/lib/base";
+import { buildDeepLink } from "@/lib/deep-link";
 
 /**
  * What a spectator gets when they click the world.
@@ -20,6 +22,9 @@ import { gp } from "@/lib/base";
 
 export type OrgBadge = { id: string; name: string; colour: string };
 
+/** What a Copy link on the card points at: a body to follow, or a tile to centre. */
+export type ShareTarget = { follow: string } | { at: { tx: number; ty: number } };
+
 export type Peek =
   | {
       kind: "body";
@@ -33,6 +38,7 @@ export type Peek =
       /** False for a body that has no Grove presence to answer you — offering
        *  to sign in and speak to it would be a promise we cannot keep. */
       speakable: boolean;
+      share: ShareTarget;
     }
   | {
       kind: "space";
@@ -45,6 +51,7 @@ export type Peek =
       ownerHandle: string | null;
       occupancy: number;
       orgs: OrgBadge[];
+      share: ShareTarget;
     }
   | {
       kind: "region";
@@ -52,6 +59,7 @@ export type Peek =
       title: string;
       here: Array<{ name: string; detail: string }>;
       recent: Array<{ who: string; body: string }>;
+      share: ShareTarget;
     };
 
 /**
@@ -66,6 +74,40 @@ export function loginHref(opts: { next?: string; why?: string; what?: string }):
   if (opts.what) q.set("what", opts.what);
   const s = q.toString();
   return gp(`/login${s ? `?${s}` : ""}`);
+}
+
+/**
+ * Copy a deep link to what the card is showing. The link is built from the
+ * address the viewer is on at the moment of the click, so it carries the right
+ * base path and theme pin, and never the viewer's kiosk or TV mode.
+ */
+function CopyLink({ share }: { share: ShareTarget }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const key = "follow" in share ? `f:${share.follow}` : `a:${share.at.tx},${share.at.ty}`;
+  useEffect(() => setState("idle"), [key]);
+  useEffect(() => {
+    if (state === "idle") return;
+    const t = window.setTimeout(() => setState("idle"), 2000);
+    return () => window.clearTimeout(t);
+  }, [state]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(buildDeepLink(window.location.href, share));
+      setState("copied");
+    } catch {
+      setState("failed");
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      title={"follow" in share ? "Copy a link that opens the map following this body" : "Copy a link that opens the map centred here"}
+      className="mt-2 block w-full rounded-full border border-white/15 px-4 py-3 text-center text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:py-2"
+    >
+      <span aria-live="polite">{state === "copied" ? "Link copied" : state === "failed" ? "Could not copy" : "Copy link"}</span>
+    </button>
+  );
 }
 
 function Chip({ org }: { org: OrgBadge }) {
@@ -110,6 +152,7 @@ export function SpectatorPeek({
       {peek.kind === "body" ? <BodyPeek peek={peek} signedIn={signedIn} /> : null}
       {peek.kind === "space" ? <SpacePeek peek={peek} signedIn={signedIn} /> : null}
       {peek.kind === "region" ? <RegionPeek peek={peek} signedIn={signedIn} /> : null}
+      <CopyLink share={peek.share} />
     </aside>
   );
 }

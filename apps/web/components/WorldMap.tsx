@@ -57,6 +57,7 @@ import {
   type MapRegion,
 } from "@/lib/map-layout";
 import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
+import { deepLinkApplies, parseDeepLink, type DeepLink } from "@/lib/deep-link";
 import { AttentionBell } from "./AttentionBell";
 import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
@@ -319,6 +320,8 @@ type Minimap = {
 type Actor = {
   id: string;
   name: string;
+  /** Grove bodies only: what `?follow=` names. Paperclip bodies have none. */
+  slug?: string;
   kind: "human" | "agent" | "paperclip";
   region: MapRegion;
   activity: string;
@@ -794,6 +797,12 @@ export function WorldMap() {
   /** Public lines already handed to the director, so a poll never re-tells one. Null until the first poll. */
   const tvSpeechSeenRef = useRef<Set<string> | null>(null);
   const tvModeRef = useRef<(on: boolean) => void>(() => {});
+  /**
+   * A shareable deep link read on load (lib/deep-link), waiting for what it
+   * needs: `at` for the camera controls, `follow` for the body to be on the
+   * map. Consumed once. Null when there is none, or when TV owns the camera.
+   */
+  const deepLinkRef = useRef<(DeepLink & { tries: number }) | null>(null);
   /** Null until the clock effect runs: the server has no hour to render. */
   const [sky, setSky] = useState<Sky | null>(null);
   const [hud, setHud] = useState({
@@ -1009,6 +1018,8 @@ export function WorldMap() {
       const params = new URLSearchParams(window.location.search);
       wanted = on(params.get("kiosk"));
       wantTv = on(params.get("tv"));
+      const link = parseDeepLink(params);
+      if (deepLinkApplies(params) && (link.follow || link.at)) deepLinkRef.current = { ...link, tries: 0 };
     } catch {
       wanted = false;
     }
@@ -1209,6 +1220,7 @@ export function WorldMap() {
             pulseAgeSeconds: b.pulse_age_seconds ?? b.pulseAgeSeconds ?? null,
             fading: connection.toLowerCase() === "offline",
             name: b.display_name ?? b.displayName ?? b.slug,
+            slug: b.slug,
             kind: b.kind,
             region,
             activity: b.activity || "idle",
@@ -1372,6 +1384,21 @@ export function WorldMap() {
           : null;
         actorsRef.current = actors;
         seatsRef.current = assignSeats(actors);
+        // ?follow=<slug>: hand the body to the follow-cam once it is on the map.
+        // A slug the public map does not carry after a few polls is dropped
+        // quietly; the link names nothing this viewer may see.
+        const link = deepLinkRef.current;
+        if (link?.follow && !replaying && !tvRef.current) {
+          const body = actors.find((a) => a.slug === link.follow);
+          if (body) {
+            glideRef.current = null;
+            kioskYieldRef.current = Date.now() + KIOSK_YIELD_MS;
+            followRef.current = body.id;
+            setFollowing(body.name);
+            link.follow = null;
+          } else if (++link.tries >= 3) link.follow = null;
+          if (!link.follow && !link.at) deepLinkRef.current = null;
+        }
         // Replay syncs its own director on historical ticks (lib/replay/motion).
         if (!replaying) motionRef.current?.sync(actors, seatsRef.current, Date.now());
         const claimed = data.claimed_agents ?? data.claimedAgents ?? 0;
@@ -1617,6 +1644,17 @@ export function WorldMap() {
       },
     };
 
+    // ?at=<tx>,<ty>: centre on that tile. Skipped when a follow is also asked
+    // for, since the follow-cam would take the camera straight back.
+    {
+      const link = deepLinkRef.current;
+      if (link?.at && !tvRef.current) {
+        if (!link.follow) controlsRef.current.goTo(link.at.tx, link.at.ty, BOOKMARK_ZOOM);
+        link.at = null;
+        if (!link.follow) deepLinkRef.current = null;
+      }
+    }
+
     /**
      * How healthy this body's connection is, right now.
      *
@@ -1747,6 +1785,12 @@ export function WorldMap() {
               ? { id: body.orgId ?? body.orgName, name: body.orgName, colour: body.orgColour }
               : null,
           url: body.url ?? null,
+          share: body.slug
+            ? { follow: body.slug }
+            : (() => {
+                const seat = seatsRef.current.get(body.id) ?? seatInRegion(body.id, body.region);
+                return { at: { tx: seat.x, ty: seat.y } };
+              })(),
           // Paperclip bodies are mirrored onto the map but live next door, so
           // no amount of signing in lets you address one.
           speakable: body.source === "grove",
@@ -1766,6 +1810,7 @@ export function WorldMap() {
           ownerHandle: plot.ownerHandle,
           occupancy: plot.occupancy,
           orgs: plot.orgs,
+          share: { at: { tx: (plot.rect.x0 + plot.rect.x1) / 2, ty: (plot.rect.y0 + plot.rect.y1) / 2 } },
         };
       }
       const region = regionAt(tx, ty);
@@ -1778,6 +1823,7 @@ export function WorldMap() {
           .filter((a) => a.region === region)
           .map((a) => ({ name: a.name, detail: a.detail ?? VERB_LABEL[a.verb] })),
         recent: recentRef.current,
+        share: { at: { tx, ty } },
       };
     };
 
