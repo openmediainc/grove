@@ -19,6 +19,14 @@ function readPreset(value: unknown): SpacePolicyPreset {
   throw new GroveError("INVALID", `policy_preset must be one of: ${PRESET_NAMES.join(", ")}.`);
 }
 
+/** One top-level field off the raw body, either spelling; `undefined` when absent. */
+function rawField(req: { body: unknown }, snake: string): unknown {
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  if (snake in raw) return raw[snake];
+  const camel = snake.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+  return camel in raw ? raw[camel] : undefined;
+}
+
 function body(req: { body: unknown }): Record<string, unknown> {
   return (toCamel(req.body ?? {}) as Record<string, unknown>) ?? {};
 }
@@ -103,8 +111,24 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
       name: b.name === undefined ? undefined : String(b.name),
       policyPreset: b.policyPreset === undefined ? undefined : readPreset(b.policyPreset),
       orgRenderMode: b.orgRenderMode,
+      // SPC-10. Read off the RAW body: toCamel would rename the ceiling's own
+      // snake_case keys, and campus accepts either spelling anyway.
+      memberPolicy: rawField(req, "member_policy"),
     });
     return sendOk(reply, { world });
+  });
+
+  // SPC-07 / SPC-10 — one room's own ceilings. Owner-only; a space the caller
+  // does not operate, or a room that is not in it, is a 404. The change is
+  // broadcast in-room by campus.updateRoomAccess (§5.6).
+  app.patch("/api/v1/worlds/:id/rooms/:room", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    const params = req.params as { id: string; room: string };
+    const result = await grove.campus.updateRoomAccess(human, params.id, params.room, {
+      roomPreset: rawField(req, "room_preset"),
+      memberPolicy: rawField(req, "member_policy"),
+    });
+    return sendOk(reply, result);
   });
 
   /** Give a space back: releases the plot, keeps the record. Owner only. */
@@ -129,21 +153,29 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
     // canonical world (WORLD_ID), so Grove itself stays open to every signed-in
     // human; any other campus requires the human to already be its owner or a
     // member. Entering must never be what grants membership.
-    if (!(await grove.campus.isMember(world.id, human.id))) {
+    const requestedRoom = typeof (req.body as { room?: unknown } | null)?.room === "string"
+      ? String((req.body as { room: string }).room)
+      : null;
+    const member = await grove.campus.isMember(world.id, human.id);
+    // SPC-07: a non-member may come in through a room the owner opened — only
+    // that room, and never by being made a member. Anything else is the same
+    // refusal as before, so a closed room and a missing one look identical.
+    const lobby = !member && requestedRoom ? await grove.campus.visitableRoom(world.id, requestedRoom) : null;
+    if (!member && !lobby) {
       throw new GroveError("ROOM_FORBIDDEN", "You are not a member of this campus.", { httpStatus: 403 });
     }
     // Reached only by someone already entitled to be here; keeps the
-    // world_members row in step for the canonical world.
-    await grove.campus.addMember(world.id, human.id);
+    // world_members row in step for the canonical world. Never for a visitor.
+    if (member) await grove.campus.addMember(world.id, human.id);
     setWorldCookie(reply, grove, world.id);
     const result = await grove.presence.enter(
       { id: human.id, kind: "human" },
-      "plaza",
+      lobby ? lobby.slug : requestedRoom ?? "plaza",
       {
         connection: "live",
         mode: human.lurk ? "lurk" : "active",
         activity: "idle",
-        overflowPlaza: true,
+        overflowPlaza: !lobby,
         worldId: world.id,
       },
     );

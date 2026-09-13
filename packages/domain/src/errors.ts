@@ -20,6 +20,8 @@ export class GroveError extends Error {
    */
   source?: PolicyDecision["source"];
   subject?: PolicyDecision["subject"];
+  /** SPC-07/10: member vs non-member ceiling, when `source` is space or room. */
+  membership?: PolicyDecision["membership"];
 
   constructor(
     code: string,
@@ -32,6 +34,7 @@ export class GroveError extends Error {
       details?: Record<string, unknown>;
       source?: PolicyDecision["source"];
       subject?: PolicyDecision["subject"];
+      membership?: PolicyDecision["membership"];
     },
   ) {
     super(message);
@@ -44,5 +47,6 @@ export class GroveError extends Error {
     this.details = opts?.details;
     this.source = opts?.source;
     this.subject = opts?.subject;
+    this.membership = opts?.membership;
   }
 }

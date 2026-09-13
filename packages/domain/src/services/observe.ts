@@ -172,7 +172,15 @@ export class ObserveService {
       suggestedActions: suggested(agent, nearby.length, pendingInstructions.length),
     };
     const worldId = room.worldId ?? WORLD_ID;
-    if (this.campus) {
+    // SPC-07: an agent can stand in a space it is not a member of only through
+    // a room the owner opened (a lobby). Everything past that room — the space's
+    // Stage bill, its role briefings — is the space's contents and stays
+    // behind the door. Membership is its OWNER's, as everywhere else.
+    const visitor =
+      worldId !== WORLD_ID &&
+      this.campus !== undefined &&
+      !(agent.ownerHumanId && (await this.campus.isMember(worldId, agent.ownerHumanId)));
+    if (this.campus && !visitor) {
       const briefings = await this.campus.dueBriefings(agent.id, worldId);
       if (briefings.length) packet.briefings = briefings;
 

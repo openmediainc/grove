@@ -3,11 +3,16 @@ import {
   PUBLIC_ROOMS,
   SPACE_POLICY_PRESETS,
   WORLD_ID,
+  parseCeiling,
+  roomAdmitsNonMembers,
   spacePolicyForPreset,
+  type CeilingLayers,
   type Human,
+  type Room,
   type SpacePolicy,
   type SpacePolicyPreset,
 } from "@grove/protocol";
+import { ceilingFromRow, ceilingToRow, mapRoom } from "../mappers.js";
 import type { GroveStore } from "../store.js";
 import { GroveError } from "../errors.js";
 import { newId, newUlid } from "../ids.js";
@@ -27,6 +32,8 @@ export interface WorldRow {
   policyPreset: SpacePolicyPreset;
   /** Explicit override; when null the preset supplies the policy. */
   spacePolicy: SpacePolicy | null;
+  /** SPC-10: the ceiling members sit at. Null = the full ceiling (the old rule). */
+  memberPolicy: SpacePolicy | null;
   /** How bound orgs are painted here. See orgRenderFor(). */
   orgRenderMode: OrgRenderMode;
 }
@@ -156,6 +163,21 @@ export interface SpaceDirectoryEntry {
   /** Orgs bound to this plot, and how they are painted. Empty when redacted. */
   orgRenderMode: OrgRenderMode;
   orgs: Array<{ id: string; slug: string; name: string; colour: string }>;
+  /**
+   * SPC-07: rooms the owner deliberately opened to non-members. Published even
+   * when the space itself is redacted — that is the point of a public lobby —
+   * but ONLY these rooms: never the space's name, owner, or other rooms.
+   */
+  openRooms: OpenRoomEntry[];
+}
+
+/** One room a non-member may walk into. Nothing here names the space around it. */
+export interface OpenRoomEntry {
+  id: string;
+  slug: string;
+  name: string;
+  roomPreset: SpacePolicyPreset;
+  occupancy: number;
 }
 
 export interface SpaceRoomRow {
@@ -165,6 +187,32 @@ export interface SpaceRoomRow {
   kind: string;
   capacity: number;
   occupancy: number;
+  /** SPC-07: the room's own non-member access level. Null = inherits the space. */
+  roomPreset: SpacePolicyPreset | null;
+  /** SPC-10: the room's own member ceiling. Null = inherits the space. */
+  memberPolicy: SpacePolicy | null;
+  /** True when this room's override lets a non-member walk in. */
+  admitsNonMembers: boolean;
+}
+
+/** Wire -> JSON aggregate of a plot's open rooms, shared by directory + minimap. */
+export const OPEN_ROOMS_SQL = `COALESCE((SELECT json_agg(json_build_object(
+            'id', r.id, 'slug', r.slug, 'name', r.name, 'room_preset', r.room_preset,
+            'occupancy', (SELECT count(*)::int FROM presence p WHERE p.room_id = r.id))
+            ORDER BY r.name)
+          FROM rooms r
+          WHERE r.world_id = w.id AND r.room_preset IS NOT NULL AND r.room_preset <> 'private'),
+        '[]'::json)`;
+
+export function mapOpenRooms(raw: unknown): OpenRoomEntry[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r: Record<string, unknown>) => ({
+    id: String(r.id),
+    slug: String(r.slug),
+    name: String(r.name),
+    roomPreset: r.room_preset as SpacePolicyPreset,
+    occupancy: Number(r.occupancy),
+  }));
 }
 
 export interface SpaceMemberRow {
@@ -334,7 +382,8 @@ export class CampusService {
                           'id', o.id, 'slug', o.slug, 'name', o.name, 'colour', o.colour)
                           ORDER BY wo.created_at, o.id)
                         FROM world_orgs wo JOIN orgs o ON o.id = wo.org_id
-                        WHERE wo.world_id = w.id), '[]'::json) AS orgs
+                        WHERE wo.world_id = w.id), '[]'::json) AS orgs,
+              ${OPEN_ROOMS_SQL} AS open_rooms
        FROM worlds w LEFT JOIN humans h ON h.id = w.owner_human_id
        WHERE w.archived_at IS NULL AND w.plot_index IS NOT NULL
        ORDER BY w.plot_index`,
@@ -360,6 +409,7 @@ export class CampusService {
         // Which orgs live on a plot is part of what is behind a private door,
         // so it redacts with the name and the owner rather than separately.
         orgs: visible ? (r.orgs as SpaceDirectoryEntry["orgs"]) ?? [] : [],
+        openRooms: mapOpenRooms(r.open_rooms),
       };
     });
   }
@@ -367,19 +417,25 @@ export class CampusService {
   /** The public rooms of a space, with live occupancy. */
   async roomsOf(worldId: string): Promise<SpaceRoomRow[]> {
     const { rows } = await this.store.pg.query(
-      `SELECT r.id, r.slug, r.name, r.kind, r.capacity,
+      `SELECT r.id, r.slug, r.name, r.kind, r.capacity, r.room_preset, r.member_policy,
               (SELECT count(*)::int FROM presence p WHERE p.room_id = r.id) AS occupancy
        FROM rooms r WHERE r.world_id = $1 ORDER BY r.name`,
       [worldId],
     );
-    return rows.map((r) => ({
-      id: String(r.id),
-      slug: String(r.slug),
-      name: String(r.name),
-      kind: String(r.kind),
-      capacity: Number(r.capacity),
-      occupancy: Number(r.occupancy),
-    }));
+    return rows.map((r) => {
+      const roomPreset = isSpacePolicyPreset(r.room_preset) ? r.room_preset : null;
+      return {
+        id: String(r.id),
+        slug: String(r.slug),
+        name: String(r.name),
+        kind: String(r.kind),
+        capacity: Number(r.capacity),
+        occupancy: Number(r.occupancy),
+        roomPreset,
+        memberPolicy: ceilingFromRow(r.member_policy),
+        admitsNonMembers: roomAdmitsNonMembers(roomPreset),
+      };
+    });
   }
 
   /**
@@ -416,7 +472,7 @@ export class CampusService {
   async updateWorld(
     human: Human,
     idOrSlug: string,
-    input: { name?: string | undefined; policyPreset?: unknown; orgRenderMode?: unknown },
+    input: { name?: string | undefined; policyPreset?: unknown; orgRenderMode?: unknown; memberPolicy?: unknown },
   ): Promise<WorldRow> {
     const world = await this.requireWorld(idOrSlug);
     await this.assertOperate(human, world);
@@ -467,15 +523,198 @@ export class CampusService {
       sets.push(`org_render_mode = $${params.length}`);
     }
 
+    if (input.memberPolicy !== undefined) {
+      if (world.id === WORLD_ID) {
+        throw new GroveError("INVALID", "The civic core has no member ceiling to change.");
+      }
+      const ceiling = readCeiling(input.memberPolicy, "member_policy");
+      params.push(ceiling === null ? null : JSON.stringify(ceilingToRow(ceiling)));
+      sets.push(`member_policy = $${params.length}`);
+    }
+
     if (!sets.length) {
-      throw new GroveError("INVALID", "name, policy_preset or org_render_mode is required.");
+      throw new GroveError("INVALID", "name, policy_preset, member_policy or org_render_mode is required.");
     }
 
     const { rows } = await this.store.pg.query(
       `UPDATE worlds SET ${sets.join(", ")} WHERE id = $1 RETURNING *`,
       params,
     );
-    return mapWorld(rows[0] as Record<string, unknown>);
+    const after = mapWorld(rows[0] as Record<string, unknown>);
+    // §5.6: a ceiling change is a permission change for everyone standing in
+    // the space, so every room hears it — not only the rooms with bodies in
+    // them today, because a runtime may be mid-move.
+    if (input.policyPreset !== undefined || input.memberPolicy !== undefined) {
+      for (const room of await this.roomsOf(world.id)) {
+        await this.publishRoomPolicy(after, room, "space");
+      }
+    }
+    return after;
+  }
+
+  /**
+   * SPC-07 / SPC-10 — set or clear one room's own ceilings. Owner-only, and a
+   * space the caller does not operate is a 404 (assertOperate); a room that is
+   * not in that space is ALSO a 404, never a 403, so the call cannot be used to
+   * learn another space's room ids.
+   *
+   * `roomPreset: null` / `memberPolicy: null` mean "inherit the space". When
+   * the change closes a door that was open, non-members standing in the room are
+   * returned to nothing (their presence is removed), the same way archiving a
+   * space empties it: a closed lobby must not keep strangers inside.
+   */
+  async updateRoomAccess(
+    human: Human,
+    worldIdOrSlug: string,
+    roomIdOrSlug: string,
+    input: { roomPreset?: unknown; memberPolicy?: unknown },
+  ): Promise<{ world: WorldRow; room: SpaceRoomRow; evicted: string[] }> {
+    const world = await this.requireWorld(worldIdOrSlug);
+    await this.assertOperate(human, world);
+    if (world.id === WORLD_ID) {
+      throw new GroveError("INVALID", "The civic core's rooms have no access level to change.");
+    }
+    if (world.archivedAt) {
+      throw new GroveError("NOT_FOUND", "Not found.", { httpStatus: 404 });
+    }
+    const before = (await this.roomsOf(world.id)).find((r) => r.id === roomIdOrSlug || r.slug === roomIdOrSlug);
+    if (!before) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
+
+    const sets: string[] = [];
+    const params: unknown[] = [before.id];
+    if (input.roomPreset !== undefined) {
+      if (input.roomPreset !== null && !isSpacePolicyPreset(input.roomPreset)) {
+        throw new GroveError(
+          "INVALID",
+          `room_preset must be null (inherit) or one of: ${Object.keys(SPACE_POLICY_PRESETS).join(", ")}.`,
+        );
+      }
+      params.push(input.roomPreset);
+      sets.push(`room_preset = $${params.length}`);
+    }
+    if (input.memberPolicy !== undefined) {
+      const ceiling = readCeiling(input.memberPolicy, "member_policy");
+      params.push(ceiling === null ? null : JSON.stringify(ceilingToRow(ceiling)));
+      sets.push(`member_policy = $${params.length}`);
+    }
+    if (!sets.length) throw new GroveError("INVALID", "room_preset or member_policy is required.");
+
+    await this.store.pg.query(`UPDATE rooms SET ${sets.join(", ")} WHERE id = $1`, params);
+    const room = (await this.roomsOf(world.id)).find((r) => r.id === before.id)!;
+
+    let evicted: string[] = [];
+    if (before.admitsNonMembers && !room.admitsNonMembers) {
+      evicted = await this.evictNonMembers(world.id, room.id);
+    }
+    await this.publishRoomPolicy(world, room, "room");
+    return { world, room, evicted };
+  }
+
+  /**
+   * Remove every body in a room whose human (or whose agent's owner) is not a
+   * member of the space. Returns the actor ids removed.
+   */
+  private async evictNonMembers(worldId: string, roomId: string): Promise<string[]> {
+    const { rows } = await this.store.pg.query<{ actor_id: string }>(
+      `DELETE FROM presence p
+       WHERE p.room_id = $2
+         AND NOT EXISTS (
+           SELECT 1 FROM worlds w
+           LEFT JOIN agents a ON a.id = p.actor_id
+           WHERE w.id = $1
+             AND COALESCE(CASE WHEN p.actor_kind = 'human' THEN p.actor_id ELSE a.owner_human_id END, '') <> ''
+             AND (
+               w.owner_human_id = CASE WHEN p.actor_kind = 'human' THEN p.actor_id ELSE a.owner_human_id END
+               OR EXISTS (SELECT 1 FROM world_members m WHERE m.world_id = w.id
+                            AND m.human_id = CASE WHEN p.actor_kind = 'human' THEN p.actor_id ELSE a.owner_human_id END)
+             )
+         )
+       RETURNING p.actor_id`,
+      [worldId, roomId],
+    );
+    for (const r of rows) {
+      await this.store.redis.publish(
+        `pubsub:room:${roomId}`,
+        JSON.stringify({ type: "actor_leave", actor_id: r.actor_id, room_id: roomId, reason: "room_closed" }),
+      );
+    }
+    return rows.map((r) => String(r.actor_id));
+  }
+
+  /**
+   * §5.6 in-room broadcast for a ceiling change. Carries the room's own layers
+   * and the space's, so a runtime can re-derive what it may do without a read.
+   * No actor_id: this frame is about the ROOM, not one body's matrix.
+   */
+  private async publishRoomPolicy(world: WorldRow, room: SpaceRoomRow, scope: "room" | "space"): Promise<void> {
+    const what =
+      scope === "room"
+        ? room.roomPreset === null && room.memberPolicy === null
+          ? `${room.name} now follows the space's access level.`
+          : `${room.name} has its own access level now.`
+        : `This space's access level changed.`;
+    await this.store.redis.publish(
+      `pubsub:room:${room.id}`,
+      JSON.stringify({
+        type: "policy_update",
+        scope,
+        world_id: world.id,
+        room_id: room.id,
+        room_preset: room.roomPreset,
+        room_member_policy: room.memberPolicy ? ceilingToRow(room.memberPolicy) : null,
+        space_preset: world.policyPreset,
+        space_member_policy: world.memberPolicy ? ceilingToRow(world.memberPolicy) : null,
+        admits_non_members: room.admitsNonMembers,
+        message: what,
+      }),
+    );
+  }
+
+  /**
+   * Every ceiling layer for one room, already resolved to policies, for the
+   * kernel (`PolicyContext.room`). `undefined` for the civic core and for an
+   * unknown room: the commons narrows nothing.
+   */
+  async ceilingLayersForRoom(roomId: string): Promise<CeilingLayers | undefined> {
+    const { rows } = await this.store.pg.query(
+      `SELECT w.id AS world_id, w.policy_preset, w.space_policy, w.member_policy AS space_member_policy,
+              r.room_preset, r.member_policy AS room_member_policy
+       FROM rooms r JOIN worlds w ON w.id = r.world_id WHERE r.id = $1`,
+      [roomId],
+    );
+    const row = rows[0];
+    if (!row || row.world_id === WORLD_ID) return undefined;
+    const layers: CeilingLayers = {
+      policy:
+        toSpacePolicy(row.space_policy) ??
+        spacePolicyForPreset((row.policy_preset as SpacePolicyPreset) ?? DEFAULT_SPACE_POLICY_PRESET),
+    };
+    const spaceMember = ceilingFromRow(row.space_member_policy);
+    if (spaceMember) layers.memberPolicy = spaceMember;
+    if (isSpacePolicyPreset(row.room_preset)) layers.roomPolicy = spacePolicyForPreset(row.room_preset);
+    const roomMember = ceilingFromRow(row.room_member_policy);
+    if (roomMember) layers.roomMemberPolicy = roomMember;
+    return layers;
+  }
+
+  /**
+   * SPC-07 — the one room of a space a NON-member may walk into, resolved from
+   * untrusted input. Null unless the room is in THAT space, the space is live,
+   * and the room's own override opens it. Callers turn null into the same
+   * refusal a non-member always got, so a closed room and a missing room are
+   * indistinguishable from outside.
+   */
+  async visitableRoom(worldId: string, slugOrId: string): Promise<Room | null> {
+    if (worldId === WORLD_ID) return null;
+    const { rows } = await this.store.pg.query(
+      `SELECT r.* FROM rooms r JOIN worlds w ON w.id = r.world_id
+       WHERE r.world_id = $1 AND (r.slug = $2 OR r.id = $2) AND w.archived_at IS NULL
+       LIMIT 1`,
+      [worldId, slugOrId],
+    );
+    if (!rows[0]) return null;
+    const room = mapRoom(rows[0] as Record<string, unknown>);
+    return roomAdmitsNonMembers(room.roomPreset) ? room : null;
   }
 
   async createWorld(
@@ -1369,6 +1608,7 @@ function mapWorld(r: Record<string, unknown>): WorldRow {
     archivedAt: r.archived_at ? new Date(String(r.archived_at)).toISOString() : null,
     policyPreset: (r.policy_preset as SpacePolicyPreset) ?? DEFAULT_SPACE_POLICY_PRESET,
     spacePolicy: toSpacePolicy(r.space_policy),
+    memberPolicy: ceilingFromRow(r.member_policy),
     orgRenderMode: isOrgRenderMode(r.org_render_mode) ? r.org_render_mode : "shared",
   };
 }
@@ -1443,6 +1683,18 @@ function normaliseColour(raw: unknown): string {
 }
 
 /** JSONB override -> SpacePolicy. Anything malformed falls back to the preset. */
+/** Owner input -> ceiling, or null to clear. Refuses anything that is not exactly four booleans. */
+function readCeiling(raw: unknown, field: string): SpacePolicy | null {
+  const parsed = parseCeiling(raw);
+  if (parsed === undefined) {
+    throw new GroveError(
+      "INVALID",
+      `${field} must be null or an object of four booleans: speak_to_agents, speak_to_humans, listen_to_agents, listen_to_humans.`,
+    );
+  }
+  return parsed;
+}
+
 function toSpacePolicy(raw: unknown): SpacePolicy | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;

@@ -14,7 +14,7 @@ import {
   type QuotaSnapshot,
   type Room,
   type SayAck,
-  type SpacePolicy,
+  type CeilingLayers,
   type SpeechChannel,
   type UndeliveredRecipient,
   capabilityWire,
@@ -108,6 +108,7 @@ export function undeliveredFor(recipientId: ActorId, decision: PolicyDecision): 
   if (decision.capability) entry.capability = capabilityWire(decision.capability);
   if (decision.source) entry.source = decision.source;
   if (decision.subject) entry.subject = decision.subject;
+  if (decision.membership) entry.membership = decision.membership;
   if (decision.reason) entry.reason = decision.reason;
   return entry;
 }
@@ -245,8 +246,13 @@ export class SpeechService {
         capability: result.emit.capability,
         source: result.emit.source,
         subject: result.emit.subject,
+        membership: result.emit.membership,
+        // The owner_reply hint sends the reader to their OWNER; that is the
+        // wrong door when a room or space ceiling refused (SPC-07).
         hint:
-          result.emit.code === "PERMISSION_DENIED" && result.emit.capability === "speakToHumans"
+          result.emit.code === "PERMISSION_DENIED" &&
+          result.emit.capability === "speakToHumans" &&
+          (result.emit.source === undefined || result.emit.source === "actor")
             ? "Use channel owner_reply to talk to your owner, or ask them to enable Talk to humans."
             : undefined,
       });
@@ -523,9 +529,11 @@ export class SpeechService {
     // The kernel treats a missing `isSpaceMember` as "not a member", so a caller
     // that forgets to populate it would silently darken a private space. Doing it
     // in buildContext means every ingress that speaks gets it for free.
-    let spacePolicy: SpacePolicy | undefined;
+    // SPC-07 / SPC-10: every ceiling layer (space + room override, member +
+    // non-member) comes from one read; the kernel picks between them.
+    let layers: CeilingLayers | undefined;
     if (room && this.campus) {
-      spacePolicy = await this.campus.spacePolicyForRoom(room.id);
+      layers = await this.campus.ceilingLayersForRoom(room.id);
       const worldId = await this.campus.worldIdForRoom(room.id);
       const members = await this.campus.memberIdsOf(worldId);
       // null = the civic core: everyone is a member of the commons.
@@ -553,7 +561,7 @@ export class SpeechService {
             allowsWhisper: room.allowsWhisper,
             sayLimitPerMin: room.sayLimitPerMin,
             capacity: room.capacity,
-            policy: spacePolicy,
+            ...(layers ?? {}),
           }
         : undefined,
       quota,
@@ -651,11 +659,29 @@ export class SpeechService {
     return (rowCount ?? 0) > 0;
   }
 
-  async transcript(roomId: string, viewer: SenderActor, cursor?: string, limit = 50) {
+  async transcript(
+    roomId: string,
+    viewer: SenderActor,
+    cursor?: string,
+    limit = 50,
+    opts: { deliveredOnly?: boolean } = {},
+  ) {
     const viewerId = viewer.kind === "human" ? viewer.human.id : viewer.agent.id;
     const params: unknown[] = [roomId, Math.min(limit, 100)];
     let sql = `SELECT s.* FROM speech s
       WHERE s.room_id = $1 AND s.channel = 'room_say'`;
+    // SPC-07: a visitor let in through an opened room reads only what actually
+    // reached them. Re-evaluating old lines against TODAY's ceiling would hand a
+    // stranger everything said while the room was still private.
+    if (opts.deliveredOnly) {
+      params.push(viewerId);
+      sql += ` AND EXISTS (SELECT 1 FROM speech_deliveries d
+                 WHERE d.speech_id = s.id AND d.recipient_id = $${params.length} AND d.status = 'delivered')`;
+    }
+    // Ceilings and membership, read once for the page rather than per line.
+    const layers = this.campus ? await this.campus.ceilingLayersForRoom(roomId) : undefined;
+    const members = layers && this.campus ? await this.campus.memberIdsOf(await this.campus.worldIdForRoom(roomId)) : null;
+    const memberOf = (humanId: string | null | undefined) => members === null || Boolean(humanId && members.has(humanId));
     if (cursor) {
       params.push(cursor);
       sql += ` AND s.id < $${params.length}`;
@@ -688,9 +714,10 @@ export class SpeechService {
       }
       const rec = await this.loadRecipient(viewerId, sender.id);
       if (!rec) continue;
+      rec.isSpaceMember = memberOf(rec.kind === "human" ? rec.id : rec.ownerHumanId);
       const room = await this.presence.getRoomById(roomId);
       const decision = authorize({
-        sender,
+        sender: { ...sender, isSpaceMember: memberOf(sender.kind === "human" ? sender.id : sender.ownerHumanId) },
         recipients: [rec],
         channel: "room_say",
         room: room
@@ -701,6 +728,7 @@ export class SpeechService {
               allowsWhisper: room.allowsWhisper,
               sayLimitPerMin: room.sayLimitPerMin,
               capacity: room.capacity,
+              ...(layers ?? {}),
             }
           : undefined,
         quota: { roomSayRemaining: 8, roomSayGapOk: true, writeRemaining: 30, roomWindowCount: 0 },
