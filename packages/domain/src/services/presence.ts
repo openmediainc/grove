@@ -361,6 +361,10 @@ export class PresenceService {
     const prev = await this.getPresence(actorId);
     await this.store.pg.query("DELETE FROM presence WHERE actor_id = $1", [actorId]);
     if (prev) {
+      // The ledger used to record arrivals and never departures, so history
+      // could not tell a body that stayed from one that walked out. Replay needs
+      // the leaving; the chronicle gates it exactly like the joining.
+      await this.identity.audit("actor_left_room", actorId, { room: prev.roomId, reason: "left" });
       await this.store.redis.publish(
         `pubsub:room:${prev.roomId}`,
         JSON.stringify({ type: "actor_leave", actor_id: actorId, room_id: prev.roomId }),
@@ -664,6 +668,15 @@ export class PresenceService {
        WHERE last_seen_at < now() - interval '10 minutes'
        RETURNING actor_id, room_id`,
     );
+    if (rows.length) {
+      // One statement for the whole sweep: see leave() for why departures are kept.
+      await this.store.pg.query(
+        `INSERT INTO world_events (type, actor_id, payload)
+         SELECT 'actor_left_room', t.actor_id, jsonb_build_object('room', t.room_id, 'reason', 'evicted')
+         FROM unnest($1::text[], $2::text[]) AS t(actor_id, room_id)`,
+        [rows.map((r) => r.actor_id), rows.map((r) => r.room_id)],
+      );
+    }
     for (const row of rows) {
       await this.store.redis.publish(
         `pubsub:room:${row.room_id}`,

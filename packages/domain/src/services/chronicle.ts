@@ -197,6 +197,30 @@ export interface ChronicleQuery {
   /** Keyset cursor: the `nextCursor` of the previous page. */
   cursor?: string | null;
   limit?: number | null;
+  /**
+   * `desc` (default) is the chronicle: newest first, cursor walks back. `asc`
+   * is replay: oldest first, cursor walks forwards. Same visibility either way —
+   * the direction is the only thing the two page queries do differently.
+   */
+  order?: "asc" | "desc" | null;
+}
+
+/**
+ * Knobs only domain callers may turn. Kept out of ChronicleQuery on purpose:
+ * the route builds that object from a query string, so anything in it is
+ * something a stranger can set.
+ */
+export interface ChronicleReadOptions {
+  /** Raise the page ceiling (replay reads 1,000 at a time). Hard-capped at 2,000. */
+  maxLimit?: number;
+  /** Skip the totals query, which a paging replay does not need per page. */
+  withTotals?: boolean;
+}
+
+export interface ChronicleDensity {
+  bucketSeconds: number;
+  /** Bucket start (ISO) -> count, only buckets that hold something. Ordered by time. */
+  buckets: Array<{ at: string; n: number; byKind: Record<string, number> }>;
 }
 
 export interface ChronicleActor {
@@ -240,6 +264,11 @@ const KIND_OF: Record<string, ChronicleKind> = {
   actor_registered: "arrival",
   actor_claimed: "claim",
   actor_joined_room: "movement",
+  // The other half of a movement, written by PresenceService.leave() and
+  // evictStale(). Before it existed the ledger said where a body went and never
+  // that it left, so nothing reading history (the replay above all) could tell a
+  // body that stood in the Plaza all night from one that walked out at 02:00.
+  actor_left_room: "movement",
   // Rule 8. `movement`-grade: a coming and a going, like walking into a room —
   // the kind a reader skims past in a run rather than stops on.
   "stage.started": "movement",
@@ -394,7 +423,9 @@ visible AS (
       -- is permitted to do. All three are already on the public map or the
       -- public agent page.
       WHEN type IN ('actor_registered', 'actor_claimed', 'permission_changed') THEN TRUE
-      WHEN type = 'actor_joined_room' THEN world_id IN (SELECT id FROM visible_worlds)
+      -- Leaving takes joining's rule character for character: the live map
+      -- shows a body vanish to exactly the people it showed it arrive to.
+      WHEN type IN ('actor_joined_room', 'actor_left_room') THEN world_id IN (SELECT id FROM visible_worlds)
       -- Rule 8. Identical to the line above, deliberately: /api/v1/civic and
       -- /api/v1/civic/stage already serve this to a signed-out visitor for
       -- every world the same gate lets them reach.
@@ -435,7 +466,7 @@ visible AS (
     END
 )`;
 
-const PAGE_SQL = `${VISIBLE_CTE}
+const SELECT_COLUMNS = `
 SELECT id, type, payload, created_at, world_id, room_id, room_name, body_allowed,
        -- actor_id on a mod.* row is the MODERATOR. A suspended owner may read
        -- that they were suspended; they may not read who did it. Blanked here
@@ -444,11 +475,50 @@ SELECT id, type, payload, created_at, world_id, room_id, room_name, body_allowed
        CASE WHEN type LIKE 'mod.%' AND NOT $2::bool THEN 'unknown' ELSE actor_kind END AS actor_kind,
        CASE WHEN type LIKE 'mod.%' AND NOT $2::bool THEN NULL      ELSE actor_name END AS actor_name,
        CASE WHEN type LIKE 'mod.%' AND NOT $2::bool THEN NULL      ELSE actor_slug END AS actor_slug,
-       CASE WHEN body_allowed THEN speech_body ELSE NULL END AS body
+       CASE WHEN body_allowed THEN speech_body ELSE NULL END AS body`;
+
+const PAGE_SQL = `${VISIBLE_CTE}${SELECT_COLUMNS}
 FROM visible
 WHERE ($9::bigint IS NULL OR id < $9::bigint)
 ORDER BY id DESC
 LIMIT $10::int`;
+
+/** The same page walked forwards, for a reader that plays history in order. */
+const PAGE_ASC_SQL = `${VISIBLE_CTE}${SELECT_COLUMNS}
+FROM visible
+WHERE ($9::bigint IS NULL OR id > $9::bigint)
+ORDER BY id ASC
+LIMIT $10::int`;
+
+/**
+ * Where every visible body last moved, as of the window. One row per actor:
+ * its latest join or leave. Nothing new is decided here — it is the same
+ * `visible` set, reduced — so a keyframe can never hold a body the page query
+ * would have refused. $6 is always the two movement types, which is what lets
+ * the (type, created_at) index serve it.
+ */
+const LAST_MOVEMENT_SQL = `${VISIBLE_CTE}
+SELECT * FROM (
+  SELECT DISTINCT ON (raw_actor_id) * FROM (${SELECT_COLUMNS}, actor_id AS raw_actor_id
+    FROM visible WHERE actor_id IS NOT NULL) moves
+  ORDER BY raw_actor_id, id DESC
+) latest
+-- Newest first, so a cap drops the bodies that moved longest ago.
+ORDER BY id DESC
+LIMIT $9::int`;
+
+/**
+ * Activity density: visible events per time bucket. $9 is the bucket width in
+ * seconds. A work span is counted where it STARTED, not where its row was
+ * written, because a span's row lands only when the stretch closes.
+ */
+const DENSITY_SQL = `${VISIBLE_CTE}
+SELECT floor(extract(epoch FROM COALESCE(
+         CASE WHEN type = 'agent_phase' THEN (payload->>'started_at')::timestamptz END,
+         created_at)) / $9::int)::bigint AS bucket,
+       type, count(*)::int AS n
+FROM visible
+GROUP BY 1, 2`;
 
 const TOTALS_SQL = `${VISIBLE_CTE}
 SELECT type, count(*)::int AS n FROM visible GROUP BY type`;
@@ -469,11 +539,17 @@ function parseCursor(value: string | null | undefined): string | null {
 export class ChronicleService {
   constructor(private store: GroveStore) {}
 
-  async read(viewer: ChronicleViewer, query: ChronicleQuery = {}): Promise<ChroniclePage> {
+  async read(
+    viewer: ChronicleViewer,
+    query: ChronicleQuery = {},
+    options: ChronicleReadOptions = {},
+  ): Promise<ChroniclePage> {
     const since = parseTime(query.since, "since");
     const until = parseTime(query.until, "until");
     const cursor = parseCursor(query.cursor);
-    const limit = Math.max(1, Math.min(MAX_LIMIT, Math.trunc(Number(query.limit ?? DEFAULT_LIMIT)) || DEFAULT_LIMIT));
+    const ceiling = Math.max(MAX_LIMIT, Math.min(2000, Math.trunc(options.maxLimit ?? MAX_LIMIT)));
+    const limit = Math.max(1, Math.min(ceiling, Math.trunc(Number(query.limit ?? DEFAULT_LIMIT)) || DEFAULT_LIMIT));
+    const ascending = query.order === "asc";
 
     // A `kinds` filter is sugar over `types`: the caller thinks in buckets, the
     // ledger stores types. Resolving it here means the browser never has to
@@ -509,8 +585,9 @@ export class ChronicleService {
       WORLD_ID,
     ];
 
-    const { rows } = await this.store.pg.query(PAGE_SQL, [...base, cursor, limit]);
-    const { rows: totalRows } = await this.store.pg.query(TOTALS_SQL, base);
+    const { rows } = await this.store.pg.query(ascending ? PAGE_ASC_SQL : PAGE_SQL, [...base, cursor, limit]);
+    const { rows: totalRows } =
+      options.withTotals === false ? { rows: [] as Array<Record<string, unknown>> } : await this.store.pg.query(TOTALS_SQL, base);
 
     const byType: Record<string, number> = {};
     const byKind: Record<string, number> = {};
@@ -531,6 +608,73 @@ export class ChronicleService {
       nextCursor: rows.length === limit && entries.length ? (entries[entries.length - 1]!.id ?? null) : null,
       window: { since, until },
       totals: { events, byKind, byType },
+    };
+  }
+
+  /**
+   * The last visible movement of every body in a window — the raw material of a
+   * replay keyframe. Runs the page query's own `visible` CTE, so the gate is the
+   * chronicle's and cannot drift from it.
+   */
+  async lastMovements(
+    viewer: ChronicleViewer,
+    query: { since: string | null; until: string | null; worldId?: string | null; limit?: number },
+  ): Promise<ChronicleEntry[]> {
+    const since = parseTime(query.since, "since");
+    const until = parseTime(query.until, "until");
+    const limit = Math.max(1, Math.min(5000, Math.trunc(query.limit ?? 2000)));
+    const { rows } = await this.store.pg.query(LAST_MOVEMENT_SQL, [
+      viewer.humanId,
+      viewer.isOperator,
+      since,
+      until,
+      null,
+      ["actor_joined_room", "actor_left_room"],
+      query.worldId ?? null,
+      WORLD_ID,
+      limit,
+    ]);
+    const names = await this.resolveNames(rows);
+    return rows.map((r) => this.toEntry(r as Record<string, unknown>, names));
+  }
+
+  /** Visible events per bucket over a window. Same gate as every other read here. */
+  async density(
+    viewer: ChronicleViewer,
+    query: { since: string; until: string; worldId?: string | null; bucketSeconds: number },
+  ): Promise<ChronicleDensity> {
+    const since = parseTime(query.since, "since");
+    const until = parseTime(query.until, "until");
+    const bucketSeconds = Math.max(1, Math.trunc(query.bucketSeconds));
+    const { rows } = await this.store.pg.query(DENSITY_SQL, [
+      viewer.humanId,
+      viewer.isOperator,
+      since,
+      until,
+      null,
+      null,
+      query.worldId ?? null,
+      WORLD_ID,
+      bucketSeconds,
+    ]);
+    const lo = since ? Math.floor(Date.parse(since) / 1000 / bucketSeconds) : null;
+    const byBucket = new Map<number, { n: number; byKind: Record<string, number> }>();
+    for (const r of rows) {
+      // A span that began before the window is counted in the window's first bucket.
+      let b = Number(r.bucket);
+      if (lo !== null && b < lo) b = lo;
+      const slot = byBucket.get(b) ?? { n: 0, byKind: {} };
+      const n = Number(r.n);
+      const kind = kindOf(String(r.type));
+      slot.n += n;
+      slot.byKind[kind] = (slot.byKind[kind] ?? 0) + n;
+      byBucket.set(b, slot);
+    }
+    return {
+      bucketSeconds,
+      buckets: [...byBucket.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([b, v]) => ({ at: new Date(b * bucketSeconds * 1000).toISOString(), n: v.n, byKind: v.byKind })),
     };
   }
 
@@ -658,6 +802,8 @@ function summaryFor(
     }
     case "actor_joined_room":
       return `${who(actor)} walked into ${room}.`;
+    case "actor_left_room":
+      return `${who(actor)} left ${room}.`;
     case "agent_phase": {
       const verb = typeof payload.verb === "string" ? payload.verb : "";
       const span = humanDuration(Number(payload.seconds ?? 0));
@@ -773,6 +919,10 @@ function detailFor(
       return { ...pick("slug"), owner: named(payload.owner, names) };
     case "actor_joined_room":
       return pick("seat");
+    case "actor_left_room":
+      // Why the body left: `left` (it walked out) or `evicted` (it went quiet
+      // past the eviction window). Both are what the live map already showed.
+      return pick("reason");
     case "agent_phase":
       // `verb`, `seconds` and `detail` are already in the sentence; they are
       // published anyway because a reader that wants to total a day's time by
