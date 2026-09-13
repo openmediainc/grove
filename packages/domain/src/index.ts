@@ -48,7 +48,18 @@ export {
   type ChronicleQuery,
   type ChronicleEntry,
   type ChroniclePage,
+  type ChronicleDensity,
+  type ChronicleReadOptions,
 } from "./services/chronicle.js";
+export {
+  ReplayService,
+  REPLAY_MAX_WINDOW_MS,
+  REPLAY_KEYFRAME_LOOKBACK_MS,
+  densityBucketSeconds,
+  type ReplayQuery,
+  type ReplayPage,
+  type ReplayKeyframeBody,
+} from "./services/replay.js";
 export { WebhookService, JobService } from "./services/webhooks.js";
 export { HostedBrainService, type ResponsesClient, type XaiClientFactory } from "./services/brains.js";
 export { mapAgent, mapHuman, mapRoom, mapPresence } from "./mappers.js";
@@ -98,6 +109,7 @@ import { FlagService } from "./services/flags.js";
 import { QuotaService, RedisRateLimiter } from "./services/quota.js";
 import { CampusService } from "./services/campus.js";
 import { ChronicleService } from "./services/chronicle.js";
+import { ReplayService } from "./services/replay.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
 import { HostedBrainService } from "./services/brains.js";
 import { createMailer } from "./mailer.js";
@@ -118,6 +130,7 @@ export class GroveApp {
   moderation: ModerationService;
   campus: CampusService;
   chronicle: ChronicleService;
+  replay: ReplayService;
   webhooks: WebhookService;
   jobs: JobService;
   brains: HostedBrainService;
@@ -132,6 +145,7 @@ export class GroveApp {
     this.toolCalls = new ToolCallService(this.store, this.quota, this.presence);
     this.campus = new CampusService(this.store);
     this.chronicle = new ChronicleService(this.store);
+    this.replay = new ReplayService(this.chronicle);
     this.webhooks = new WebhookService(this.store);
     this.jobs = new JobService(this.store);
     this.mailbox = new MailboxService(this.store, this.presence, this.webhooks);

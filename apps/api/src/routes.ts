@@ -833,6 +833,34 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     });
   });
 
+  /**
+   * Replay: a window of the ledger, oldest first, for the map to play back.
+   *
+   * The world is chosen exactly the way the live minimap chooses it —
+   * assertWorldAccess() on the request's world cookie/header — so the replay of
+   * a campus is refused to precisely the people its live map is refused to.
+   * Inside that world every row is filtered by the chronicle's SQL (see
+   * ReplayService for why that gate and not a second one). Unauthenticated like
+   * the minimap and the chronicle, and for the same reason: the landing page is
+   * public, and a signed-out reader gets the chronicle's civic skeleton only.
+   */
+  app.get("/api/v1/replay", async (req, reply) => {
+    const worldId = await assertWorldAccess(req, grove);
+    const viewer = await proofViewer(req, grove);
+    const q = req.query as { since?: string; until?: string; cursor?: string; limit?: string };
+    const page = await grove.replay.window(viewer, {
+      since: q.since ?? "",
+      until: q.until ?? "",
+      worldId,
+      cursor: q.cursor ?? null,
+      limit: q.limit ? Number(q.limit) : null,
+    });
+    return sendOk(reply, {
+      ...page,
+      viewer: { signedIn: viewer.humanId !== null, operator: viewer.isOperator },
+    });
+  });
+
   app.get("/api/v1/inbox", async (req, reply) => {
     const human = await requireHuman(req, grove);
     const inbox = await grove.identity.inbox(human.id);

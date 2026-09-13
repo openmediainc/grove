@@ -108,6 +108,7 @@ export const REGISTER_IPS = {
   sayQuota: "10.99.6.2",
   eventProofs: "10.99.7.1",
   toolCalls: "10.99.8.1",
+  replay: \"10.99.9.1\",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */
