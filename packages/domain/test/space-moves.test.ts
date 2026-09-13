@@ -78,7 +78,7 @@ describe.skipIf(!hasDb)("space transfer & relocate", () => {
     const heir = await newHuman("mv-heir");
     const outsider = await newHuman("mv-out");
     const w = await space(owner);
-    await grove.branding.setSpaceBranding(owner, w.id, { accent: "#e8b04a" });
+    await grove.branding.setSpaceBranding(owner, w.id, { accent: "violet" });
 
     // Only a member can be offered the space; the slug must be typed.
     expect(await code(grove.spaceMoves.offerTransfer(owner, w.id, { toHumanId: heir.id, confirm: w.slug }))).toBe("INVALID");
@@ -113,7 +113,7 @@ describe.skipIf(!hasDb)("space transfer & relocate", () => {
     expect(after.ownerHumanId).toBe(heir.id);
     expect(after.plotIndex).toBe(w.plotIndex);
     expect(await grove.campus.isMember(w.id, owner.id)).toBe(true);
-    expect((await grove.branding.ofWorld(w.id))?.accent).toBe("#e8b04a");
+    expect((await grove.branding.ofWorld(w.id))?.accent).toBe("#c4b5fd");
     // The old holder is now just a member: no more Manage acts.
     expect(await code(grove.spaceMoves.relocationPlan(owner, w.id))).toBe("NOT_FOUND");
 
@@ -141,7 +141,7 @@ describe.skipIf(!hasDb)("space transfer & relocate", () => {
     expect((await grove.spaceMoves.transferState(owner, w.id)).last?.status).toBe("declined");
 
     const stale = await grove.spaceMoves.offerTransfer(owner, w.id, { toHumanId: heir.id, confirm: w.slug });
-    await pg.query(`UPDATE space_transfers SET created_at = now() - interval '8 days', expires_at = now() - interval '1 day' WHERE id = $1`, [stale.id]);
+    await pg.query(`UPDATE space_transfers SET expires_at = now() - interval '1 second' WHERE id = $1`, [stale.id]);
     expect((await grove.spaceMoves.incoming(heir.id)).map((t) => t.id)).not.toContain(stale.id);
     expect(await code(grove.spaceMoves.answer(heir, stale.id, "accept"))).toBe("CONFLICT");
     const state = await grove.spaceMoves.transferState(owner, w.id);
