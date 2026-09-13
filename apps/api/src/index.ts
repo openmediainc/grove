@@ -68,7 +68,7 @@ export async function getApp() {
       return { ok: true };
     });
 
-    if (!process.env.VERCEL) {
+    if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
       setInterval(() => {
         void grove.presence.evictStale();
         void grove.toolCalls.sweep().catch(() => {});
@@ -91,7 +91,10 @@ export async function getApp() {
 const app = await getApp();
 export default app;
 
-if (!process.env.VERCEL) {
+const serverless = Boolean(
+  process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME,
+);
+if (!serverless) {
   const config = loadConfig();
   await app.listen({ port: config.apiPort, host: config.listenHost });
   console.log(`[grove] api http://${config.listenHost}:${config.apiPort}`);

@@ -44,7 +44,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
   const nodeEnv = env.NODE_ENV ?? "development";
   return {
     databaseUrl: env.DATABASE_URL ?? "postgres://grove:grove@localhost:5432/grove",
-    redisUrl: env.REDIS_URL ?? (env.VERCEL ? "pg" : "redis://localhost:6379"),
+    redisUrl:
+      env.REDIS_URL ||
+      (env.VERCEL || env.DATABASE_URL?.includes("supabase") ? "pg" : "redis://localhost:6379"),
     publicUrl: env.GROVE_PUBLIC_URL ?? "http://localhost:3000",
     webOrigin: env.GROVE_WEB_ORIGIN ?? "http://localhost:3000",
     magicLinkStdout:
