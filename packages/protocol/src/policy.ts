@@ -106,6 +106,125 @@ export function intersectSpacePolicy(actor: PermissionPolicy, space: SpacePolicy
   };
 }
 
+/**
+ * Field-wise OR of two ceilings. Used for exactly one thing: a member's ceiling
+ * is never below the non-member ceiling of the same room (see `resolveCeiling`).
+ * It never touches an ACTOR policy, so it cannot widen what anyone granted.
+ */
+export function unionSpacePolicy(a: SpacePolicy, b: SpacePolicy): SpacePolicy {
+  return {
+    speakToAgents: a.speakToAgents || b.speakToAgents,
+    speakToHumans: a.speakToHumans || b.speakToHumans,
+    listenToAgents: a.listenToAgents || b.listenToAgents,
+    listenToHumans: a.listenToHumans || b.listenToHumans,
+  };
+}
+
+/**
+ * SPC-07 / SPC-10 — the four ceiling layers one room can carry, already resolved
+ * to `SpacePolicy` objects by the caller. Every layer is optional and absence
+ * means "inherit" (for a room layer) or "narrows nothing" (for a space layer),
+ * so a context that carries none of them is exactly today's kernel.
+ */
+export interface CeilingLayers {
+  /** The space's NON-member ceiling (from `worlds.policy_preset` / `space_policy`). */
+  policy?: SpacePolicy;
+  /** SPC-10: the space's MEMBER ceiling (`worlds.member_policy`). Absent = full. */
+  memberPolicy?: SpacePolicy;
+  /** SPC-07: this room's NON-member override (`rooms.room_preset`). Absent = inherit. */
+  roomPolicy?: SpacePolicy;
+  /** SPC-10 at room grain: this room's MEMBER override (`rooms.member_policy`). Absent = inherit. */
+  roomMemberPolicy?: SpacePolicy;
+}
+
+/** Which layer set a ceiling. `null` = no layer narrows this actor here. */
+export type CeilingScope = "room" | "space";
+/** Which of the two ceilings applied to the actor. */
+export type CeilingMembership = "member" | "non_member";
+
+export interface ResolvedCeiling {
+  ceiling: SpacePolicy;
+  scope: CeilingScope | null;
+  membership: CeilingMembership;
+}
+
+/**
+ * THE precedence rule for room vs space vs member vs non-member. One function,
+ * exported, so the kernel and every UI preview read the same answer.
+ *
+ *     nonMember(room) = room.roomPolicy ?? space.policy ?? OPEN
+ *     member(room)    = (room.roomMemberPolicy ?? space.memberPolicy ?? OPEN) OR nonMember(room)
+ *     effective       = actor AND (isMember ? member(room) : nonMember(room))
+ *
+ * 1. A room override REPLACES the space's value for that audience; it does not
+ *    intersect with it. So a room may be more open than its space (a public
+ *    lobby on a private plot) or more closed (a members-only study in a public
+ *    space). Replacement is what an owner means by "this room is different".
+ * 2. The two audiences resolve independently — a room that overrides only the
+ *    non-member ceiling still inherits the space's member ceiling.
+ * 3. A member is never below a non-member in the same room: joining a space can
+ *    only ADD. Without the OR, a public lobby in a space whose members are
+ *    listen-only would let strangers speak where members could not.
+ * 4. Nothing here touches the actor's own matrix: `effective` is still an AND,
+ *    so no layer can grant a capability the actor lacks.
+ */
+export function resolveCeiling(layers: CeilingLayers | undefined, isMember: boolean): ResolvedCeiling {
+  const nonMember: { ceiling: SpacePolicy; scope: CeilingScope | null } = layers?.roomPolicy
+    ? { ceiling: layers.roomPolicy, scope: "room" }
+    : layers?.policy
+      ? { ceiling: layers.policy, scope: "space" }
+      : { ceiling: OPEN_SPACE_POLICY, scope: null };
+  if (!isMember) return { ...nonMember, membership: "non_member" };
+  const own: { ceiling: SpacePolicy; scope: CeilingScope } | null = layers?.roomMemberPolicy
+    ? { ceiling: layers.roomMemberPolicy, scope: "room" }
+    : layers?.memberPolicy
+      ? { ceiling: layers.memberPolicy, scope: "space" }
+      : null;
+  if (!own) return { ceiling: OPEN_SPACE_POLICY, scope: null, membership: "member" };
+  return {
+    ceiling: unionSpacePolicy(own.ceiling, nonMember.ceiling),
+    scope: own.scope,
+    membership: "member",
+  };
+}
+
+/**
+ * Does this room's own override let a NON-member through the space's door?
+ *
+ * The space's preset never admits a non-member to a non-core space (that gate is
+ * membership, `assertWorldAccess`). A room override that grants any capability
+ * is the owner deliberately opening THAT room — a lobby — and only that room.
+ * `private` (or no override) admits nobody new.
+ */
+export function roomAdmitsNonMembers(roomPreset: SpacePolicyPreset | null | undefined): boolean {
+  if (!roomPreset) return false;
+  const p = SPACE_POLICY_PRESETS[roomPreset];
+  return Boolean(p && (p.listenToAgents || p.listenToHumans || p.speakToAgents || p.speakToHumans));
+}
+
+/**
+ * Parse an owner-supplied ceiling (wire or camel spelling) or `null` to clear
+ * it. Returns `undefined` for anything that is not exactly four booleans, so a
+ * route can refuse it rather than store half a ceiling.
+ */
+export function parseCeiling(raw: unknown): SpacePolicy | null | undefined {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const pick = (camel: string, snake: string) => (typeof o[camel] === "boolean" ? o[camel] : o[snake]);
+  const sa = pick("speakToAgents", "speak_to_agents");
+  const sh = pick("speakToHumans", "speak_to_humans");
+  const la = pick("listenToAgents", "listen_to_agents");
+  const lh = pick("listenToHumans", "listen_to_humans");
+  if (![sa, sh, la, lh].every((v) => typeof v === "boolean")) return undefined;
+  return {
+    speakToAgents: sa as boolean,
+    speakToHumans: sh as boolean,
+    listenToAgents: la as boolean,
+    listenToHumans: lh as boolean,
+  };
+}
+
 export interface PrivacyPolicy {
   addressableByAgents: boolean;
   addressableByHumans: boolean;
@@ -158,7 +277,18 @@ export interface PolicyDecision {
    * `PermissionPolicy`, and borrowing an actor-shaped capability name for them
    * would recreate the incoherence this field exists to remove.
    */
-  source?: "actor" | "space";
+  source?: "actor" | "space" | "room";
+  /**
+   * SPC-07 / SPC-10: WHICH ceiling refused, when a ceiling did. Set exactly
+   * when `source` is `"space"` or `"room"`: `"non_member"` means the refusal is
+   * the one strangers get (join, or ask the owner to open this room);
+   * `"member"` means even members are held to it here (only the owner can lift
+   * it). Absent on `source: "actor"` and on every other code.
+   *
+   * `source: "room"` means a room override set the ceiling; `"space"` means the
+   * room inherited it from its space. See `resolveCeiling`.
+   */
+  membership?: CeilingMembership;
   /**
    * §5.5: WHICH actor. `source: "actor"` says a person's own setting refused,
    * but not whose — and `capability` cannot stand in for it, because a denial
@@ -224,6 +354,12 @@ export interface PolicyContext {
      * caller. Absent ⇒ the space narrows nothing (today's behaviour).
      */
     policy?: SpacePolicy;
+    /** SPC-10: the space's member ceiling. Absent ⇒ members sit at the full ceiling. */
+    memberPolicy?: SpacePolicy;
+    /** SPC-07: this room's non-member override. Absent ⇒ inherit `policy`. */
+    roomPolicy?: SpacePolicy;
+    /** SPC-10: this room's member override. Absent ⇒ inherit `memberPolicy`. */
+    roomMemberPolicy?: SpacePolicy;
   };
   quota: QuotaSnapshot;
   isOwnerChannel: boolean;

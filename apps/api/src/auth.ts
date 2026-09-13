@@ -190,3 +190,33 @@ export async function assertWorldAccess(
   }
   return worldId;
 }
+
+/**
+ * SPC-07 — `assertWorldAccess`, widened by exactly ONE room.
+ *
+ * A space owner may open a single room to non-members (a public lobby on a
+ * private plot). A non-member asking for THAT room, in the world they named, is
+ * let through as a `visitor`; every other room of the space answers with the
+ * very same refusal a non-member always got, whether the room is closed or does
+ * not exist — so the widening leaks nothing about the rooms behind the door.
+ *
+ * Only reads and the room's own enter call this. World-level routes (the
+ * minimap, /world, the civic board) keep `assertWorldAccess` untouched: a
+ * visitor sees the lobby, never the space.
+ */
+export async function assertRoomAccess(
+  req: FastifyRequest,
+  grove: GroveApp,
+  actor: Actor | null | undefined,
+  slug: string,
+): Promise<{ worldId: string; visitor: boolean }> {
+  try {
+    return { worldId: await assertWorldAccess(req, grove, actor), visitor: false };
+  } catch (err) {
+    if (!(err instanceof GroveError) || err.code !== "ROOM_FORBIDDEN") throw err;
+    const worldId = requestedWorldId(req).requested;
+    const room = await grove.campus.visitableRoom(worldId, slug);
+    if (!room) throw err;
+    return { worldId, visitor: true };
+  }
+}

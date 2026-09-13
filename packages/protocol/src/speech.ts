@@ -70,6 +70,8 @@ export interface UndeliveredRecipient {
   source?: PolicyDecision["source"];
   /** Whose setting it was, when an actor's was: the sender's, or the recipient's. */
   subject?: PolicyDecision["subject"];
+  /** SPC-07/10: which ceiling, when a room or space refused: members' or non-members'. */
+  membership?: PolicyDecision["membership"];
   /** The kernel's sentence. Names a setting, never a person. */
   reason?: string;
 }

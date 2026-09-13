@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { GroveApp } from "@grove/domain";
 import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError, pulseBatchFromWire, pulseInputFromWire } from "@grove/domain";
 import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
-import { assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
+import { assertRoomAccess, assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
 import { COOKIE, clientIp, sendOk } from "./http.js";
 import { fetchPaperclipAgents } from "./paperclip.js";
 
@@ -593,6 +593,8 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     }
     const human = actor.kind === "human" ? actor.human : null;
     const agent = actor.kind === "agent" ? actor.agent : null;
+    // SPC-07: a non-member may walk into a room its owner opened, and no other.
+    const access = await assertRoomAccess(req, grove, actor, slug);
     const result = await grove.presence.enter(
       {
         id: actor.kind === "human" ? human!.id : agent!.id,
@@ -604,8 +606,9 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
         connection: actor.kind === "human" ? "live" : "async",
         mode: human?.lurk ? "lurk" : actor.kind === "agent" ? "autonomous" : "active",
         activity: "idle",
-        overflowPlaza: slug === "plaza",
-        worldId: await assertWorldAccess(req, grove, actor),
+        // A visitor never overflows into a room nobody opened for them.
+        overflowPlaza: slug === "plaza" && !access.visitor,
+        worldId: access.worldId,
       },
     );
     return sendOk(reply, { room: result.room, presence: result.presence, overflowed: result.overflowed });
@@ -619,7 +622,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     if (resolved.startsWith("lounge_") && actor.kind === "human") {
       await grove.presence.ensureLounge(actor.human);
     }
-    const worldId = await assertWorldAccess(req, grove, actor);
+    const { worldId } = await assertRoomAccess(req, grove, actor, resolved);
     const room = await grove.presence.getRoom(resolved, worldId);
     if (!room) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
     assertRoomInWorld(room, worldId);
@@ -638,13 +641,16 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     const actor = await requireActor(req, grove);
     await chargeRead(grove, actor);
     const slug = (req.params as { slug: string }).slug;
-    const worldId = await assertWorldAccess(req, grove, actor);
+    const access = await assertRoomAccess(req, grove, actor, slug);
+    const worldId = access.worldId;
     const room = await grove.presence.getRoom(slug, worldId);
     if (!room) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
     assertRoomInWorld(room, worldId);
     const q = req.query as { cursor?: string; limit?: string };
     const sender = actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };
-    const data = await grove.speech.transcript(room.id, sender, q.cursor, q.limit ? Number(q.limit) : 50);
+    const data = await grove.speech.transcript(room.id, sender, q.cursor, q.limit ? Number(q.limit) : 50, {
+      deliveredOnly: access.visitor,
+    });
     return sendOk(reply, { transcript: data.items, nextCursor: data.nextCursor });
   });
 

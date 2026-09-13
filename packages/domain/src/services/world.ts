@@ -8,6 +8,7 @@ import type { IdentityService } from "./identity.js";
 import type { FlagService } from "./flags.js";
 import type { MailboxService } from "./mailbox.js";
 import type { ToolCallService } from "./tool-calls.js";
+import { OPEN_ROOMS_SQL, mapOpenRooms } from "./campus.js";
 import { WORLD_ID, WORLD_PUBLIC_NAME } from "@grove/protocol";
 
 export class WorldService {
@@ -293,7 +294,10 @@ export class WorldService {
                           'id', o.id, 'slug', o.slug, 'name', o.name, 'colour', o.colour)
                           ORDER BY wo.created_at, o.id)
                         FROM world_orgs wo JOIN orgs o ON o.id = wo.org_id
-                        WHERE wo.world_id = w.id), '[]'::json) AS orgs
+                        WHERE wo.world_id = w.id), '[]'::json) AS orgs,
+              -- SPC-07: rooms opened to non-members. Shown even on a private
+              -- plot: a public lobby shows ONLY itself, never the space around it.
+              ${OPEN_ROOMS_SQL} AS open_rooms
        FROM worlds w LEFT JOIN humans h ON h.id = w.owner_human_id
        WHERE w.plot_index IS NOT NULL
        ORDER BY w.plot_index`,
@@ -312,6 +316,7 @@ export class WorldService {
         // Which orgs live on a plot is part of what is behind a private door,
         // so it redacts with the name and the owner rather than separately.
         orgs: open ? ((r.orgs as OrgBadge[] | null) ?? []) : [],
+        openRooms: mapOpenRooms(r.open_rooms),
       };
     });
 

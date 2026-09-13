@@ -5,6 +5,7 @@ import {
   type Human,
   type Presence,
   type Room,
+  type SpacePolicy,
   toCamel,
 } from "@grove/protocol";
 
@@ -75,6 +76,38 @@ export function mapRoom(row: Record<string, unknown>): Room {
     sayLimitPerMin: c.sayLimitPerMin == null ? null : Number(c.sayLimitPerMin),
     ownerHumanId: (c.ownerHumanId as string | null) ?? null,
     worldId: String(c.worldId ?? "aetheria-prime"),
+    // SPC-07 / SPC-10. Read from the RAW row: toCamel would rename the JSONB's
+    // own keys, and member_policy is stored in wire spelling.
+    roomPreset: isPreset(row.room_preset) ? row.room_preset : null,
+    memberPolicy: ceilingFromRow(row.member_policy),
+  };
+}
+
+function isPreset(v: unknown): v is "private" | "public_view" | "public_write" {
+  return v === "private" || v === "public_view" || v === "public_write";
+}
+
+/** Four wire-spelled booleans from a JSONB column, or null. Never half a ceiling. */
+export function ceilingFromRow(raw: unknown): SpacePolicy | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const keys = ["speak_to_agents", "speak_to_humans", "listen_to_agents", "listen_to_humans"] as const;
+  if (!keys.every((k) => typeof o[k] === "boolean")) return null;
+  return {
+    speakToAgents: o.speak_to_agents as boolean,
+    speakToHumans: o.speak_to_humans as boolean,
+    listenToAgents: o.listen_to_agents as boolean,
+    listenToHumans: o.listen_to_humans as boolean,
+  };
+}
+
+/** The inverse of ceilingFromRow, for writing. */
+export function ceilingToRow(p: SpacePolicy): Record<string, boolean> {
+  return {
+    speak_to_agents: p.speakToAgents,
+    speak_to_humans: p.speakToHumans,
+    listen_to_agents: p.listenToAgents,
+    listen_to_humans: p.listenToHumans,
   };
 }
 
