@@ -11,7 +11,7 @@ import {
   TEST_DB_SUFFIX,
   warnIfNotTestDatabase,
 } from "@grove/domain/test-support";
-import { buildApp } from "../src/app.js";
+import { buildApp } from "../src/create-app.js";
 
 // These tests write real rows. They must never touch a live campus, so the
 // suite refuses to run unless DATABASE_URL names a database ending in "_test".

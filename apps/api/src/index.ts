@@ -1,5 +1,6 @@
+import "fastify";
 import { GroveApp, createPool, createBus, loadConfig, migrate, pendingMigrations } from "@grove/domain";
-import { buildApp } from "./app.js";
+import { buildApp } from "./create-app.js";
 import { maybeTick, runTick } from "./tick.js";
 
 async function prepareSchema(databaseUrl: string, migrateOnBoot: boolean): Promise<void> {

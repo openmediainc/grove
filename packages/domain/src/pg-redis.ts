@@ -95,7 +95,7 @@ export class PgRedis extends EventEmitter {
        RETURNING value`,
       [key],
     );
-    return Number(rows[0].value);
+    return Number(rows[0]?.value ?? "1");
   }
 
   async expire(key: string, seconds: number): Promise<number> {

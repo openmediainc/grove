@@ -31,7 +31,7 @@ import {
   REGISTER_IPS,
   warnIfNotTestDatabase,
 } from "@grove/domain/test-support";
-import { buildApp } from "../src/app.js";
+import { buildApp } from "../src/create-app.js";
 
 /** Own register bucket: the limiter is 3/IP/hour and vitest runs files in parallel. */
 const REGISTER_IP = REGISTER_IPS.routesWiring;

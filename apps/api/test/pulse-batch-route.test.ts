@@ -18,7 +18,7 @@ import {
   REGISTER_IPS,
   warnIfNotTestDatabase,
 } from "@grove/domain/test-support";
-import { buildApp } from "../src/app.js";
+import { buildApp } from "../src/create-app.js";
 
 const REGISTER_IP = REGISTER_IPS.pulseBatchRoute;
 const hasDb = hasTestDatabase();

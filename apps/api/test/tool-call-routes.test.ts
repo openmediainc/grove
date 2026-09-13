@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import Redis from "ioredis";
 import { GroveApp, createPool, loadConfig, migrate } from "@grove/domain";
 import { assertTestDatabase, createFixtures, hasTestDatabase, warnIfNotTestDatabase } from "@grove/domain/test-support";
-import { buildApp } from "../src/app.js";
+import { buildApp } from "../src/create-app.js";
 
 const hasDb = hasTestDatabase();
 warnIfNotTestDatabase("tool-call routes suite");

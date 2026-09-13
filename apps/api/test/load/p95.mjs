@@ -8,7 +8,7 @@
  */
 import Redis from "ioredis";
 import { GroveApp, createPool, loadConfig, migrate } from "@grove/domain";
-import { buildApp } from "../../src/app.ts";
+import { buildApp } from "../../src/create-app.ts";
 
 const N = 50;
 const GATE_MS = 1500;
