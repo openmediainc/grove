@@ -735,6 +735,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
   heldPlot: "Held node",
   resting: "standby at home node",
   estate: { label: "Compound", plots: "nodes" },
+  inTrial: "executing a Holo Stage trial",
   construction: "compiling",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle units", allBusy: "all units running" },
   hud: { hereNow: "connected", watching: "observing", awake: "online", asleep: "dormant", fog: "range", world: "grid", claimed: "nodes", quiet: "no broadcasts recently" },
@@ -755,7 +756,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
     theme: "Theme",
   },
   postcard: { button: "Capture", buttonTitle: "Capture this view as a PNG on this device. Nothing leaves it.", greeting: "Frame captured on", world: "the Glasshouse Grid", replay: "Playback" },
-  marks: { heading: "Badges", thousand_calls: "1k tool calls executed on this node", week_streak: "Seven-cycle uptime streak" },
+  marks: { heading: "Badges", thousand_calls: "1k tool calls executed on this node", week_streak: "Seven-cycle uptime streak", trial: "Trial completed: resident unit cleared a Holo Stage trial" },
 };
 
 export const SCIFI_PALETTE: ThemePalette = {

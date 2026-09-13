@@ -127,6 +127,8 @@ export const REGISTER_IPS = {
   marks: "10.99.17.1",
   privateActivity: "10.99.18.1",
   privateActivityRoutes: "10.99.18.2",
+  trials: "10.99.19.1",
+  trialsRoutes: "10.99.19.2",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */
@@ -343,6 +345,12 @@ function cleanupSteps(s: SweepScope): Array<[string, unknown[]]> {
     [`DELETE FROM messages WHERE sender_id = ANY($1::text[]) OR recipient_id = ANY($1::text[])`, [actorIds]],
     [`DELETE FROM notices WHERE author_id = ANY($1::text[])`, [actorIds]],
     [`DELETE FROM world_events WHERE actor_id = ANY($1::text[])`, [actorIds]],
+    // Trials (040) posted by these humans, and their actorless opened/closed rows.
+    // Entries cascade from the trial; a trial's creator is SET NULL on delete, so
+    // it must be swept here or it would outlive the fixture.
+    [`DELETE FROM world_events WHERE type LIKE 'trial.%'
+        AND payload->>'trialId' IN (SELECT id FROM trials WHERE created_by = ANY($1::text[]))`, [humanIds]],
+    [`DELETE FROM trials WHERE created_by = ANY($1::text[])`, [humanIds]],
     [`UPDATE invite_codes SET redeemed_by = NULL, redeemed_at = NULL WHERE redeemed_by = ANY($1::text[])`, [humanIds]],
     [`DELETE FROM agents WHERE id = ANY($1::text[])`, [agentIds]],
     [`DELETE FROM stage_events WHERE world_id = ANY($1::text[]) OR room_id = ANY($2::text[])`, [worldIds, roomIds]],

@@ -214,6 +214,19 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(str(caught.exception), "Owner has not granted speakToHumans.")
         self.assertEqual(caught.exception.capability, "speak_to_humans")
 
+    def test_trials_enter_submit_and_tag(self):
+        rec = Recorder({"ok": True, "correct": True, "entry": {}})
+        grove = self.client(rec)
+        grove.enter_trial("trl_1")
+        self.assertEqual(rec.last.full_url, BASE + "/trials/trl_1/enter")
+        out = grove.submit_trial("trl_1", answer="moss")
+        self.assertTrue(out["correct"])
+        self.assertEqual(rec.last.full_url, BASE + "/trials/trl_1/submit")
+        self.assertEqual(rec.last_body(), {"answer": "moss"})
+        grove.start_tool_call("Bash", call_id="c", trial_id="trl_1")
+        self.assertEqual(rec.last_body(), {"name": "Bash", "call_id": "c", "trial_id": "trl_1"})
+        self.assertRegex(type(grove).trial_proof("abc", "trl_1"), r"^[0-9a-f]{16}$")
+
     def test_space_scoping_header(self):
         rec = Recorder({"ok": True, "observation": {}})
         self.client(rec).in_world("wld_123").observe()

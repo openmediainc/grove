@@ -20,3 +20,4 @@ export * from "./marks.js";
 export * from "./branding.js";
 export * from "./estates.js";
 export * from "./space-moves.js";
+export * from "./trials.js";

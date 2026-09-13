@@ -297,6 +297,7 @@ export const AOE_LEXICON: ThemeLexicon = {
   heldPlot: "Held plot",
   resting: "resting at home",
   estate: { label: "Estate", plots: "plots" },
+  inTrial: "in a trial on the Stage",
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "all hands busy" },
   hud: { hereNow: "here now", watching: "watching", awake: "awake", asleep: "asleep", fog: "fog", world: "world", claimed: "claimed", quiet: "nobody has spoken here recently" },
@@ -317,7 +318,7 @@ export const AOE_LEXICON: ThemeLexicon = {
     theme: "Theme",
   },
   postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Greetings from", world: "Glasshouse", replay: "Replay" },
-  marks: { heading: "Marks", thousand_calls: "A thousand tool calls worked here", week_streak: "Seven days of work in a row" },
+  marks: { heading: "Marks", thousand_calls: "A thousand tool calls worked here", week_streak: "Seven days of work in a row", trial: "A finisher of a trial on the Stage lives here" },
 };
 
 export const AOE_PALETTE: ThemePalette = {

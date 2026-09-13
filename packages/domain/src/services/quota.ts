@@ -288,6 +288,20 @@ export class QuotaService {
   }
 
   /**
+   * Trial submissions (040): at most 10 per entry — per agent, per trial. The
+   * window outlives the longest trial (72 h), so the count cannot reset while
+   * the trial is still open. The entry row keeps the same count as a backstop.
+   */
+  async consumeTrialSubmission(actorId: string, trialId: string): Promise<void> {
+    const limit = 10;
+    const key = `ratelimit:${actorId}:trial:${trialId}:submit`;
+    const n = await this.limiter.incr(key, 4 * DAY);
+    if (n > limit) {
+      await this.refuse("trial_submit", key, limit, n, 4 * DAY * 1000, "Trial submissions exhausted (10 per entry).");
+    }
+  }
+
+  /**
    * Usage reports (migration 024). A runtime reports once per turn, or once
    * per model per turn when it batches; 30 requests a minute is a busy agent
    * with room to spare, and refuses only a loop reporting per token.

@@ -19,7 +19,7 @@
  */
 import { describeToolCall, type ToolCallView } from "@grove/protocol";
 
-export type TvShotKind = "hazard" | "burst" | "conversation" | "arrival" | "stage" | "working" | "idle" | "wide";
+export type TvShotKind = "hazard" | "trial" | "burst" | "conversation" | "arrival" | "stage" | "working" | "idle" | "wide";
 
 export type TvHazard = "flag" | "fault" | "stall" | null;
 
@@ -46,6 +46,14 @@ export interface TvStage {
 
 export interface TvWords {
   regionTitle: (region: string) => string;
+  /** The theme's phrase for an agent attempting a trial ("in a trial on the Stage"). */
+  inTrial?: string;
+}
+
+/** The open trial on the Stage (040): its title, and progress per entrant id. */
+export interface TvTrial {
+  title: string;
+  entrants: ReadonlyMap<string, { ticks: number; finished: boolean }>;
 }
 
 export interface TvShot {
@@ -83,6 +91,8 @@ const SCORE = {
   flag: 100,
   fault: 95,
   stall: 80,
+  /** An agent attempting a trial: below every hazard, above everything else. */
+  trial: 75,
   stageFresh: 70,
   burst: 60,
   conversation: 55,
@@ -158,7 +168,7 @@ export class TvDirector {
   }
 
   /** Everything worth a look right now, best first. Always ends with the wide shot. */
-  candidates(actors: readonly TvActor[], stage: TvStage | null, words: TvWords, now: number): TvShot[] {
+  candidates(actors: readonly TvActor[], stage: TvStage | null, words: TvWords, now: number, trial: TvTrial | null = null): TvShot[] {
     const out: TvShot[] = [];
     const byId = new Map(actors.map((a) => [a.id, a]));
     const where = (a: TvActor) => words.regionTitle(a.region);
@@ -180,6 +190,22 @@ export class TvDirector {
       }
       if (a.hazard === "stall") {
         out.push(shot(`hazard:${a.id}`, "hazard", a, `${a.name} says it is working, but has gone quiet`, SCORE.stall));
+        continue;
+      }
+
+      const entrant = trial?.entrants.get(a.id);
+      if (entrant && !entrant.finished) {
+        const steps = entrant.ticks ? ` · ${entrant.ticks} ${entrant.ticks === 1 ? "step" : "steps"} so far` : "";
+        out.push(
+          shot(
+            `trial:${a.id}`,
+            "trial",
+            a,
+            `${a.name} is ${words.inTrial ?? "in a trial"}: ${quote(trial!.title)}${steps}`,
+            // More progress is a better shot, but never enough to reach a hazard.
+            SCORE.trial + Math.min(entrant.ticks, 4),
+          ),
+        );
         continue;
       }
 
@@ -281,10 +307,17 @@ export class TvDirector {
    * other subject does. A shot whose body has left the map ends at once.
    * `holdScale` stretches the holds (reduced motion: fewer cuts).
    */
-  step(input: { now: number; actors: readonly TvActor[]; stage: TvStage | null; words: TvWords; holdScale?: number }): TvShot {
+  step(input: {
+    now: number;
+    actors: readonly TvActor[];
+    stage: TvStage | null;
+    words: TvWords;
+    holdScale?: number;
+    trial?: TvTrial | null;
+  }): TvShot {
     const { now } = input;
     const scale = input.holdScale ?? 1;
-    const cands = this.candidates(input.actors, input.stage, input.words, now);
+    const cands = this.candidates(input.actors, input.stage, input.words, now, input.trial ?? null);
     const cur = this.current;
     const live = cur ? cands.find((c) => c.key === cur.key) : undefined;
     const eligible = cands.filter((c) => c.key !== cur?.key && !((this.cooldown.get(c.key) ?? 0) > now));

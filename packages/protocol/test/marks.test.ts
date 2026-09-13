@@ -9,7 +9,7 @@ describe("space marks", () => {
     ]);
     expect(normaliseMarks(null)).toEqual([]);
     expect(normaliseMarks("thousand_calls")).toEqual([]);
-    expect(SPACE_MARKS).toEqual(["thousand_calls", "week_streak"]);
+    expect(SPACE_MARKS).toEqual(["thousand_calls", "week_streak", "trial"]);
   });
 
   it("counts a streak as consecutive UTC days, not days in a window", () => {

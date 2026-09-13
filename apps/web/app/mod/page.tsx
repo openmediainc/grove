@@ -23,6 +23,7 @@ import { api } from "@/lib/api";
 import { gp } from "@/lib/base";
 import { EmailHealthPanel } from "@/components/mod/EmailHealth";
 import { OverviewPanel } from "@/components/mod/Overview";
+import { TrialsPanel } from "@/components/mod/Trials";
 
 type Actor = {
   id: string;
@@ -107,7 +108,7 @@ type Queue = {
   counts: { open: number; open_injection: number; frozen: string[] };
 };
 
-type Tab = "overview" | "reports" | "injection" | "log" | "email";
+type Tab = "overview" | "reports" | "injection" | "log" | "email" | "trials";
 
 const STATUSES = ["open", "resolved", "rejected", "all"] as const;
 
@@ -421,6 +422,7 @@ export default function ModPage() {
           ["injection", `Injection flags (${injection.length})`],
           ["log", "Moderator log"],
           ["email", "Email"],
+          ["trials", "Trials"],
         ] as Array<[Tab, string]>).map(([key, label]) => (
           <button
             key={key}
@@ -646,6 +648,8 @@ export default function ModPage() {
       {tab === "overview" ? <OverviewPanel /> : null}
 
       {tab === "email" ? <EmailHealthPanel /> : null}
+
+      {tab === "trials" ? <TrialsPanel /> : null}
 
       {msg ? <p className="mt-6 text-lantern-300">{msg}</p> : null}
       {err ? <p className="mt-6 text-red-300">{err}</p> : null}

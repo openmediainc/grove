@@ -6,6 +6,7 @@ const TICK_MS = 15_000;
 export async function runTick(grove: GroveApp): Promise<void> {
   await grove.presence.evictStale();
   await grove.toolCalls.sweep().catch(() => {});
+  await grove.trials.advance().catch(() => {});
   await grove.whispers.maybePrune().catch(() => 0);
   await grove.analytics.maybePrune().catch(() => {});
   await grove.guests.maybePrune().catch(() => 0);

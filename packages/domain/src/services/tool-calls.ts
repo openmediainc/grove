@@ -34,6 +34,8 @@ export interface StartToolCall {
   callId?: string | null;
   name: unknown;
   args?: unknown;
+  /** Tag the span as work on a trial you entered (040). Counted toward a tool_run trial. */
+  trialId?: unknown;
 }
 
 export interface ProgressToolCall {
@@ -90,6 +92,8 @@ export class ToolCallService {
   follows?: FollowHooks;
   /** Plot marks (030): the prune folds spans into their durable tally. */
   readonly marks: MarkService;
+  /** Late-bound by GroveApp: checks a span's trial tag (040). */
+  trials?: { assertTaggable(agentId: string, trialId: string): Promise<void> };
 
   constructor(
     private store: GroveStore,
@@ -110,6 +114,12 @@ export class ToolCallService {
       }
     }
     const args = sanitiseCaption(input.args, TOOL_ARGS_MAX);
+    let trialId: string | null = null;
+    if (input.trialId != null && input.trialId !== "") {
+      trialId = String(input.trialId).slice(0, 64);
+      if (!this.trials) throw new GroveError("INVALID", "Trials are not available here.");
+      await this.trials.assertTaggable(actorId, trialId);
+    }
     await this.quota.consumeToolCall(actorId);
 
     const presence = await this.presence.getPresence(actorId);
@@ -131,11 +141,11 @@ export class ToolCallService {
     // Idempotent on (actor, call_id): a retried start is the same call, not a
     // second one, and it must not reset the clock the first start set.
     const { rows } = await this.store.pg.query(
-      `INSERT INTO tool_calls (id, actor_id, call_id, room_id, name, args)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO tool_calls (id, actor_id, call_id, room_id, name, args, trial_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (actor_id, call_id) DO UPDATE SET actor_id = tool_calls.actor_id
        RETURNING *`,
-      [id, actorId, cid, presence.roomId, name, args],
+      [id, actorId, cid, presence.roomId, name, args, trialId],
     );
     const view = toToolCallView(rows[0] as Row);
     if (!view.outcome) {

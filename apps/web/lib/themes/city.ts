@@ -671,6 +671,7 @@ export const CITY_LEXICON: ThemeLexicon = {
   heldPlot: "Held lot",
   resting: "home for the night",
   estate: { label: "Block", plots: "lots" },
+  inTrial: "competing at the Theatre",
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "everyone's at work" },
   hud: { hereNow: "in town", watching: "watching", awake: "at work", asleep: "off shift", fog: "limits", world: "city", claimed: "lots", quiet: "the street is quiet" },
@@ -691,7 +692,7 @@ export const CITY_LEXICON: ThemeLexicon = {
     theme: "Theme",
   },
   postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Wish you were here, from", world: "Glasshouse City", replay: "Rerun" },
-  marks: { heading: "Plaques", thousand_calls: "A thousand tool calls on this lot", week_streak: "Seven straight working days" },
+  marks: { heading: "Plaques", thousand_calls: "A thousand tool calls on this lot", week_streak: "Seven straight working days", trial: "Home of a Theatre trial finisher" },
 };
 
 export const CITY_PALETTE: ThemePalette = {

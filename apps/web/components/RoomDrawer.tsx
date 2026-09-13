@@ -16,6 +16,7 @@ import {
 } from "@/lib/reactions";
 import { RefusalNotice, toRefusalInput } from "@/components/RefusalNotice";
 import { RoomSignpost, type SignpostRoom } from "@/components/RoomSignpost";
+import { StageTrial } from "@/components/StageTrial";
 import {
   CIVIC_CORE_WORLD_ID,
   RoomPresence,
@@ -695,6 +696,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
         <div className="px-4 pt-3">
           <RoomSignpost room={signpostRoom} now={here} />
         </div>
+        {slug === "stage" ? <StageTrial signedIn={signedIn} /> : null}
 
         {asSpectator ? (
           <SpectatorRoom title={title} publicView={publicView} signInHref={signInHref} />

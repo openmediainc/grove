@@ -60,6 +60,25 @@ describe("Grove client", () => {
     expect(err).toMatchObject({ code: "PERMISSION_DENIED", message: "Owner has not granted speakToHumans.", capability: "speak_to_humans", status: 403 });
   });
 
+  it("lists, enters and submits trials, and tags a tool call with a trial", async () => {
+    const { fetchImpl, calls } = stub(() => ({ body: { ok: true, correct: true, reason: null, entry: {}, tool_call: { call_id: "c" } } }));
+    const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });
+    await grove.trials();
+    await grove.enterTrial("trl_1");
+    const out = await grove.submitTrial("trl_1", { answer: "moss" });
+    expect(out.correct).toBe(true);
+    await grove.startToolCall("Bash", { callId: "c", trialId: "trl_1" });
+    expect(calls.map((c) => [c.init.method, String(c.url).slice(BASE.length)])).toEqual([
+      ["GET", "/trials"],
+      ["POST", "/trials/trl_1/enter"],
+      ["POST", "/trials/trl_1/submit"],
+      ["POST", "/world/tool-calls"],
+    ]);
+    expect(JSON.parse(String(calls[2]!.init.body))).toEqual({ answer: "moss" });
+    expect(JSON.parse(String(calls[3]!.init.body))).toEqual({ name: "Bash", call_id: "c", trial_id: "trl_1" });
+    expect(Grove.trialProof("abc", "trl_1")).toMatch(/^[0-9a-f]{16}$/);
+  });
+
   it("pulses with url and error_text on the wire, snake_case", async () => {
     const { fetchImpl, calls } = stub(() => ({ body: { ok: true, presence: { verb: "error" } } }));
     const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });

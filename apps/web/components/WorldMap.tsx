@@ -30,7 +30,8 @@ import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
 import { themedAccess } from "@/lib/access";
 import { MotionDirector, mergeSpan, spanFromWire, OUTCOME_MARK_MS } from "@/lib/motion/director";
-import { drawOutcomeMark, drawRestingMark, drawStanceMark, drawWorkBar, RESTING_MARK_COLOUR, scaffoldStageFor } from "@/lib/motion/marks";
+import { drawOutcomeMark, drawRestingMark, drawStanceMark, drawTrialRing, drawWorkBar, RESTING_MARK_COLOUR, scaffoldStageFor } from "@/lib/motion/marks";
+import { useTrialStage } from "@/components/useTrialStage";
 import { restingBodies, type RestingBody, type RestingWire } from "@/lib/resting";
 import { SpeechBook, markRect, paintSpeech, speechPainter } from "@/lib/speech-render";
 import {
@@ -849,6 +850,8 @@ export function WorldMap() {
   if (!tvDirectorRef.current) tvDirectorRef.current = new TvDirector();
   /** The live Stage event, if any, polled only while TV is on. */
   const tvStageRef = useRef<TvStage | null>(null);
+  /** The open trial on the Stage (040): trial rings on entrants, and a TV shot. */
+  const trialRef = useTrialStage();
   /** The shot the camera was last pointed at; null = point it again (after a person let go). */
   const tvAppliedRef = useRef<string | null>(null);
   const tvLastStepRef = useRef(0);
@@ -2645,6 +2648,8 @@ export function WorldMap() {
               if (a.stalled) ctx.setLineDash([3, 3]);
               ctx.stroke();
               ctx.setLineDash([]);
+              const inTrial = replay.view.active ? undefined : trialRef.current.marks.get(a.id);
+              if (inTrial) drawTrialRing(ctx, x, y, inTrial.ticks, inTrial.finished, t, reduceMotion.matches);
               // A hazard also spreads on the ground. The screen-space triangle
               // is what carries at low zoom; this is what makes a faulted body
               // look wrong rather than merely labelled when you are close.
@@ -3083,8 +3088,9 @@ export function WorldMap() {
             now: nowMs,
             actors: tvActors,
             stage: tvStageRef.current,
-            words: { regionTitle: (r) => regionTitle(chosenRef.current, r) },
+            words: { regionTitle: (r) => regionTitle(chosenRef.current, r), inTrial: chosenRef.current.lexicon.inTrial },
             holdScale: reduceMotion.matches ? 2 : 1,
+            trial: trialRef.current.tv,
           });
           const paused = nowMs <= kioskYieldRef.current;
           if (paused) {

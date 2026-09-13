@@ -266,6 +266,7 @@ export type SignMarkStyle = {
  * glyph inside says which mark it is by shape alone, the same in every theme:
  *   thousand_calls  a four-point star (much work, lifetime)
  *   week_streak     seven studs in a ring (seven days running)
+ *   trial           a pennant on a pole (finished a trial on the Stage, 040)
  */
 export function drawSignMark(ctx: Ctx, m: SignMark, style: SignMarkStyle): void {
   const { x, y, r } = m;
@@ -315,6 +316,16 @@ export function drawSignMark(ctx: Ctx, m: SignMark, style: SignMarkStyle): void 
     ctx.lineTo(x - i, y + i);
     ctx.lineTo(x - o, y);
     ctx.lineTo(x - i, y - i);
+    ctx.closePath();
+    ctx.fill();
+  } else if (m.key === "trial") {
+    // A pennant on a pole: the flag a finisher crossed under.
+    const pole = Math.max(1, Math.round(r * 0.16));
+    ctx.fillRect(Math.round(x - r * 0.42), Math.round(y - r * 0.62), pole, Math.round(r * 1.24));
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.42 + pole, y - r * 0.62);
+    ctx.lineTo(x + r * 0.55, y - r * 0.3);
+    ctx.lineTo(x - r * 0.42 + pole, y + r * 0.02);
     ctx.closePath();
     ctx.fill();
   } else {

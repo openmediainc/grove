@@ -95,6 +95,7 @@ export const KIND_ORDER = [
   "instruction",
   "credential",
   "moderation",
+  "trial",
   "other",
 ];
 
@@ -112,6 +113,8 @@ const KIND_COPY: Record<string, KindCopy> = {
   instruction: { label: "instructions", plural: (n) => `${n} instructions sent`, tint: "border-violet-400/30 text-violet-200" },
   credential: { label: "keys", plural: (n) => `${n} key changes`, tint: "border-amber-400/30 text-amber-200" },
   moderation: { label: "moderation", plural: (n) => `${n} moderation events`, tint: "border-red-400/40 text-red-300" },
+  // Trials on the Stage (040): public commons events, and ones people cheer on.
+  trial: { label: "trials", plural: (n) => `${n} trial moments on the Stage`, tint: "border-teal-400/40 text-teal-200" },
   other: { label: "other", plural: (n) => `${n} other events`, tint: "border-white/15 text-white/50" },
 };
 

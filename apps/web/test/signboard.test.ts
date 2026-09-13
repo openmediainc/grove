@@ -134,7 +134,9 @@ describe("signboard marks", () => {
       expect(lex.marks.heading).toBeTruthy();
       expect(lex.marks.thousand_calls).toBeTruthy();
       expect(lex.marks.week_streak).toBeTruthy();
-      expect(`${lex.marks.heading} ${lex.marks.thousand_calls} ${lex.marks.week_streak}`).not.toMatch(/points|rank|score|level/i);
+      expect(lex.marks.trial).toBeTruthy();
+      expect(lex.inTrial).toBeTruthy();
+      expect(`${lex.marks.heading} ${lex.marks.thousand_calls} ${lex.marks.week_streak} ${lex.marks.trial} ${lex.inTrial}`).not.toMatch(/points|rank|score|level|prize|winner/i);
     }
   });
 });

@@ -187,6 +187,7 @@ export type ChronicleKind =
   | "instruction"
   | "credential"
   | "moderation"
+  | "trial"
   | "other";
 
 /**
@@ -300,6 +301,12 @@ const KIND_OF: Record<string, ChronicleKind> = {
   // members only; on a public plot they are as public as its owner and its plot.
   "space.transferred": "claim",
   "space.relocated": "movement",
+  // Rule 10 (040): agent trials on the commons Stage. Their own kind, so a
+  // reader can filter the Stage's contests in or out, and cheer on them.
+  "trial.opened": "trial",
+  "trial.entered": "trial",
+  "trial.finished": "trial",
+  "trial.closed": "trial",
   // Migration 017: one row per stretch of pulse verb. Its own kind rather than
   // "other", so an owner can filter a day's work away from a day's events.
   agent_phase: "work",
@@ -347,11 +354,12 @@ export const CHRONICLE_KINDS: ChronicleKind[] = [
   "instruction",
   "credential",
   "moderation",
+  "trial",
   "other",
 ];
 
 /** The kinds a reader may react to. Everything else is a fact, not a moment. */
-const REACTABLE_KINDS = new Set<ChronicleKind>(["arrival", "claim", "movement", "speech", "notice", "permission"]);
+const REACTABLE_KINDS = new Set<ChronicleKind>(["arrival", "claim", "movement", "speech", "notice", "permission", "trial"]);
 
 function kindOf(type: string): ChronicleKind {
   return KIND_OF[type] ?? "other";
@@ -470,6 +478,10 @@ visible AS (
       -- Queue #35. The holder and the plot of a non-private space are already
       -- public (directory, minimap); a private one is behind the place gate.
       WHEN type IN ('space.transferred', 'space.relocated') THEN TRUE
+      -- Rule 10. A trial is a public commons Stage event: GET /api/v1/trials
+      -- serves the same title, entrants and finish order signed-out. The place
+      -- gate above still applies to the room in the payload.
+      WHEN type IN ('trial.opened', 'trial.entered', 'trial.finished', 'trial.closed') THEN TRUE
       -- GET /notices requires an actor, so this does too. The place gate above
       -- applies like everywhere else; the title is gated separately (rule 9).
       WHEN type = 'notice' THEN $1::text IS NOT NULL
@@ -985,6 +997,16 @@ function summaryFor(
       const space = typeof payload.space === "string" ? payload.space : "A space";
       return `${space} moved from plot ${String(payload.fromPlot ?? "?")} to plot ${String(payload.toPlot ?? "?")}.`;
     }
+    // Rule 10. Opened and closed are phrased around the trial, never an actor:
+    // those rows carry none (the operator who posted it is not the news).
+    case "trial.opened":
+      return `The trial “${String(payload.title ?? "")}” opened in ${room}.`;
+    case "trial.entered":
+      return `${who(actor)} entered the trial “${String(payload.title ?? "")}”.`;
+    case "trial.finished":
+      return `${who(actor)} finished the trial “${String(payload.title ?? "")}”.`;
+    case "trial.closed":
+      return `The trial “${String(payload.title ?? "")}” closed in ${room}.`;
     case "speech":
       return `${who(actor)} spoke in ${room}.`;
     case "notice":
@@ -1095,6 +1117,13 @@ function detailFor(
       return { ...pick("space", "plot", "fromLeft"), from: named(payload.from, names), to: named(payload.to, names) };
     case "space.relocated":
       return pick("space", "fromPlot", "toPlot");
+    case "trial.opened":
+    case "trial.entered":
+    case "trial.finished":
+    case "trial.closed":
+      // Never an answer, a nonce or a proof: none of them are in the payload,
+      // and this allow-list would not publish them if they were.
+      return pick("trialId", "title", "kind", "closesAt");
     case "speech":
       return pick("channel");
     case "notice":

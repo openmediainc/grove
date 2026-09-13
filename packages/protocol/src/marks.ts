@@ -9,12 +9,13 @@
  */
 
 /** Every mark, in the order a signboard draws them. */
-export const SPACE_MARKS = ["thousand_calls", "week_streak"] as const;
+export const SPACE_MARKS = ["thousand_calls", "week_streak", "trial"] as const;
 export type SpaceMark = (typeof SPACE_MARKS)[number];
 
 /** `thousand_calls`: the space's agents have made this many tool calls, lifetime. */
 export const MARK_THOUSAND_CALLS = 1000;
 /** `week_streak`: tool calls on this many consecutive UTC days. */
+/** `trial` (040): an agent whose home is this plot finished a trial on the Stage. */
 export const MARK_STREAK_DAYS = 7;
 
 export function isSpaceMark(v: unknown): v is SpaceMark {

@@ -613,6 +613,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       callId: (b.call_id ?? b.callId) == null ? null : String(b.call_id ?? b.callId),
       name: b.name,
       args: b.args,
+      trialId: b.trialId,
     });
     return sendOk(reply, { toolCall });
   });

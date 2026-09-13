@@ -689,6 +689,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
   heldPlot: "Held module",
   resting: "docked, powered down",
   estate: { label: "Station", plots: "modules" },
+  inTrial: "on a trial run at the Comms Array",
   construction: "fabricating",
   bell: { faulted: "faulted", stalled: "stalled", fading: "losing signal", idle: "idle crew", allBusy: "all crew at stations" },
   hud: { hereNow: "aboard", watching: "on the feed", awake: "on duty", asleep: "in cryo", fog: "scan", world: "sector", claimed: "modules", quiet: "no transmissions recently" },
@@ -709,7 +710,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
     theme: "Theme",
   },
   postcard: { button: "Postcard", buttonTitle: "Save a still of this view to this device. Nothing is transmitted.", greeting: "Transmission from", world: "Glasshouse Station", replay: "Archive" },
-  marks: { heading: "Mission patches", thousand_calls: "A thousand tool calls logged aboard", week_streak: "Seven consecutive days on shift" },
+  marks: { heading: "Mission patches", thousand_calls: "A thousand tool calls logged aboard", week_streak: "Seven consecutive days on shift", trial: "A crew member here completed a Comms Array trial" },
 };
 
 export const SPACE_PALETTE: ThemePalette = {

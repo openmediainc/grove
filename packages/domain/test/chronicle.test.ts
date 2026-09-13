@@ -481,9 +481,10 @@ describe.skipIf(!hasDb)("the chronicle never widens what the world already refus
     const anon = await grove.chronicle.read(ANON, { limit: 200 });
     expect(await idsFor(ANON)).toContain(registered);
     // Whatever else is in the database from other suites, none of it may be
-    // speech, a notice or moderation-grade.
+    // speech, a notice or moderation-grade. Trials on the commons Stage (040)
+    // are public by rule 10.
     for (const e of anon.entries) {
-      expect(["arrival", "claim", "movement", "permission"]).toContain(e.kind);
+      expect(["arrival", "claim", "movement", "permission", "trial"]).toContain(e.kind);
       expect(e.body).toBeNull();
       expect(e.moderation).toBe(false);
     }

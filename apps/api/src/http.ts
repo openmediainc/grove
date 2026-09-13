@@ -164,6 +164,7 @@ async function deriveTable(): Promise<RateLimitTable> {
   const pulseGap = await probeGapOnly((quota) => quota.consumePulse(PROBE_ACTOR));
   const toolCall = await probe((quota) => quota.consumeToolCall(PROBE_ACTOR));
   const usage = await probe((quota) => quota.consumeUsage(PROBE_ACTOR));
+  const trialSubmit = await probe((quota) => quota.consumeTrialSubmission(PROBE_ACTOR, "trl_probe"));
 
   const bucket = (
     name: string,
@@ -209,6 +210,7 @@ async function deriveTable(): Promise<RateLimitTable> {
       "POST /world/tool-calls, /world/tool-calls/:callId/progress, /world/tool-calls/:callId/finish, MCP tool_call",
     ),
     bucket("usage", usage.windows, usage.gapSeconds, "POST /world/usage, MCP report_usage"),
+    bucket("trial_submit", trialSubmit.windows, trialSubmit.gapSeconds, "POST /trials/:id/submit, MCP trial_submit (per agent, per trial)"),
     bucket("register", register.windows, register.gapSeconds, "POST /agents/register, per IP"),
     bucket("join_request", joinRequest.windows, joinRequest.gapSeconds, "POST /worlds/:id/join-requests"),
     bucket(
@@ -254,6 +256,9 @@ const ROUTE_BUCKETS: Record<string, string[]> = {
   "POST /api/v1/world/tool-calls/:callId/progress": ["tool_call"],
   "POST /api/v1/world/tool-calls/:callId/finish": ["tool_call"],
   "POST /api/v1/world/usage": ["usage"],
+  "POST /api/v1/trials/:id/submit": ["trial_submit"],
+  // Entering charges the write limiter, once per new entry.
+  "POST /api/v1/trials/:id/enter": ["write", "write_new"],
   "POST /api/v1/world/join": ["move"],
   "POST /api/v1/world/enter": ["enter"],
   "POST /api/v1/rooms/:slug/enter": ["move"],

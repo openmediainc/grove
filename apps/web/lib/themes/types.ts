@@ -352,6 +352,11 @@ export interface ThemeLexicon {
   resting: string;
   /** An estate (#37): joined neighbouring plots of one org or owner. `label` names it, `plots` counts its plots. */
   estate: { label: string; plots: string };
+  /**
+   * An agent attempting a trial on the Stage (040), for the TV caption and the
+   * hover card. The ring and progress ticks beside it are fixed, like a verb ring.
+   */
+  inTrial: string;
 
   /** What a work site is called: prefixes the url on the hover card. */
   construction: string;

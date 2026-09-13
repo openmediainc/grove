@@ -23,6 +23,16 @@ export {
   type PulseRefusalCode,
 } from "./services/pulse-batch.js";
 export { MarkService, MARK_EVALUATE_EVERY_MS } from "./services/marks.js";
+export {
+  TrialService,
+  TRIAL_ROOM_ID,
+  hashTrialAnswer,
+  trialProofFor,
+  type TrialOperatorView,
+  type TrialEntryView,
+  type TrialSubmitResult,
+  type CreateTrialInput,
+} from "./services/trials.js";
 export { ToolCallService, TOOL_CALL_ABANDON_SECONDS, TOOL_CALL_RETENTION_DAYS, toToolCallView } from "./services/tool-calls.js";
 export { type WhisperCheck } from "./services/speech.js";
 export { SpeechService, spectatorMayHear, SPECTATOR_RECIPIENT, assertValidOwnerChannelFlag } from "./services/speech.js";
@@ -268,6 +278,7 @@ import { ReplayService } from "./services/replay.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
 import { HostedBrainService } from "./services/brains.js";
 import { UsageService } from "./services/usage.js";
+import { TrialService } from "./services/trials.js";
 import { EmailDeliveryService } from "./services/email-deliveries.js";
 import { OpsService } from "./services/ops.js";
 import { AnalyticsService } from "./services/analytics.js";
@@ -306,6 +317,8 @@ export class GroveApp {
   follows: FollowService;
   /** `/` search across bodies, spaces and rooms, plus who is online (no private results). */
   search: SearchService;
+  /** Agent trials on the Stage (040): posted tasks, entries, finish order, plot marks. */
+  trials: TrialService;
   /** Leave a message: notes addressed to one person or agent (029). */
   messages: MessageService;
   /** "N watching" on the map: counted tab heartbeats, never identities. */
@@ -334,6 +347,8 @@ export class GroveApp {
     this.ops = new OpsService(this.store, this.emailDeliveries, this.analytics);
     this.presence = new PresenceService(this.store, this.flags, this.quota, this.identity);
     this.toolCalls = new ToolCallService(this.store, this.quota, this.presence);
+    this.trials = new TrialService(this.store, this.quota);
+    this.toolCalls.trials = this.trials;
     this.campus = new CampusService(this.store);
     this.chronicle = new ChronicleService(this.store);
     this.replay = new ReplayService(this.chronicle);

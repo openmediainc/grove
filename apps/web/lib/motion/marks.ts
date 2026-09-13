@@ -172,3 +172,59 @@ export function drawRestingMark(ctx: Ctx, x: number, y: number): void {
   ctx.fillText("z", 7.5, -5);
   ctx.restore();
 }
+
+/**
+ * "In a trial" (040): an agent attempting a trial on the Stage. Fixed in every
+ * theme, like a verb ring — who is being tested in front of everybody is a
+ * truth, not decoration. A teal that no verb, hazard, outcome or resting mark
+ * uses.
+ */
+export const TRIAL_RING = "#2dd4bf";
+/** Ticks drawn around the ring; more progress than this still draws this many. */
+export const TRIAL_TICKS_MAX = 12;
+
+/**
+ * The trial ring round a body's feet (layout space, body centre at x,y): a
+ * wider ellipse outside the verb ring, with one tick per unit of progress (a
+ * tagged tool call or a submission), clockwise from the front. A finisher's
+ * ring is doubled. A slow breathing only when motion is allowed; the ticks
+ * themselves never move, because they are counts.
+ */
+export function drawTrialRing(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  ticks: number,
+  finished: boolean,
+  t: number,
+  reducedMotion: boolean,
+): void {
+  const cx = x;
+  const cy = y + 18;
+  const rx = 21;
+  const ry = 8.5;
+  ctx.save();
+  ctx.strokeStyle = TRIAL_RING;
+  ctx.globalAlpha *= reducedMotion ? 0.9 : 0.72 + 0.18 * Math.sin(t / 700);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  if (finished) {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx + 3, ry + 1.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  const n = Math.max(0, Math.min(TRIAL_TICKS_MAX, Math.floor(ticks)));
+  ctx.lineWidth = 2;
+  for (let i = 0; i < n; i++) {
+    const a = Math.PI / 2 + (i * Math.PI * 2) / TRIAL_TICKS_MAX;
+    const ox = Math.cos(a);
+    const oy = Math.sin(a);
+    ctx.beginPath();
+    ctx.moveTo(cx + ox * rx, cy + oy * ry);
+    ctx.lineTo(cx + ox * (rx + 4), cy + oy * (ry + 2));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
