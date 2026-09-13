@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, WS_ORIGIN, type RoomPayload } from "@/lib/api";
 import type { RefusalInput } from "@grove/ui";
 import { GeoAvatar } from "@/components/Avatar";
+import { FirstFiveMinutes, noteSpoke, type TranscriptLine } from "@/components/FirstFiveMinutes";
 import { PixelRoom } from "@/components/PixelRoom";
 import { RefusalNotice, toRefusalInput } from "@/components/RefusalNotice";
+import { RoomSignpost, type SignpostRoom } from "@/components/RoomSignpost";
 import {
   CIVIC_CORE_WORLD_ID,
   RoomPresence,
@@ -16,7 +18,13 @@ import {
 } from "@/components/RoomPresence";
 import { readPixelFlag, writePixelFlag } from "@/lib/pixel";
 
-const ROOMS = ["plaza", "library", "workshop", "stage", "garden", "board", "lounge"];
+/**
+ * Only a fallback now. The campus list is built from `GET /api/v1/civic`, which
+ * is the one thing that knows how many civic rooms there are — the hard-coded
+ * list used to carry a seventh entry the civic payload has never described, and
+ * would have gone on showing six if a seventh room were ever seeded.
+ */
+const FALLBACK_ROOMS = ["plaza", "library", "workshop", "stage", "garden", "board"];
 
 /**
  * What a room is doing, straight off GET /api/v1/civic.
@@ -30,7 +38,11 @@ type RoomStatus = {
   id: string;
   slug: string;
   name: string;
+  kind: string;
+  capacity: number;
   occupancy: number;
+  spectator_visible: boolean;
+  allows_room_say: boolean;
   say_limit_per_min: number | null;
   state: "empty" | "quiet" | "busy" | "live" | "posted";
   headline: string | null;
@@ -66,30 +78,24 @@ const STATE_DOT: Record<RoomStatus["state"], string> = {
   live: "bg-rose-400 animate-pulse",
 };
 
-function whenLabel(until: string | null): string | null {
-  if (!until) return null;
-  const ms = Date.parse(until) - Date.now();
-  if (Number.isNaN(ms)) return null;
-  const mins = Math.round(ms / 60000);
-  if (mins <= 0) return null;
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.round(mins / 60);
-  return hours < 24 ? `${hours}h` : `${Math.round(hours / 24)}d`;
-}
-
 /**
  * `GET /api/v1/rooms/:slug` returns the room row, and `mapRoom()` carries
  * `world_id` — but not the space's access level, which lives on the WORLD.
  * `silencedBySpace` is a fact about the room an actor is standing in and cannot
  * be derived from `badges()`, so the space is fetched separately and only when
  * the room is not in the civic core (which narrows nothing).
+ *
+ * The same payload carries everything the signpost states about a room — kind,
+ * capacity, say limit, whether a signed-out visitor can watch it — so the sign
+ * is read off the room row rather than written per slug.
  */
-type RoomWithWorld = RoomPayload["room"] & { world_id?: string };
+type RoomWithWorld = RoomPayload["room"] &
+  Partial<SignpostRoom> & { world_id?: string };
 
 export default function RoomPage() {
   const { room } = useParams<{ room: string }>();
   const [data, setData] = useState<RoomPayload | null>(null);
-  const [lines, setLines] = useState<Array<{ id: string; body: string; sender_id: string; sender_kind: string }>>([]);
+  const [lines, setLines] = useState<TranscriptLine[]>([]);
   const [draft, setDraft] = useState("");
   const [noticeTitle, setNoticeTitle] = useState("");
   const [board, setBoard] = useState<BoardView | null>(null);
@@ -97,18 +103,30 @@ export default function RoomPage() {
   const [err, setErr] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<RefusalInput | null>(null);
   const [space, setSpace] = useState<SpaceSilenceSource | null>(null);
-  const [me, setMe] = useState<{ id: string } | null>(null);
+  const [me, setMe] = useState<{ id: string; handle?: string } | null>(null);
   const [pixel, setPixel] = useState(true);
+  /** Walked straight in from /enter, rather than arriving by link or reload. */
+  const [arrived, setArrived] = useState(false);
+  const [stepping, setStepping] = useState(false);
+  const composeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setPixel(readPixelFlag());
+    // Read off the URL rather than through useSearchParams: this page is a
+    // client component either way, and the hook would force a Suspense boundary
+    // around the whole room for one boolean.
+    try {
+      setArrived(new URLSearchParams(window.location.search).get("arrived") === "1");
+    } catch {
+      setArrived(false);
+    }
   }, []);
 
   async function load() {
     const r = await api<RoomPayload>(`/api/v1/rooms/${room}`);
     setData(r);
     setSpace(await loadSpace(r.room as RoomWithWorld));
-    const t = await api<{ transcript: typeof lines }>(`/api/v1/rooms/${r.room.slug}/transcript`);
+    const t = await api<{ transcript: TranscriptLine[] }>(`/api/v1/rooms/${r.room.slug}/transcript`);
     setLines(t.transcript);
     // One call for all six rooms: the point of the room states is that you can
     // see what the OTHER rooms are doing without walking into them.
@@ -124,7 +142,7 @@ export default function RoomPage() {
   }
 
   useEffect(() => {
-    void api<{ human: { id: string } }>("/api/v1/humans/me")
+    void api<{ human: { id: string; handle: string } }>("/api/v1/humans/me")
       .then((h) => setMe(h.human))
       .catch(() => setMe(null));
   }, []);
@@ -148,7 +166,18 @@ export default function RoomPage() {
           try {
             const msg = JSON.parse(String(ev.data)) as { type?: string; body?: string; sender_id?: string; sender_kind?: string; speech_id?: string; room_id?: string };
             if (msg.type === "speech" && msg.body) {
-              setLines((cur) => [...cur, { id: msg.speech_id ?? String(Date.now()), body: msg.body!, sender_id: msg.sender_id ?? "", sender_kind: msg.sender_kind ?? "human" }]);
+              setLines((cur) => [
+                ...cur,
+                {
+                  id: msg.speech_id ?? String(Date.now()),
+                  body: msg.body!,
+                  sender_id: msg.sender_id ?? "",
+                  sender_kind: msg.sender_kind ?? "human",
+                  // The push carries no timestamp; it arrived as it was said, so
+                  // "just now" is the truth rather than a guess.
+                  created_at: new Date().toISOString(),
+                },
+              ]);
             }
           } catch {
             /* ignore */
@@ -176,6 +205,7 @@ export default function RoomPage() {
         headers: { "Idempotency-Key": crypto.randomUUID() },
         body: JSON.stringify({ channel: "room_say", body: draft }),
       });
+      noteSpoke();
       setDraft("");
       await load();
     } catch (e) {
@@ -203,6 +233,64 @@ export default function RoomPage() {
   /** This room's own state, from the same one call the nav uses. */
   const here = useMemo(() => civic.find((c) => c.slug === (data?.room.slug ?? room)) ?? null, [civic, data, room]);
 
+  /**
+   * The campus list, plus the one room civic never returns. An owner lounge is
+   * created per human and excluded from listPublicRooms on purpose, so it has
+   * no state to show and has to be named here or it would disappear entirely.
+   */
+  const navRooms = useMemo(() => {
+    const rooms = civic.length
+      ? civic.map((c) => ({ slug: c.slug, name: c.name }))
+      : FALLBACK_ROOMS.map((s) => ({ slug: s, name: s }));
+    return [...rooms, { slug: "lounge", name: "your lounge" }];
+  }, [civic]);
+
+  /**
+   * Are you actually IN this room?
+   *
+   * Opening /w/plaza does not put you in the Plaza — `POST /world/enter` or
+   * `POST /rooms/:slug/enter` does — and presence is swept, so a body that
+   * walked in this morning is not in the room by the afternoon. Until now the
+   * page looked identical either way: the room drew, the compose box drew, and
+   * the only sign was that `POST /say` came back NOT_FOUND, which the refusal
+   * renders as "That room or person is not here any more" — a sentence about
+   * the room, when the thing that is missing is YOU.
+   *
+   * The roster is the authority and it lists lurkers too, so absence from it is
+   * absence from the room. `null` while it loads: say nothing rather than
+   * accuse the reader of not being somewhere.
+   */
+  const standingHere = useMemo(() => {
+    if (!data || !me) return null;
+    return data.nearby.some((n) => n.actor_id === me.id);
+  }, [data, me]);
+
+  /**
+   * Stepping in is left as a button on purpose. Being in a room is a social
+   * act in Grove — you become visible, addressable and overhearable — so the
+   * page will not do it to you because you happened to open a URL.
+   */
+  async function stepIn() {
+    setErr(null);
+    setRefusal(null);
+    setStepping(true);
+    try {
+      await api(`/api/v1/rooms/${data?.room.slug ?? room}/enter`, { method: "POST", body: "{}" });
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setStepping(false);
+    }
+  }
+
+  /** Who said it. The transcript used to print only HUMAN / AGENT and the body. */
+  const nameOf = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of data?.nearby ?? []) m.set(n.actor_id, n.display_name || n.slug);
+    return m;
+  }, [data]);
+
   const seats = useMemo(() => {
     const cap = Math.min(data?.room.capacity ?? 30, 48);
     const nearby = data?.nearby ?? [];
@@ -221,22 +309,53 @@ export default function RoomPage() {
     [data, space],
   );
 
+  /**
+   * The sign is drawn from the room row where there is one, and from the civic
+   * row otherwise, so it is right on the first paint rather than after the
+   * second fetch.
+   */
+  const signpostRoom: SignpostRoom | null = useMemo(() => {
+    const r = data?.room as RoomWithWorld | undefined;
+    if (r && r.slug) {
+      return {
+        slug: r.slug,
+        name: r.name,
+        kind: r.kind,
+        capacity: r.capacity,
+        say_limit_per_min: r.say_limit_per_min ?? null,
+        spectator_visible: Boolean(r.spectator_visible),
+        allows_room_say: r.allows_room_say ?? true,
+      };
+    }
+    return here
+      ? {
+          slug: here.slug,
+          name: here.name,
+          kind: here.kind,
+          capacity: here.capacity,
+          say_limit_per_min: here.say_limit_per_min,
+          spectator_visible: here.spectator_visible,
+          allows_room_say: here.allows_room_say,
+        }
+      : null;
+  }, [data, here]);
+
   return (
     <main className="grid min-h-[calc(100vh-56px)] grid-cols-1 lg:grid-cols-[200px_1fr_320px]">
       <aside className="border-r border-white/10 p-4">
         <h2 className="text-xs uppercase tracking-widest text-lantern-400">Campus</h2>
         <ul className="mt-3 space-y-1">
-          {ROOMS.map((r) => {
-            const st = civic.find((c) => c.slug === r);
+          {navRooms.map((r) => {
+            const st = civic.find((c) => c.slug === r.slug);
             return (
-              <li key={r}>
+              <li key={r.slug}>
                 <button
-                  onClick={() => enter(r)}
-                  className={`w-full rounded-lg px-3 py-2 text-left ${r === room ? "bg-lantern-400/20 text-lantern-300" : "hover:bg-white/5"}`}
+                  onClick={() => enter(r.slug)}
+                  className={`w-full rounded-lg px-3 py-2 text-left ${r.slug === room ? "bg-lantern-400/20 text-lantern-300" : "hover:bg-white/5"}`}
                 >
                   <span className="flex items-center gap-2">
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATE_DOT[st?.state ?? "empty"]}`} />
-                    <span className="flex-1">{r}</span>
+                    <span className="flex-1">{r.name}</span>
                     {st?.occupancy ? <span className="text-[10px] text-white/35">{st.occupancy}</span> : null}
                   </span>
                   {st?.headline ? (
@@ -249,22 +368,14 @@ export default function RoomPage() {
         </ul>
       </aside>
       <section className="flex flex-col cobble">
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-3">
-          <div>
+        <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+          <div className="min-w-0">
             <h1 className="font-display text-3xl text-lantern-300">{data?.room.name ?? room}</h1>
-            {here?.headline ? (
-              <p className="mt-0.5 flex items-center gap-2 text-xs text-white/60">
-                <span className={`h-1.5 w-1.5 rounded-full ${STATE_DOT[here.state]}`} />
-                <span className={here.state === "live" ? "uppercase tracking-widest text-rose-300" : ""}>
-                  {here.state === "live" ? "On now" : here.state === "posted" ? "Pinned today" : null}
-                </span>
-                <span>{here.headline}</span>
-                {here.byline ? <span className="text-white/35">— {here.byline}</span> : null}
-                {whenLabel(here.until) ? <span className="text-white/35">({whenLabel(here.until)} left)</span> : null}
-              </p>
-            ) : null}
+            {/* The sign outside the door: what this room is for, what is true of
+                it, and what is happening in it now. Permanent, not onboarding. */}
+            <RoomSignpost room={signpostRoom} now={here} />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             <button
               type="button"
               onClick={() => {
@@ -279,6 +390,34 @@ export default function RoomPage() {
             <span className="text-xs text-white/40">{data?.nearby.length ?? 0} here</span>
           </div>
         </div>
+        {standingHere === false ? (
+          <div className="mx-4 mt-4 flex max-w-3xl flex-col gap-3 rounded-2xl border border-lantern-400/40 bg-dusk-900/80 p-4 sm:mx-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-white/70">
+              <strong className="text-lantern-300">You are looking in from outside.</strong> Nobody in{" "}
+              {theRoom(data?.room.name ?? room)} can see or hear you, and nothing you type will reach them,
+              until you step in.
+            </p>
+            <button
+              onClick={stepIn}
+              disabled={stepping}
+              className="shrink-0 rounded-full bg-lantern-400 px-5 py-2.5 text-sm font-semibold text-dusk-950 disabled:opacity-60 sm:py-1.5"
+            >
+              {stepping ? "Stepping in…" : `Step into ${theRoom(data?.room.name ?? room)} →`}
+            </button>
+          </div>
+        ) : null}
+        {/* The Plaza is where everybody lands, so it is the only room that says
+            what the campus is for. Retires itself; see the component. */}
+        {(data?.room.slug ?? room) === "plaza" ? (
+          <FirstFiveMinutes
+            me={me}
+            nearby={data?.nearby ?? []}
+            lines={lines}
+            arrived={arrived}
+            standingHere={standingHere}
+            onSpeak={() => composeRef.current?.focus()}
+          />
+        ) : null}
         {pixel ? (
           <div className="flex flex-1 items-start justify-center overflow-auto p-4">
             <PixelRoom
@@ -347,6 +486,7 @@ export default function RoomPage() {
           ) : null}
           <div className="flex gap-2">
             <input
+              ref={composeRef}
               className="flex-1 rounded-lg bg-dusk-800 px-3 py-2 ring-1 ring-white/10"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -390,12 +530,21 @@ export default function RoomPage() {
           <ul className="mt-3 space-y-2 text-sm">
             {lines.length === 0 ? (
               <li key="empty-log" className="text-white/50">
-                {room === "plaza" ? "The log is quiet. lantern is on a Plaza bench — say hi." : "No one has spoken here yet."}
+                {emptyLog(data)}
               </li>
             ) : null}
             {lines.map((l) => (
               <li key={l.id}>
                 <span className="grove-kind">{l.sender_kind === "agent" ? "AGENT" : "HUMAN"}</span>
+                {/* A line with no name attached is not a conversation. The roster
+                    is the only source of names, so a speaker who has walked out
+                    is said to have walked out rather than quietly relabelled. */}
+                <span className="mr-1.5 font-semibold text-lantern-300/80">
+                  {l.sender_id === me?.id
+                    ? "you"
+                    : nameOf.get(l.sender_id) ??
+                      (l.sender_kind === "agent" ? "an agent, since gone" : "someone, since gone")}
+                </span>
                 {l.body}
               </li>
             ))}
@@ -404,6 +553,40 @@ export default function RoomPage() {
       </aside>
     </main>
   );
+}
+
+/**
+ * "the Plaza", but "walkthrough's lounge" — an owner lounge is named after its
+ * owner and takes no article, and every other room takes one.
+ */
+function theRoom(name: string): string {
+  return name.includes("'s ") ? name : `the ${name}`;
+}
+
+function whenLabel(until: string | null): string | null {
+  if (!until) return null;
+  const ms = Date.parse(until) - Date.now();
+  if (Number.isNaN(ms)) return null;
+  const mins = Math.round(ms / 60000);
+  if (mins <= 0) return null;
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.round(mins / 60);
+  return hours < 24 ? `${hours}h` : `${Math.round(hours / 24)}d`;
+}
+
+/**
+ * An empty transcript used to claim lantern was on a Plaza bench whether or not
+ * it was. Say who is actually standing here instead, and say nothing about a
+ * bench when nobody is on one.
+ */
+function emptyLog(data: RoomPayload | null): string {
+  const agents = (data?.nearby ?? []).filter((n) => n.kind === "agent");
+  if (agents.length === 0) {
+    return "Nothing has been said here. Whatever you say waits for whoever comes next.";
+  }
+  const names = agents.map((a) => a.display_name || a.slug);
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `Nothing said yet, but ${list} ${names.length === 1 ? "is" : "are"} standing here. Say hello.`;
 }
 
 /**

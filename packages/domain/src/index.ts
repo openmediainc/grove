@@ -7,6 +7,7 @@ export type { GroveStore } from "./store.js";
 export { IdentityService } from "./services/identity.js";
 export { PresenceService } from "./services/presence.js";
 export { SpeechService, spectatorMayHear, SPECTATOR_RECIPIENT, assertValidOwnerChannelFlag } from "./services/speech.js";
+export type { SayQuota, SayAckWithQuota } from "./services/speech.js";
 export { ObserveService } from "./services/observe.js";
 export { WorldService } from "./services/world.js";
 export {
@@ -35,6 +36,7 @@ export {
   type FreezeFlagState,
 } from "./services/flags.js";
 export { QuotaService, RedisRateLimiter, MemoryRateLimiter, isFirst24h } from "./services/quota.js";
+export type { RateLimitDetails } from "./services/quota.js";
 export { CampusService } from "./services/campus.js";
 export {
   ChronicleService,
@@ -50,6 +52,18 @@ export { WebhookService, JobService } from "./services/webhooks.js";
 export { HostedBrainService, type ResponsesClient, type XaiClientFactory } from "./services/brains.js";
 export { mapAgent, mapHuman, mapRoom, mapPresence } from "./mappers.js";
 export { mintAgentKey, verifyAgentKey, flagPromptInjection, randomToken } from "./crypto.js";
+// Signature proofs (migration 018). Exported so a route, the SDK or an outside
+// verifier can check a bundle with the same code the domain wrote it with.
+export {
+  verifyProofBundle,
+  canonicalMessageForProof,
+  PROOF_BUNDLE_VERSION,
+  type ProofBundle,
+  type ProofDomain,
+  type AuthProofCovers,
+  type BindProofCovers,
+} from "./crypto.js";
+export type { ProofViewer } from "./services/identity.js";
 export { signWebhookBody, verifyWebhookSignature } from "./webhook-sign.js";
 export { createMailer, type Mailer } from "./mailer.js";
 export { resolveWorldId, WORLD_COOKIE, WORLD_HEADER, type UnverifiedWorldId } from "./world-scope.js";
@@ -118,9 +132,19 @@ export class GroveApp {
     this.jobs = new JobService(this.store);
     this.mailbox = new MailboxService(this.store, this.presence, this.webhooks);
     this.speech = new SpeechService(this.store, this.flags, this.quota, this.presence, this.mailbox, this.webhooks, this.campus);
-    this.observe = new ObserveService(this.store, this.presence, this.speech, this.identity, this.mailbox, this.campus);
-    this.world = new WorldService(this.store, this.presence, this.identity, this.flags, this.mailbox);
+    // Before observe: the observation packet carries the day's pin, filtered
+    // for the agent asking.
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);
+    this.observe = new ObserveService(
+      this.store,
+      this.presence,
+      this.speech,
+      this.identity,
+      this.mailbox,
+      this.campus,
+      this.notices,
+    );
+    this.world = new WorldService(this.store, this.presence, this.identity, this.flags, this.mailbox);
     this.moderation = new ModerationService(
       this.store,
       this.quota,

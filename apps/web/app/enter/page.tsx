@@ -31,10 +31,12 @@ export default function EnterPage() {
   }, []);
 
   // The arrival is the point, so hold it on screen for a beat before walking on.
+  // `?arrived=1` carries the moment into the room: the toast is gone two seconds
+  // later, and the room is where the arrival actually has to mean something.
   useEffect(() => {
     if (!arrival) return;
     const t = setTimeout(() => {
-      window.location.href = `/grove/w/${arrival.slug}`;
+      window.location.href = `/grove/w/${arrival.slug}?arrived=1`;
     }, 2600);
     return () => clearTimeout(t);
   }, [arrival]);
@@ -93,7 +95,7 @@ export default function EnterPage() {
         <ArrivalToast
           title={arrival.title}
           line={arrival.line}
-          action={{ label: "Walk in now →", href: `/w/${arrival.slug}` }}
+          action={{ label: "Walk in now →", href: `/w/${arrival.slug}?arrived=1` }}
         />
       ) : null}
       <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">Step into the Grove</h1>

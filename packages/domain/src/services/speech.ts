@@ -3,17 +3,21 @@ import {
   SPEECH_GRAPHEME_LIMIT,
   computeIsOwnerChannel,
   graphemeCount,
+  type ActorId,
   type ActorKind,
   type Agent,
   type Human,
   type PermissionPolicy,
   type PolicyContext,
+  type PolicyDecision,
   type PrivacyPolicy,
   type QuotaSnapshot,
   type Room,
   type SayAck,
   type SpacePolicy,
   type SpeechChannel,
+  type UndeliveredRecipient,
+  capabilityWire,
 } from "@grove/protocol";
 import { authorize } from "@grove/policy";
 import type { GroveStore } from "../store.js";
@@ -36,6 +40,77 @@ export const SPECTATOR_RECIPIENT: PolicyContext["recipients"][number] = {
   mutedByRecipient: false,
   synthetic: "spectator",
 };
+
+/**
+ * What the sender has left, returned on every ack.
+ *
+ * WHY. `say()` already had a `QuotaSnapshot` in its hand — it is what the
+ * kernel judges the call against — and threw it away on the way out. An agent
+ * therefore had exactly one way to learn where it stood: be refused. This is
+ * the same numbers, handed back, so a well-behaved agent can pace itself and a
+ * badly-behaved one has no excuse.
+ *
+ * A SUBSET of `QuotaSnapshot`, deliberately. `roomWindowCount` is left off: it
+ * is a raw count whose meaning comes from the ROOM's `say_limit_per_min`, which
+ * is the room's business and is not returned beside it, so a client could only
+ * misread it. Everything here is about the sender, is already knowable to the
+ * sender, and is directly actionable.
+ */
+export interface SayQuota {
+  /** `room_say` calls left this minute. */
+  roomSayRemaining: number;
+  /** False while the minimum gap between two room lines is still running. */
+  roomSayGapOk: boolean;
+  /** Owner-channel (and room_say) write calls left this minute. */
+  writeRemaining: number;
+}
+
+/** A `SayAck` with the sender's remaining allowance attached. */
+export type SayAckWithQuota = SayAck & { quota: SayQuota };
+
+/**
+ * One refused recipient, as the sender is told about it.
+ *
+ * THE ONE PLACE this shape is built, so the live ack and the idempotent replay
+ * below cannot drift, and so the mute rule lives in exactly one branch.
+ *
+ * Everything is COPIED from the kernel's decision, never recomputed. `authorize`
+ * derives `source` and `subject` from the same test that produced the refusal —
+ * a space denial has to borrow an actor-shaped capability name, and a speaker's
+ * own privacy setting reports the capability of the ear it closed — so a second
+ * derivation out here would eventually disagree with the first. This is exactly
+ * what say() already does with `result.emit` when it throws: the two halves of a
+ * decision now reach the client the same way.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY A MUTE IS NOT ATTRIBUTED
+ * ---------------------------------------------------------------------------
+ * A mute is the one refusal the world keeps from the person it refused. The
+ * kernel marks it `visibleInUi: false` and everything downstream honours that:
+ * the line is stored for audit, the MUTER's client is told to hide it (the
+ * `speech_hidden` frame below), and it is dropped from an agent's `heard`. The
+ * sender is not a party to any of that — a mute is a reader's private decision
+ * about their own feed, and telling the speaker whose settings closed which ear
+ * would turn it into the announcement that a block deliberately is not.
+ *
+ * So a muted recipient is reported as the bare fact that the line did not land,
+ * and the attribution stops here. Widening this branch is not a refactor; it is
+ * a product decision about whether mutes stay private.
+ *
+ * (`code: "MUTED"` itself is pre-existing and is left exactly as it shipped.
+ * It is the honest half — a silent drop is forbidden — but it does disclose
+ * more than the rest of this comment would like. Narrowing it is a separate
+ * decision, deliberately not taken here.)
+ */
+export function undeliveredFor(recipientId: ActorId, decision: PolicyDecision): UndeliveredRecipient {
+  const entry: UndeliveredRecipient = { actorId: recipientId, code: decision.code };
+  if (decision.code === "MUTED" || decision.visibleInUi === false) return entry;
+  if (decision.capability) entry.capability = capabilityWire(decision.capability);
+  if (decision.source) entry.source = decision.source;
+  if (decision.subject) entry.subject = decision.subject;
+  if (decision.reason) entry.reason = decision.reason;
+  return entry;
+}
 
 export function assertValidOwnerChannelFlag(ctx: PolicyContext): void {
   if (!ctx.isOwnerChannel) return;
@@ -80,7 +155,7 @@ export class SpeechService {
   async say(
     sender: SenderActor,
     input: { channel: SpeechChannel; body: string; targetId?: string | null; idempotencyKey?: string | null },
-  ): Promise<SayAck> {
+  ): Promise<SayAckWithQuota> {
     if (!input.idempotencyKey) {
       throw new GroveError("IDEMPOTENCY_REQUIRED", "Header Idempotency-Key is required.");
     }
@@ -117,12 +192,24 @@ export class SpeechService {
         id: speechId,
         channel: existing.rows[0].channel as SpeechChannel,
         deliveredCount: dels.filter((d) => d.status === "delivered").length,
+        // Thinner than the live ack by necessity, not by choice:
+        // speech_deliveries records the code and nothing else, so there is no
+        // `source`/`subject`/`reason` to replay. Routed through the same shaper
+        // anyway, so the mute rule cannot be honoured in one path and forgotten
+        // in the other.
         undelivered: dels
           .filter((d) => d.status === "filtered")
-          .map((d) => ({
-            actorId: d.recipient_id as string,
-            code: (d.filter_code as SayAck["undelivered"][number]["code"]) ?? "PERMISSION_DENIED",
-          })),
+          .map((d) =>
+            undeliveredFor(d.recipient_id as ActorId, {
+              allow: false,
+              code: (d.filter_code as PolicyDecision["code"]) ?? "PERMISSION_DENIED",
+              reason: "",
+            }),
+          ),
+        // A replay charges nothing, so this is simply where the sender stands
+        // now. Answering it here as well means an agent that retried a timed-out
+        // call is not left pacing against a stale number.
+        quota: await this.remainingFor(sender, null),
       };
     }
 
@@ -236,11 +323,9 @@ export class SpeechService {
           });
         }
       } else {
-        undelivered.push({
-          actorId: d.recipientId,
-          code: d.decision.code,
-          capability: d.decision.capability,
-        });
+        // §5.5 the last hop: which ceiling refused, and whose setting it was,
+        // per recipient. `undeliveredFor` redacts a mute and nothing else.
+        undelivered.push(undeliveredFor(d.recipientId, d.decision));
         if (d.decision.code === "MUTED" && d.decision.visibleInUi === false) {
           mutedHumanIds.push(d.recipientId);
         }
@@ -329,7 +414,40 @@ export class SpeechService {
       await this.wakeMentions(input.body, senderId, roomId);
     }
 
-    return { id: speechId, channel: input.channel, deliveredCount, undelivered };
+    return {
+      id: speechId,
+      channel: input.channel,
+      deliveredCount,
+      undelivered,
+      quota: await this.remainingFor(sender, roomId),
+    };
+  }
+
+  /**
+   * What the sender has left, read back from the limiter AFTER this call was
+   * charged.
+   *
+   * NOT subtracted from the snapshot `buildContext` took. That one is the state
+   * the call was JUDGED against, so by the time the ack is written it is one
+   * call stale; and doing the arithmetic here would be a second, drifting
+   * statement of what `consumeSay` and `consumeWrite` charge, in a file that
+   * already has one. Three reads against Redis on a path that has already done
+   * a dozen queries, and they are the limiter's own answer rather than this
+   * file's opinion of it.
+   *
+   * `roomId` only selects `roomWindowCount`, which `SayQuota` does not carry —
+   * it is passed through so the read is aimed at the real room where there is
+   * one, and costs nothing when there is not.
+   */
+  private async remainingFor(sender: SenderActor, roomId: string | null): Promise<SayQuota> {
+    const senderId = sender.kind === "human" ? sender.human.id : sender.agent.id;
+    const first24 = sender.kind === "agent" && isFirst24h(sender.agent.claimedAt);
+    const snapshot = await this.quota.snapshotForSay(senderId, roomId ?? "", first24);
+    return {
+      roomSayRemaining: snapshot.roomSayRemaining,
+      roomSayGapOk: snapshot.roomSayGapOk,
+      writeRemaining: snapshot.writeRemaining,
+    };
   }
 
   async buildContext(

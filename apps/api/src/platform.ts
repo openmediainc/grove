@@ -107,10 +107,24 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
     return sendOk(reply, { world });
   });
 
+  /** Give a space back: releases the plot, keeps the record. Owner only. */
+  app.post("/api/v1/worlds/:id/archive", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    const id = (req.params as { id: string }).id;
+    const world = await grove.campus.archiveWorld(human, id);
+    return sendOk(reply, { world });
+  });
+
   app.post("/api/v1/worlds/:id/enter", async (req, reply) => {
     const human = await requireHuman(req, grove);
     const id = (req.params as { id: string }).id;
     const world = await grove.campus.requireWorld(id);
+    // An archived space has given its land back. Membership may still be on
+    // record -- the history is deliberately kept -- so membership alone would
+    // let a former member walk into somewhere that no longer exists.
+    if (world.archivedAt) {
+      throw new GroveError("ROOM_FORBIDDEN", "That space has been given back.", { httpStatus: 403 });
+    }
     // Membership is the gate. isMember() returns true unconditionally for the
     // canonical world (WORLD_ID), so Grove itself stays open to every signed-in
     // human; any other campus requires the human to already be its owner or a

@@ -12,6 +12,7 @@ import type { GroveStore } from "../store.js";
 import { GroveError } from "../errors.js";
 import { newId, newUlid } from "../ids.js";
 import { randomToken } from "../crypto.js";
+import { withTx } from "../db.js";
 
 export interface WorldRow {
   id: string;
@@ -21,6 +22,8 @@ export interface WorldRow {
   createdAt: string;
   /** Plot on the shared world. NULL only for the civic core. */
   plotIndex: number | null;
+  /** Set when the space was given back; its plot is released and it cannot be entered. */
+  archivedAt: string | null;
   policyPreset: SpacePolicyPreset;
   /** Explicit override; when null the preset supplies the policy. */
   spacePolicy: SpacePolicy | null;
@@ -289,6 +292,33 @@ export class CampusService {
    *
    * Pass null for a signed-out viewer; membership then reads false everywhere.
    */
+  /**
+   * Give a space back. The land is released, the record is kept: rooms, speech
+   * and every chronicle event that happened there survive, because tidying a
+   * directory is not a reason to rewrite what happened. Anyone standing in it
+   * is returned to the commons rather than stranded in a space nobody can enter.
+   */
+  async archiveWorld(human: Human, idOrSlug: string): Promise<WorldRow> {
+    const world = await this.requireWorld(idOrSlug);
+    if (world.id === WORLD_ID) {
+      throw new GroveError("INVALID", "The commons cannot be given back.");
+    }
+    await this.assertOperate(human, world);
+    await withTx(this.store.pg, async (c) => {
+      await c.query(
+        `DELETE FROM presence WHERE room_id IN (SELECT id FROM rooms WHERE world_id = $1)`,
+        [world.id],
+      );
+      await c.query(
+        `UPDATE worlds SET archived_at = now(), plot_index = NULL WHERE id = $1`,
+        [world.id],
+      );
+    });
+    const after = await this.getWorld(world.id);
+    if (!after) throw new GroveError("NOT_FOUND", "Space not found.", { httpStatus: 404 });
+    return after;
+  }
+
   async listDirectory(humanId: string | null): Promise<SpaceDirectoryEntry[]> {
     const { rows } = await this.store.pg.query(
       `SELECT w.id, w.slug, w.name, w.plot_index, w.policy_preset, w.owner_human_id,
@@ -306,7 +336,7 @@ export class CampusService {
                         FROM world_orgs wo JOIN orgs o ON o.id = wo.org_id
                         WHERE wo.world_id = w.id), '[]'::json) AS orgs
        FROM worlds w LEFT JOIN humans h ON h.id = w.owner_human_id
-       WHERE w.plot_index IS NOT NULL
+       WHERE w.archived_at IS NULL AND w.plot_index IS NOT NULL
        ORDER BY w.plot_index`,
       [humanId],
     );
@@ -742,6 +772,7 @@ export class CampusService {
       worldSlug: String(r.world_slug),
       worldName: String(r.world_name),
       plotIndex: r.plot_index == null ? null : Number(r.plot_index),
+    archivedAt: r.archived_at ? new Date(String(r.archived_at)).toISOString() : null,
       humanId: String(r.human_id),
       handle: String(r.handle),
       displayName: String(r.display_name),
@@ -1335,6 +1366,7 @@ function mapWorld(r: Record<string, unknown>): WorldRow {
     ownerHumanId: (r.owner_human_id as string | null) ?? null,
     createdAt: new Date(String(r.created_at)).toISOString(),
     plotIndex: r.plot_index == null ? null : Number(r.plot_index),
+    archivedAt: r.archived_at ? new Date(String(r.archived_at)).toISOString() : null,
     policyPreset: (r.policy_preset as SpacePolicyPreset) ?? DEFAULT_SPACE_POLICY_PRESET,
     spacePolicy: toSpacePolicy(r.space_policy),
     orgRenderMode: isOrgRenderMode(r.org_render_mode) ? r.org_render_mode : "shared",

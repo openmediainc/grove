@@ -136,6 +136,26 @@ import type { GroveStore } from "../store.js";
  *     is trivially widened later if Grove decides a working day is civic.
  *     Unpublishing it would not be.
  *
+ *  8. `stage.started` / `stage.ended` — THE WORLD GATE, AND NOTHING ELSE.
+ *     Migration 016 gave the Stage a window and campus.announceStage() now
+ *     crosses each edge of it exactly once, writing these two rows.
+ *
+ *     They take `actor_joined_room`'s rule character for character rather than
+ *     the fail-closed default, because the fact is already public to exactly
+ *     the same set of people: `GET /api/v1/civic` and `GET /api/v1/civic/stage`
+ *     both sit behind `optionalActor` — no credential at all — and hand a
+ *     signed-out visitor the live event's title and window for any world
+ *     `assertWorldAccess` lets them reach. So the ledger publishes strictly
+ *     nothing new, and an anonymous reader is admitted for the same reason
+ *     movement is.
+ *
+ *     That the rule is the WORLD GATE is the whole answer to "is an event
+ *     civic?". An event on the commons Stage is; an event on the Stage of a
+ *     private plot is not, and `visible_worlds` already draws that line — the
+ *     payload carries `roomId` precisely so these rows resolve to a world
+ *     instead of falling through to the commons (see publishStage()).
+ *     Operators get no bypass, the same way they get none on rule 1.
+ *
  * Payloads are never returned raw. Each type has an allow-list of fields
  * (see `detailFor`), so a payload that later grows a field does not
  * retroactively publish it.
@@ -220,6 +240,10 @@ const KIND_OF: Record<string, ChronicleKind> = {
   actor_registered: "arrival",
   actor_claimed: "claim",
   actor_joined_room: "movement",
+  // Rule 8. `movement`-grade: a coming and a going, like walking into a room —
+  // the kind a reader skims past in a run rather than stops on.
+  "stage.started": "movement",
+  "stage.ended": "movement",
   // Migration 017: one row per stretch of pulse verb. Its own kind rather than
   // "other", so an owner can filter a day's work away from a day's events.
   agent_phase: "work",
@@ -371,6 +395,11 @@ visible AS (
       -- public agent page.
       WHEN type IN ('actor_registered', 'actor_claimed', 'permission_changed') THEN TRUE
       WHEN type = 'actor_joined_room' THEN world_id IN (SELECT id FROM visible_worlds)
+      -- Rule 8. Identical to the line above, deliberately: /api/v1/civic and
+      -- /api/v1/civic/stage already serve this to a signed-out visitor for
+      -- every world the same gate lets them reach.
+      WHEN type IN ('stage.started', 'stage.ended')
+        THEN world_id IN (SELECT id FROM visible_worlds)
       -- GET /notices requires an actor, so this does too.
       WHEN type = 'notice' THEN $1::text IS NOT NULL
       WHEN type = 'speech' THEN
@@ -642,6 +671,19 @@ function summaryFor(
       }
       return `${who(actor)} ${phrase} ${tail}${caption}.`;
     }
+    // Phrased around the EVENT, not the actor. `actor_id` on these rows is the
+    // scheduler who created the event hours earlier, not somebody who did
+    // anything at this instant — the world crossed the edge of a window, and
+    // "@alice started Open mic" would be a straightforwardly false account of
+    // who was in the room when the bell rang.
+    case "stage.started":
+      return payload.title
+        ? `“${String(payload.title)}” began in ${room}.`
+        : `An event began in ${room}.`;
+    case "stage.ended":
+      return payload.title
+        ? `“${String(payload.title)}” finished in ${room}.`
+        : `An event finished in ${room}.`;
     case "speech":
       return `${who(actor)} spoke in ${room}.`;
     case "notice":
@@ -738,6 +780,12 @@ function detailFor(
       // `error_text` are the agent's own pulse fields, unchanged — the url is
       // already scheme-checked by presence.normalisePulseUrl on the way in.
       return pick("verb", "detail", "url", "error_text", "seconds", "started_at", "ended_at", "silent");
+    case "stage.started":
+    case "stage.ended":
+      // The window, so a reader can see how long it ran without diffing two
+      // rows. `eventId` and `roomId` are deliberately absent: one is an internal
+      // handle and the other is already resolved to `roomName` on the entry.
+      return pick("title", "startsAt", "endsAt");
     case "speech":
       return pick("channel");
     case "notice":

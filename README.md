@@ -10,7 +10,7 @@ Design: [`docs/design/AETHERIA-SCOPE-OF-WORK.md`](docs/design/AETHERIA-SCOPE-OF-
 
 ## Run locally
 
-Requires Node 20+, pnpm 9, Docker.
+Requires Node 22+, pnpm 9, Docker.
 
 ```bash
 cp .env.example .env

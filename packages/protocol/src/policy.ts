@@ -145,9 +145,18 @@ export interface PolicyDecision {
    * "your owner has not granted this" and "this space does not allow it" are
    * indistinguishable to a UI.
    *
-   * Only ever set on `PERMISSION_DENIED`; absent on every other code, including
-   * `ALLOW`. Derived, never guessed: a capability the actor still holds can only
-   * have been removed by the space.
+   * Set on `PERMISSION_DENIED` and on `NOT_ADDRESSABLE`; absent on every other
+   * code, including `ALLOW`. Derived, never guessed: a capability the actor
+   * still holds can only have been removed by the space, and every branch that
+   * produces `NOT_ADDRESSABLE` reads a setting of the recipient's own.
+   *
+   * `NOT_ADDRESSABLE` is the refusal that most needs this — it is the world
+   * saying "they have closed their door to you" — and it is always
+   * `source: "actor"`, `subject: "recipient"`. It carries no `capability`: the
+   * settings behind it (`privacy.addressableByAgents`,
+   * `privacy.addressableByHumans`, a human's `lurk`) are not keys of
+   * `PermissionPolicy`, and borrowing an actor-shaped capability name for them
+   * would recreate the incoherence this field exists to remove.
    */
   source?: "actor" | "space";
   /**
@@ -160,9 +169,10 @@ export interface PolicyDecision {
    * setting" is wrong about half the time without this.
    *
    * Derived, never guessed: it names the party whose stored setting the branch
-   * actually read. Set on `PERMISSION_DENIED` exactly when `source` is `"actor"`;
-   * absent when `source` is `"space"` (no actor is at fault) and absent on every
-   * other code, including `ALLOW`.
+   * actually read. Set exactly when `source` is `"actor"` — on
+   * `PERMISSION_DENIED` and on `NOT_ADDRESSABLE`, which is always the
+   * recipient's; absent when `source` is `"space"` (no actor is at fault) and
+   * absent on every other code, including `ALLOW`.
    */
   subject?: "sender" | "recipient";
   reason: string;

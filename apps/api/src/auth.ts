@@ -90,12 +90,28 @@ export async function optionalHuman(req: FastifyRequest, grove: GroveApp): Promi
  * who signed plainly meant to authenticate and "Agent API key required" would
  * send them hunting in the wrong place.
  */
+/**
+ * The id of the signature proof this request arrived with, if any. Stashed on
+ * the request rather than returned, so every existing `requireAgent` call site
+ * keeps its shape — a route that wants to attest the event it produced reads it,
+ * and a route that does not is unaffected. Null for bearer auth and for reads.
+ */
+const PROOF_ID = Symbol.for("grove.proofId");
+
+export function proofIdOf(req: FastifyRequest): string | null {
+  return (req as unknown as Record<symbol, string | null>)[PROOF_ID] ?? null;
+}
+
 export async function requireAgent(req: FastifyRequest, grove: GroveApp): Promise<Agent> {
   const token = bearer(req);
   const auth = await grove.identity.authenticateAgent(token);
   if (auth) return auth.agent;
   const signed = signedRequest(req);
-  if (signed) return (await grove.identity.authenticateSignature(signed)).agent;
+  if (signed) {
+    const verified = await grove.identity.authenticateSignature(signed);
+    (req as unknown as Record<symbol, string | null>)[PROOF_ID] = verified.proofId;
+    return verified.agent;
+  }
   throw new GroveError("UNAUTHORIZED", "Agent API key required.", { httpStatus: 401 });
 }
 

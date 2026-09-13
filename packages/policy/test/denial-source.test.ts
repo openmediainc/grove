@@ -448,6 +448,11 @@ describe("actor vs space actually discriminates", () => {
 // 5. `source` is absent everywhere else
 // ---------------------------------------------------------------------------
 
+/*
+ * PRM-07: `NOT_ADDRESSABLE` used to live in this list. It no longer does — it
+ * is now attributed, and its own tests are in section 7 below. Nothing else
+ * moved: every other non-permission code is still unattributed.
+ */
 describe("source is absent on ALLOW and on every non-permission code", () => {
   const cases: Array<{ code: string; where: "emit" | "delivery"; ctx: PolicyContext }> = [
     {
@@ -548,19 +553,6 @@ describe("source is absent on ALLOW and on every non-permission code", () => {
         isOwnerChannel: true,
       },
     },
-    {
-      code: "NOT_ADDRESSABLE",
-      where: "emit",
-      ctx: {
-        sender: agentSender(),
-        recipients: [{ ...humanRecipient(), lurk: true }],
-        channel: "whisper",
-        requestedTargetId: "hum_recipient",
-        room: room(),
-        quota,
-        isOwnerChannel: false,
-      },
-    },
   ];
 
   for (const c of cases) {
@@ -653,7 +645,7 @@ function withoutSpace(ctx: PolicyContext): PolicyContext {
 describe("source — invariants over the whole matrix", () => {
   const channels: Array<PolicyContext["channel"]> = ["room_say", "whisper", "notice"];
 
-  it("source is present EXACTLY on PERMISSION_DENIED, and is always one of the two literals", () => {
+  it("source is present EXACTLY on PERMISSION_DENIED and NOT_ADDRESSABLE, and is always one of the two literals", () => {
     let denials = 0;
     let others = 0;
     for (const { senderKind, recipientKind } of KIND_PAIRS) {
@@ -677,7 +669,7 @@ describe("source — invariants over the whole matrix", () => {
                   );
                   for (const d of [res.emit, ...res.deliveries.map((x) => x.decision)]) {
                     expect(d.code).not.toBe("ROOM_FULL");
-                    if (d.code === "PERMISSION_DENIED") {
+                    if (d.code === "PERMISSION_DENIED" || d.code === "NOT_ADDRESSABLE") {
                       expect(["actor", "space"]).toContain(d.source);
                       denials += 1;
                     } else {

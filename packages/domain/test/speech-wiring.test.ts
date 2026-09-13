@@ -286,7 +286,13 @@ describe.skipIf(!hasDb)("a refusal names who refused, and public speech is writt
         await pg.query<{ k: string }>("SELECT idempotency_key AS k FROM speech WHERE id = $1", [ack.id])
       ).rows[0]!.k,
     });
-    expect(replay).toEqual(ack);
+    // The SPEECH FACTS replay byte-for-byte, which is the contract. `quota` is
+    // deliberately not among them: it is a live reading of what the sender has
+    // left, taken when the ack is written, and this test clears the limiters in
+    // between precisely so the replay can be taken at all — so the two readings
+    // are different on purpose.
+    expect({ ...replay, quota: undefined }).toEqual({ ...ack, quota: undefined });
+    expect(replay.quota).toBeDefined();
   });
 
   it("records a public Plaza line as carried, which is the fact the chronicle reads", async () => {
@@ -320,27 +326,23 @@ describe.skipIf(!hasDb)("a refusal names who refused, and public speech is writt
   });
 
   /**
-   * PENDING one clause in `packages/domain/src/services/chronicle.ts`, which
-   * this worker does not own.
+   * The end-to-end property: a Plaza line written with a spectator delivery row
+   * is readable in the chronicle by a signed-in viewer who was not in the room.
    *
-   * The delivery row above is now written, but the chronicle's `VISIBLE_CTE`
-   * body gate only matches a row whose `recipient_id` is the VIEWER or an agent
-   * the viewer owns:
+   * Both halves are now in place — `say()` writes the row under the same
+   * `spectatorHears` expression that decides the `sse:plaza` publish, and the
+   * chronicle's `VISIBLE_CTE` admits `hum_spectator` inside its signed-in guard.
    *
-   *     AND (d.recipient_id = $1::text
-   *          OR d.recipient_id IN (SELECT id FROM own))
+   * This test is what keeps them honest. The SQL matches the recipient id as a
+   * LITERAL, so if `SPECTATOR_RECIPIENT` is ever renamed the two halves part
+   * company silently and public speech goes dark again — with no error anywhere.
+   * That failure is invisible in production and visible only here, which is the
+   * whole reason this assertion exists rather than a unit test of either side.
    *
-   * so `hum_spectator` matches nobody and the body is still withheld. The fix is
-   * one disjunct, inside the existing `$1::text IS NOT NULL` guard so it stays
-   * signed-in-only:
-   *
-   *          OR d.recipient_id = 'hum_spectator'
-   *
-   * That is the same rule as the write side and nothing more: a spectator row
-   * exists only where `sse:plaza` already broadcast the line to every logged-out
-   * viewer of the landing page. Un-skip this the moment that lands — the
-   * assertions below are the real end-to-end property and are written to pass
-   * then, and only then.
+   * It also cannot be used to widen anything: the sibling test below proves a
+   * Plaza line from an agent without `speakToHumans` writes no spectator row and
+   * stays withheld, so the clause opens exactly the lines the unauthenticated
+   * `/api/v1/sse/plaza` feed already broadcast, and nothing else.
    */
   it("makes a public Plaza line readable in the chronicle to someone who was not there", async () => {
     const owner = await newHuman("open-speaker");

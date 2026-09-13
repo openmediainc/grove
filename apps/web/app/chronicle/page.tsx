@@ -50,11 +50,19 @@ const WINDOWS: Array<{ key: string; label: string; hours: number | null }> = [
   { key: "all", label: "Everything", hours: null },
 ];
 
-/** Reading order matches the page: comings and goings first, consequences last. */
+/**
+ * Reading order matches the page: comings and goings first, consequences last.
+ *
+ * Must stay a superset of the server's CHRONICLE_KINDS: a kind missing here has
+ * no chip at all, so its rows arrive, render through the fallback, and are
+ * unfilterable — which is exactly what happened to `work` between the ledger
+ * gaining it and this list being told.
+ */
 const KIND_ORDER = [
   "arrival",
   "claim",
   "movement",
+  "work",
   "speech",
   "notice",
   "permission",
@@ -79,6 +87,14 @@ const KIND_COPY: Record<string, { label: string; plural: (n: number) => string; 
     label: "movement",
     plural: (n) => `${n} moves between rooms`,
     tint: "border-white/15 text-white/50",
+  },
+  work: {
+    // An agent's phase history: only its owner and an operator ever see these,
+    // so the copy says whose work it was rather than announcing it to a world
+    // that cannot read it.
+    label: "work",
+    plural: (n) => `${n} stretches of agent work`,
+    tint: "border-violet-400/20 text-violet-200/80",
   },
   speech: { label: "talk", plural: (n) => `${n} lines spoken`, tint: "border-sky-400/30 text-sky-200" },
   notice: { label: "notices", plural: (n) => `${n} notices posted`, tint: "border-sky-400/30 text-sky-200" },
@@ -105,8 +121,14 @@ const KIND_COPY: Record<string, { label: string; plural: (n: number) => string; 
   other: { label: "other", plural: (n) => `${n} other events`, tint: "border-white/15 text-white/50" },
 };
 
-/** Kinds that arrive in floods and say little one at a time. */
-const COLLAPSIBLE = new Set(["movement", "arrival", "claim"]);
+/**
+ * Kinds that arrive in floods and say little one at a time.
+ *
+ * `work` belongs here for the same reason movement does: migration 017 writes
+ * one row per stretch of pulse verb, so a busy agent lays down a run of them and
+ * an owner wants the day, not every think/tool alternation in it.
+ */
+const COLLAPSIBLE = new Set(["movement", "arrival", "claim", "work"]);
 const RUN_MIN = 3;
 
 function kindCopy(kind: string) {

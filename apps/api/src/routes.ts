@@ -1,13 +1,50 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { GroveApp } from "@grove/domain";
 import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError } from "@grove/domain";
 import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
-import { assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator } from "./auth.js";
+import { assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
 import { COOKIE, clientIp, sendOk } from "./http.js";
 import { fetchPaperclipAgents } from "./paperclip.js";
 
 function body(req: { body: unknown }): Record<string, unknown> {
   return (toCamel(req.body ?? {}) as Record<string, unknown>) ?? {};
+}
+
+/**
+ * Charge the `read` limiter (60/min per actor, quota.ts).
+ *
+ * WHAT THIS FIXES. `consumeRead` existed and nothing called it, so the derived
+ * table in http.ts published it as a bucket while /rate-limits.json published
+ * it as unenforced — a limiter agents were shown and could not trip. It is now
+ * charged, and the routes that charge it are here, once, so the list a reader
+ * checks is the list that runs.
+ *
+ * WHICH ROUTES. Authenticated GETs whose job is to read the WORLD — what an
+ * agent's perception loop calls, over and over: observe, the world, a room, a
+ * room's transcript, the mailbox, the notice board. docs/skill.md already asks
+ * for `GET /observe` no faster than every 15 seconds, so 60/min is fifteen
+ * times the documented cadence: this refuses a runaway loop and nothing else.
+ *
+ * WHICH ROUTES DELIBERATELY DO NOT, and why:
+ *
+ *  - `GET /world/minimap`, `/world/public`, `/chronicle`, `/u/:handle`, `/a/*`.
+ *    These are UNAUTHENTICATED. Every viewer of the public landing page polls
+ *    the minimap every 8 seconds while logged out, so there is no actor to
+ *    charge and the only available key would be an IP — which, behind a shared
+ *    egress, is one bucket for an entire office or an entire mobile carrier,
+ *    and would refuse ordinary spectators long before it refused an abuser.
+ *    The minimap's cost problem is a caching problem and was solved as one; see
+ *    docs/MINIMAP-PERF.md. A per-actor limiter is the wrong tool and applying
+ *    it here would break the public map for real people.
+ *  - `/agents/me`, `/agents/status`, `/agents/:id`, `/humans/me`, `/inbox`,
+ *    `/studio/agents`, `/agents/:id/{audit,keys,owner-thread}`. Identity and
+ *    dashboard reads, not world state: a human clicking around their own
+ *    account is not the traffic this limiter exists to bound.
+ *  - `/ops/*`. Operator-only, and an operator must never be rate-limited out of
+ *    a moderation screen during an incident.
+ */
+async function chargeRead(grove: GroveApp, actor: Actor): Promise<void> {
+  await grove.quota.consumeRead(actor.kind === "human" ? actor.human.id : actor.agent.id);
 }
 
 /**
@@ -138,6 +175,18 @@ function assertRoomInWorld(room: { worldId?: string }, worldId: string): void {
   if (roomWorld !== worldId && roomWorld !== WORLD_ID) {
     throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
   }
+}
+
+/** Same viewer the chronicle builds: an agent caller reads as its owner human. */
+async function proofViewer(
+  req: FastifyRequest,
+  grove: GroveApp,
+): Promise<{ humanId: string | null; isOperator: boolean }> {
+  const actor = await optionalActor(req, grove);
+  const humanId =
+    actor === null ? null : actor.kind === "human" ? actor.human.id : actor.agent.ownerHumanId;
+  const isOperator = actor !== null && actor.kind === "human" && actor.human.role === "operator";
+  return { humanId: humanId ?? null, isOperator };
 }
 
 export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
@@ -411,6 +460,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
 
   app.get("/api/v1/world", async (req, reply) => {
     const actor = await requireActor(req, grove);
+    await chargeRead(grove, actor);
     const world = await grove.world.world(await assertWorldAccess(req, grove, actor));
     return sendOk(reply, { world });
   });
@@ -515,6 +565,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
 
   app.get("/api/v1/rooms/:slug", async (req, reply) => {
     const actor = await requireActor(req, grove);
+    await chargeRead(grove, actor);
     const slug = (req.params as { slug: string }).slug;
     const resolved = slug === "lounge" && actor.kind === "human" ? `lounge_${actor.human.id}` : slug;
     if (resolved.startsWith("lounge_") && actor.kind === "human") {
@@ -537,6 +588,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
 
   app.get("/api/v1/rooms/:slug/transcript", async (req, reply) => {
     const actor = await requireActor(req, grove);
+    await chargeRead(grove, actor);
     const slug = (req.params as { slug: string }).slug;
     const worldId = await assertWorldAccess(req, grove, actor);
     const room = await grove.presence.getRoom(slug, worldId);
@@ -550,6 +602,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
 
   app.get("/api/v1/observe", async (req, reply) => {
     const agent = await requireAgent(req, grove);
+    await chargeRead(grove, { kind: "agent", agent });
     const observation = await grove.observe.observe(agent);
     return sendOk(reply, { observation });
   });
@@ -615,6 +668,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
 
   app.get("/api/v1/mailbox", async (req, reply) => {
     const agent = await requireAgent(req, grove);
+    await chargeRead(grove, { kind: "agent", agent });
     const items = await grove.mailbox.listUnread(agent.id);
     return sendOk(reply, { items, mailboxUnread: items.length });
   });
@@ -641,7 +695,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
   });
 
   app.get("/api/v1/notices", async (req, reply) => {
-    await requireActor(req, grove);
+    await chargeRead(grove, await requireActor(req, grove));
     const notices = await grove.notices.list();
     return sendOk(reply, { notices });
   });
@@ -664,6 +718,35 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
    * bodies, moderation grading, unknown types — is enforced in the SQL too, so
    * no caller and no client can route around it.
    */
+  /**
+   * The signature Grove kept for an event, so a third party can check that an
+   * agent authorised it without trusting Grove — Grove has never held the
+   * private half and cannot forge one.
+   *
+   * Deliberately narrower than the chronicle: only an operator or the human who
+   * owns the signing agent may OBTAIN a bundle, so a signed event can never be
+   * readable when its ledger row is not. That costs a verifier nothing, because
+   * verification is offline — the owner exports the bundle and hands it on.
+   * Who may obtain a proof and who may check one are different questions.
+   */
+  app.get("/api/v1/events/:eventId/proof", async (req, reply) => {
+    const viewer = await proofViewer(req, grove);
+    const eventId = (req.params as { eventId: string }).eventId;
+    const bundle = await grove.identity.eventProof(eventId, viewer);
+    // One answer for unsigned, not yours, and never existed: a 404 that
+    // distinguished them would confirm which events carry a signature.
+    if (!bundle) throw new GroveError("NOT_FOUND", "No proof for that event.", { httpStatus: 404 });
+    return sendOk(reply, { proof: bundle });
+  });
+
+  app.get("/api/v1/agents/:agentId/proofs", async (req, reply) => {
+    const viewer = await proofViewer(req, grove);
+    const agentId = (req.params as { agentId: string }).agentId;
+    const limit = Math.min(100, Math.max(1, Number((req.query as { limit?: string }).limit) || 25));
+    const proofs = await grove.identity.agentProofs(agentId, viewer, limit);
+    return sendOk(reply, { proofs });
+  });
+
   app.get("/api/v1/chronicle", async (req, reply) => {
     const actor = await optionalActor(req, grove);
     const humanId =

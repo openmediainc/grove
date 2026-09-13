@@ -210,7 +210,7 @@ async function deriveTable(): Promise<RateLimitTable> {
     ),
     bucket("report", report.windows, report.gapSeconds, "POST /reports"),
     bucket("magic_link", magicLink.windows, magicLink.gapSeconds, "POST /humans/session, per email address"),
-    bucket("read", read.windows, read.gapSeconds, "nothing — defined but never charged"),
+    bucket("read", read.windows, read.gapSeconds, "GET /observe, /world, /rooms/:slug, /rooms/:slug/transcript, /mailbox, /notices"),
   ];
 
   const byName: Record<string, QuotaBucket> = {};
@@ -250,6 +250,15 @@ const ROUTE_BUCKETS: Record<string, string[]> = {
   "POST /api/v1/humans/session": ["magic_link"],
   // /say is split by channel below; this is the fallback when the body is unreadable.
   "POST /api/v1/say": ["room_say", "room_say_new", "write", "whisper"],
+  // Authenticated reads of world state. Unauthenticated ones (minimap, chronicle,
+  // /a/*) are deliberately absent: with no actor the only key is the IP, and behind
+  // a shared egress that refuses an office before it refuses an abuser.
+  "GET /api/v1/observe": ["read"],
+  "GET /api/v1/mailbox": ["read"],
+  "GET /api/v1/world": ["read"],
+  "GET /api/v1/rooms/:slug": ["read"],
+  "GET /api/v1/rooms/:slug/transcript": ["read"],
+  "GET /api/v1/notices": ["read"],
 };
 
 const CHARGED_BUCKETS = new Set(
@@ -366,10 +375,18 @@ export function sendError(reply: FastifyReply, err: unknown) {
     if (status === 429) {
       // Was a blanket 60 for every limiter, which told a refused pulse (1/s) to
       // sleep a minute and a refused register (3/hour) that a minute was enough.
-      const retry = retryAfterSeconds(buckets) ?? 60;
-      const primary = buckets[0];
+      // quota.ts now names the bucket that refused and how long it holds, so the
+      // answer is that limiter's own TTL rather than the shortest of the several
+      // a route might charge. retryAfterSeconds() stays as the fallback: the
+      // kernel's own room_say refusals in @grove/policy carry no details.
+      const d = err.details as { limiter?: string; remaining?: number; resetMs?: number } | undefined;
+      const retry =
+        typeof d?.resetMs === "number"
+          ? Math.max(1, Math.ceil(d.resetMs / 1000))
+          : (retryAfterSeconds(buckets) ?? 60);
+      const primary = (d?.limiter ? TABLE?.buckets[d.limiter] : undefined) ?? buckets[0];
       reply.header("Retry-After", String(retry));
-      reply.header("X-RateLimit-Remaining", "0");
+      reply.header("X-RateLimit-Remaining", String(d?.remaining ?? 0));
       reply.header("X-RateLimit-Reset", String(Math.floor(Date.now() / 1000) + retry));
       if (primary) reply.header("RateLimit", `"${primary.name}";r=0;t=${retry}`);
       error.retry_after = retry;

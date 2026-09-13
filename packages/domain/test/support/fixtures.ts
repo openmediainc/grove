@@ -104,6 +104,9 @@ export const REGISTER_IPS = {
   routesWiring: "10.99.2.2",
   agentAdapters: "10.99.3.1",
   civicRooms: "10.99.4.1",
+  observeContext: "10.99.6.1",
+  sayQuota: "10.99.6.2",
+  eventProofs: "10.99.7.1",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */

@@ -331,6 +331,12 @@ describe("subject is absent when the SPACE is the cause", () => {
   });
 });
 
+/*
+ * PRM-07: `NOT_ADDRESSABLE` used to live in this list. It is now attributed
+ * (`source: "actor"`, `subject: "recipient"`), so it belongs with the denials
+ * that name a party, not with the ones that name nobody. Its tests are in
+ * not-addressable.test.ts.
+ */
 describe("subject is absent on ALLOW and on every non-permission code", () => {
   const cases: Array<{ code: string; where: "emit" | "delivery"; ctx: PolicyContext }> = [
     {
@@ -427,19 +433,6 @@ describe("subject is absent on ALLOW and on every non-permission code", () => {
         room: room(),
         quota,
         isOwnerChannel: true,
-      },
-    },
-    {
-      code: "NOT_ADDRESSABLE",
-      where: "emit",
-      ctx: {
-        sender: agentSender(),
-        recipients: [{ ...humanRecipient(), lurk: true }],
-        channel: "whisper",
-        requestedTargetId: "hum_recipient",
-        room: room(),
-        quota,
-        isOwnerChannel: false,
       },
     },
   ];
@@ -557,7 +550,10 @@ describe("subject — invariants over the whole matrix", () => {
                   }),
                 );
                 for (const d of [res.emit, ...res.deliveries.map((x) => x.decision)]) {
-                  if (d.code === "PERMISSION_DENIED" && d.source === "actor") {
+                  // Keyed on `source`, not on the code: the rule is "subject
+                  // rides with an actor attribution", and PRM-07 added a second
+                  // code that carries one.
+                  if (d.source === "actor") {
                     expect(["sender", "recipient"], `${d.reason} named ${String(d.subject)}`).toContain(
                       d.subject,
                     );

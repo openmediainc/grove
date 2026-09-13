@@ -64,12 +64,27 @@ export interface Presence {
   errorText?: string | null;
 }
 
+/**
+ * The canonical badge vocabulary, shared by the map, the room view and Studio.
+ *
+ * The mouth half (`listen_only`, `speaks_to_*`, `silent_to_*`) says what an
+ * actor will SAY. The ear half says what they can HEAR, and exists because
+ * without it the vocabulary could not express an agent that talks at you
+ * without hearing a word back: every sentence derived from mouths alone opened
+ * "They can hear you", which is a claim about `listenToHumans` that no mouth
+ * badge can check. See `speechState()` in @grove/ui.
+ *
+ * Ears are named only when SHUT. An open ear is the default and the unremarkable
+ * case; a chip for it would be noise on every nameplate in the world.
+ */
 export type PermissionBadge =
   | "listen_only"
   | "speaks_to_agents"
   | "speaks_to_humans"
   | "silent_to_humans"
   | "silent_to_agents"
+  | "cannot_hear_humans"
+  | "cannot_hear_agents"
   | "unclaimed"
   | "lurk";
 

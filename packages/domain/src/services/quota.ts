@@ -86,8 +86,73 @@ export function isFirst24h(claimedAt: string | null | undefined): boolean {
   return Date.now() - Date.parse(claimedAt) < 24 * HOUR * 1000;
 }
 
+/**
+ * Which limiter refused, and what the caller needs in order to act on it.
+ *
+ * WHY THIS EXISTS. A `RATE_LIMITED` GroveError used to carry a sentence and
+ * nothing else. apps/api/src/http.ts knows every limiter's SHAPE — it derives
+ * the whole table by running this file — but it could not know which of a
+ * route's buckets had just refused, so `Retry-After` fell back to the shortest
+ * window of every bucket the route might charge. A floor: correct, and often
+ * far too eager. A spent register day-window was told to come back in an hour.
+ *
+ * These three fields are read off the limiter that actually refused, at the
+ * moment it refused, so a consumer can be exact instead of conservative.
+ *
+ * NO LIMIT IS WRITTEN DOWN HERE. `resetMs` is the limiter's own TTL for the key
+ * that refused; `remaining` is computed from the same `limit` the branch above
+ * it just tested. Nothing downstream has to know a window length to use either,
+ * and the runtime derivation in http.ts keeps working untouched — `refuse()`
+ * calls `ttlMs`, never `incr`, so the probe's "which key refused" bookkeeping
+ * still sees exactly what it saw before.
+ */
+export type RateLimitDetails = {
+  /**
+   * Bucket name, spelled exactly as the derived table in apps/api/src/http.ts
+   * spells it (`write` vs `write_new`, `join_request` vs `join_request_new`),
+   * so a consumer can find the refusal in `RateLimit-Policy` without a mapping
+   * table that could drift.
+   */
+  limiter: string;
+  /**
+   * Calls left in the refusing window. Always 0 when this error is thrown — but
+   * computed, not asserted, so a consumer can stop hard-coding the zero.
+   */
+  remaining: number;
+  /**
+   * Milliseconds until the refusing key frees. Falls back to the full window
+   * only when the limiter cannot say (a Redis key with no TTL, an instrumented
+   * limiter that keeps none) — never to a global constant.
+   */
+  resetMs: number;
+};
+
 export class QuotaService {
   constructor(private limiter: RateLimiter) {}
+
+  /**
+   * Refuse, naming the limiter that did it.
+   *
+   * The TTL read happens only on the refusal path, so nothing is added to a
+   * call that succeeds.
+   */
+  private async refuse(
+    limiter: string,
+    key: string,
+    limit: number,
+    used: number,
+    fallbackMs: number,
+    message: string,
+  ): Promise<never> {
+    const ttl = await this.limiter.ttlMs(key);
+    throw new GroveError("RATE_LIMITED", message, {
+      details: {
+        limiter,
+        remaining: Math.max(0, limit - used),
+        resetMs: ttl > 0 ? ttl : fallbackMs,
+      } satisfies RateLimitDetails,
+    });
+  }
 
   async snapshotForSay(actorId: string, roomId: string, first24h: boolean): Promise<QuotaSnapshot> {
     const sayLimit = first24h ? 4 : 8;
@@ -114,59 +179,96 @@ export class QuotaService {
 
   async consumeWrite(actorId: string, first24h: boolean): Promise<void> {
     const limit = first24h ? 15 : 30;
-    const n = await this.limiter.incr(`ratelimit:${actorId}:write:min`, 60);
+    const key = `ratelimit:${actorId}:write:min`;
+    const n = await this.limiter.incr(key, 60);
     if (n > limit) {
-      throw new GroveError("RATE_LIMITED", "Write rate limiter exhausted.");
+      await this.refuse(first24h ? "write_new" : "write", key, limit, n, 60_000, "Write rate limiter exhausted.");
     }
   }
 
   async consumeRead(actorId: string): Promise<void> {
-    const n = await this.limiter.incr(`ratelimit:${actorId}:read:min`, 60);
-    if (n > 60) throw new GroveError("RATE_LIMITED", "Read rate limiter exhausted.");
+    const limit = 60;
+    const key = `ratelimit:${actorId}:read:min`;
+    const n = await this.limiter.incr(key, 60);
+    if (n > limit) {
+      await this.refuse("read", key, limit, n, 60_000, "Read rate limiter exhausted.");
+    }
   }
 
   async consumeMove(actorId: string): Promise<void> {
-    if (await this.limiter.exists(`ratelimit:${actorId}:move:gap`)) {
-      throw new GroveError("RATE_LIMITED", "Move cooldown.");
+    const gapMs = 3000;
+    const gapKey = `ratelimit:${actorId}:move:gap`;
+    if (await this.limiter.exists(gapKey)) {
+      await this.refuse("move", gapKey, 1, 1, gapMs, "Move cooldown.");
     }
-    const n = await this.limiter.incr(`ratelimit:${actorId}:move:5min`, 300);
-    if (n > 20) throw new GroveError("RATE_LIMITED", "Move rate limiter exhausted.");
-    await this.limiter.setPx(`ratelimit:${actorId}:move:gap`, "1", 3000);
+    const key = `ratelimit:${actorId}:move:5min`;
+    const n = await this.limiter.incr(key, 300);
+    if (n > 20) {
+      await this.refuse("move", key, 20, n, 300_000, "Move rate limiter exhausted.");
+    }
+    await this.limiter.setPx(gapKey, "1", gapMs);
   }
 
   async consumeEnter(humanId: string): Promise<void> {
-    const n = await this.limiter.incr(`ratelimit:${humanId}:enter:hour`, HOUR);
-    if (n > 10) throw new GroveError("RATE_LIMITED", "Enter rate limiter exhausted.");
+    const key = `ratelimit:${humanId}:enter:hour`;
+    const n = await this.limiter.incr(key, HOUR);
+    if (n > 10) {
+      await this.refuse("enter", key, 10, n, HOUR * 1000, "Enter rate limiter exhausted.");
+    }
   }
 
   async consumeRegister(ip: string): Promise<void> {
-    const hour = await this.limiter.incr(`ratelimit:ip:${ip}:register:hour`, HOUR);
+    const hourKey = `ratelimit:ip:${ip}:register:hour`;
+    const hour = await this.limiter.incr(hourKey, HOUR);
     if (hour > 3) {
-      throw new GroveError("RATE_LIMITED", "Register rate limiter exhausted (3 per IP per hour).");
+      await this.refuse(
+        "register",
+        hourKey,
+        3,
+        hour,
+        HOUR * 1000,
+        "Register rate limiter exhausted (3 per IP per hour).",
+      );
     }
-    const day = await this.limiter.incr(`ratelimit:ip:${ip}:register:day`, DAY);
+    const dayKey = `ratelimit:ip:${ip}:register:day`;
+    const day = await this.limiter.incr(dayKey, DAY);
     if (day > 10) {
-      throw new GroveError("RATE_LIMITED", "Register rate limiter exhausted (10 per IP per day).");
+      await this.refuse(
+        "register",
+        dayKey,
+        10,
+        day,
+        DAY * 1000,
+        "Register rate limiter exhausted (10 per IP per day).",
+      );
     }
   }
 
   async consumeMagicLink(email: string): Promise<void> {
-    const n = await this.limiter.incr(`ratelimit:email:${email.toLowerCase()}:magic:hour`, HOUR);
-    if (n > 5) throw new GroveError("RATE_LIMITED", "Magic link rate limiter exhausted.");
+    const key = `ratelimit:email:${email.toLowerCase()}:magic:hour`;
+    const n = await this.limiter.incr(key, HOUR);
+    if (n > 5) {
+      await this.refuse("magic_link", key, 5, n, HOUR * 1000, "Magic link rate limiter exhausted.");
+    }
   }
 
   async consumeWhisper(actorId: string, first24h: boolean): Promise<void> {
     const limit = first24h ? 10 : 20;
-    const n = await this.limiter.incr(`ratelimit:${actorId}:whisper:min`, 60);
-    if (n > limit) throw new GroveError("RATE_LIMITED", "Whisper rate limiter exhausted.");
+    const key = `ratelimit:${actorId}:whisper:min`;
+    const n = await this.limiter.incr(key, 60);
+    if (n > limit) {
+      await this.refuse(first24h ? "whisper_new" : "whisper", key, limit, n, 60_000, "Whisper rate limiter exhausted.");
+    }
   }
 
   /** Pulse is cheap but must not become a firehose: 1/s per actor. */
   async consumePulse(actorId: string): Promise<void> {
-    if (await this.limiter.exists(`ratelimit:${actorId}:pulse:gap`)) {
-      throw new GroveError("RATE_LIMITED", "Pulse cooldown (1 per second).");
+    const gapMs = 1000;
+    const key = `ratelimit:${actorId}:pulse:gap`;
+    if (await this.limiter.exists(key)) {
+      await this.refuse("pulse", key, 1, 1, gapMs, "Pulse cooldown (1 per second).");
     }
-    await this.limiter.setPx(`ratelimit:${actorId}:pulse:gap`, "1", 1000);
+    await this.limiter.setPx(key, "1", gapMs);
   }
 
   /**
@@ -177,20 +279,39 @@ export class QuotaService {
    * like, not what a new member does.
    */
   async consumeJoinRequest(humanId: string, first24h: boolean): Promise<void> {
-    const hour = await this.limiter.incr(`ratelimit:${humanId}:join_request:hour`, HOUR);
+    const hourKey = `ratelimit:${humanId}:join_request:hour`;
+    const hour = await this.limiter.incr(hourKey, HOUR);
     if (hour > 3) {
-      throw new GroveError("RATE_LIMITED", "Join request rate limiter exhausted (3 per hour).");
+      await this.refuse(
+        "join_request",
+        hourKey,
+        3,
+        hour,
+        HOUR * 1000,
+        "Join request rate limiter exhausted (3 per hour).",
+      );
     }
     const dayLimit = first24h ? 5 : 10;
-    const day = await this.limiter.incr(`ratelimit:${humanId}:join_request:day`, DAY);
+    const dayKey = `ratelimit:${humanId}:join_request:day`;
+    const day = await this.limiter.incr(dayKey, DAY);
     if (day > dayLimit) {
-      throw new GroveError("RATE_LIMITED", `Join request rate limiter exhausted (${dayLimit} per day).`);
+      await this.refuse(
+        first24h ? "join_request_new" : "join_request",
+        dayKey,
+        dayLimit,
+        day,
+        DAY * 1000,
+        `Join request rate limiter exhausted (${dayLimit} per day).`,
+      );
     }
   }
 
   async consumeReport(actorId: string, first24h: boolean): Promise<void> {
     const limit = first24h ? 5 : 10;
-    const n = await this.limiter.incr(`ratelimit:${actorId}:report:day`, DAY);
-    if (n > limit) throw new GroveError("RATE_LIMITED", "Report rate limiter exhausted.");
+    const key = `ratelimit:${actorId}:report:day`;
+    const n = await this.limiter.incr(key, DAY);
+    if (n > limit) {
+      await this.refuse("report", key, limit, n, DAY * 1000, "Report rate limiter exhausted.");
+    }
   }
 }

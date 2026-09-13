@@ -106,6 +106,38 @@ function spaceDenied(
   return denied(capability, reason, source, subject);
 }
 
+/**
+ * §5.8a, PRM-06. WHICH mouth to name on the aggregate "no audience left"
+ * refusal — the one branch whose test is a disjunction, so no single capability
+ * is on its own THE cause.
+ *
+ * `capability` used to be hard-coded to the canonical `speakToHumans` while
+ * `source` was decided by a different question ("did the actor arrive with any
+ * mouth at all?"). Each field was right by its own rule and the PAIR was a lie:
+ * an agent granted `{speakToAgents: true, speakToHumans: false}` standing in a
+ * `public_view` space read as `capability: "speakToHumans", source: "space"` —
+ * a capability the actor never held, charged to the space that never took it.
+ * Switching to per-capability attribution on that hard-coded name is no better:
+ * it says `"actor"`, which sends the owner to a switch that would not have
+ * helped, and it is the SPACE that closed the mouth they actually had.
+ *
+ * The fix is to stop hard-coding the name. Pick the mouth the actor genuinely
+ * held and genuinely lost, and the existing per-capability rules (`source`,
+ * `reason`) become true of it without any special case — the aggregate answer
+ * and the per-capability answer are then the same answer, which is what
+ * coherence means here. `speakToHumans` stays canonical wherever it is honest:
+ * the actor held it and lost it, or the actor arrived with no mouth at all and
+ * so genuinely lacks it.
+ *
+ *   own SH=true                 -> speakToHumans (canonical; held and removed)
+ *   own SH=false, SA=true       -> speakToAgents (the only mouth there was)
+ *   own SH=false, SA=false      -> speakToHumans (canonical; never held either)
+ */
+function mouthThatClosed(actorPolicy: PermissionPolicy | undefined): keyof PermissionPolicy {
+  const own = actorPolicy ?? ALL_CAPABILITIES;
+  return own.speakToHumans || !own.speakToAgents ? "speakToHumans" : "speakToAgents";
+}
+
 export function authorize(ctx: PolicyContext): AuthorizeResult {
   const emit = emitDecision(ctx);
   if (!emit.allow) return { emit, deliveries: [] };
@@ -179,22 +211,10 @@ function emitDecision(ctx: PolicyContext): PolicyDecision {
   }
 
   // Space narrowing of the same "no mouth" rule, for every sender kind.
-  // speakToHumans is the canonical failed capability when no audience is left (§5.8a).
   if (ctx.channel === "room_say" || ctx.channel === "notice") {
     const effective = effectiveCaps(ctx.sender.policy, ctx.room, ctx.sender);
     if (!effective.speakToAgents && !effective.speakToHumans) {
-      // `capability` is the canonical speakToHumans (§5.8a) even when it was
-      // speakToAgents that the space removed, so per-capability attribution
-      // would misreport here. Attribute on the real question this branch asks:
-      // did the actor arrive with a mouth at all?
-      const own = ctx.sender.policy ?? ALL_CAPABILITIES;
-      const hadAMouth = own.speakToAgents || own.speakToHumans;
-      return denied(
-        "speakToHumans",
-        "This space does not grant speech here.",
-        hadAMouth ? "space" : "actor",
-        "sender",
-      );
+      return spaceDenied(ctx.sender.policy, mouthThatClosed(ctx.sender.policy), "sender");
     }
   }
 
@@ -292,22 +312,52 @@ function deliveryDecision(
   return { allow: true, code: "ALLOW", reason: "Recipient may receive this speech act." };
 }
 
+/**
+ * §5.5, PRM-07. "They have closed their door to you" is the denial that most
+ * needs to name whose door it is, and it used to carry `code` and prose alone.
+ *
+ * Every branch that produces it reads a setting belonging to the RECIPIENT —
+ * their `privacy.addressableByAgents`, their `privacy.addressableByHumans`, or
+ * their own `lurk` — so the attribution is not a judgement call: `source` is
+ * always `"actor"` (no space ceiling is consulted here; `assertAddressable` is
+ * reached on channels a space has already let through) and `subject` is always
+ * `"recipient"`. Without these a client had no way to tell this apart from its
+ * own settings refusing, and the nameplate's "owned by @x" byline points at a
+ * door that cannot open it.
+ *
+ * No `capability`: none of the three settings is a `PermissionPolicy` key, and
+ * borrowing an actor-shaped name for a privacy flag is exactly the confusion
+ * PRM-06 was. The code itself already says what closed.
+ */
+function notAddressable(reason: string): PolicyDecision {
+  return {
+    allow: false,
+    code: "NOT_ADDRESSABLE",
+    reason,
+    source: "actor",
+    subject: "recipient",
+  };
+}
+
 /** Unexported. Used for whisper (P2) and directed notice. Both sender kinds. */
 function assertAddressable(
   sender: PolicyContext["sender"],
   target: PolicyContext["recipients"][number],
 ): PolicyDecision {
+  // BLOCKED stays unattributed: a block is mutual by design and the code does
+  // not disclose which side set it. Only the NOT_ADDRESSABLE branches are the
+  // recipient's own door.
   if (target.blocked) return { allow: false, code: "BLOCKED", reason: "Blocked." };
   if (target.kind === "human" && target.lurk) {
-    return { allow: false, code: "NOT_ADDRESSABLE", reason: "Human is lurking." };
+    return notAddressable("Human is lurking.");
   }
   const priv = target.privacy as import("@grove/protocol").PrivacyPolicy | undefined;
   if (priv) {
     if (sender.kind === "agent" && priv.addressableByAgents === false) {
-      return { allow: false, code: "NOT_ADDRESSABLE", reason: "Not addressable by agents." };
+      return notAddressable("Not addressable by agents.");
     }
     if (sender.kind === "human" && priv.addressableByHumans === false) {
-      return { allow: false, code: "NOT_ADDRESSABLE", reason: "Not addressable by humans." };
+      return notAddressable("Not addressable by humans.");
     }
   }
   return { allow: true, code: "ALLOW", reason: "Addressable." };

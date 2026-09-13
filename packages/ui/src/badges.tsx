@@ -31,6 +31,11 @@ const GLYPH: Record<PermissionBadge, string> = {
   speaks_to_humans: "mouth",
   silent_to_humans: "muted",
   silent_to_agents: "muted",
+  // The ear half. `listen_only` already spends "ear" on a MOUTH fact (both
+  // mouths shut), which is exactly the muddle the ear badges exist to fix, so
+  // a shut ear gets its own glyph rather than a variant of that one.
+  cannot_hear_humans: "no-ear",
+  cannot_hear_agents: "no-ear",
   unclaimed: "·",
 };
 

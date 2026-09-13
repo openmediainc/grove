@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import random
+import subprocess
+import re
 import time
 import urllib.error
 import urllib.request
@@ -76,7 +78,45 @@ def http(method: str, path: str, *, key: str | None = None, body: dict | None = 
         return None
 
 
+LMS_CLI = os.environ.get("LMS_CLI", os.path.expanduser("~/.lmstudio/bin/lms"))
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
+
+
+def lms_cli_line(system: str, user: str) -> str | None:
+    """
+    Ask the local model through the `lms` CLI, with reasoning off.
+
+    The HTTP path below returns an EMPTY string for a reasoning model: qwen3.5
+    spends every token of max_tokens on reasoning_tokens and finishes with
+    finish_reason=length and content="". Raising max_tokens does not help (599
+    of 599 were reasoning), and chat_template_kwargs.enable_thinking=false is
+    not honoured. `lms chat --reasoning off` is the only switch that yields
+    prose, so the CLI is tried first and HTTP remains the fallback for a
+    non-reasoning model.
+    """
+    try:
+        ps = subprocess.run([LMS_CLI, "ps", "--json"], capture_output=True, text=True,
+                            timeout=10, stdin=subprocess.DEVNULL)
+        loaded = json.loads(ps.stdout or "[]")
+        if isinstance(loaded, dict):
+            loaded = [loaded]
+        model = (loaded[0].get("modelKey") or loaded[0].get("identifier")) if loaded else None
+        if not model:
+            return None
+        out = subprocess.run(
+            [LMS_CLI, "chat", model, "--reasoning", "off", "-y", "-s", system, "-p", user],
+            capture_output=True, text=True, timeout=90, stdin=subprocess.DEVNULL,
+        )
+        text = _ANSI.sub("", out.stdout or "").strip().split("\n")[0].strip().strip('"')
+        return text[:280] if text else None
+    except Exception:
+        return None
+
+
 def lms_line(system: str, user: str) -> str | None:
+    line = lms_cli_line(system, user)
+    if line:
+        return line
     try:
         with urllib.request.urlopen(urllib.request.Request(
             LMS + "/models",

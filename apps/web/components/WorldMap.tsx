@@ -2,8 +2,41 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { asPermissionBadges, consequenceOf } from "@grove/ui";
 import { api } from "@/lib/api";
-import { BUILDING, CHAR_SRC, buildingSrc, drawAnchored, groundSrc, type AccessLevel, type CharKey, tileSrc } from "@/lib/art";
+import {
+  ANIMAL_KEYS,
+  BUILDING,
+  CHAR_SRC,
+  CIVIC,
+  CIVIC_ROOMS,
+  ITEM,
+  ITEM_KEYS,
+  PROP,
+  PROP_KEYS,
+  SCAFFOLD,
+  SCATTER_KEYS,
+  animalSrc,
+  buildingSrc,
+  civicSrc,
+  drawAnchored,
+  groundSrc,
+  itemSrc,
+  pathSrc,
+  propSrc,
+  scaffoldSrc,
+  scatterSrc,
+  tileSrc,
+  type AccessLevel,
+  type AnimalKey,
+  type Anchored,
+  type CharKey,
+  type CivicRoom,
+  type ItemKey,
+  type PropKey,
+  type ScaffoldStage,
+  type ScatterKey,
+} from "@/lib/art";
 import { gp } from "@/lib/base";
 import {
   groveVerb,
@@ -31,6 +64,32 @@ import {
   type MapRegion,
 } from "@/lib/map-layout";
 import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
+import { AttentionBell } from "./AttentionBell";
+import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
+import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
+import { DAYLIGHT, skyAt, type Sky } from "./skyClock";
+import {
+  DEPART_MS,
+  ELSEWHERE,
+  bodyHealth,
+  healthColour,
+  healthNote,
+  healthVisible,
+  sleepingAlpha,
+  type Health,
+} from "./presenceHealth";
+import {
+  CIVIC_LAMPS,
+  CIVIC_PLACEMENTS,
+  LAMP_STRIDE,
+  PROPS,
+  SHEEP,
+  STREET_LAMPS,
+  pathMaskAt,
+  scatterAt,
+  sheepAt,
+  tileBlocked,
+} from "./worldDressing";
 
 const TW = 64;
 const TH = 32;
@@ -59,6 +118,61 @@ const BODY_W = 40;
 const CAPTION_W = 48;
 /** How long a body takes to walk to a new seat. */
 const WALK_MS = 1200;
+/**
+ * Level of detail for the world dressing.
+ *
+ * Props, carried items and scaffolding are the same size as a body, so they
+ * live and die with the plot buildings. Scatter and sheep are smaller and much
+ * more numerous: a whole campus of speckle is what the art pass warned reads as
+ * scree when zoomed out, and four sheep at 0.4x are four white blobs. Those
+ * drop out one step earlier, with the nameplates.
+ *
+ * Paths are deliberately NOT gated. At minimum zoom they are the only thing
+ * that says the six regions are one campus rather than six islands.
+ */
+const LOD_DRESSING = LOD_PLOTS;
+const LOD_SCATTER = LOD_LABELS;
+/**
+ * Scaffolding grows with how long a body has been on the same piece of work.
+ * There is no progress field anywhere in Grove to read, and inventing a
+ * percentage would be a lie; elapsed time is the one honest signal available.
+ * It is measured from when THIS tab first saw the work, so a reload stakes the
+ * site out again — which is the cost of not fabricating a number.
+ */
+const SCAFFOLD_STAGE_MS: readonly number[] = [90_000, 300_000];
+
+/* --- the hour ------------------------------------------------------ *
+ * Day and night, from skyClock.ts. Two things live here rather than there
+ * because they are about DRAWING the hour, not about what the hour is.
+ * ------------------------------------------------------------------- */
+
+/**
+ * Street lamps bloom with the props they belong to; civic windows never gate.
+ * The sky wash itself has NO level-of-detail gate at all, and that is the
+ * considered answer for 0.4x: zoomed out, the whole campus is the subject and
+ * its colour is the only thing still big enough to tell you the hour. Every
+ * detail that could say it instead — a lit window, a lantern, a shadow — is
+ * two pixels wide down there. The tint is the one signal that survives.
+ */
+const LOD_LAMPS = LOD_PLOTS;
+/** Below this the lamps are not worth compositing at all. */
+const LAMP_FLOOR = 0.03;
+/** How much of the glow sprite's own alpha the hour is allowed to spend. */
+const LAMP_GAIN = 0.85;
+
+/** Where the camera lands when a bookmark is pressed. One zoom for all of them,
+ *  so every jump arrives framed the same way whatever you were looking at. */
+const BOOKMARK_ZOOM = 1.15;
+/** The wide shot at the end of the kiosk tour. */
+const KIOSK_WIDE_ZOOM = 0.45;
+/** How long a kiosk tour stop is held before gliding to the next. */
+const KIOSK_STOP_MS = 26_000;
+/** A person who touches the map gets it to themselves for this long. */
+const KIOSK_YIELD_MS = 60_000;
+/** A glide that cannot reach its mark (clamped at the world edge) gives up here. */
+const GLIDE_GIVE_UP_MS = 4_000;
+/** If the minimap does not say, assume the documented 180s stall threshold. */
+const DEFAULT_STALL_SECONDS = 180;
 
 type GroveBody = {
   stalled?: boolean;
@@ -79,6 +193,9 @@ type GroveBody = {
   detail?: string | null;
   pulsed_at?: string | null;
   pulsedAt?: string | null;
+  /** Server-measured seconds since this body last reported. Null = never has. */
+  pulse_age_seconds?: number | null;
+  pulseAgeSeconds?: number | null;
   /** Org tint, resolved server-side by minimap(): null = no org here. */
   org_id?: string | null;
   orgId?: string | null;
@@ -171,6 +288,9 @@ function regionTitle(region: string): string {
 }
 
 type Minimap = {
+  /** The world's stall threshold, so the map never hard-codes its own. */
+  stall_after_seconds?: number;
+  stallAfterSeconds?: number;
   /** How this world paints bound orgs; see campus.orgRenderFor(). */
   org_render_mode?: "shared" | "dedicated";
   orgRenderMode?: "shared" | "dedicated";
@@ -202,12 +322,130 @@ type Actor = {
   orgId?: string | null;
   orgName?: string | null;
   orgColour?: string | null;
+  /** Carries a prompt_injection_flag in the chronicle's last 24h. */
+  flagged?: boolean;
+  /** Presence connection, verbatim: "live" | "async" | "offline". */
+  connection?: string;
+  /** Server-measured seconds since it last reported; null if it never has. */
+  pulseAgeSeconds?: number | null;
+  /** Offline, so counting down to eviction. Set from `connection`, not inferred. */
+  fading?: boolean;
 };
+
+/**
+ * A body that has left the map, kept for as long as it takes to see it go.
+ *
+ * The world deletes a presence row ten minutes after the last heartbeat, and
+ * the map polls every eight seconds, so before this a body's last act was to be
+ * absent from a poll — which renders as a sprite vanishing between two frames
+ * with nothing to distinguish it from a bug. A departure is the same body, in
+ * the same seat, fading out of it.
+ *
+ * Eviction is the common cause but not the only one: a block, a room change or
+ * a redaction can also take a body off the public map. The animation says "this
+ * body left the map", which is true in all of them, and claims nothing about why.
+ */
+type Departure = { x: number; y: number; alpha: number; sprite: CharKey; at: number };
 
 type RecentLine = { speech_id?: string; speechId?: string; sender_id?: string; senderId?: string; sender_name?: string; senderName?: string; body: string };
 
 /** A stalled body claims to be working but has stopped reporting. */
 const STALL_RING = "#f87171";
+
+/* --- hazards ------------------------------------------------------- *
+ * Three states a watcher has to be able to see from across the world,
+ * ranked by how much they want a human:
+ *
+ *   flag  — the chronicle has a prompt_injection_flag against this body.
+ *   fault — it says it has errored, or something is blocking it.
+ *   stall — the server marked it stalled: claims to be working, has gone
+ *           quiet for longer than stall_after_seconds.
+ *
+ * They are NOT drawn in layout space. Everything else on the map shrinks
+ * with the zoom, which is correct for scenery and wrong for an alarm: at
+ * 0.4x a layout-space marker is four pixels and says nothing. These are
+ * drawn in screen space at a fixed size, so a faulted body is equally loud
+ * whether you are looking at one room or the whole campus.
+ * ------------------------------------------------------------------- */
+type HazardTone = "flag" | "fault" | "stall";
+
+const HAZARD_COLOUR: Record<HazardTone, string> = {
+  flag: "#f472b6",
+  fault: "#f87171",
+  stall: "#fb923c",
+};
+
+function hazardOf(a: Actor): HazardTone | null {
+  if (a.flagged) return "flag";
+  if (a.verb === "error" || a.verb === "blocked") return "fault";
+  if (a.stalled) return "stall";
+  return null;
+}
+
+/**
+ * Order the bell cycles in: hazards, then stalls, then bodies drifting toward
+ * eviction, then the merely idle.
+ *
+ * "Fading" earns its own rank between the two because it is a different kind of
+ * thing from either neighbour. A stall is a fault to fix. An idle body is a
+ * thing to notice. A fading body is neither: nothing is wrong with it, but it
+ * has a deadline, and after the deadline there is nothing left to look at.
+ */
+function attentionRank(a: Actor): number {
+  const h = hazardOf(a);
+  if (h === "flag" || h === "fault") return 0;
+  if (h === "stall") return 1;
+  if (isActiveVerb(a.verb)) return -1;
+  return a.fading ? 2 : 3;
+}
+
+/**
+ * What a body is carrying. The verb glyph beside the sprite says the same
+ * thing in the abstract; an item in the hand says it as a picture, so where
+ * there is an item the glyph stands down rather than saying it twice.
+ */
+function itemForActor(a: Actor): ItemKey | null {
+  if (a.verb === "read") return "document";
+  if (a.verb === "tool") return "tool";
+  if (a.verb === "think") return "lamp";
+  // "Carried while claiming or planting a new space" — the Garden is where a
+  // body with nothing to do goes, and a cutting is what it does there.
+  if (a.region === "garden" && a.verb === "idle") return "seedling";
+  return null;
+}
+
+/** A pulsing warning triangle, drawn at a fixed size in SCREEN space. */
+function drawHazardMark(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  tone: HazardTone,
+  t: number,
+): void {
+  const pulse = 0.55 + 0.45 * Math.sin(t / 240);
+  ctx.save();
+  ctx.translate(Math.round(sx), Math.round(sy));
+  ctx.globalAlpha = 0.55 + 0.45 * pulse;
+  // Dark backing first: these land on lantern-amber paving as often as on grass.
+  ctx.fillStyle = "rgba(7,8,20,0.88)";
+  ctx.beginPath();
+  ctx.moveTo(0, -14);
+  ctx.lineTo(9, 3);
+  ctx.lineTo(-9, 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = HAZARD_COLOUR[tone];
+  ctx.beginPath();
+  ctx.moveTo(0, -11);
+  ctx.lineTo(6.5, 1.5);
+  ctx.lineTo(-6.5, 1.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#0a0a18";
+  ctx.fillRect(-1, -7, 2, 5);
+  ctx.fillRect(-1, -1, 2, 2);
+  ctx.restore();
+}
 /**
  * Below this zoom a body is a few pixels of sprite, so its pennant would be a
  * coloured speck among hundreds. Org colour survives on the plot fences, which
@@ -215,6 +453,46 @@ const STALL_RING = "#f87171";
  * noise.
  */
 const LOD_ORG = LOD_PLOTS;
+
+/**
+ * The six rooms, in the order the campus lists them, bound to the digits above
+ * them. `0` is already "back to the core", so the rooms start at 1 and the two
+ * computed destinations take letters instead of running into `7`.
+ */
+/** The six named rooms. `wild` is the rest of the world, and not a destination. */
+type RoomRegion = Exclude<MapRegion, "wild">;
+
+const BOOKMARK_REGIONS: ReadonlyArray<{ key: string; region: RoomRegion }> = [
+  { key: "1", region: "plaza" },
+  { key: "2", region: "library" },
+  { key: "3", region: "workshop" },
+  { key: "4", region: "stage" },
+  { key: "5", region: "garden" },
+  { key: "6", region: "board" },
+];
+
+/** Every key that jumps the camera, for the one test the key handler needs. */
+const BOOKMARK_KEYS: ReadonlySet<string> = new Set([
+  ...BOOKMARK_REGIONS.map((b) => b.key),
+  "b",
+  "m",
+]);
+
+/**
+ * The kiosk tour: the six landmarks, then one wide shot of the whole campus.
+ *
+ * Precomputed from the region table, not from anything that moves, and the stop
+ * is chosen by dividing the wall clock — so two displays side by side show the
+ * same room at the same moment, a reload rejoins the tour where it already was,
+ * and nothing here can shimmer or reorder on a poll.
+ */
+const KIOSK_STOPS: ReadonlyArray<{ tx: number; ty: number; zoom: number }> = [
+  ...BOOKMARK_REGIONS.map(({ region }) => {
+    const r = REGION_RECTS[region];
+    return { tx: (r.x0 + r.x1) / 2, ty: (r.y0 + r.y1) / 2, zoom: BOOKMARK_ZOOM };
+  }),
+  { tx: PLAZA_CENTER.x, ty: PLAZA_CENTER.y, zoom: KIOSK_WIDE_ZOOM },
+];
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -249,6 +527,12 @@ type Walk = { fromX: number; fromY: number; toX: number; toY: number; start: num
  * Bodies must never share a tile — a stack of overlapping sprites is the fastest
  * way to make a living world look broken. Hash gives each actor a preferred
  * seat; collisions probe forward deterministically through the region.
+ *
+ * Since the campus got furniture, the probe also steps over tiles the dressing
+ * owns: a civic building's footprint and every prop tile. A body standing on a
+ * bench looks like a bug, and a body standing inside the Library looks like the
+ * Library is see-through. Both regions keep well over half their tiles free, so
+ * the spill rings below are no likelier to fire than before.
  */
 function assignSeats(actors: Actor[]): Map<string, Seat> {
   const out = new Map<string, Seat>();
@@ -274,7 +558,7 @@ function assignSeats(actors: Actor[]): Map<string, Seat> {
         const x = rect.x0 + (i % w);
         const y = rect.y0 + Math.floor(i / w);
         const key = `${x},${y}`;
-        if (!taken.has(key)) {
+        if (!taken.has(key) && !tileBlocked(x, y)) {
           taken.add(key);
           seat = { x, y };
           break;
@@ -291,7 +575,7 @@ function assignSeats(actors: Actor[]): Map<string, Seat> {
                 x === rect.x0 - ring || x === rect.x1 + ring || y === rect.y0 - ring || y === rect.y1 + ring;
               if (!onRing) continue;
               const key = `${x},${y}`;
-              if (taken.has(key)) continue;
+              if (taken.has(key) || tileBlocked(x, y)) continue;
               taken.add(key);
               seat = { x, y };
               break outer;
@@ -306,17 +590,34 @@ function assignSeats(actors: Actor[]): Map<string, Seat> {
 }
 
 /**
- * One sentence a watcher can act on. Mirrors packages/ui/src/consequences.ts;
- * the map draws to canvas so it cannot render those React components.
+ * One sentence a watcher can act on.
+ *
+ * This used to be a hand-copied cascade of the vocabulary in
+ * packages/ui/src/consequences.ts, on the reasoning that the map draws to
+ * canvas and cannot render React components. True of the components — and not
+ * true of `speechState()` / `consequenceOf()`, which are pure functions over a
+ * badge list and come out of the same `@grove/ui` entry point this app already
+ * imports from in RoomPresence. So the copy is gone and the canonical reducer
+ * is called directly, which is the only version of "the map says what the room
+ * says" that cannot drift.
+ *
+ * The copy had drifted three ways by the time it was replaced, and every one of
+ * them was the map stating something false:
+ *
+ *  - it knew nothing about the EAR half of the matrix, so an agent with
+ *    `listenToHumans: false` was described as one that can hear you;
+ *  - it tested for a badge named `lurking`, which does not exist — the badge is
+ *    `lurk` — so that branch had never once fired;
+ *  - it returned "will only reply to other agents" for any body carrying
+ *    `speaks_to_agents`, including the ones that also carry `speaks_to_humans`.
+ *    With all four permissions defaulting to true, that was most of the campus.
+ *
+ * `silencedBySpace` is not passed: the public minimap carries no per-room say
+ * permission, and guessing at one would put the map right back in the business
+ * of inventing sentences.
  */
 function badgeConsequence(badges?: string[]): string | null {
-  if (!badges || badges.length === 0) return null;
-  if (badges.includes("unclaimed")) return "Nobody has claimed them yet, so they cannot speak in public at all.";
-  if (badges.includes("lurking")) return "Watching quietly — they cannot be spoken to directly.";
-  if (badges.includes("listen_only")) return "They can hear you, but cannot reply in public.";
-  if (badges.includes("speaks_to_agents")) return "They can hear you, but will only reply to other agents.";
-  if (badges.includes("speaks_to_humans")) return "They can reply to you, but stay silent to other agents.";
-  return null;
+  return consequenceOf(asPermissionBadges(badges));
 }
 
 function iso(tx: number, ty: number): { x: number; y: number } {
@@ -405,7 +706,63 @@ function drawGlyph(ctx: CanvasRenderingContext2D, verb: AgentVerb, x: number, y:
     ctx.beginPath();
     ctx.ellipse(0, 0, 7, 5, 0, 0, Math.PI * 2);
     ctx.stroke();
+  } else if (verb === "offline") {
+    // The only rung of the idle -> asleep -> gone ladder that had no mark at
+    // all: a dimmer sprite is a difference you can only see next to a brighter
+    // one, so asleep never said anything on its own. Not drawn in the verb's
+    // own ring colour — at 0.45 alpha under a body already down at 0.4 it would
+    // be invisible, which is the problem, not the solution.
+    ctx.fillStyle = "rgba(148,163,184,0.8)";
+    ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("z", 0, 4);
   }
+  ctx.restore();
+}
+
+/**
+ * The heartbeat ring: how much of this body's seat is left.
+ *
+ * Drawn in SCREEN space at a fixed size, for the same reason the hazard
+ * triangle is. Everything else on this map shrinks with the zoom, which is
+ * right for scenery and wrong for a deadline — at 0.4x a layout-space meter is
+ * two pixels and says nothing, and the whole point of this mark is that you can
+ * see an agent drifting from across the campus rather than discovering the
+ * empty seat afterwards.
+ *
+ * It reads as a clock face emptying clockwise. Nothing is drawn at all while a
+ * body is beating normally, so the presence of the ring is itself the signal,
+ * and a healthy campus carries no marks.
+ */
+function drawHealthMark(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  drift: number,
+  t: number,
+  animate: boolean,
+): void {
+  const remain = Math.max(0.03, 1 - drift);
+  ctx.save();
+  ctx.translate(Math.round(sx), Math.round(sy));
+  // Dark backing, then a faint full ring: the empty part of the clock has to be
+  // visible too, or a nearly-evicted body reads as an unfinished scratch.
+  ctx.strokeStyle = "rgba(7,8,20,0.88)";
+  ctx.lineWidth = 4.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(236,231,221,0.16)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = animate ? 0.72 + 0.28 * Math.sin(t / 420) : 1;
+  ctx.strokeStyle = healthColour(drift);
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 6.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remain);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -463,8 +820,54 @@ export function WorldMap() {
   const [peek, setPeek] = useState<Peek | null>(null);
   const [following, setFollowing] = useState<string | null>(null);
   const followRef = useRef<string | null>(null);
+  /** Bodies that want a human, hazards first. Rebuilt on every poll. */
+  const attentionRef = useRef<Actor[]>([]);
+  const attnIdxRef = useRef(0);
+  const [attnPos, setAttnPos] = useState<string | null>(null);
+  /** Actor ids with a prompt_injection_flag in the chronicle's last 24h. */
+  const flaggedRef = useRef<Set<string>>(new Set());
+  /** Poll counter, so the chronicle is asked a quarter as often as the minimap. */
+  const pullNoRef = useRef(0);
+  /** When each body started its current piece of work, for the scaffold stage. */
+  const workRef = useRef<Map<string, { url: string; start: number }>>(new Map());
+  /** Called by the "." key; owned by the effect that builds the attention list. */
+  const cycleRef = useRef<() => void>(() => {});
+  /** Called by the bookmark keys; owned by the effect that can resolve them. */
+  const jumpRef = useRef<(key: string) => void>(() => {});
+  /** Called by the K and Escape keys, which live in an effect that must not
+   *  be torn down and rebuilt every time kiosk mode is toggled. */
+  const kioskModeRef = useRef<(on: boolean) => void>(() => {});
   const viewRef = useRef<View>({ zoom: 1, px: 0, py: 0 });
-  const controlsRef = useRef<{ zoomBy: (f: number) => void; reset: () => void } | null>(null);
+  const controlsRef = useRef<{
+    zoomBy: (f: number) => void;
+    reset: () => void;
+    goTo: (tx: number, ty: number, zoom: number) => void;
+  } | null>(null);
+  /** The world's own stall threshold, straight off the minimap. */
+  const stallSecondsRef = useRef(DEFAULT_STALL_SECONDS);
+  /**
+   * When THIS TAB first saw each body sitting offline. The minimap does not
+   * publish last_seen_at, so this is the only measured interval available for
+   * the fade toward eviction — see presenceHealth.ts for why that is stated as
+   * a lower bound rather than dressed up as an absolute.
+   */
+  const offlineSinceRef = useRef<Map<string, number>>(new Map());
+  /** Bodies that have left the map, still playing their departure. */
+  const departedRef = useRef<Map<string, Departure>>(new Map());
+  /** Where each body was last drawn, so a departure can start from its seat. */
+  const lastPosRef = useRef<Map<string, Departure>>(new Map());
+  /** The signed-in viewer's handle, for the "my space" bookmark. Null = unknown. */
+  const myHandleRef = useRef<string | null>(null);
+  const [hasMySpace, setHasMySpace] = useState(false);
+  /** An eased camera move to a bookmark. Cleared by any drag, wheel or follow. */
+  const glideRef = useRef<{ tx: number; ty: number; zoom: number; start: number } | null>(null);
+  const [kiosk, setKiosk] = useState(false);
+  const kioskRef = useRef(false);
+  /** Kiosk yields to a person who touches the map, rather than fighting them. */
+  const kioskYieldRef = useRef(0);
+  const tourStopRef = useRef(-1);
+  /** Null until the clock effect runs: the server has no hour to render. */
+  const [sky, setSky] = useState<Sky | null>(null);
   const [hud, setHud] = useState({
     lastHeard: "",
     world: "",
@@ -478,6 +881,7 @@ export function WorldMap() {
     asleep: 0,
     orgs: [] as OrgBadge[],
     orgMode: "shared" as "shared" | "dedicated",
+    attn: { idle: 0, stalled: 0, hazard: 0, fading: 0 },
   });
   const [status, setStatus] = useState("charting the dusk…");
 
@@ -487,17 +891,161 @@ export function WorldMap() {
   const stopFollowing = useCallback(() => {
     followRef.current = null;
     setFollowing(null);
+    setAttnPos(null);
   }, []);
+
+  /**
+   * The bell. Hands the next body that wants attention to the follow-cam that
+   * already exists — this deliberately does not move the view itself, because
+   * a second camera would fight the first one the moment someone panned.
+   */
+  const cycleAttention = useCallback(() => {
+    const list = attentionRef.current;
+    if (list.length === 0) return;
+    const i = attnIdxRef.current % list.length;
+    attnIdxRef.current = (i + 1) % list.length;
+    const target = list[i]!;
+    followRef.current = target.id;
+    setFollowing(target.name);
+    setAttnPos(`${i + 1}/${list.length}`);
+  }, []);
+  useEffect(() => {
+    cycleRef.current = cycleAttention;
+  }, [cycleAttention]);
+
+  /* --- the campus clock -------------------------------------------- *
+   * The renderer reads the hour itself, every frame, straight from the wall
+   * clock; this is only the HUD's copy of it. Deliberately null on the first
+   * render: this is a client component, but Next still renders it on the
+   * server, and a clock that differs between the two is a hydration mismatch.
+   * Fifteen seconds is fast enough for a display that shows minutes.
+   * ------------------------------------------------------------------ */
+  useEffect(() => {
+    const tick = () =>
+      setSky((prev) => {
+        const next = skyAt(Date.now());
+        return prev && prev.clock === next.clock && prev.label === next.label ? prev : next;
+      });
+    tick();
+    const t = window.setInterval(tick, 15_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  /* --- kiosk mode ---------------------------------------------------- *
+   * Entered by ?kiosk=1 so a wall display is a bookmark, and by the button or
+   * K for everyone else. Leaving strips the parameter, so a reload does not
+   * walk straight back in — and KioskChrome always draws a visible way out, so
+   * someone who walks up to the Mini and taps the screen is never trapped in a
+   * mode they did not know they were in.
+   * ------------------------------------------------------------------- */
+  const setKioskMode = useCallback((on: boolean) => {
+    kioskRef.current = on;
+    tourStopRef.current = -1;
+    setKiosk(on);
+    try {
+      if (on) document.documentElement.setAttribute(KIOSK_ATTR, "1");
+      else document.documentElement.removeAttribute(KIOSK_ATTR);
+      const url = new URL(window.location.href);
+      if (on) url.searchParams.set("kiosk", "1");
+      else url.searchParams.delete("kiosk");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+      /* A browser that refuses either of those still gets the mode itself. */
+    }
+  }, []);
+
+  useEffect(() => {
+    kioskModeRef.current = setKioskMode;
+  }, [setKioskMode]);
+
+  useEffect(() => {
+    let wanted = false;
+    try {
+      const q = new URLSearchParams(window.location.search).get("kiosk");
+      wanted = q !== null && q !== "0" && q !== "false";
+    } catch {
+      wanted = false;
+    }
+    if (wanted) setKioskMode(true);
+    return () => {
+      // The attribute lives on <html>, outside React's tree, so it has to be
+      // taken off by hand or navigating away leaves the nav hidden.
+      try {
+        document.documentElement.removeAttribute(KIOSK_ATTR);
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [setKioskMode]);
+
+  /* --- camera bookmarks --------------------------------------------- *
+   * Keys, resolved against what the map already holds. Nothing here consults
+   * the clock, Math.random or poll order: the busiest room is decided by a
+   * strict majority over the fixed region order, so a tie always resolves the
+   * same way and pressing B twice in a row never lands somewhere else.
+   * ------------------------------------------------------------------- */
+  const jumpTo = useCallback((key: string) => {
+    const go = controlsRef.current?.goTo;
+    if (!go) return;
+    const region = BOOKMARK_REGIONS.find((b) => b.key === key)?.region;
+    if (region) {
+      const r = REGION_RECTS[region];
+      go((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, BOOKMARK_ZOOM);
+      return;
+    }
+    if (key === "b") {
+      let best: RoomRegion = "plaza";
+      let bestN = -1;
+      for (const { region: r } of BOOKMARK_REGIONS) {
+        const n = actorsRef.current.reduce((acc, a) => acc + (a.region === r ? 1 : 0), 0);
+        // Strictly greater, walked in a fixed order: a tie keeps the earlier room.
+        if (n > bestN) {
+          bestN = n;
+          best = r;
+        }
+      }
+      const r = REGION_RECTS[best];
+      go((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, BOOKMARK_ZOOM);
+      return;
+    }
+    if (key === "m") {
+      const handle = myHandleRef.current;
+      if (!handle) return;
+      const mine = plotRef.current
+        .filter((p) => p.ownerHandle === handle)
+        .sort((p, q) => p.plotIndex - q.plotIndex)[0];
+      if (!mine) return;
+      go((mine.rect.x0 + mine.rect.x1) / 2, (mine.rect.y0 + mine.rect.y1) / 2, BOOKMARK_ZOOM);
+    }
+  }, []);
+  useEffect(() => {
+    jumpRef.current = jumpTo;
+  }, [jumpTo]);
+
+  const bookmarks: Bookmark[] = [
+    { key: "1", label: "Plaza", title: "Plaza — where the world talks" },
+    { key: "2", label: "Library", title: "Library — where bodies read" },
+    { key: "3", label: "Workshop", title: "Workshop — where the tools run" },
+    { key: "4", label: "Stage", title: "Stage — what is on" },
+    { key: "5", label: "Garden", title: "Garden — where idle bodies go" },
+    { key: "6", label: "Board", title: "Board — faults and notices" },
+    { key: "b", label: "Busiest", title: "Busiest room right now" },
+    ...(hasMySpace ? [{ key: "m", label: "My space", title: "My space — ground I hold" }] : []),
+  ];
 
   // Who is watching. Deliberately its own effect, deliberately not awaited by
   // anything that draws: the map must paint for a spectator exactly as fast as
   // it does for a member, so this only ever changes what a CLICK does.
   useEffect(() => {
     let cancelled = false;
-    void api<{ human: { id: string } }>("/api/v1/humans/me")
-      .then(() => {
+    void api<{ human: { id: string; handle?: string } }>("/api/v1/humans/me")
+      .then((res) => {
         if (cancelled) return;
         signedInRef.current = true;
+        // The handle is what the public minimap names a plot's owner with, so
+        // it is the one field that lets "my space" be resolved without asking
+        // a second endpoint for something the map already has.
+        myHandleRef.current = res.human?.handle ?? null;
         setSignedIn(true);
       })
       .catch(() => {
@@ -516,6 +1064,27 @@ export function WorldMap() {
       try {
         const data = await api<Minimap>("/api/v1/world/minimap");
         if (cancelled) return;
+        // Injection flags come from the chronicle, not the minimap, and cost a
+        // real query, so they are refreshed every fourth poll rather than every
+        // one. The chronicle decides in SQL who may see a moderation row: a
+        // signed-out spectator gets an empty page, and the count is then
+        // honestly zero rather than withheld.
+        if (pullNoRef.current % 4 === 0) {
+          try {
+            const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+            const flags = await api<{ entries: Array<{ actor: { id: string } | null }> }>(
+              `/api/v1/chronicle?types=prompt_injection_flag&limit=100&since=${encodeURIComponent(since)}`,
+            );
+            if (cancelled) return;
+            flaggedRef.current = new Set(
+              flags.entries.map((e) => e.actor?.id).filter((id): id is string => Boolean(id)),
+            );
+          } catch {
+            /* Not readable by this viewer. Leave the last known set alone. */
+          }
+        }
+        pullNoRef.current += 1;
+        const flaggedIds = flaggedRef.current;
         const orgList = (data.orgs ?? []).map((o) => ({ id: o.id, name: o.name, colour: o.colour }));
         const orgById = new Map(orgList.map((o) => [o.id, o]));
         const orgMode = data.org_render_mode ?? data.orgRenderMode ?? "shared";
@@ -535,8 +1104,12 @@ export function WorldMap() {
           // The tint is already resolved server-side (own org when the space is
           // shared, the host org when it is dedicated), so the map only paints.
           const orgId = b.org_id ?? b.orgId ?? null;
+          const connection = b.connection ?? "";
           return {
             id: b.id,
+            connection,
+            pulseAgeSeconds: b.pulse_age_seconds ?? b.pulseAgeSeconds ?? null,
+            fading: connection.toLowerCase() === "offline",
             name: b.display_name ?? b.displayName ?? b.slug,
             kind: b.kind,
             region,
@@ -551,6 +1124,7 @@ export function WorldMap() {
             orgId,
             orgColour: b.org_colour ?? b.orgColour ?? null,
             orgName: (orgId ? orgById.get(orgId)?.name : null) ?? null,
+            flagged: flaggedIds.has(b.id),
           };
         });
         const issues = data.paperclip?.issues ?? [];
@@ -579,6 +1153,65 @@ export function WorldMap() {
           };
         });
         const actors: Actor[] = [...grove, ...paperclip];
+        stallSecondsRef.current =
+          data.stall_after_seconds ?? data.stallAfterSeconds ?? DEFAULT_STALL_SECONDS;
+        /* --- the fade, and the leaving ------------------------------ *
+         * Two clocks kept here rather than in the draw loop, because both are
+         * about what CHANGED between two polls and a frame cannot see that.
+         * ------------------------------------------------------------ */
+        {
+          const now = Date.now();
+          const since = offlineSinceRef.current;
+          const live = new Set<string>();
+          for (const a of actors) {
+            live.add(a.id);
+            // First poll at which this body read offline. A body that comes
+            // back forgets its fade entirely rather than resuming it.
+            if (a.fading) {
+              if (!since.has(a.id)) since.set(a.id, now);
+            } else since.delete(a.id);
+          }
+          for (const id of [...since.keys()]) if (!live.has(id)) since.delete(id);
+          // Bodies in the last poll and not in this one have left the map.
+          // Their departure starts from wherever they were last DRAWN, which is
+          // the interpolated walk position, not the seat they were assigned.
+          for (const prev of actorsRef.current) {
+            if (live.has(prev.id)) continue;
+            const at = lastPosRef.current.get(prev.id);
+            if (!at) continue;
+            departedRef.current.set(prev.id, { ...at, at: now });
+          }
+          // A body that came back cancels its own departure mid-fade.
+          for (const id of live) departedRef.current.delete(id);
+        }
+        // Scaffolding: how long this body has been on THIS url. Work that
+        // changes target starts a fresh site; work that stops takes its
+        // scaffolding down with it.
+        {
+          const work = workRef.current;
+          const live = new Set<string>();
+          for (const a of actors) {
+            if (!a.url || !isActiveVerb(a.verb)) continue;
+            live.add(a.id);
+            const cur = work.get(a.id);
+            if (!cur || cur.url !== a.url) work.set(a.id, { url: a.url, start: Date.now() });
+          }
+          for (const id of [...work.keys()]) if (!live.has(id)) work.delete(id);
+        }
+        // The attention list, in the order the bell walks it. Sorted by id
+        // within each rank so the same world always cycles the same way.
+        attentionRef.current = actors
+          .filter((a) => attentionRank(a) >= 0)
+          .sort((p, q) => attentionRank(p) - attentionRank(q) || (p.id < q.id ? -1 : 1));
+        const attn = { idle: 0, stalled: 0, hazard: 0, fading: 0 };
+        for (const a of attentionRef.current) {
+          const r = attentionRank(a);
+          if (r === 0) attn.hazard += 1;
+          else if (r === 1) attn.stalled += 1;
+          else if (r === 2) attn.fading += 1;
+          else attn.idle += 1;
+        }
+        if (attnIdxRef.current >= attentionRef.current.length) attnIdxRef.current = 0;
         const plots: Plot[] = (data.spaces ?? []).map((sp) => {
           const idx = sp.plot_index ?? sp.plotIndex ?? 0;
           return {
@@ -597,6 +1230,12 @@ export function WorldMap() {
         });
         plotRef.current = plots;
         plotsRef.current = plots.length;
+        // The "my space" bookmark only exists when there is one to go to.
+        // owner_handle is redacted to null on a private plot the viewer cannot
+        // see, which is exactly right: a plot you cannot be told about is not
+        // one this bookmark should quietly confirm the existence of.
+        const handle = myHandleRef.current;
+        setHasMySpace(Boolean(handle) && plots.some((p) => p.ownerHandle === handle));
         // A quiet Plaza used to render mute: the live SSE feed only carries what
         // happens while you watch. Seed the last few lines a spectator is allowed
         // to hear so arriving at a still world still shows it talking.
@@ -635,6 +1274,7 @@ export function WorldMap() {
           asleep,
           orgs: orgList,
           orgMode,
+          attn,
         });
         setStatus(data.paperclip?.ok ? "live campus + paperclip" : "live campus · paperclip quiet");
       } catch {
@@ -738,7 +1378,27 @@ export function WorldMap() {
       clampPan();
     };
 
+    /**
+     * Hand the camera to whoever just grabbed it.
+     *
+     * Three things want to drive the view — the follow-cam, a bookmark glide
+     * and the kiosk tour — and the way two cameras fight is that neither of
+     * them lets go. One place where a new driver cancels the last one, called
+     * by every entry point, is the whole answer.
+     */
+    const takeCamera = () => {
+      followRef.current = null;
+      setFollowing(null);
+      setAttnPos(null);
+      glideRef.current = null;
+    };
+
     const reset = () => {
+      // Reset means reset. Before the bell existed you had to double-click a
+      // body to start following one, so a follow-cam quietly surviving "back to
+      // the core" was rare enough to go unnoticed; now one click starts one,
+      // and a reset that snapped straight back to the body looked broken.
+      takeCamera();
       const v = viewRef.current;
       v.zoom = clamp(1, minZoom(), MAX_ZOOM);
       v.px = 0;
@@ -763,7 +1423,41 @@ export function WorldMap() {
         zoomAt(w / 2, h / 2, f);
       },
       reset,
+      /**
+       * Point the camera at a tile. Deliberately does NOT set the view here:
+       * it records a target, and the draw loop eases toward it with the same
+       * clampPan the follow-cam uses. A cut across the campus is disorienting
+       * and, worse, tells you nothing about where you went — a glide shows you
+       * the way, which is the whole point of a world you watch rather than read.
+       */
+      goTo: (tx, ty, zoom) => {
+        takeCamera();
+        // Whoever pressed a bookmark is a person; the kiosk tour stands down
+        // and gives them the display for a while.
+        kioskYieldRef.current = Date.now() + KIOSK_YIELD_MS;
+        glideRef.current = { tx, ty, zoom, start: performance.now() };
+      },
     };
+
+    /**
+     * How healthy this body's connection is, right now.
+     *
+     * Called once per body per frame for the meter, and once more for whatever
+     * is being hovered or peeked. Cheap by construction: it returns numbers and
+     * builds no strings — healthNote() does the wording, and only when read.
+     */
+    const healthOf = (a: Actor): Health =>
+      // Paperclip bodies are mirrored from next door. Grove holds no heartbeat
+      // for them and never evicts them, so there is no seat here to run out.
+      a.source === "paperclip"
+        ? ELSEWHERE
+        : bodyHealth({
+            connection: a.connection,
+            pulseAgeSeconds: a.pulseAgeSeconds ?? null,
+            stallAfterSeconds: stallSecondsRef.current,
+            offlineSince: offlineSinceRef.current.get(a.id) ?? null,
+            now: Date.now(),
+          });
 
     /* ---- input ------------------------------------------------------ */
 
@@ -780,6 +1474,10 @@ export function WorldMap() {
 
     const onPointerDown = (ev: PointerEvent) => {
       canvas.setPointerCapture?.(ev.pointerId);
+      // Somebody is here. A wall display that keeps touring while a person is
+      // dragging it is a display that is fighting them.
+      kioskYieldRef.current = Date.now() + KIOSK_YIELD_MS;
+      glideRef.current = null;
       pointers.set(ev.pointerId, localPoint(ev));
       if (pointers.size === 1) {
         dragging = true;
@@ -850,8 +1548,13 @@ export function WorldMap() {
       });
       if (body) {
         const facts: string[] = [];
+        if (body.flagged) facts.push("Flagged for prompt injection — the chronicle holds the record.");
         if (body.stalled) facts.push("Stopped reporting — it says it is working, but has gone quiet.");
         if (body.errorText) facts.push(`Fault: ${body.errorText.slice(0, 120)}`);
+        // How its connection is doing, said as a sentence rather than as a ring
+        // the reader has to have learnt. Always shown for a Grove body: "it is
+        // beating" is the answer an owner came here for as often as the alarm.
+        if (body.source === "grove") facts.push(healthNote(healthOf(body)));
         const consequence = badgeConsequence(body.badges);
         if (consequence) facts.push(consequence);
         if (body.source === "paperclip") facts.push("Runs on Paperclip next door, so it has no Grove body to answer you.");
@@ -939,6 +1642,8 @@ export function WorldMap() {
 
     const onWheel = (ev: WheelEvent) => {
       ev.preventDefault();
+      kioskYieldRef.current = Date.now() + KIOSK_YIELD_MS;
+      glideRef.current = null;
       const rect = canvas.getBoundingClientRect();
       // Trackpad pinch arrives as a ctrl-wheel; give it a snappier ratio.
       const k = ev.ctrlKey ? 0.01 : 0.0016;
@@ -948,14 +1653,32 @@ export function WorldMap() {
     const onKey = (ev: KeyboardEvent) => {
       const el = ev.target as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
-      if (ev.key === "Escape" && followRef.current) {
-        followRef.current = null;
-        setFollowing(null);
+      // Escape is the way out of whatever the map has put you in, innermost
+      // first: release a follow before you leave kiosk mode, so one key does
+      // not throw away two states at once.
+      if (ev.key === "Escape") {
+        if (followRef.current) {
+          followRef.current = null;
+          setFollowing(null);
+          return;
+        }
+        if (kioskRef.current) {
+          kioskModeRef.current(false);
+          ev.preventDefault();
+        }
         return;
       }
-      if (ev.key === "+" || ev.key === "=") controlsRef.current?.zoomBy(1.25);
+      // Age of Empires bound the idle-villager bell to a single key and so
+      // does this: "." is the next body that wants attention.
+      if (ev.key === ".") cycleRef.current();
+      else if (ev.key === "+" || ev.key === "=") controlsRef.current?.zoomBy(1.25);
       else if (ev.key === "-" || ev.key === "_") controlsRef.current?.zoomBy(1 / 1.25);
       else if (ev.key === "0") reset();
+      else if (ev.key === "k" || ev.key === "K") kioskModeRef.current(!kioskRef.current);
+      // The bookmarks. A modified key is somebody else's shortcut — cmd-1 is a
+      // browser tab, not the Plaza — so only the bare keystroke jumps.
+      else if (!ev.metaKey && !ev.ctrlKey && !ev.altKey && BOOKMARK_KEYS.has(ev.key.toLowerCase()))
+        jumpRef.current(ev.key.toLowerCase());
       else return;
       ev.preventDefault();
     };
@@ -1007,6 +1730,62 @@ export function WorldMap() {
       if (cancelled || !canvasRef.current) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+
+      /* ---- the dressing, loaded behind the first frame ---------------
+       * Ground, characters and the three access buildings are what the map
+       * cannot draw a single honest frame without, so they are awaited above.
+       * The other 47 files are scenery: they are fetched without blocking,
+       * and every draw call below treats a missing image as "not yet" rather
+       * than as an error. The campus paints exactly as fast as it did before
+       * this pass, then fills in.
+       * ---------------------------------------------------------------- */
+      const civics = new Map<CivicRoom, HTMLImageElement>();
+      const scaffolds = new Map<ScaffoldStage, HTMLImageElement>();
+      const props = new Map<PropKey, HTMLImageElement>();
+      const paths = new Map<number, HTMLImageElement>();
+      const scatters = new Map<ScatterKey, HTMLImageElement>();
+      const items = new Map<ItemKey, HTMLImageElement>();
+      const animals = new Map<AnimalKey, HTMLImageElement>();
+      const lazy = <K,>(store: Map<K, HTMLImageElement>, key: K, src: string) =>
+        loadImage(src)
+          .then((img) => {
+            if (!cancelled) store.set(key, img);
+          })
+          .catch(() => {
+            /* a missing scenery file just means that thing never appears */
+          });
+      void Promise.all([
+        ...CIVIC_ROOMS.map((r) => lazy(civics, r, civicSrc(r))),
+        ...([1, 2, 3] as ScaffoldStage[]).map((s) => lazy(scaffolds, s, scaffoldSrc(s))),
+        ...PROP_KEYS.map((k) => lazy(props, k, propSrc(k))),
+        ...Array.from({ length: 16 }, (_, m) => lazy(paths, m, pathSrc(m))),
+        ...SCATTER_KEYS.map((k) => lazy(scatters, k, scatterSrc(k))),
+        ...ITEM_KEYS.map((k) => lazy(items, k, itemSrc(k))),
+        ...ANIMAL_KEYS.map((k) => lazy(animals, k, animalSrc(k))),
+      ]);
+
+      /* ---- one lamp, drawn once -------------------------------------
+       * A radial gradient is an allocation, and the campus has forty-odd lamps
+       * in view at once. Building one per lamp per frame is 2,400 gradients a
+       * second for a picture that never changes, so the blob is rendered ONCE
+       * into an offscreen canvas here and stamped from then on — the same
+       * discipline the dressing follows, moved from placement to paint.
+       * ---------------------------------------------------------------- */
+      const GLOW_R = 64;
+      const glowSprite = document.createElement("canvas");
+      glowSprite.width = GLOW_R * 2;
+      glowSprite.height = GLOW_R * 2;
+      {
+        const g = glowSprite.getContext("2d");
+        if (g) {
+          const grad = g.createRadialGradient(GLOW_R, GLOW_R, 0, GLOW_R, GLOW_R, GLOW_R);
+          grad.addColorStop(0, "rgba(255,206,132,0.9)");
+          grad.addColorStop(0.32, "rgba(255,174,86,0.34)");
+          grad.addColorStop(1, "rgba(255,146,56,0)");
+          g.fillStyle = grad;
+          g.fillRect(0, 0, GLOW_R * 2, GLOW_R * 2);
+        }
+      }
 
       /** Where a body is this frame, in (fractional) tile coords. */
       const bodyAt = (id: string, seat: Seat, now: number): { x: number; y: number } => {
@@ -1109,6 +1888,24 @@ export function WorldMap() {
             ctx.clip();
             ctx.globalAlpha = explored ? (core ? 1 : 0.55) : 0.18;
             ctx.drawImage(tile, x - TW / 2, y, TW, TH);
+            // Paving, then seasoning, both still inside the tile's clip so a
+            // path arm can never bleed into the diamond next door. Both are a
+            // single typed-array read per tile — the whole network and every
+            // pebble was decided once, at module load, from the tile grid.
+            if (core && explored) {
+              const mask = pathMaskAt(tx, ty);
+              if (mask >= 0) {
+                const road = paths.get(mask);
+                if (road) ctx.drawImage(road, x - TW / 2, y, TW, TH);
+              }
+              if (z >= LOD_SCATTER) {
+                const s = scatterAt(tx, ty);
+                if (s >= 0) {
+                  const speck = scatters.get(SCATTER_KEYS[s]!);
+                  if (speck) ctx.drawImage(speck, x - TW / 2, y, TW, TH);
+                }
+              }
+            }
             if (!explored) {
               ctx.fillStyle = "rgba(4,6,16,0.72)";
               ctx.fill();
@@ -1143,6 +1940,45 @@ export function WorldMap() {
           }
         }
 
+        /* ---- the structure layer -------------------------------------
+         * Everything with a footprint, and everything standing on one, goes
+         * into ONE list and is painted back-to-front by the (tx + ty) of its
+         * south-most tile — the rule the art README states and the only rule
+         * that makes a body and a building agree about which is in front.
+         *
+         * Before this pass the plot buildings were drawn in one block and the
+         * bodies in another, so a body always won. That was invisible while
+         * the only structures were 3x3 sheds on empty plots and is very
+         * visible now there is a Library for someone to stand behind.
+         *
+         * The list is rebuilt from the ALREADY-CULLED viewport every frame, so
+         * its length is bounded by what is on screen rather than by how big
+         * the world has grown: a few dozen entries, sorted once.
+         * ------------------------------------------------------------- */
+        type Scene = { s: number; draw: () => void };
+        const scene: Scene[] = [];
+        /** Generous margin: a 328px Library pokes into view from ~7 tiles off. */
+        const near = (tx: number, ty: number, fw: number, fh: number) =>
+          tx + fw - 1 >= vx0 - 8 && tx <= vx1 + 8 && ty + fh - 1 >= vy0 - 8 && ty <= vy1 + 8;
+        const anchored = (img: HTMLImageElement, tx: number, ty: number, a: Anchored, alpha = 1) => {
+          const q = iso(tx, ty);
+          const px = ox + q.x;
+          const py = oy + q.y;
+          scene.push({
+            s: tx + a.fw - 1 + (ty + a.fh - 1),
+            draw: () => {
+              if (alpha === 1) {
+                drawAnchored(ctx, img, px, py, a);
+                return;
+              }
+              ctx.save();
+              ctx.globalAlpha = alpha;
+              drawAnchored(ctx, img, px, py, a);
+              ctx.restore();
+            },
+          });
+        };
+
         // Claimed land, drawn over the terrain and under the bodies.
         for (const plot of plotRef.current) {
           const { rect } = plot;
@@ -1172,13 +2008,7 @@ export function WorldMap() {
           // underneath as the machine-readable half.
           const shell = buildings.get(plot.preset as AccessLevel);
           if (anyExplored && shell && z >= LOD_PLOTS) {
-            const bx = rect.x0 + 2;
-            const by = rect.y0 + 1;
-            const bp = iso(bx, by);
-            ctx.save();
-            ctx.globalAlpha = 0.96;
-            drawAnchored(ctx, shell, ox + bp.x, oy + bp.y, BUILDING);
-            ctx.restore();
+            anchored(shell, rect.x0 + 2, rect.y0 + 1, BUILDING, 0.96);
           }
 
           // Bound orgs colour the FENCE, not the ground: the fill already says
@@ -1234,44 +2064,216 @@ export function WorldMap() {
         }
 
         const actors = actorsRef.current;
-        // Bodies that have left the world stop walking.
+        // Bodies that have left the world stop walking. The last-seen positions
+        // are pruned on the same pass, but only once the departure that needs
+        // them has finished playing — that is the one entry a leaver still has
+        // a use for after it is gone.
         if (walkRef.current.size > actors.length) {
           const live = new Set(actors.map((a) => a.id));
           for (const id of [...walkRef.current.keys()]) if (!live.has(id)) walkRef.current.delete(id);
+          for (const id of [...lastPosRef.current.keys()]) {
+            if (!live.has(id) && !departedRef.current.has(id)) lastPosRef.current.delete(id);
+          }
         }
         const labels: Label[] = [];
+        /** Layout-space positions of everything wrong, drawn in screen space later. */
+        const hazards: Array<{ x: number; y: number; tone: HazardTone }> = [];
+        /** Bodies whose connection is drifting. Fixed-size marks, drawn later. */
+        const meters: Array<{ x: number; y: number; drift: number }> = [];
+        /** Where the lamps are this frame; lit after the hour's wash goes down. */
+        const lamps: Array<{ x: number; y: number; r: number }> = [];
+        /** Speech, lifted out of the depth list so the night can never dim it. */
+        const bubbles: Array<{ x: number; y: number; text: string }> = [];
+        // `t` is a rAF timestamp; the work clock, the fade clock and the
+        // campus clock are all WALL time, because that is what the poll
+        // recorded and what the hour means. Read once per frame, not per body.
+        const nowMs = Date.now();
+        // The hour. Read once per frame — not once per tile, and not once per
+        // body — and used by everything below that cares what time it is.
+        const hour = skyAt(nowMs);
+        const lit = hour.lamp > LAMP_FLOOR;
+
+        // The six civic landmarks. No level-of-detail gate: zoomed all the way
+        // out these ARE the campus, and a map of six coloured rectangles with
+        // nothing on them is what this pass exists to stop being.
+        for (const c of CIVIC_PLACEMENTS) {
+          const a = CIVIC[c.room];
+          if (!near(c.tx, c.ty, a.fw, a.fh)) continue;
+          if (!tileExplored(c.tx + 1, c.ty + 1, radius)) continue;
+          const img = civics.get(c.room);
+          if (img) anchored(img, c.tx, c.ty, a);
+        }
+
+        // Furniture. Fixed list, computed once from the tile grid, so the same
+        // bench is on the same tile in every frame and after every poll.
+        if (z >= LOD_DRESSING) {
+          for (const p of PROPS) {
+            if (!near(p.tx, p.ty, 1, 1)) continue;
+            if (!tileExplored(p.tx, p.ty, radius)) continue;
+            const img = props.get(p.key);
+            if (img) anchored(img, p.tx, p.ty, PROP[p.key]);
+          }
+        }
+
+        /* ---- what is burning -----------------------------------------
+         * Two precomputed flat arrays of [tx, ty, lift, radius], read four
+         * numbers at a time. The civic windows are never gated, because the
+         * six landmarks are never gated; the street lamps follow the props
+         * they belong to and go out with them at 0.4x, where the lantern under
+         * the glow would be two pixels and the glow would be a smudge.
+         * -------------------------------------------------------------- */
+        if (lit) {
+          const takeLamps = (table: Int16Array) => {
+            for (let i = 0; i < table.length; i += LAMP_STRIDE) {
+              const tx = table[i]!;
+              const ty = table[i + 1]!;
+              if (!near(tx, ty, 1, 1) || !tileExplored(tx, ty, radius)) continue;
+              const q = iso(tx, ty);
+              lamps.push({ x: ox + q.x, y: oy + q.y - table[i + 2]!, r: table[i + 3]! });
+            }
+          };
+          takeLamps(CIVIC_LAMPS);
+          if (z >= LOD_LAMPS) takeLamps(STREET_LAMPS);
+        }
+
+        // Sheep. Pure function of the clock, so they neither shimmer nor need
+        // state; dropped with the nameplates because zoomed out they are blobs.
+        if (z >= LOD_SCATTER) {
+          for (const plan of SHEEP) {
+            const f = sheepAt(plan, t);
+            const htx = Math.round(f.x);
+            const hty = Math.round(f.y);
+            if (!near(htx, hty, 1, 1) || !tileExplored(htx, hty, radius)) continue;
+            const img = animals.get(f.pose);
+            if (!img) continue;
+            const q = iso(f.x, f.y);
+            const sx = ox + q.x;
+            const sy = oy + q.y - 18;
+            const flip = f.flip;
+            scene.push({
+              s: f.x + f.y - 0.5,
+              draw: () => {
+                ctx.save();
+                ctx.translate(sx, sy);
+                if (flip) ctx.scale(-1, 1);
+                // Animals go through the character path unchanged: 64x64 art
+                // drawn at 40x40, feet on the bottom edge of the frame.
+                ctx.drawImage(img, -20, -20, 40, 40);
+                ctx.restore();
+              },
+            });
+          }
+        }
+
         for (const a of actors) {
           const seat = seatsRef.current.get(a.id) ?? seatInRegion(a.id, a.region);
           if (!tileExplored(seat.x, seat.y, radius)) continue;
           const at = bodyAt(a.id, seat, t);
+          if (!near(Math.round(at.x), Math.round(at.y), 1, 1)) continue;
           const p = iso(at.x, at.y);
           const active = isActiveVerb(a.verb);
           const walk = active ? Math.sin(t / 160 + seat.x) * 5 : 0;
           const bob = Math.sin(t / (active ? 160 : 400) + seat.y) * (active ? 2.5 : a.verb === "offline" ? 0 : 1.2);
           const x = ox + p.x + walk;
           const y = oy + p.y - 18 + bob;
-          const alpha = a.verb === "offline" ? 0.4 : a.verb === "idle" ? 0.72 : 1;
-          ctx.save();
-          ctx.globalAlpha = alpha;
-          ctx.beginPath();
-          ctx.ellipse(x, y + 18, active ? 14 : 10, 5, 0, 0, Math.PI * 2);
-          ctx.strokeStyle = a.stalled ? STALL_RING : VERB_RING[a.verb];
-          ctx.lineWidth = active ? 2 : 1;
-          if (a.stalled) ctx.setLineDash([3, 3]);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          const key = spriteKey(a.kind === "paperclip" ? "agent" : a.kind, a.verb);
-          const img = chars.get(key) ?? chars.get("agent-front");
-          if (img) ctx.drawImage(img, x - BODY_W / 2, y - 20, BODY_W, 40);
-          else {
-            ctx.fillStyle = a.kind === "human" ? "#e8b86d" : "#7c3aed";
-            ctx.fillRect(x - 6, y - 6, 12, 12);
+          /* --- idle, asleep, and going --------------------------------
+           * The ladder used to stop at "asleep": 1.0 awake, 0.72 idle, 0.4
+           * offline, and then the body was simply not in the next poll. The
+           * last rung is now a slope — a sleeping body keeps dimming as its
+           * seat runs out — so "about to go" is a state you can see rather
+           * than one you reconstruct from the gap afterwards.
+           * ------------------------------------------------------------ */
+          const health = healthOf(a);
+          const alpha =
+            a.verb === "offline" ? sleepingAlpha(health.drift) : a.verb === "idle" ? 0.72 : 1;
+          const tone = hazardOf(a);
+          if (tone) hazards.push({ x, y, tone });
+          if (healthVisible(health)) meters.push({ x, y, drift: health.drift });
+          // Remember where this body stood, so that if it is gone by the next
+          // poll its departure can start from the seat and not from nowhere.
+          {
+            const last = lastPosRef.current.get(a.id);
+            const sprite = spriteKey(a.kind === "paperclip" ? "agent" : a.kind, a.verb);
+            if (last) {
+              last.x = at.x;
+              last.y = at.y;
+              last.alpha = alpha;
+              last.sprite = sprite;
+            } else lastPosRef.current.set(a.id, { x: at.x, y: at.y, alpha, sprite, at: 0 });
           }
-          // Org before the verb glyph and the bubble: identity sits behind
-          // what the body is doing and what it just said, never over them.
-          if (a.orgColour && z >= LOD_ORG) drawPennant(ctx, a.orgColour, x, y);
-          drawGlyph(ctx, a.verb, x, y, t);
-          ctx.restore();
+
+          // Scaffolding. A body working a url raises a site three tiles north
+          // of itself, so the frame stands BEHIND the worker rather than
+          // burying them — the scaffold's south-most tile is one north of the
+          // seat, which is what puts it earlier in this list.
+          const job = workRef.current.get(a.id);
+          if (job && z >= LOD_DRESSING) {
+            const elapsed = nowMs - job.start;
+            const stage: ScaffoldStage =
+              elapsed < SCAFFOLD_STAGE_MS[0]! ? 1 : elapsed < SCAFFOLD_STAGE_MS[1]! ? 2 : 3;
+            const rig = scaffolds.get(stage);
+            const sx = seat.x - 3;
+            const sy = seat.y - 3;
+            if (rig && near(sx, sy, SCAFFOLD.fw, SCAFFOLD.fh)) anchored(rig, sx, sy, SCAFFOLD, 0.92);
+          }
+
+          scene.push({
+            // Bodies stand on the tile's NORTH vertex while a footprint covers
+            // the whole diamond, so a body on tile T is half a tile north of a
+            // prop on tile T and must sort just ahead of it.
+            s: at.x + at.y - 0.5,
+            draw: () => {
+              ctx.save();
+              ctx.globalAlpha = alpha;
+              ctx.beginPath();
+              ctx.ellipse(x, y + 18, active ? 14 : 10, 5, 0, 0, Math.PI * 2);
+              ctx.strokeStyle = a.stalled ? STALL_RING : VERB_RING[a.verb];
+              ctx.lineWidth = active ? 2 : 1;
+              if (a.stalled) ctx.setLineDash([3, 3]);
+              ctx.stroke();
+              ctx.setLineDash([]);
+              // A hazard also spreads on the ground. The screen-space triangle
+              // is what carries at low zoom; this is what makes a faulted body
+              // look wrong rather than merely labelled when you are close.
+              if (tone && z >= LOD_PLOTS) {
+                const grow = 0.5 + 0.5 * Math.sin(t / 300);
+                ctx.globalAlpha = alpha * (0.5 - 0.34 * grow);
+                ctx.strokeStyle = HAZARD_COLOUR[tone];
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.ellipse(x, y + 18, 14 + 16 * grow, (14 + 16 * grow) * 0.42, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = alpha;
+              }
+              const key = spriteKey(a.kind === "paperclip" ? "agent" : a.kind, a.verb);
+              const img = chars.get(key) ?? chars.get("agent-front");
+              if (img) ctx.drawImage(img, x - BODY_W / 2, y - 20, BODY_W, 40);
+              else {
+                ctx.fillStyle = a.kind === "human" ? "#e8b86d" : "#7c3aed";
+                ctx.fillRect(x - 6, y - 6, 12, 12);
+              }
+              // Org before the verb glyph and the bubble: identity sits behind
+              // what the body is doing and what it just said, never over them.
+              if (a.orgColour && z >= LOD_ORG) drawPennant(ctx, a.orgColour, x, y);
+              // What it is doing, as a thing in its hand. The 24x24 item is
+              // anchored at its grip point, placed at the sprite's right hand —
+              // 11px right of centre, 3px below the waist. Where an item says
+              // the verb, the abstract glyph stands down instead of saying the
+              // same thing twice beside it.
+              const carried = z >= LOD_DRESSING ? itemForActor(a) : null;
+              const held = carried ? items.get(carried) : undefined;
+              if (held) ctx.drawImage(held, x + 11 - ITEM.ax, y + 3 - ITEM.ay, ITEM.w, ITEM.h);
+              else drawGlyph(ctx, a.verb, x, y, t);
+              ctx.restore();
+            },
+          });
+          // Speech leaves the depth list. It used to be painted inside the
+          // body's own entry, which meant a nearer body could draw over a line
+          // someone had just said — and, since this pass, that the hour's wash
+          // would have gone down on top of it. It is information, so it is
+          // painted after the light, with the nameplates.
+          if (a.bubble) bubbles.push({ x, y, text: a.bubble });
+
           if (z >= LOD_LABELS) {
             labels.push({
               x,
@@ -1286,18 +2288,124 @@ export function WorldMap() {
               orgColour: a.orgColour ?? null,
             });
           }
-          if (a.bubble) {
-            const text = a.bubble;
-            ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
-            ctx.textAlign = "center";
-            const w = Math.min(160, ctx.measureText(text).width + 12);
-            ctx.fillStyle = "rgba(7,8,20,0.9)";
-            ctx.beginPath();
-            ctx.roundRect(x - w / 2, y - 36, w, 16, 4);
-            ctx.fill();
-            ctx.fillStyle = "#f4d19a";
-            ctx.fillText(text, x, y - 24, w - 8);
+        }
+
+        /* ---- and gone -------------------------------------------------
+         * The last rung of the ladder. A departure goes through the SAME
+         * depth-sorted list as everything else — a body leaving from behind
+         * the Library has to leave from behind the Library — and it is pushed
+         * after the live bodies so that on a shared tile the living one is
+         * still in front.
+         * -------------------------------------------------------------- */
+        for (const [id, gone] of departedRef.current) {
+          const age = nowMs - gone.at;
+          // Not `age >= DEPART_MS`: the test is that the age is IN the window.
+          // A wall clock can step backwards — an NTP correction, a laptop
+          // waking up in another timezone — and a departure that started in
+          // the future would otherwise play backwards forever, which in a
+          // canvas means a negative radius and a dead render loop.
+          if (!(age >= 0 && age < DEPART_MS)) {
+            departedRef.current.delete(id);
+            lastPosRef.current.delete(id);
+            continue;
           }
+          const htx = Math.round(gone.x);
+          const hty = Math.round(gone.y);
+          if (!near(htx, hty, 1, 1) || !tileExplored(htx, hty, radius)) continue;
+          const pr = age / DEPART_MS;
+          const q = iso(gone.x, gone.y);
+          // Reduced motion keeps the fade and drops the rise: dissolving in
+          // place is what says "gone"; the drift upward is only decoration.
+          const gx = ox + q.x;
+          const gy = oy + q.y - 18 - (reduceMotion.matches ? 0 : 10 * pr);
+          const img = chars.get(gone.sprite) ?? chars.get("agent-front");
+          const startAlpha = gone.alpha;
+          scene.push({
+            s: gone.x + gone.y - 0.5,
+            draw: () => {
+              ctx.save();
+              // The seat empties: a ring opening outward where the body stood,
+              // which is the half of this that is still readable at 0.4x.
+              ctx.globalAlpha = (1 - pr) * 0.55;
+              ctx.strokeStyle = "rgba(148,163,184,0.9)";
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.ellipse(gx, gy + 18, 10 + 24 * pr, (10 + 24 * pr) * 0.42, 0, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.globalAlpha = startAlpha * (1 - pr) * (1 - pr);
+              if (img) ctx.drawImage(img, gx - BODY_W / 2, gy - 20, BODY_W, 40);
+              ctx.restore();
+            },
+          });
+        }
+
+        // One sort, one pass. Ties keep insertion order, which is why the
+        // pushes above run landmarks first and bodies last: on the same tile,
+        // the living thing is in front.
+        scene.sort((p, q) => p.s - q.s);
+        for (const item of scene) item.draw();
+
+        /* ---- the hour -------------------------------------------------
+         * The wash goes down over the terrain, the buildings and the bodies —
+         * and over nothing else. Everything you READ off this map is painted
+         * after it: speech, nameplates, task captions, hazard marks, the
+         * heartbeat rings and the hover card. That is what "legibility beats
+         * atmosphere" means in practice rather than as a promise, and it is
+         * why the deepest hour can be a third of an alpha without any hour
+         * making anything unreadable.
+         *
+         * Two fillRects for the sky, however far out you are zoomed.
+         *
+         * Daylight goes down first, as `screen`. A translucent pale fill could
+         * not do this job: the campus is painted in dusk values, so a film
+         * thin enough to keep the art legible barely moved it and noon looked
+         * like midnight with the lanterns off. `screen` raises the blacks and
+         * leaves the highlights where they are, which is what daylight does to
+         * a dark scene. Then the hue wash, as ordinary alpha, for the colour
+         * of the hour rather than its brightness.
+         * -------------------------------------------------------------- */
+        if (hour.lift > 0.004 || hour.wash) {
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          if (hour.lift > 0.004) {
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            ctx.globalAlpha = hour.lift;
+            ctx.fillStyle = DAYLIGHT;
+            ctx.fillRect(0, 0, cssW, cssH);
+            ctx.restore();
+          }
+          if (hour.wash) {
+            ctx.fillStyle = hour.wash;
+            ctx.fillRect(0, 0, cssW, cssH);
+          }
+          ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * v.px, dpr * v.py);
+        }
+        // Then the lamps cut back through it. Additive, so a lantern lifts the
+        // night rather than painting a disc on it, and smoothed — this is the
+        // one thing on a pixel map that must not be nearest-neighboured.
+        if (lamps.length) {
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.imageSmoothingEnabled = true;
+          ctx.globalAlpha = Math.min(1, hour.lamp * LAMP_GAIN);
+          for (const l of lamps) ctx.drawImage(glowSprite, l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+          ctx.restore();
+          ctx.imageSmoothingEnabled = false;
+        }
+
+        // Speech, above the light. Painted before the nameplates so that when
+        // the two would collide it is the caption that loses, not the line
+        // somebody just said.
+        for (const b of bubbles) {
+          ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+          ctx.textAlign = "center";
+          const w = Math.min(160, ctx.measureText(b.text).width + 12);
+          ctx.fillStyle = "rgba(7,8,20,0.9)";
+          ctx.beginPath();
+          ctx.roundRect(b.x - w / 2, b.y - 36, w, 16, 4);
+          ctx.fill();
+          ctx.fillStyle = "#f4d19a";
+          ctx.fillText(b.text, b.x, b.y - 24, w - 8);
         }
 
         // Captions last, front-most first, skipping any that would collide:
@@ -1332,6 +2440,26 @@ export function WorldMap() {
 
         // Screen-space overlay: never pans or zooms.
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        // Hazard marks, at a fixed size. Everything else on this map shrinks
+        // with the zoom; an alarm must not. A stalled body is the same 14px
+        // triangle whether you are looking at one room or the whole campus,
+        // which is what makes "something is wrong over there" readable from
+        // across the world instead of only in a counter.
+        for (const h of hazards) {
+          const sx = h.x * z + v.px;
+          const sy = h.y * z + v.py - 22;
+          if (sx < -20 || sx > cssW + 20 || sy < -20 || sy > cssH + 20) continue;
+          drawHazardMark(ctx, sx, sy, h.tone, t);
+        }
+        // The heartbeat rings, at the same fixed size and for the same reason.
+        // Offset to the right of the hazard slot so a body that is both faulted
+        // and drifting shows both marks rather than one on top of the other.
+        for (const m of meters) {
+          const sx = m.x * z + v.px + 16;
+          const sy = m.y * z + v.py - 24;
+          if (sx < -20 || sx > cssW + 20 || sy < -20 || sy > cssH + 20) continue;
+          drawHealthMark(ctx, sx, sy, m.drift, t, !reduceMotion.matches);
+        }
         // Follow-cam. Runs after the bodies are placed so it can use the same
         // interpolated position they were drawn at, and eases rather than snaps.
         const followId = followRef.current;
@@ -1352,11 +2480,60 @@ export function WorldMap() {
             clampPan();
           }
         }
+
+        /* ---- kiosk: the slow tour --------------------------------------
+         * The stop is chosen by dividing the WALL clock, not by counting
+         * frames or polls: two displays side by side show the same room at the
+         * same moment, a reload rejoins the tour where it already was, and
+         * nothing here can drift, shimmer or reorder. It yields for a minute to
+         * anyone who touches the map, and it does not run at all under reduced
+         * motion — a wall that pans on its own is exactly what that setting is
+         * asking us not to do, and a screen that jump-cut every 26 seconds
+         * instead would be worse than one that sits still.
+         * ---------------------------------------------------------------- */
+        if (kioskRef.current && !reduceMotion.matches && nowMs > kioskYieldRef.current) {
+          const stop = Math.floor(nowMs / KIOSK_STOP_MS) % KIOSK_STOPS.length;
+          if (stop !== tourStopRef.current) {
+            tourStopRef.current = stop;
+            const s = KIOSK_STOPS[stop]!;
+            glideRef.current = { tx: s.tx, ty: s.ty, zoom: s.zoom, start: t };
+          }
+        }
+
+        /* ---- bookmark glide --------------------------------------------
+         * Eased, and through the same clampPan as every other camera, so a
+         * bookmark can no more leave the world behind than a drag can. The
+         * follow-cam wins outright while it is on: two cameras that both think
+         * they are driving is the bug this avoids by never having two.
+         *
+         * A target the pan clamp cannot reach — the far corner of the world at
+         * a zoom that will not fit it — would otherwise never converge, so the
+         * glide also gives up on a clock.
+         * ---------------------------------------------------------------- */
+        const glide = glideRef.current;
+        if (glide && !followRef.current) {
+          const q = iso(glide.tx, glide.ty);
+          const k = reduceMotion.matches ? 1 : 0.1;
+          v.zoom = clamp(v.zoom + (glide.zoom - v.zoom) * k, minZoom(), MAX_ZOOM);
+          const wantX = cssW / 2 - (ox + q.x) * v.zoom;
+          const wantY = cssH / 2 - (oy + q.y) * v.zoom;
+          v.px += (wantX - v.px) * k;
+          v.py += (wantY - v.py) * k;
+          clampPan();
+          const arrived =
+            Math.abs(v.zoom - glide.zoom) < 0.004 &&
+            Math.abs(wantX - v.px) < 1.5 &&
+            Math.abs(wantY - v.py) < 1.5;
+          if (arrived || t - glide.start > GLIDE_GIVE_UP_MS) glideRef.current = null;
+        }
         const hover = hoverRef.current;
         if (hover) {
           const lines: string[] = [`${hover.name} · ${hover.detail ?? hover.verb} · ${hover.region}`];
+          if (hover.flagged) lines.push("Flagged for prompt injection — the chronicle holds the record.");
           if (hover.stalled) lines.push("Stopped reporting — it says it is working, but has gone quiet.");
           if (hover.errorText) lines.push(`Fault: ${hover.errorText.slice(0, 90)}`);
+          const hoverHealth = healthOf(hover);
+          if (healthVisible(hoverHealth)) lines.push(healthNote(hoverHealth));
           if (hover.url) lines.push(hover.url.slice(0, 90));
           if (hover.orgName) lines.push(`Flying ${hover.orgName} colours here.`);
           const consequence = badgeConsequence(hover.badges);
@@ -1393,7 +2570,12 @@ export function WorldMap() {
   }, [router]);
 
   return (
-    <section className="relative min-h-[calc(100svh-56px)] overflow-hidden bg-dusk-950">
+    <section
+      className={`relative overflow-hidden bg-dusk-950 ${
+        kiosk ? "min-h-[100svh]" : "min-h-[calc(100svh-56px)]"
+      }`}
+    >
+      <KioskChrome active={kiosk} onLeave={() => setKioskMode(false)} />
       <canvas
         ref={canvasRef}
         className="absolute inset-0 h-full w-full"
@@ -1403,8 +2585,18 @@ export function WorldMap() {
       {/* Top overlay. On a phone the display heading and the HUD together used
           to eat the screen the world is supposed to fill, so at small widths the
           title drops to a readable 24px, the decorative line stands down, and
-          the HUD becomes one compact strip instead of a column beside it. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2 bg-gradient-to-b from-dusk-950/90 via-dusk-950/55 to-transparent p-4 pb-8 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:bg-none sm:p-6">
+          the HUD becomes one compact strip instead of a column beside it.
+
+          Gone entirely in kiosk mode: on a wall display this is the half of the
+          page that is talking to somebody who is not there. */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-0 flex-col gap-2 bg-gradient-to-b from-dusk-950/90 via-dusk-950/55 to-transparent p-4 pb-8 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:bg-none sm:p-6 ${
+          // Not the `hidden` attribute: a utility class carrying `display:flex`
+          // is an author style and beats the user agent's [hidden] rule, so the
+          // overlay would have stayed on the wall display.
+          kiosk ? "hidden sm:hidden" : "flex"
+        }`}
+      >
         <div className="min-w-0 sm:max-w-xl">
           <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/80 sm:text-xs">Aetheria · Grove</p>
           <h1 className="font-display mt-1 text-2xl leading-tight text-lantern-300 sm:text-4xl md:text-5xl">
@@ -1421,7 +2613,18 @@ export function WorldMap() {
           ) : null}
         </div>
         <div className="pointer-events-auto w-full shrink-0 rounded-2xl border border-lantern-400/20 bg-dusk-950/80 px-3 py-2 text-[11px] uppercase tracking-widest text-lantern-300/80 sm:w-auto sm:px-4 sm:py-3 sm:text-xs">
-          <div>{status}</div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span>{status}</span>
+            {/* The campus clock. UTC and said so: the world is one place, and
+                two people watching it from two continents are watching the
+                same hour of it, whatever their own clocks say. */}
+            {sky ? (
+              <span className="shrink-0 tabular-nums text-lantern-300/70" title={`${sky.label} over Aetheria`}>
+                {sky.clock} <span className="text-white/40">UTC</span>
+              </span>
+            ) : null}
+          </div>
+          {sky ? <div className="mt-0.5 text-[10px] text-white/40">{sky.label}</div> : null}
           <div className="mt-1 text-white/60">
             {hud.awake} awake · {hud.asleep} asleep · fog {hud.radius}
             {hud.world ? ` · world ${hud.world}` : ""}
@@ -1438,6 +2641,7 @@ export function WorldMap() {
             <span>blocked</span>
             <span>fault</span>
             <span>asleep</span>
+            <span>fading</span>
           </div>
           {hud.orgs.length ? (
             <div className="mt-2 hidden flex-wrap items-center gap-2 border-t border-white/10 pt-2 text-[10px] normal-case tracking-normal text-white/55 sm:flex">
@@ -1459,7 +2663,17 @@ export function WorldMap() {
           on top of each other at phone width — the zoom buttons sat underneath
           the "Enter as yourself" pill and could not be pressed at all. One
           column that wraps keeps every control reachable at any width. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-end gap-2 p-4 sm:p-6">
+      <div
+        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-end gap-2 p-4 sm:p-6 ${
+          // Kiosk keeps the bell — a wall display exists to show you the alarm —
+          // and the exit pill is pinned under it, so the column gets out of its
+          // way. Both breakpoints: `sm:p-6` above would otherwise win the
+          // padding-bottom back at exactly the widths a wall display runs at.
+          kiosk ? "pb-16 sm:pb-20" : ""
+        }`}
+      >
+        {kiosk ? null : <CameraBookmarks items={bookmarks} onGo={jumpTo} />}
+        <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} />
         {following ? (
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-lantern-400/40 bg-dusk-950/90 py-1.5 pl-4 pr-1.5 text-xs text-lantern-300">
             <span className="truncate">Following {following}</span>
@@ -1472,7 +2686,9 @@ export function WorldMap() {
             </button>
           </div>
         ) : null}
-        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+        <div
+          className={`w-full flex-wrap items-center justify-between gap-2 ${kiosk ? "hidden" : "flex"}`}
+        >
           <div className="pointer-events-auto flex flex-wrap gap-2 text-sm">
             <a href={gp("/login")} className="rounded-full bg-lantern-400 px-5 py-3 font-semibold text-dusk-950 sm:py-2">
               Enter as yourself
@@ -1508,9 +2724,25 @@ export function WorldMap() {
             >
               Reset view
             </button>
+            <button
+              type="button"
+              onClick={() => setKioskMode(true)}
+              title="Kiosk mode: the world with no chrome, for a wall display (K). Escape leaves."
+              className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
+            >
+              Kiosk
+            </button>
           </div>
         </div>
       </div>
+      {/* The one line kiosk mode keeps besides the bell: what time it is here
+          and how many bodies are up, in the corner, at the weight of a clock on
+          a wall rather than of a heading on a page. */}
+      {kiosk && sky ? (
+        <div className="pointer-events-none absolute bottom-4 left-4 text-[11px] tabular-nums tracking-wide text-white/35">
+          {sky.clock} UTC · {sky.label} · {hud.awake} awake · {hud.asleep} asleep
+        </div>
+      ) : null}
     </section>
   );
 }

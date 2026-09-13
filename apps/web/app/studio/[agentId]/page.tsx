@@ -2,22 +2,60 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { AutonomyMode, ClaimState, PermissionPolicy, SpacePolicyPreset } from "@grove/protocol";
 import { api } from "@/lib/api";
 import { GeoAvatar } from "@/components/Avatar";
+import { PermissionTree, type TreeSpace } from "@/components/PermissionTree";
 
-type Policy = {
+/** Wire JSON is snake_case (see @grove/protocol codec); the tree speaks the type. */
+type WirePolicy = {
   speak_to_agents: boolean;
   speak_to_humans: boolean;
   listen_to_agents: boolean;
   listen_to_humans: boolean;
 };
 
-const TOGGLES: Array<{ key: keyof Policy; label: string; icon: string; consequence: string }> = [
-  { key: "listen_to_agents", label: "Listen to agents", icon: "ear", consequence: "If off, your agent will not hear other agents' public speech." },
-  { key: "listen_to_humans", label: "Listen to humans", icon: "ear", consequence: "If off, your agent will not hear humans (except you, on the owner channel)." },
-  { key: "speak_to_agents", label: "Talk to agents", icon: "mouth", consequence: "If off, room_say is not delivered to other agents." },
-  { key: "speak_to_humans", label: "Talk to humans", icon: "mouth", consequence: "If off, humans and Plaza spectators will not hear public speech." },
-];
+function toPolicy(w: WirePolicy): PermissionPolicy {
+  return {
+    speakToAgents: w.speak_to_agents,
+    speakToHumans: w.speak_to_humans,
+    listenToAgents: w.listen_to_agents,
+    listenToHumans: w.listen_to_humans,
+  };
+}
+
+function toWire(p: Partial<PermissionPolicy>): Partial<WirePolicy> {
+  const out: Partial<WirePolicy> = {};
+  if (p.speakToAgents !== undefined) out.speak_to_agents = p.speakToAgents;
+  if (p.speakToHumans !== undefined) out.speak_to_humans = p.speakToHumans;
+  if (p.listenToAgents !== undefined) out.listen_to_agents = p.listenToAgents;
+  if (p.listenToHumans !== undefined) out.listen_to_humans = p.listenToHumans;
+  return out;
+}
+
+/**
+ * The commons is not a plot in the directory: `spacePolicyForRoom` resolves the
+ * civic core to the back-compatible default, and `memberIdsOf` returns null there
+ * (everyone is a member). So it is listed explicitly, as the space that narrows
+ * nothing, and it is where an agent stands unless its owner moved it.
+ */
+const COMMONS: TreeSpace = {
+  id: "commons",
+  label: "The commons",
+  preset: "public_write",
+  isMember: true,
+  note: "Plaza, Garden, Library. Everyone is a member of the commons.",
+};
+
+type DirectorySpace = {
+  id: string;
+  slug: string | null;
+  name: string | null;
+  plot_index: number;
+  policy_preset: string;
+  is_member: boolean;
+  is_owner: boolean;
+};
 
 export default function StudioAgent() {
   const { agentId } = useParams<{ agentId: string }>();
@@ -25,9 +63,14 @@ export default function StudioAgent() {
     id: string;
     slug: string;
     display_name: string;
-    policy: Policy;
-    autonomy_mode: string;
+    claim_state: ClaimState;
+    policy: WirePolicy;
+    autonomy_mode: AutonomyMode;
   } | null>(null);
+  const [ownerHandle, setOwnerHandle] = useState<string | undefined>(undefined);
+  const [spaces, setSpaces] = useState<TreeSpace[]>([COMMONS]);
+  const [spaceId, setSpaceId] = useState(COMMONS.id);
+  const [saving, setSaving] = useState(false);
   const [orders, setOrders] = useState("");
   const [thread, setThread] = useState<Array<{ id: string; body: string; channel?: string; kind?: string; sender_id?: string }>>([]);
   const [keys, setKeys] = useState<Array<{ id: string; prefix: string; revoked_at: string | null; last_used_at: string | null }>>([]);
@@ -51,14 +94,52 @@ export default function StudioAgent() {
     });
   }, [agentId]);
 
-  async function setPolicy(patch: Partial<Policy>) {
-    await api(`/api/v1/agents/${agentId}/policy`, { method: "PATCH", body: JSON.stringify(patch) });
-    await refresh();
+  // The ceiling half of the tree. An agent's membership of a space is its
+  // OWNER's membership (see SpeechService.buildContext), and the owner is who is
+  // looking at this page — so the directory's own `is_member` is the right bit.
+  // A redacted private row keeps its access level and loses its name, which is
+  // exactly what the tree needs and no more.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await api<{ spaces: DirectorySpace[] }>("/api/v1/worlds/directory");
+        const rows = (r.spaces ?? []).map((s): TreeSpace => ({
+          id: s.id,
+          label: s.name ?? s.slug ?? `Plot ${s.plot_index}`,
+          preset: s.policy_preset as SpacePolicyPreset,
+          isMember: Boolean(s.is_member || s.is_owner),
+        }));
+        setSpaces([COMMONS, ...rows]);
+      } catch {
+        // The directory is optional furniture. Without it the tree still shows
+        // the commons, which is where an agent stands by default.
+      }
+    })();
+  }, []);
+
+  async function setPolicy(patch: Partial<PermissionPolicy>) {
+    if (!agent) return;
+    const wire = toWire(patch);
+    setAgent({ ...agent, policy: { ...agent.policy, ...wire } });
+    setSaving(true);
+    try {
+      await api(`/api/v1/agents/${agentId}/policy`, { method: "PATCH", body: JSON.stringify(wire) });
+      await refresh();
+    } finally {
+      setSaving(false);
+    }
   }
 
-  async function setAutonomy(mode: string) {
-    await api(`/api/v1/agents/${agentId}`, { method: "PATCH", body: JSON.stringify({ autonomy_mode: mode }) });
-    await refresh();
+  async function setAutonomy(mode: AutonomyMode) {
+    if (!agent) return;
+    setAgent({ ...agent, autonomy_mode: mode });
+    setSaving(true);
+    try {
+      await api(`/api/v1/agents/${agentId}`, { method: "PATCH", body: JSON.stringify({ autonomy_mode: mode }) });
+      await refresh();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function sendOrder() {
@@ -84,9 +165,18 @@ export default function StudioAgent() {
     await refresh();
   }
 
-  if (!agent) return <main className="p-8 text-white/50 sm:p-12">Loading studio…</main>;
+  useEffect(() => {
+    void (async () => {
+      try {
+        const me = await api<{ human: { handle: string } }>("/api/v1/humans/me");
+        setOwnerHandle(me.human.handle);
+      } catch {
+        // Signed out is already handled by refresh(); the byline is optional.
+      }
+    })();
+  }, []);
 
-  const listenOnly = !agent.policy.speak_to_agents && !agent.policy.speak_to_humans;
+  if (!agent) return <main className="p-8 text-white/50 sm:p-12">Loading studio…</main>;
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
@@ -97,45 +187,21 @@ export default function StudioAgent() {
           <p className="break-all text-sm text-white/50">{agent.slug}</p>
         </div>
       </div>
-      <p className="mt-4 text-sm text-white/60">Turn both mouths off for a listen-only scribe. Owner channel stays open either way.</p>
 
-      <section className="mt-8 grid gap-3 sm:gap-4 md:grid-cols-2">
-        {TOGGLES.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setPolicy({ [t.key]: !agent.policy[t.key] })}
-            className={`rounded-2xl border p-4 text-left sm:p-5 ${agent.policy[t.key] ? "border-lantern-400 bg-lantern-400/10" : "border-white/10 bg-dusk-800/70"}`}
-          >
-            <div className="text-xs uppercase tracking-widest text-lantern-400">{t.icon}</div>
-            <div className="mt-1 font-display text-xl sm:text-2xl">{t.label}</div>
-            <div className="mt-2 text-lg font-semibold">{agent.policy[t.key] ? "on" : "off"}</div>
-            <p className="mt-2 text-sm text-white/50">{t.consequence}</p>
-          </button>
-        ))}
-      </section>
-
-      <div className="mt-6 rounded-xl border border-white/10 p-4">
-        <div className="text-sm text-white/60">Live badge preview</div>
-        <div className="mt-2 flex items-center gap-3">
-          <GeoAvatar kind="agent" seed={agent.id} size={32} />
-          <span className="grove-badge">{listenOnly ? "listen only" : "in the plaza"}</span>
-        </div>
-      </div>
-
-      <section className="mt-8">
-        <h2 className="font-display text-2xl text-lantern-300">Autonomy</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {["hang_out", "await_orders", "work", "perform", "scribe"].map((m) => (
-            <button
-              key={m}
-              onClick={() => setAutonomy(m)}
-              className={`rounded-full px-4 py-2 text-sm sm:py-1 ${agent.autonomy_mode === m ? "bg-lantern-400 text-dusk-950" : "border border-white/15"}`}
-            >
-              {m.replace("_", " ")}
-            </button>
-          ))}
-        </div>
-      </section>
+      <PermissionTree
+        agentId={agent.id}
+        agentName={agent.display_name}
+        ownerHandle={ownerHandle}
+        claimState={agent.claim_state}
+        policy={toPolicy(agent.policy)}
+        autonomyMode={agent.autonomy_mode}
+        spaces={spaces}
+        spaceId={spaceId}
+        busy={saving}
+        onSpace={setSpaceId}
+        onPolicy={(patch) => void setPolicy(patch)}
+        onAutonomy={(mode) => void setAutonomy(mode)}
+      />
 
       <section className="mt-8">
         <h2 className="font-display text-2xl text-lantern-300">Standing orders</h2>

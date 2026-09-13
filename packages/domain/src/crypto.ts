@@ -169,6 +169,36 @@ export function normalizePublicKey(raw: unknown): string | null {
   return buf.toString("base64url") === s ? s : null;
 }
 
+/**
+ * Accept a signature only in its one canonical spelling.
+ *
+ * An Ed25519 signature is 64 bytes = 512 bits; 86 base64url characters carry
+ * 516. The final character therefore has FOUR padding bits and only two that
+ * mean anything, so a canonical signature always ends in one of exactly four
+ * characters — A, Q, g or w — and the same 64 bytes can be written 4 different
+ * ways by putting junk in the padding.
+ *
+ * Every standard encoder zeroes those bits, so this refuses nothing an honest
+ * signer produces. What it buys is that a stored proof has ONE written form:
+ * without it, two rows spelled differently could carry the same signature and
+ * "has this row been edited?" would have a mushy answer. Exactly the argument
+ * normalizePublicKey makes about the key.
+ *
+ * Deliberately NOT applied in verifyEd25519(), which is the live
+ * authentication path. A stricter credential check is a new way for an honest
+ * agent in an unfamiliar language to earn an unexplainable 401, and the
+ * padding bits change nothing about what a signature proves. Strictness
+ * belongs where the record is written and read, not where callers are let in.
+ */
+export function normalizeSignature(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (!/^[A-Za-z0-9_-]{86}$/.test(s)) return null;
+  const buf = Buffer.from(s, "base64url");
+  if (buf.length !== ED25519_SIGNATURE_BYTES) return null;
+  return buf.toString("base64url") === s ? s : null;
+}
+
 /** A short, stable, human-quotable name for a key. */
 export function publicKeyFingerprint(publicKey: string): string {
   return crypto.createHash("sha256").update(publicKey).digest("hex").slice(0, 16);
@@ -283,4 +313,170 @@ export function signEd25519(privateKey: string, message: string): string {
 /** A nonce fit for one signed request. */
 export function newNonce(): string {
   return crypto.randomBytes(16).toString("base64url");
+}
+
+/* ------------------------------------------------------------------ *
+ * PROOF BUNDLES: a signature that outlives the request
+ *
+ * Verifying a signature and discarding it makes the ledger true only on
+ * Grove's say-so. A proof bundle is the opposite: a self-contained object
+ * carrying the public key, the exact bytes that were signed, the signature and
+ * the algorithm, so that a stranger can check it with the standard library of
+ * any language and NO access to Grove at all.
+ *
+ * Everything below is pure. It touches no database, no clock and no
+ * configuration, which is the property that makes it re-implementable by a
+ * verifier who does not trust this code either — the Node snippet in
+ * docs/EVENT-PROOFS.md and the OpenSSL invocation beside it are both exact
+ * substitutes for verifyProofBundle().
+ *
+ * WHAT A BUNDLE PROVES, PRECISELY
+ *
+ *   grove-bind-v1  — the holder of this private key asked for this key to be
+ *                    bound to this agent id at this second. The agent id and
+ *                    the key are both INSIDE the signed bytes, so this is a
+ *                    complete proof of the act it attests.
+ *   grove-auth-v1  — the holder of this private key made a request with this
+ *                    method to this path at this second. The body is NOT
+ *                    covered (see authMessage above), so it does NOT prove
+ *                    what the agent said, only that it called.
+ *
+ * Anything more than that is Grove's assertion, and is labelled as such rather
+ * than smuggled in beside the cryptography.
+ * ------------------------------------------------------------------ */
+
+/** Bundle format version. Bumped only if the SHAPE changes, never the contents. */
+export const PROOF_BUNDLE_VERSION = "grove-proof-v1";
+
+export type ProofDomain = typeof SIGNED_AUTH_DOMAIN | typeof SIGNED_BIND_DOMAIN;
+
+/** The lines of a `grove-auth-v1` message, as fields. */
+export interface AuthProofCovers {
+  method: string;
+  path: string;
+  timestamp: number;
+  nonce: string;
+}
+
+/** The lines of a `grove-bind-v1` message, as fields. `agentId` is "" at registration. */
+export interface BindProofCovers {
+  agentId: string;
+  publicKey: string;
+  timestamp: number;
+  nonce: string;
+}
+
+export interface ProofBundleCommon {
+  version: typeof PROOF_BUNDLE_VERSION;
+  algorithm: "ed25519";
+  /** The agent's public key, base64url. The only thing a verifier must obtain elsewhere. */
+  publicKey: string;
+  fingerprint: string;
+  /** The exact bytes that were signed, verbatim, newlines and all. */
+  message: string;
+  /** base64url, 86 characters. */
+  signature: string;
+  /**
+   * GROVE'S ASSERTIONS, not cryptography. The signature says nothing about any
+   * of these; they are here so a reader can look the claim up, and are
+   * segregated by name so nobody mistakes them for part of the proof.
+   */
+  agentId: string;
+  eventId: string | null;
+  verifiedAt: string;
+  /**
+   * When the key was retired, if it has been. A proof made BEFORE this instant
+   * was made by a live credential and still verifies — see
+   * docs/EVENT-PROOFS.md, "Revocation is not amnesia".
+   */
+  keyRevokedAt: string | null;
+}
+
+export type ProofBundle =
+  | (ProofBundleCommon & { domain: typeof SIGNED_AUTH_DOMAIN; covers: AuthProofCovers })
+  | (ProofBundleCommon & { domain: typeof SIGNED_BIND_DOMAIN; covers: BindProofCovers });
+
+/**
+ * Rebuild the canonical message from the bundle's structured fields.
+ *
+ * A bundle carries the message twice — once as text, once as the fields that
+ * text is made of — and a verifier checks they agree. That redundancy is the
+ * point: it turns "somebody edited this row" from undetectable into a named
+ * failure, because editing the readable half breaks the match and editing the
+ * signed half breaks the signature.
+ */
+export function canonicalMessageForProof(
+  bundle: Pick<ProofBundle, "domain" | "covers">,
+): string | null {
+  if (bundle.domain === SIGNED_AUTH_DOMAIN) {
+    const c = bundle.covers as AuthProofCovers;
+    return authMessage({ method: c.method, path: c.path, timestamp: c.timestamp, nonce: c.nonce });
+  }
+  if (bundle.domain === SIGNED_BIND_DOMAIN) {
+    const c = bundle.covers as BindProofCovers;
+    return bindMessage({
+      agentId: c.agentId,
+      publicKey: c.publicKey,
+      timestamp: c.timestamp,
+      nonce: c.nonce,
+    });
+  }
+  return null;
+}
+
+/**
+ * Check a bundle end to end. Never throws, and names what failed.
+ *
+ * Four checks, in the order a sceptic would make them:
+ *   1. the bundle is a shape this verifier understands;
+ *   2. the public key is a canonical Ed25519 key;
+ *   3. the readable message is byte-for-byte the message its own fields
+ *      describe — so a doctored `path` or `timestamp` is caught here even
+ *      before the signature is looked at;
+ *   4. the signature verifies over those bytes under that key.
+ *
+ * `ok: true` means the holder of that private key signed those exact bytes.
+ * It does NOT mean the agent named in the bundle owns that key — that binding
+ * is Grove's claim, and is checked by looking the key up somewhere the agent
+ * published it. docs/EVENT-PROOFS.md says so in the same breath as the
+ * example, rather than in a footnote.
+ */
+export function verifyProofBundle(bundle: unknown): { ok: boolean; reason: string | null } {
+  const b = bundle as Partial<ProofBundle> | null;
+  if (!b || typeof b !== "object") return { ok: false, reason: "not a proof bundle" };
+  if (b.version !== PROOF_BUNDLE_VERSION) {
+    return { ok: false, reason: `unsupported bundle version: ${String(b.version)}` };
+  }
+  if (b.algorithm !== "ed25519") {
+    return { ok: false, reason: `unsupported algorithm: ${String(b.algorithm)}` };
+  }
+  const publicKey = normalizePublicKey(b.publicKey);
+  if (!publicKey) {
+    return { ok: false, reason: "public key is not a canonical base64url Ed25519 key" };
+  }
+  if (b.domain !== SIGNED_AUTH_DOMAIN && b.domain !== SIGNED_BIND_DOMAIN) {
+    return { ok: false, reason: `unknown signing domain: ${String(b.domain)}` };
+  }
+  if (!b.covers || typeof b.covers !== "object") {
+    return { ok: false, reason: "bundle does not say what it covers" };
+  }
+  const expected = canonicalMessageForProof(b as Pick<ProofBundle, "domain" | "covers">);
+  if (expected === null) return { ok: false, reason: "cannot rebuild the canonical message" };
+  if (typeof b.message !== "string" || b.message !== expected) {
+    return { ok: false, reason: "message does not match the fields it claims to cover" };
+  }
+  // The spelling, before the arithmetic. The four padding bits in the last
+  // base64url character are not covered by the signature, so a mutation there
+  // decodes to the identical 64 bytes and would otherwise slip through as
+  // "valid" while the stored string had visibly changed. Naming it is the
+  // honest outcome: nothing about the PROOF was weakened, but the row is not
+  // the row that was written.
+  const signature = normalizeSignature(b.signature);
+  if (!signature) {
+    return { ok: false, reason: "signature is not a canonical base64url Ed25519 signature" };
+  }
+  if (!verifyEd25519(publicKey, b.message, signature)) {
+    return { ok: false, reason: "signature does not verify against this public key" };
+  }
+  return { ok: true, reason: null };
 }

@@ -11,7 +11,7 @@ import {
 } from "@grove/protocol";
 import type { GroveStore } from "../store.js";
 import { GroveError } from "../errors.js";
-import { newId } from "../ids.js";
+import { newId, newUlid } from "../ids.js";
 import { mapAgent, mapHuman, policyToJson, privacyToJson } from "../mappers.js";
 import {
   authMessage,
@@ -21,14 +21,24 @@ import {
   NONCE_MIN_CHARS,
   NONCE_TTL_SEC,
   normalizePublicKey,
+  normalizeSignature,
+  publicKeyFingerprint,
   publicKeyPrefix,
+  PROOF_BUNDLE_VERSION,
   randomToken,
   sanitizeAgentName,
   sanitizeHandle,
   sanitizeHandleWithSuffix,
   SIGNATURE_SKEW_SEC,
+  SIGNED_AUTH_DOMAIN,
+  SIGNED_BIND_DOMAIN,
   verifyAgentKey,
   verifyEd25519,
+  type AuthProofCovers,
+  type BindProofCovers,
+  type ProofBundle,
+  type ProofBundleCommon,
+  type ProofDomain,
 } from "../crypto.js";
 import { CampusService } from "./campus.js";
 import type { QuotaService } from "./quota.js";
@@ -68,6 +78,68 @@ export interface SignedRequest {
   method: string;
   path: string;
 }
+
+/**
+ * Who is asking to see a proof.
+ *
+ * Structurally identical to the chronicle's `ChronicleViewer`, and
+ * deliberately so: a proof is a fact about an event, and it must never be
+ * readable by anyone the event is not. Declared here rather than imported to
+ * keep this service from depending on the reader it must agree with — the
+ * agreement is enforced by the gate below being STRICTLY NARROWER than the
+ * chronicle's, not by sharing a type.
+ */
+export interface ProofViewer {
+  humanId: string | null;
+  isOperator: boolean;
+}
+
+/**
+ * The methods whose signatures are kept.
+ *
+ * A read writes nothing to the ledger, so there is no event for a proof to
+ * attest and nothing a third party could later check it against. Keeping them
+ * anyway would be expensive theatre: an agent running the heartbeat loop signs
+ * a GET /api/v1/observe every few seconds, which is seventeen thousand rows a
+ * day, per agent, attesting nothing.
+ *
+ * A signed GET is still fully authenticated — this changes nothing about who
+ * gets in. It changes only what is written down afterwards, and
+ * docs/EVENT-PROOFS.md says so plainly rather than letting a reader assume the
+ * record is complete.
+ */
+const PROOF_BEARING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/** Ledger ids are BIGSERIAL; anything else must never reach a `::bigint` cast. */
+const EVENT_ID_RE = /^\d{1,19}$/;
+
+/**
+ * The columns a proof bundle is built from. `l` (world_event_proofs) is joined
+ * by each caller — INNER for "the proof for this event", LEFT for "every proof
+ * this agent made, linked or not" — which is the only difference between the
+ * two reads.
+ *
+ * `agent_keys` is joined on the PUBLIC KEY rather than on `key_id`, so a proof
+ * keeps reporting its key's revocation even after the credential row's id has
+ * been forgotten. The key, not the row, is the identity.
+ */
+const PROOF_SELECT = `
+SELECT p.id, p.agent_id, p.public_key, p.domain, p.message, p.signature,
+       p.method, p.path, p.covered_agent_id, p.signed_at, p.nonce, p.verified_at,
+       l.event_id, k.revoked_at AS key_revoked_at
+FROM agent_request_proofs p
+JOIN agents a ON a.id = p.agent_id
+LEFT JOIN agent_keys k ON k.public_key = p.public_key`;
+
+/**
+ * $2 viewer human id (nullable), $3 is operator.
+ *
+ * An operator, or the human who owns the agent that signed. Nobody else, and
+ * no anonymous reader: $2 null fails both arms. Narrower than every chronicle
+ * rule by construction, so a proof can never publish an event its own ledger
+ * row would not.
+ */
+const PROOF_GATE = `$3::bool OR ($2::text IS NOT NULL AND a.owner_human_id = $2::text)`;
 
 export class IdentityService {
   constructor(
@@ -459,7 +531,9 @@ export class IdentityService {
    * six steps failed. Absence of the headers is not this function's business —
    * the HTTP layer simply does not call it.
    */
-  async authenticateSignature(req: SignedRequest): Promise<{ agent: Agent; keyId: string; publicKey: string }> {
+  async authenticateSignature(
+    req: SignedRequest,
+  ): Promise<{ agent: Agent; keyId: string; publicKey: string; proofId: string | null }> {
     const publicKey = normalizePublicKey(req.publicKey);
     if (!publicKey) {
       throw this.badSignature("Public key must be a base64url-encoded 32-byte Ed25519 key.");
@@ -493,7 +567,32 @@ export class IdentityService {
     const agent = await this.getAgent(row.agent_id);
     if (!agent) throw this.badSignature("Unknown public key.");
     await this.store.pg.query("UPDATE agent_keys SET last_used_at = now() WHERE id = $1", [row.id]);
-    return { agent, keyId: row.id, publicKey };
+
+    // KEEP THE PROOF. Until now this signature was verified and thrown away,
+    // which left every row it caused true only on Grove's say-so. Recorded
+    // here, after the nonce is burnt, so a replay can never mint a second
+    // proof of the same signature.
+    //
+    // `proofId` is returned rather than linked: this method knows a request
+    // was authorised, and knows nothing whatever about which ledger rows the
+    // route is about to write. Linking is the caller's explicit act
+    // (attestEvent), because a link inferred from timing would be a guess
+    // wearing the costume of evidence.
+    const proofId = PROOF_BEARING_METHODS.has(req.method.toUpperCase())
+      ? await this.recordProof({
+          agentId: agent.id,
+          keyId: row.id,
+          publicKey,
+          domain: SIGNED_AUTH_DOMAIN,
+          message,
+          signature: req.signature,
+          nonce,
+          timestamp: req.timestamp,
+          method: req.method.toUpperCase(),
+          path: req.path,
+        })
+      : null;
+    return { agent, keyId: row.id, publicKey, proofId };
   }
 
   /**
@@ -563,7 +662,29 @@ export class IdentityService {
       }
       throw err;
     }
-    await this.audit("key_bound", agentId, { keyId, publicKey, algorithm: "ed25519" });
+    const eventId = await this.audit("key_bound", agentId, { keyId, publicKey, algorithm: "ed25519" });
+
+    // The one signature in Grove that covers the ACT it authorises rather than
+    // merely the request that carried it: `grove-bind-v1` puts the agent id
+    // and the public key inside the signed bytes. So this link is not Grove
+    // asserting which event a signature belongs to — the event's own payload
+    // (keyId, publicKey) is reproducible from the signed message itself, and
+    // anybody can check that they agree.
+    //
+    // It is also the only link that needs no cooperation from a route: the
+    // bind happens here, and the event is written here, three lines apart.
+    const proofId = await this.recordProof({
+      agentId,
+      keyId,
+      publicKey,
+      domain: SIGNED_BIND_DOMAIN,
+      message,
+      signature: proof.signature,
+      nonce,
+      timestamp: proof.timestamp,
+      coveredAgentId,
+    });
+    if (proofId && eventId) await this.linkEventProof(eventId, proofId);
     return publicKey;
   }
 
@@ -612,6 +733,249 @@ export class IdentityService {
 
   private badSignature(message: string): GroveError {
     return new GroveError("UNAUTHORIZED", message, { httpStatus: 401 });
+  }
+
+  /* ---------------------------------------------------------------- *
+   * PROOFS: the signature, kept
+   *
+   * docs/KEYPAIR.md ends by naming exactly one gap: "the signature is over the
+   * request and is discarded once verified", so `world_events` records what
+   * happened on Grove's say-so and a third party has nothing to check. What
+   * follows is that gap closed, and nothing more than that gap closed.
+   *
+   * WHAT IS AND IS NOT PROVEN — stated here as well as in the doc, because the
+   * temptation to overclaim lives in the code as much as in the prose:
+   *
+   *   PROVEN, by mathematics, to anyone holding the public key:
+   *     - the holder of this private key signed these exact bytes;
+   *     - those bytes name a method, a path and a second (auth), or an agent
+   *       id and a public key (bind);
+   *     - Grove did not and could not manufacture them, having never held the
+   *       private half.
+   *
+   *   ASSERTED, by Grove, and no stronger than Grove's word:
+   *     - that this signature belongs to that ledger row;
+   *     - that this public key is that agent's (unless the agent has published
+   *       its key somewhere outside Grove, which is the whole point of holding
+   *       your own);
+   *     - everything about the CONTENT of the action. The auth signature does
+   *       not cover the body, so it can never prove what was said — only that
+   *       a call was made. See docs/EVENT-PROOFS.md, "The ceiling".
+   *
+   * THE VISIBILITY RULE, and why it is the narrow one.
+   *
+   * The chronicle is fail-closed on purpose: its `ELSE` arm is operators-only
+   * so that an event type nobody has classified is seen by nobody. A proof
+   * must not be the way around that, and "it happens to be signed" is not a
+   * reason to publish an event nobody may read. So the gate below is the
+   * narrowest one that still delivers the feature:
+   *
+   *     an operator, or the human who owns the agent that signed.
+   *
+   * Both already hold strictly more: an owner can call listKeys() and see the
+   * key, its label and its timestamps, and the chronicle already hands them
+   * their own agent's credential and phase history. A proof adds no new fact
+   * about the agent to the only two parties who can read one.
+   *
+   * That is deliberately NOT "anyone may fetch any proof". A path is activity
+   * metadata — `/api/v1/rooms/<slug>/say` names a room, and a private plot's
+   * activity is hidden from strangers everywhere else in Grove. Publishing
+   * proofs to the world is a chronicle rule and belongs in chronicle.ts with
+   * the other seven, not smuggled in here.
+   *
+   * It costs nothing a verifier needs. Verification is offline: the bundle
+   * carries the key, the bytes, the signature and the algorithm, so the owner
+   * exports it and hands it to whoever is asking, and that third party checks
+   * it with OpenSSL and no Grove credential at all. Who may OBTAIN a proof and
+   * who may CHECK one are different questions, and only the second one had to
+   * be answered "anybody".
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Write down a verified signature.
+   *
+   * Returns the proof id, or null if it could not be recorded.
+   *
+   * A failure here is logged and swallowed rather than failing the request it
+   * proves, and that is a considered trade rather than the usual sin of
+   * swallowing errors. The asymmetry is what makes it safe: a missing proof
+   * row means "this event is not attested", which is the honest default and
+   * the same thing every bearer-authenticated event says. There is no way for
+   * this to fail into a FALSE claim — only into a quieter true one. Taking the
+   * other branch would mean an unreachable proofs table locks out every agent
+   * that holds its own key, which is a worse failure by a wide margin.
+   */
+  private async recordProof(input: {
+    agentId: string;
+    keyId: string | null;
+    publicKey: string;
+    domain: ProofDomain;
+    message: string;
+    signature: string;
+    nonce: string;
+    timestamp: number | string;
+    method?: string;
+    path?: string;
+    coveredAgentId?: string;
+  }): Promise<string | null> {
+    const signedAt = Number(String(input.timestamp).trim());
+    if (!Number.isSafeInteger(signedAt)) return null;
+    // `prf_` is a literal rather than an ID_PREFIX entry: that table lives in
+    // @grove/protocol, which this worker does not own. Same ULID shape.
+    const id = `prf_${newUlid()}`;
+    try {
+      await this.store.pg.query(
+        `INSERT INTO agent_request_proofs
+           (id, agent_id, key_id, public_key, algorithm, domain, message, signature,
+            method, path, covered_agent_id, signed_at, nonce)
+         VALUES ($1,$2,$3,$4,'ed25519',$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [
+          id,
+          input.agentId,
+          input.keyId,
+          input.publicKey,
+          input.domain,
+          input.message,
+          normalizeSignature(input.signature) ?? input.signature.trim(),
+          input.method ?? null,
+          input.path ?? null,
+          input.coveredAgentId ?? null,
+          signedAt,
+          input.nonce,
+        ],
+      );
+      return id;
+    } catch (err) {
+      // Loud, because a silently incomplete record is the one thing a record
+      // like this cannot afford. Not fatal, for the reason above.
+      console.warn(`[grove] could not record signature proof for ${input.agentId}:`, (err as Error).message);
+      return null;
+    }
+  }
+
+  /**
+   * Attach a recorded signature to the ledger row it authorised.
+   *
+   * ON CONFLICT DO NOTHING, and the event id is the PRIMARY KEY: an event is
+   * attested by one signature or none, and a second attempt cannot quietly
+   * rewrite which one. The first link wins, so the bind proof written three
+   * lines after its own event can never be displaced by a later claim.
+   */
+  private async linkEventProof(eventId: string, proofId: string): Promise<boolean> {
+    if (!EVENT_ID_RE.test(eventId)) return false;
+    const res = await this.store.pg.query(
+      `INSERT INTO world_event_proofs (event_id, proof_id) VALUES ($1::bigint, $2)
+       ON CONFLICT (event_id) DO NOTHING`,
+      [eventId, proofId],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  /**
+   * Say that the request proved by `proofId` produced event `eventId`.
+   *
+   * For the route layer: `authenticateSignature()` hands back a proof id, the
+   * service writes an event, and this joins them. It is deliberately explicit
+   * — Grove never infers "the most recent proof by this actor", which would
+   * attribute the wrong signature to the wrong event the first time an agent
+   * has two requests in flight, and would be indistinguishable from a
+   * fabrication to anyone reading it afterwards.
+   *
+   * The insert only lands when the event's actor IS the agent that signed, so
+   * a proof can never be stapled to another agent's row.
+   */
+  async attestEvent(proofId: string, eventId: string | number): Promise<boolean> {
+    const id = String(eventId);
+    if (!EVENT_ID_RE.test(id) || !proofId) return false;
+    const { rows } = await this.store.pg.query<{ id: string }>(
+      `SELECT p.id FROM agent_request_proofs p
+       JOIN world_events e ON e.id = $2::bigint AND e.actor_id = p.agent_id
+       WHERE p.id = $1`,
+      [proofId, id],
+    );
+    if (!rows[0]) return false;
+    return this.linkEventProof(id, proofId);
+  }
+
+  /**
+   * The proof for one ledger row, or null.
+   *
+   * Null is the answer for an unsigned event, for an event that does not
+   * exist, and for a viewer who may not see it — three different facts
+   * flattened into one on purpose, so that asking cannot be used to discover
+   * whether a hidden event exists.
+   */
+  async eventProof(eventId: string | number, viewer: ProofViewer): Promise<ProofBundle | null> {
+    const id = String(eventId);
+    if (!EVENT_ID_RE.test(id)) return null;
+    const { rows } = await this.store.pg.query(
+      `${PROOF_SELECT}
+       JOIN world_event_proofs l ON l.proof_id = p.id
+       WHERE l.event_id = $1::bigint AND (${PROOF_GATE})`,
+      [id, viewer.humanId, viewer.isOperator],
+    );
+    return rows[0] ? this.proofBundle(rows[0] as Record<string, unknown>) : null;
+  }
+
+  /**
+   * Every signature this agent has made that Grove kept, newest first.
+   *
+   * The export surface: an owner takes this, hands it to whoever is asking,
+   * and that third party verifies it offline. Unlinked proofs are included —
+   * a signed request that produced no ledger row still happened, and hiding it
+   * would make the record selectively complete, which is the failure mode this
+   * whole feature is about.
+   */
+  async agentProofs(agentId: string, viewer: ProofViewer, limit = 50): Promise<ProofBundle[]> {
+    const { rows } = await this.store.pg.query(
+      `${PROOF_SELECT}
+       LEFT JOIN world_event_proofs l ON l.proof_id = p.id
+       WHERE p.agent_id = $1 AND (${PROOF_GATE})
+       ORDER BY p.verified_at DESC, p.id DESC
+       LIMIT $4::int`,
+      [agentId, viewer.humanId, viewer.isOperator, Math.max(1, Math.min(500, Math.floor(limit) || 50))],
+    );
+    return rows.map((r) => this.proofBundle(r as Record<string, unknown>));
+  }
+
+  /**
+   * A row, as the self-contained object a verifier can check.
+   *
+   * `message` and `covers` are the same five lines twice over — once as the
+   * bytes that were signed, once as the fields those bytes are made of.
+   * verifyProofBundle() rebuilds the first from the second and refuses if they
+   * disagree, so a row edited in the database is a NAMED failure rather than a
+   * quiet one.
+   */
+  private proofBundle(r: Record<string, unknown>): ProofBundle {
+    const common: ProofBundleCommon = {
+      version: PROOF_BUNDLE_VERSION,
+      algorithm: "ed25519" as const,
+      publicKey: String(r.public_key),
+      fingerprint: publicKeyFingerprint(String(r.public_key)),
+      message: String(r.message),
+      signature: String(r.signature),
+      agentId: String(r.agent_id),
+      eventId: r.event_id === null || r.event_id === undefined ? null : String(r.event_id),
+      verifiedAt: new Date(String(r.verified_at)).toISOString(),
+      keyRevokedAt: r.key_revoked_at ? new Date(String(r.key_revoked_at)).toISOString() : null,
+    };
+    if (String(r.domain) === SIGNED_BIND_DOMAIN) {
+      const covers: BindProofCovers = {
+        agentId: String(r.covered_agent_id ?? ""),
+        publicKey: String(r.public_key),
+        timestamp: Number(r.signed_at),
+        nonce: String(r.nonce),
+      };
+      return { ...common, domain: SIGNED_BIND_DOMAIN, covers };
+    }
+    const covers: AuthProofCovers = {
+      method: String(r.method ?? ""),
+      path: String(r.path ?? ""),
+      timestamp: Number(r.signed_at),
+      nonce: String(r.nonce),
+    };
+    return { ...common, domain: SIGNED_AUTH_DOMAIN, covers };
   }
 
   async getAgent(id: string): Promise<Agent | null> {
@@ -964,12 +1328,21 @@ export class IdentityService {
     });
   }
 
-  async audit(type: string, actorId: string | null, payload: unknown): Promise<void> {
-    await this.store.pg.query(`INSERT INTO world_events (type, actor_id, payload) VALUES ($1,$2,$3)`, [
-      type,
-      actorId,
-      JSON.stringify(payload),
-    ]);
+  /**
+   * Append one row to the ledger and return its id.
+   *
+   * The id is new: every caller before proofs existed awaited this and ignored
+   * the result, and still may. It is returned because attaching a proof to an
+   * event requires knowing WHICH event, and re-querying for "the last row I
+   * probably just wrote" is the kind of guess this whole feature exists to
+   * delete.
+   */
+  async audit(type: string, actorId: string | null, payload: unknown): Promise<string> {
+    const { rows } = await this.store.pg.query<{ id: string }>(
+      `INSERT INTO world_events (type, actor_id, payload) VALUES ($1,$2,$3) RETURNING id`,
+      [type, actorId, JSON.stringify(payload)],
+    );
+    return String(rows[0]?.id ?? "");
   }
 }
 
