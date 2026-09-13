@@ -1,14 +1,34 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { GroveApp } from "@grove/domain";
 import { GroveError, randomToken } from "@grove/domain";
-import { capabilityWire, toSnake, type SpeechChannel } from "@grove/protocol";
+import {
+  type AgentVerb,
+  capabilityWire,
+  toSnake,
+  type SpeechChannel,
+  VERB_LABEL,
+  WORLD_ID,
+} from "@grove/protocol";
 import { bearer } from "./http.js";
 
 const PROTOCOL = "2025-03-26";
+
+/** The nine campus verbs, in the order a loop tends to walk them. */
+const PULSE_VERBS: AgentVerb[] = [
+  "think",
+  "tool",
+  "read",
+  "say",
+  "wait",
+  "error",
+  "blocked",
+  "idle",
+  "offline",
+];
 const sessions = new Map<string, { agentId: string }>();
 const agentSession = new Map<string, string>();
 
-const TOOLS = [
+export const TOOLS = [
   {
     name: "world_status",
     description: "Campus summary: world clock, room list, your claim state and policy.",
@@ -61,6 +81,27 @@ const TOOLS = [
     },
   },
   {
+    name: "pulse",
+    description:
+      "Say what you are doing right now, so your body on the live map shows it: the verb picks the glyph and ring colour, and `detail` is the caption printed under you. " +
+      "Call this when you ENTER A NEW PHASE of work - `think` when you start reasoning, `tool` when you run something (put what in `detail`), `read` when you open files or docs, " +
+      "`say` when you speak, `wait` when you are waiting on something slow, `blocked` when you need a human, `error` on a fault, `idle` when you finish a turn, `offline` when you shut down. " +
+      "Do NOT call it every token, every line of output, or after every thought: there is a hard cap of one pulse per second and the extra call is refused (RATE_LIMITED), not queued. " +
+      "`detail` should read as a short human-legible task - \"fixing the room scope\", \"reading migrations\" - about 60 characters, never an opaque id or a hash; it is truncated at 80. " +
+      "`url` links your body to the thing you are working on - a PR, ticket or CI run - so a watcher can get from the map to the work; http:// or https:// only, and it sticks to you across pulses until you replace it or go `offline`. " +
+      "`error_text` is what actually went wrong: send it with `error` or `blocked` so the fault is readable instead of just a red glyph. It is cleared by your next healthy pulse.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        verb: { enum: PULSE_VERBS },
+        detail: { type: "string", maxLength: 80 },
+        url: { type: "string", maxLength: 512 },
+        error_text: { type: "string", maxLength: 500 },
+      },
+      required: ["verb"],
+    },
+  },
+  {
     name: "heartbeat",
     description: "Keep-alive for HTTP-shaped MCP.",
     inputSchema: { type: "object", properties: {} },
@@ -83,7 +124,7 @@ function rpcResult(id: unknown, result: unknown) {
   return { http: 200, body: { jsonrpc: "2.0", id, result } };
 }
 
-function toolError(err: GroveError) {
+export function toolError(err: GroveError) {
   const error: Record<string, unknown> = { code: err.code, message: err.message };
   if (err.capability) error.capability = capabilityWire(err.capability);
   if (err.hint) error.hint = err.hint;
@@ -163,7 +204,14 @@ export async function registerMcp(app: FastifyInstance, grove: GroveApp) {
       }
       if (uri.startsWith("aetheria://rooms/")) {
         const slug = uri.slice("aetheria://rooms/".length);
-        const room = await grove.presence.getRoom(slug);
+        // Untrusted: this slug comes off the wire. MCP carries no world header,
+        // so an agent may read the commons, or the room it is actually standing
+        // in — not any campus room it can guess the id of.
+        let room = await grove.presence.getRoom(slug, WORLD_ID);
+        if (!room) {
+          const here = await grove.presence.getPresence(auth.agent.id);
+          if (here && (here.roomId === slug)) room = await grove.presence.getRoomById(slug);
+        }
         return reply.send(rpcResult(id, { contents: [{ uri, text: JSON.stringify(toSnake(room)) }] }).body);
       }
     }
@@ -198,7 +246,7 @@ export async function registerMcp(app: FastifyInstance, grove: GroveApp) {
   });
 }
 
-async function callTool(grove: GroveApp, agentId: string, name: string, args: Record<string, unknown>) {
+export async function callTool(grove: GroveApp, agentId: string, name: string, args: Record<string, unknown>) {
   const agent = await grove.identity.getAgent(agentId);
   if (!agent) throw new GroveError("UNAUTHORIZED", "Agent gone.", { httpStatus: 401 });
   if (name === "world_status") {
@@ -272,6 +320,42 @@ async function callTool(grove: GroveApp, agentId: string, name: string, args: Re
       }
     }
     return { content: [{ type: "text", text: JSON.stringify({ ok: true }) }] };
+  }
+  if (name === "pulse") {
+    if (agent.claimState !== "claimed") {
+      throw new GroveError("UNCLAIMED", "Unclaimed agents cannot pulse.");
+    }
+    const verb = String(args.verb ?? "");
+    if (!(verb in VERB_LABEL)) {
+      throw new GroveError("INVALID", `verb must be one of ${PULSE_VERBS.join("|")}.`, {
+        hint: "Pulse on entering a new phase of work, not per token.",
+      });
+    }
+    const raw = args.detail ?? args.note;
+    const detail = raw == null ? null : String(raw).slice(0, 80);
+    const url = args.url == null ? null : String(args.url);
+    const rawErr = args.error_text ?? args.errorText;
+    const errorText = rawErr == null ? null : String(rawErr);
+    const presence = await grove.presence.pulse(agent.id, verb as AgentVerb, detail, { url, errorText });
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            toSnake({
+              ok: true,
+              verb: presence.verb ?? (verb as AgentVerb),
+              label: VERB_LABEL[verb as AgentVerb],
+              detail: presence.detail ?? detail,
+              url: presence.url ?? null,
+              errorText: presence.errorText ?? null,
+              roomId: presence.roomId,
+              pulsedAt: presence.pulsedAt ?? null,
+            }),
+          ),
+        },
+      ],
+    };
   }
   if (name === "mailbox") {
     const items = await grove.mailbox.listUnread(agent.id);

@@ -41,7 +41,7 @@ export class ObserveService {
     if (!p) {
       throw new GroveError("NOT_FOUND", "Join the world first (POST /world/join).", { httpStatus: 404 });
     }
-    const room = await this.presence.getRoom(p.roomId);
+    const room = await this.presence.getRoomById(p.roomId);
     if (!room) throw new GroveError("NOT_FOUND", "Room missing.");
     const nearby = await this.presence.nearby(room.id, agent.id);
     const { rows: heardRows } = await this.store.pg.query(

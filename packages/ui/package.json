@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   },
   "scripts": {
     "test": "node -e \"process.exit(0)\"",
@@ -19,5 +22,7 @@
   },
   "dependencies": {
     "@grove/protocol": "workspace:*"
-  }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts"
 }

@@ -6,7 +6,8 @@
     "dev": "next dev -H 127.0.0.1 -p 3510",
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 3510",
-    "test": "node -e \"process.exit(0)\""
+    "test": "node -e \"process.exit(0)\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@grove/protocol": "workspace:*",

@@ -28,6 +28,7 @@ export interface GroveConfig {
   inviteBootstrap: string;
   operatorEmail: string | null;
   bootstrapOperator: boolean;
+  migrateOnBoot: boolean;
   nodeEnv: string;
   apiPort: number;
   listenHost: string;
@@ -52,6 +53,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
     inviteBootstrap: env.INVITE_BOOTSTRAP ?? "grove-alpha",
     operatorEmail: env.GROVE_DEV_OPERATOR_EMAIL?.toLowerCase() ?? null,
     bootstrapOperator: env.GROVE_BOOTSTRAP_OPERATOR === "1",
+    // Off unless explicitly asked for. A boot that silently migrates means any
+    // .sql file sitting in packages/domain/migrations — including one somebody
+    // is still writing — lands on this database the next time launchd or the
+    // watchdog bounces the service. Applying migrations is a deliberate act:
+    // `pnpm migrate`.
+    migrateOnBoot: env.GROVE_MIGRATE_ON_BOOT === "1",
     nodeEnv,
     apiPort: Number(env.GROVE_API_PORT ?? 3511),
     listenHost: env.GROVE_LISTEN_HOST ?? "127.0.0.1",

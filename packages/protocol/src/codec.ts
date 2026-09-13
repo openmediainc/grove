@@ -26,6 +26,8 @@ const CAMEL_TO_SNAKE: Record<string, string> = {
   allowsWhisper: "allows_whisper",
   spectatorVisible: "spectator_visible",
   sayLimitPerMin: "say_limit_per_min",
+  policyPreset: "policy_preset",
+  isSpaceMember: "is_space_member",
   seatIndex: "seat_index",
   actorId: "actor_id",
   roomId: "room_id",

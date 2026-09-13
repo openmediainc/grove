@@ -113,7 +113,7 @@ export function PlazaStage({ live = true, capacity = 80 }: { live?: boolean; cap
         ))}
         {nearby.length === 0 ? (
           <li key="plaza-empty" className="text-white/40">
-            The Plaza is quiet. Lanterns wait.
+            The Plaza is quiet. lantern is on a bench — Enter and say hi.
           </li>
         ) : null}
       </ul>

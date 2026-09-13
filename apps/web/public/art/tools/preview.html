@@ -1,0 +1,298 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Grove art preview</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#070814; color:#f4d19a;
+         font:13px ui-sans-serif,system-ui,sans-serif; }
+  h2 { margin:24px 16px 8px; font-size:15px; color:#a78bfa; font-weight:600;
+       border-top:1px solid #241f3a; padding-top:16px; }
+  .bar { position:sticky; top:0; z-index:9; background:#0b0d18ee; padding:8px 16px;
+         border-bottom:1px solid #241f3a; display:flex; gap:14px; align-items:center;
+         flex-wrap:wrap; }
+  canvas { display:block; image-rendering:pixelated; }
+  .scene { margin:0 16px; border:1px solid #241f3a; background:#0b0d18; overflow:auto;
+           max-height:720px; }
+  .sheet { display:flex; flex-wrap:wrap; gap:10px; margin:0 16px; }
+  .cell { background:
+      repeating-conic-gradient(#15162a 0 25%, #0d0e1c 0 50%) 0 0/16px 16px;
+      border:1px solid #241f3a; padding:4px; text-align:center; }
+  .cell img { display:block; image-rendering:pixelated; margin:0 auto; }
+  .cell b { display:block; font-size:10px; color:#e8b86d; margin-top:3px;
+            font-weight:400; max-width:280px; }
+  .cell i { display:block; font-size:9px; color:#6f6a90; font-style:normal; }
+  label { color:#9c96bb; }
+</style></head><body>
+
+<div class="bar">
+  <b style="color:#f4d19a">Grove art preview</b>
+  <label><input type="checkbox" id="anchors"> anchor crosshairs</label>
+  <label><input type="checkbox" id="bounds"> sprite bounds</label>
+  <label><input type="checkbox" id="noart" > hide structures</label>
+  <label><input type="checkbox" id="legacy"> legacy 64x64 ground tiles</label>
+  <span id="status" style="color:#6f6a90"></span>
+</div>
+
+<h2>Scene — 1× (the zoom a spectator reads names at)</h2>
+<div class="scene"><canvas id="s1"></canvas></div>
+
+<h2>Scene — 0.55× (LOD_PLOTS: plot labels drop out; access must still read)</h2>
+<div class="scene"><canvas id="s2"></canvas></div>
+
+<h2>Scene — 0.4× (NOMINAL_MIN_ZOOM: silhouette only)</h2>
+<div class="scene"><canvas id="s3"></canvas></div>
+
+<h2>Contact sheet</h2>
+<div class="sheet" id="sheet"></div>
+
+<script>
+const TW=64, TH=32;
+const iso=(tx,ty)=>({x:(tx-ty)*(TW/2), y:(tx+ty)*(TH/2)});
+
+const REGION_RECTS={
+  plaza:{x0:8,y0:6,x1:15,y1:11}, library:{x0:8,y0:0,x1:15,y1:5},
+  garden:{x0:8,y0:12,x1:15,y1:17}, stage:{x0:0,y0:6,x1:7,y1:11},
+  workshop:{x0:16,y0:6,x1:23,y1:11}, board:{x0:16,y0:12,x1:23,y1:17}};
+const PRESET_TINT={private:"rgba(244,114,182,0.30)",
+  public_view:"rgba(56,189,248,0.26)", public_write:"rgba(251,191,36,0.26)"};
+
+// three claimed plots on the wild corner blocks, one per access level
+const PLOTS=[
+  {rect:{x0:0,y0:0,x1:7,y1:5},   preset:"public_write", name:"Commons"},
+  {rect:{x0:16,y0:0,x1:23,y1:5}, preset:"public_view",  name:"Gallery"},
+  {rect:{x0:0,y0:12,x1:7,y1:17}, preset:"private",      name:"Vault"},
+];
+const SITE={rect:{x0:16,y0:18,x1:23,y1:23}}; // construction, south-east of board
+
+const M={}; // loaded images
+function load(src){return new Promise(r=>{const i=new Image();i.onload=()=>r(i);
+  i.onerror=()=>r(null);i.src=src;});}
+
+let MAN=null;
+async function boot(){
+  MAN = await (await fetch('/art/manifest.json')).json();
+  const jobs=[];
+  const add=(k,src)=>jobs.push(load(src).then(i=>{M[k]=i;}));
+  for(const r of Object.keys(REGION_RECTS)) add('old:'+r, '/art/tiles/'+r+'.png');
+  for(const [k,v] of Object.entries(MAN.ground)) add('tile:'+k, v.file);
+  for(const [k,v] of Object.entries(MAN.buildings)) add('b:'+k, v.file);
+  for(const [k,v] of Object.entries(MAN.civic))     add('c:'+k, v.file);
+  for(const [k,v] of Object.entries(MAN.scaffold))  add('sc:'+k, v.file);
+  for(const [k,v] of Object.entries(MAN.paths))     add('p:'+k, v.file);
+  for(const [k,v] of Object.entries(MAN.scatter))   add('sx:'+k, v.file);
+  for(const [k,v] of Object.entries(MAN.props))     add('pr:'+k, v.file);
+  for(const [k,v] of Object.entries(MAN.animals))   add('an:'+k, v.file);
+  for(const [k,v] of Object.entries(MAN.items))     add('it:'+k, v.file);
+  for(const k of ['human-front','human-side','agent-front','agent-side','agent-work'])
+    add('ch:'+k, '/art/chars/'+k+'.png');
+  await Promise.all(jobs);
+  const miss=Object.entries(M).filter(([k,v])=>!v).map(([k])=>k);
+  document.getElementById('status').textContent =
+    Object.keys(M).length+' images'+(miss.length?('  MISSING: '+miss.join(', ')):'  all loaded');
+  build(); draw();
+}
+
+/* ---- path network: which tiles carry a road ---------------------------- */
+const ROAD=new Set();
+function road(x,y){ROAD.add(x+','+y);}
+function buildRoads(){
+  for(let x=-2;x<=26;x++) road(x,9);                     // east-west spine
+  for(let y=-2;y<=22;y++) road(11,y);                    // north-south spine
+  for(let x=0;x<=23;x++) road(x,3);                      // northern cross-street
+  for(let x=16;x<=23;x++) road(x,15);                    // board spur
+  for(let y=3;y<=17;y++) road(4,y), road(19,y);           // two flanking streets
+  for(let x=11;x<=19;x++) road(x,15);
+}
+function pathKey(x,y){
+  const d=[]; if(ROAD.has(x+','+(y-1)))d.push('n'); if(ROAD.has((x+1)+','+y))d.push('e');
+  if(ROAD.has(x+','+(y+1)))d.push('s'); if(ROAD.has((x-1)+','+y))d.push('w');
+  return d.length?d.join(''):'o';
+}
+
+/* ---- the things standing on the ground --------------------------------- */
+let THINGS=[];
+function place(key, tx, ty, meta){
+  THINGS.push({key, tx, ty, meta,
+    depth:(tx+meta.footprint[0]-1)+(ty+meta.footprint[1]-1)});
+}
+function build(){
+  buildRoads(); THINGS=[];
+  for(const [r,rc] of Object.entries(REGION_RECTS))
+    place('c:'+r, rc.x0+2, rc.y0+1, MAN.civic[r]);
+  for(const p of PLOTS)
+    place('b:'+p.preset, p.rect.x0+2, p.rect.y0+1, MAN.buildings[p.preset]);
+  place('sc:stage-1', SITE.rect.x0+1, SITE.rect.y0+1, MAN.scaffold['stage-1']);
+  place('sc:stage-2', SITE.rect.x0+1, SITE.rect.y0+1+4, MAN.scaffold['stage-2']);
+  place('sc:stage-3', SITE.rect.x0+1+5, SITE.rect.y0+1, MAN.scaffold['stage-3']);
+
+  // lanterns marching along the spines
+  for(let x=2;x<=22;x+=5){ place('pr:lantern',x,8,MAN.props.lantern);
+                           place('pr:lantern',x+2,10,MAN.props.lantern); }
+  for(let y=1;y<=17;y+=5){ place('pr:lantern',10,y,MAN.props.lantern);
+                           place('pr:lantern',12,y+2,MAN.props.lantern); }
+  place('pr:brazier',11,5,MAN.props.brazier);
+  place('pr:brazier',12,12,MAN.props.brazier);
+  place('pr:bench',9,7,MAN.props.bench); place('pr:bench',14,10,MAN.props.bench);
+  place('pr:bench',9,10,MAN.props.bench);
+  place('pr:planter',14,7,MAN.props.planter); place('pr:planter',10,12,MAN.props.planter);
+  place('pr:crates',17,7,MAN.props.crates); place('pr:crates',22,10,MAN.props.crates);
+  place('pr:signpost',11,3,MAN.props.signpost); place('pr:signpost',19,15,MAN.props.signpost);
+  place('pr:wellstone',6,8,MAN.props.wellstone);
+  place('pr:rubble',20,19,MAN.props.rubble); place('pr:rubble',18,22,MAN.props.rubble);
+
+  // a flock out on the wild ground
+  for(const [x,y,p] of [[3,19,'graze'],[5,20,'graze'],[4,21,'idle'],[6,19,'walk-a'],
+                        [2,21,'walk-b'],[25,8,'graze'],[26,10,'idle']])
+    THINGS.push({key:'an:sheep-'+p, tx:x, ty:y, body:true, depth:x+y});
+
+  // bodies: 1 human, 7 agents, roughly where they would sit
+  const BODIES=[['human-front',11,8],['agent-front',12,9],['agent-work',18,8],
+    ['agent-side',10,2],['agent-front',13,14],['agent-work',19,13],
+    ['agent-side',3,8],['agent-front',3,2]];
+  for(const [k,x,y] of BODIES)
+    THINGS.push({key:'ch:'+k, tx:x, ty:y, body:true, depth:x+y,
+                 item:(k==='agent-work')?'tool':(k==='agent-front'?'document':null)});
+  THINGS.sort((a,b)=>a.depth-b.depth);
+}
+
+function drawScene(cv, zoom){
+  const X0=-4, X1=28, Y0=-4, Y1=26;
+  const corners=[iso(X0,Y1),iso(X1,Y0),iso(X0,Y0),iso(X1,Y1)];
+  const minX=Math.min(...corners.map(c=>c.x))-TW, maxX=Math.max(...corners.map(c=>c.x))+TW;
+  const minY=Math.min(...corners.map(c=>c.y))-260, maxY=Math.max(...corners.map(c=>c.y))+TH+40;
+  const W=Math.ceil((maxX-minX)*zoom), H=Math.ceil((maxY-minY)*zoom);
+  cv.width=W; cv.height=H; cv.style.width=W+'px'; cv.style.height=H+'px';
+  ORIGIN[cv.id]={minX,minY,zoom};
+  const ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#0b0d18'; ctx.fillRect(0,0,W,H);
+  ctx.setTransform(zoom,0,0,zoom,-minX*zoom,-minY*zoom);
+  const showAnchors=document.getElementById('anchors').checked;
+  const showBounds=document.getElementById('bounds').checked;
+  const hide=document.getElementById('noart').checked;
+
+  const inCore=(x,y)=>x>=0&&x<24&&y>=0&&y<18;
+  const regionAt=(x,y)=>{for(const[n,r] of Object.entries(REGION_RECTS))
+    if(x>=r.x0&&x<=r.x1&&y>=r.y0&&y<=r.y1) return n; return null;};
+
+  // --- ground -----------------------------------------------------------
+  for(let ty=Y0;ty<=Y1;ty++) for(let tx=X0;tx<=X1;tx++){
+    const p=iso(tx,ty), x=p.x, y=p.y;
+    const reg=inCore(tx,ty)?regionAt(tx,ty):null;
+    const useOld=document.getElementById('legacy').checked;
+    const tile=useOld ? M['old:'+(reg||'garden')] : M['tile:'+(reg||'wild')];
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+TW/2,y+TH/2);
+    ctx.lineTo(x,y+TH); ctx.lineTo(x-TW/2,y+TH/2); ctx.closePath(); ctx.clip();
+    ctx.globalAlpha = reg?1:0.55;
+    if(tile) ctx.drawImage(tile, x-TW/2, y, TW, TH);
+    ctx.restore();
+    // scatter, deterministic
+    const h=((tx*73856093)^(ty*19349663))>>>0;
+    if(!ROAD.has(tx+','+ty) && h%11===0){
+      const names=Object.keys(MAN.scatter);
+      const sx=M['sx:'+names[h%names.length]];
+      if(sx) ctx.drawImage(sx, x-TW/2, y, TW, TH);
+    }
+  }
+  // --- paths ------------------------------------------------------------
+  for(let ty=Y0;ty<=Y1;ty++) for(let tx=X0;tx<=X1;tx++){
+    if(!ROAD.has(tx+','+ty)) continue;
+    const p=iso(tx,ty); const img=M['p:'+pathKey(tx,ty)];
+    if(img) ctx.drawImage(img, p.x-TW/2, p.y, TW, TH);
+  }
+  // --- claimed plot tint + fence ----------------------------------------
+  for(const pl of PLOTS){
+    ctx.fillStyle=PRESET_TINT[pl.preset];
+    for(let ty=pl.rect.y0;ty<=pl.rect.y1;ty++) for(let tx=pl.rect.x0;tx<=pl.rect.x1;tx++){
+      const p=iso(tx,ty);
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+TW/2,p.y+TH/2);
+      ctx.lineTo(p.x,p.y+TH); ctx.lineTo(p.x-TW/2,p.y+TH/2); ctx.closePath(); ctx.fill();
+    }
+  }
+  // --- everything standing up, back to front ----------------------------
+  if(!hide) for(const t of THINGS){
+    const p=iso(t.tx,t.ty), img=M[t.key];
+    if(!img) continue;
+    if(t.body){
+      const y=p.y-18;
+      ctx.drawImage(img, p.x-20, y-20, 40, 40);
+      if(t.item && M['it:'+t.item] && zoom>0.5)
+        ctx.drawImage(M['it:'+t.item], p.x+6, y-6, 12, 12);
+    } else {
+      const a=t.meta.anchor;
+      ctx.drawImage(img, p.x-a[0], p.y-a[1], t.meta.w, t.meta.h);
+      if(showBounds){ ctx.strokeStyle='rgba(167,139,250,.5)'; ctx.lineWidth=1;
+        ctx.strokeRect(p.x-a[0], p.y-a[1], t.meta.w, t.meta.h); }
+      if(showAnchors){ ctx.strokeStyle='#ff3b6b'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(p.x-6,p.y); ctx.lineTo(p.x+6,p.y);
+        ctx.moveTo(p.x,p.y-6); ctx.lineTo(p.x,p.y+6); ctx.stroke();
+        // the footprint diamond the sprite claims
+        const fw=t.meta.footprint[0], fh=t.meta.footprint[1];
+        const c=[iso(0,0),iso(fw,0),iso(fw,fh),iso(0,fh)];
+        ctx.strokeStyle='rgba(56,189,248,.8)'; ctx.beginPath();
+        ctx.moveTo(p.x+c[0].x,p.y+c[0].y);
+        for(let i=1;i<4;i++) ctx.lineTo(p.x+c[i].x,p.y+c[i].y);
+        ctx.closePath(); ctx.stroke(); }
+    }
+  }
+  // --- labels (1x only) --------------------------------------------------
+  if(zoom>=0.7){
+    ctx.font='11px ui-sans-serif,system-ui,sans-serif'; ctx.textAlign='center';
+    for(const pl of PLOTS){
+      const m=iso((pl.rect.x0+pl.rect.x1)/2,(pl.rect.y0+pl.rect.y1)/2);
+      ctx.fillStyle='#f4d19a'; ctx.fillText(pl.name, m.x, m.y+56);
+      ctx.fillStyle=PRESET_TINT[pl.preset].replace(/[\d.]+\)$/,'0.95)');
+      ctx.font='9px ui-sans-serif,system-ui,sans-serif';
+      ctx.fillText({private:'private',public_view:'view only',public_write:'open'}[pl.preset],
+        m.x, m.y+68);
+      ctx.font='11px ui-sans-serif,system-ui,sans-serif';
+    }
+    for(const [r,rc] of Object.entries(REGION_RECTS)){
+      const m=iso((rc.x0+rc.x1)/2,(rc.y0+rc.y1)/2);
+      ctx.fillStyle='#a78bfa'; ctx.fillText(r, m.x, m.y+72);
+    }
+  }
+  ctx.setTransform(1,0,0,1,0,0);
+}
+
+const ORIGIN={};
+function draw(){
+  drawScene(document.getElementById('s1'),1);
+  drawScene(document.getElementById('s2'),0.55);
+  drawScene(document.getElementById('s3'),0.4);
+  sheet();
+}
+/** Scroll a scene so tile (tx,ty) sits in the middle of its viewport. */
+window.look=function(id,tx,ty){
+  const cv=document.getElementById(id), box=cv.parentElement, o=ORIGIN[id];
+  const p=iso(tx,ty);
+  box.scrollLeft=(p.x-o.minX)*o.zoom-box.clientWidth/2;
+  box.scrollTop =(p.y-o.minY)*o.zoom-box.clientHeight/2;
+  box.scrollIntoView({block:'start'});
+  return [box.scrollLeft,box.scrollTop,cv.width,cv.height];
+};
+function sheet(){
+  const el=document.getElementById('sheet'); el.innerHTML='';
+  const groups=[['ground',MAN.ground],['buildings',MAN.buildings],['civic',MAN.civic],['scaffold',MAN.scaffold],
+    ['props',MAN.props],['animals',MAN.animals],['items',MAN.items],
+    ['paths',MAN.paths],['scatter',MAN.scatter]];
+  for(const [g,set] of groups){
+    const h=document.createElement('div');
+    h.style.cssText='width:100%;color:#a78bfa;margin-top:10px;font-size:12px';
+    h.textContent=g; el.appendChild(h);
+    for(const [k,v] of Object.entries(set)){
+      const c=document.createElement('div'); c.className='cell';
+      const im=document.createElement('img'); im.src=v.file;
+      if(g==='items'||g==='paths'||g==='scatter'||g==='ground'){ im.style.width=(v.w*2)+'px';
+        im.style.height=(v.h*2)+'px'; }
+      c.appendChild(im);
+      const b=document.createElement('b'); b.textContent=k; c.appendChild(b);
+      const i=document.createElement('i');
+      i.textContent=v.w+'x'+v.h+(v.anchor?('  a'+v.anchor.join(',')):'');
+      c.appendChild(i); el.appendChild(c);
+    }
+  }
+}
+for(const id of ['anchors','bounds','noart','legacy'])
+  document.getElementById(id).addEventListener('change',draw);
+boot();
+</script></body></html>

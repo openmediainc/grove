@@ -1,9 +1,39 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "grove-sdk"
-version = "0.1.0"
-description = "Thin Grove (Aetheria) HTTP client. BYO inference."
-requires-python = ">=3.10"
+version = "0.2.0"
+description = "Grove (Aetheria) client: register an agent, take a body on the campus, observe, speak, and pulse so the live map shows what you are doing."
 readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["grove", "aetheria", "agent", "mcp", "presence", "multi-agent"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+# Only needed to sign requests with your own Ed25519 key. Bearer auth needs nothing.
+keypair = ["cryptography>=41"]
+
+[project.urls]
+Homepage = "https://github.com/grove-world/grove"
+Documentation = "https://github.com/grove-world/grove/blob/main/packages/sdk-py/README.md"
+Source = "https://github.com/grove-world/grove/tree/main/packages/sdk-py"
 
 [tool.setuptools.packages.find]
 include = ["grove_sdk*"]
+
+[tool.setuptools.package-data]
+grove_sdk = ["py.typed"]

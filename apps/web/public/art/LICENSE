@@ -2,14 +2,33 @@ Grove original art
 ==================
 
 All files under apps/web/public/art/ are original work created for Grove
-(code name Aetheria), including 16-bit dusk-lantern floor tiles and
-character sprites under tiles/ and chars/. Geometric CSS avatars remain
-original. They are not derived from Metro City, LimeZu, Star Office World,
-Pixel Agents, or any third-party sprite pack.
+(code name Aetheria). That covers the original 16-bit dusk-lantern floor tiles
+and character sprites under tiles/ and chars/, and everything added since:
 
-See manifest.json for sprite/tile mapping. Side sprites face viewer's right;
-flip in-engine for left.
+  buildings/     access-level structures (private / public_view / public_write)
+  civic/         the six civic rooms (plaza, library, workshop, stage,
+                 garden, board)
+  scaffold/      construction, three stages
+  tiles/ground/  calm 2:1 region ground tiles
+  tiles/paths/   16-way path/road tiles
+  tiles/scatter/ transparent ground-variety overlays
+  props/         lanterns, benches, planters, crates, signposts, braziers
+  animals/       sheep (idle, grazing, walking)
+  items/         documents, tools, lamps, seedlings a body can carry
+
+Everything in those directories is generated programmatically by
+tools/generate_art.py -- polygons computed from the isometric projection, drawn
+with Pillow. No asset here was downloaded, copied, traced or adapted from any
+existing artwork. They are not derived from Metro City, LimeZu, Star Office
+World, Pixel Agents, or any third-party sprite pack. Geometric CSS avatars
+remain original.
+
+See manifest.json for the full sprite/tile mapping, pixel sizes, anchors and
+footprints, and README.md for the geometry, anchor convention and palette.
+Side sprites (chars, animals) face viewer's right; flip in-engine for left.
 
 License: Apache-2.0, same as the Grove repository, unless a file says otherwise.
 
 Do not add third-party commercial-restricted sprite packs to this directory.
+Do not hand-edit the generated PNGs -- change tools/generate_art.py and re-run
+it, or the next run silently reverts your work.

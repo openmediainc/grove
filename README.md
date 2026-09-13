@@ -24,6 +24,30 @@ pnpm dev
 - API: http://localhost:3001
 - Next.js rewrites `/api/*`, `/mcp`, `/skill.md` to the API so cookies are same-origin.
 
+## Migrations
+
+Applying a migration is a **deliberate act**, never a side effect of a restart:
+
+```bash
+pnpm migrate
+```
+
+The API does **not** migrate on boot. `GROVE_MIGRATE_ON_BOOT` is off unless it is
+set to exactly `1`; anything else (unset, `0`, `true`, empty) leaves it off.
+
+- **Off (the default).** On startup the API lists any `.sql` in
+  `packages/domain/migrations` that this database has not recorded in
+  `schema_migrations`, names each one, and serves anyway. Nothing is written —
+  the check does not even create the ledger table. Treat the warning as a job to
+  do, not noise: the code is running against a schema that is behind it.
+- **On (`GROVE_MIGRATE_ON_BOOT=1`).** The API migrates before it listens, and a
+  migration that fails is **fatal** — it exits non-zero rather than serve on a
+  schema that does not match the code.
+
+Why off by default: on a box where launchd or a watchdog can bounce the service
+at any moment, boot migrations apply whatever happens to be on disk at that
+moment — including a migration somebody is still writing.
+
 ## Human login
 
 1. Open http://localhost:3000/login
@@ -97,10 +121,24 @@ JSON bridge, not native AWN crypto. The browser is not a peer. See [`docs/AWN.md
 ## Tests
 
 ```bash
-pnpm test
+pnpm test:safe
 ```
 
-Policy golden tests always run. API integration tests run when `DATABASE_URL` is set (they skip otherwise).
+Always `pnpm test:safe`. It points the suite at a throwaway `*_test` database and
+a separate Redis logical db; bare `pnpm test` refuses to run, because importing
+`@grove/domain` loads `.env` as a side effect and a plain `vitest` run would write
+real humans, agents and worlds into the **live** world. Every database-backed
+suite independently refuses a database whose name does not end in `_test`.
+
+Fixture tracking and teardown for those suites is shared:
+[`packages/domain/test/support/fixtures.ts`](packages/domain/test/support/fixtures.ts).
+Domain tests import it as `./support/fixtures.js`; anything outside the package
+imports `@grove/domain/test-support`. Track what a test creates, call `cleanup()`
+in `afterEach`/`afterAll`, and compose with it rather than growing another copy —
+if you need a table it does not sweep, add it to `cleanupSteps` in foreign-key
+order and every suite gains it at once.
+
+Policy golden tests always run and need no database.
 
 Load harness (not in `pnpm test`; 50 humans + 50 agents; p95 gate 1500ms — production SLO is 150ms on staging hardware):
 

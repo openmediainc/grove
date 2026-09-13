@@ -1,26 +1,77 @@
+# Grove CI — the safety net the suite did not have.
+#
+# RUNNERS: `ubuntu-latest`, always. This owner's estate has NO self-hosted
+# runners. A job that asks for `self-hosted` does not fail — it queues for ever,
+# silently, and never goes red, so the gate quietly stops gating. Never write
+# `runs-on: self-hosted` in this repo. See docs/CI.md.
+#
+# THE DATABASE. CI has no `.env`. packages/domain/src/config.ts loads `.env` as a
+# side effect of being imported, which is why the suite refuses any database
+# whose name does not end in `_test` (packages/domain/test/support/fixtures.ts).
+# That guard is load-bearing: before it, the integration suite wrote real humans,
+# agents and worlds into the live Grove. CI does not bypass it — the Postgres
+# service container is told to create a database genuinely called `grove_test`
+# (POSTGRES_DB below), and DATABASE_URL points at that.
+#
+# infra/test-db.sh is the LOCAL path only: it reads `.env` for the live url and
+# `docker exec`s into the `infra-postgres-1` container by name. Neither exists on
+# a runner, so CI runs the same inner command that script ends with, with the
+# environment supplied directly. KEEP THE TWO IN STEP: if the script's final
+# command changes, change the "Run the suite" step below to match.
+#
+# `pnpm test` is deliberately wired to fail with a pointer to `pnpm test:safe`.
+# CI must never call it, and must never "fix" it.
+#
+# CI reaches nothing outside the repo: no Mac Mini, no Tailscale, no live
+# service. XAI_*, RESEND_*, GROVE_SMTP_URL and friends are left unset on purpose.
+
 name: ci
+
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Magic links are printed, never mailed. Origins are loopback so nothing in
+  # the suite can be pointed at a real deployment.
+  GROVE_MAGIC_LINK_STDOUT: "1"
+  GROVE_WEB_ORIGIN: http://localhost:3000
+  GROVE_PUBLIC_URL: http://localhost:3000
+
 jobs:
+  # The gate that actually broke today: 301 tests across five packages (plus
+  # packages/sdk-py's unittest), against a real Postgres and a real Redis. Both
+  # are needed — the api suite stores sessions and rate limits in Redis, and the
+  # domain suites read and write rows.
   test:
-    runs-on: ubuntu-latest
+    name: test (postgres + redis)
+    runs-on: ubuntu-latest # never self-hosted — see the header
+    timeout-minutes: 20
+
     services:
       postgres:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: grove
           POSTGRES_PASSWORD: grove
-          POSTGRES_DB: grove
+          # The whole point: the only database on this runner is already a
+          # throwaway whose name satisfies the `_test` guard.
+          POSTGRES_DB: grove_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U grove"
+          --health-cmd "pg_isready -U grove -d grove_test"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 20
       redis:
         image: redis:7-alpine
         ports:
@@ -29,24 +80,102 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 20
+
     env:
-      DATABASE_URL: postgres://grove:grove@localhost:5432/grove
-      REDIS_URL: redis://localhost:6379
-      GROVE_MAGIC_LINK_STDOUT: "1"
-      GROVE_WEB_ORIGIN: http://localhost:3000
-      GROVE_PUBLIC_URL: http://localhost:3000
+      DATABASE_URL: postgres://grove:grove@localhost:5432/grove_test
+      # Logical db 1, matching infra/test-db.sh, so test sessions and rate limits
+      # never share a keyspace with anything else.
+      REDIS_URL: redis://localhost:6379/1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm before setup-node: setup-node's `cache: pnpm` needs the pnpm binary
+      # to locate the store. Version comes from the root package.json
+      # "packageManager" field (pnpm@9.15.0) — do not pin it twice.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # packages/sdk-py's `test` script is `python3 -m unittest`.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Fail loudly on a misconfigured workflow rather than letting the guard
+      # skip every database-backed test and report a green, empty run.
+      - name: Assert the database is a throwaway
+        run: |
+          name="${DATABASE_URL##*/}"
+          name="${name%%\?*}"
+          case "$name" in
+            *_test)
+              echo "database \"$name\" ends in _test — ok" ;;
+            *)
+              echo "::error::DATABASE_URL names \"$name\", which does not end in _test. The suite would skip every database-backed test and report a green run that proved nothing."
+              exit 1 ;;
+          esac
+
+      # Migrations are a deliberate act in Grove: the API migrates on boot only
+      # when GROVE_MIGRATE_ON_BOOT=1, which CI deliberately leaves unset. The
+      # service container's database starts empty, so CI applies them itself.
+      - name: Migrate
+        run: pnpm migrate
+
+      # The inner command from infra/test-db.sh. NOT `pnpm test` (deliberately
+      # fails) and NOT `pnpm test:safe` (needs .env and a named Docker container).
+      - name: Run the suite
+        run: |
+          set -o pipefail
+          pnpm -r --filter './packages/**' --filter @grove/api test 2>&1 | tee suite.log
+          # The guard prints this marker when it is pointed at the wrong database
+          # and quietly skips a suite. A skipped suite must never look green.
+          if grep -q '\[grove\].*SKIPPED' suite.log; then
+            echo "::error::A suite SKIPPED itself because DATABASE_URL did not name a _test database. Nothing was proved."
+            exit 1
+          fi
+
+  # Separate job: no database needed, and it should go red on its own so the
+  # cause is obvious. Now covers apps/web and every package's tests via the
+  # per-package tsconfig.test.json files.
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest # never self-hosted — see the header
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: pnpm
-      - uses: actions/setup-python@v5
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm -r --if-present typecheck
+
+  # `tsc --noEmit` for api and mcp, a real `next build` for web. Catches the
+  # things a typecheck does not: a route that cannot be prerendered, a bad
+  # import across the workspace boundary.
+  build:
+    name: build
+    runs-on: ubuntu-latest # never self-hosted — see the header
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm migrate
-      - run: pnpm test
-      - run: pnpm typecheck
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build

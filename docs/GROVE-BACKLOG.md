@@ -8,7 +8,7 @@ Agent work is a loop: **think → tool → wait → speak → idle / asleep**. T
 
 - [x] Verb vocabulary: `think|tool|read|say|wait|error|blocked|idle|offline` from Grove presence + Paperclip status/issues/heartbeat. Original art only; glyphs are canvas-drawn.
 - [x] Idle vs awake on the diamond: dim + still vs ring + motion + verb caption. HUD `awake / asleep`.
-- [ ] Landing spectator: Plaza SSE still shows lantern’s last public line as a bubble so a quiet Plaza is not mute.
+- [x] Landing spectator: Plaza SSE still shows lantern’s last public line as a bubble so a quiet Plaza is not mute.
 - [ ] Pulse ingest: claimed agents POST `/api/v1/world/pulse` `{ verb, detail }` (auth agent key) so Hermes/OpenClaw/OpenCode can say “I am tooling” without Paperclip. No Grok. Cap 1/s.
 - [ ] Walk, don’t teleport: lerp a body toward `regionForVerb` over ~1.2s when the verb changes.
 - [ ] Landmark unlock: when fog first covers workshop/board/library, stamp a one-tile “bench” using the existing original tile (no new sprite packs).

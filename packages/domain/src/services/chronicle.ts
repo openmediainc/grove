@@ -1,0 +1,788 @@
+import { WORLD_ID } from "@grove/protocol";
+import { GroveError } from "../errors.js";
+import type { GroveStore } from "../store.js";
+
+/**
+ * The reader over `world_events`.
+ *
+ * The map answers "now". This answers "what happened while I was asleep" — the
+ * one question an append-only ledger is for and the one thing nothing in Grove
+ * read until now.
+ *
+ * ---------------------------------------------------------------------------
+ * THE LEAK PROBLEM
+ * ---------------------------------------------------------------------------
+ * The ledger is written indiscriminately, by design: identity, presence,
+ * speech, notices and moderation all drop a row in without asking who may
+ * later read it. A reader that simply SELECTs is therefore a disclosure
+ * machine — it would publish whispers, private-space activity, who reported
+ * whom, and which senders tripped the injection heuristic.
+ *
+ * So every rule below is enforced INSIDE the SQL, never in the API layer and
+ * never in the browser. `visible` is a CTE; nothing that fails it is ever
+ * materialised into a result row, and a speech body is replaced with NULL by
+ * the same query that decides whether it may be shown. There is no code path
+ * that can forget to filter.
+ *
+ * The rules, and why each one:
+ *
+ *  1. WORLD GATE. Every event is resolved to a world by joining `rooms` on the
+ *     room id in the payload. A non-commons world is visible only when its
+ *     policy_preset is not 'private', or the viewer owns it or is a member.
+ *     This is character-for-character the rule already in force in
+ *     campus.listDirectory() and world.minimap(): a private plot you are not
+ *     in shows as a plot number and nothing else. History does not get a
+ *     weaker rule than the live map. Operators get NO bypass here —
+ *     assertWorldAccess() gives them none either, and the chronicle must not
+ *     become the back door into a campus that the front door refuses.
+ *
+ *  2. SPEECH. Only `room_say` ever appears. `whisper`, `owner_reply` and
+ *     `owner_instruction` are excluded for everybody, operators included:
+ *     they have their own consented surfaces (ownerThread, the report
+ *     snapshot), and a moderator needs evidence attached to a report, not a
+ *     firehose of every private line in Grove.
+ *     The BODY is shown only to the sender, to an actor with a
+ *     `speech_deliveries` row of status 'delivered', or to an operator inside
+ *     a world they can already see. speech_deliveries is the world's own
+ *     record of who was actually allowed to hear the line at the time it was
+ *     said — blocks, mutes, lurk, agent policy and the space ceiling are all
+ *     already baked into it. Re-deriving audibility now (which is what
+ *     speech.transcript() does for a live room) would answer with TODAY's
+ *     permissions, so a line said while you were blocked would become
+ *     readable the moment the block lifted. Deliveries cannot drift.
+ *     A viewer who was not there still sees THAT a line was spoken, because
+ *     any authenticated actor can already read a reachable room's transcript;
+ *     the fact is strictly less than the existing route grants.
+ *
+ *     There is a THIRD holder of a delivery row, and it is not an actor:
+ *     `hum_spectator`. speech.ts persists one for the synthetic spectator on
+ *     exactly the lines it also publishes to `sse:plaza` — the same
+ *     `spectatorHears` expression drives both, so the row exists if and only if
+ *     the line was broadcast. `GET /api/v1/sse/plaza` takes no credential at
+ *     all (it hijacks the reply before any auth runs), so a line with that row
+ *     was already handed, body and all, to every anonymous client on the
+ *     internet. Admitting it here therefore publishes strictly LESS than has
+ *     already happened, and it does not weaken the principle above: the row is
+ *     written at say-time from the context that produced every other delivery,
+ *     by the same policy kernel — an agent that may not speak to humans is
+ *     denied the spectator too, because SPECTATOR_RECIPIENT is `kind: human`.
+ *     It is a record of what the world broadcast, frozen when it broadcast it;
+ *     nothing is re-derived against today's permissions.
+ *     The clause still sits inside the `$1::text IS NOT NULL` guard, so it is
+ *     signed-in-only. That is belt-and-braces rather than a rule: an anonymous
+ *     viewer never reaches a speech row at all (rule 4), so there is no body
+ *     for this to withhold from them.
+ *     The SQL matches the id as a literal. What keeps that literal honest is
+ *     the end-to-end test in test/speech-wiring.test.ts, which speaks in the
+ *     Plaza and then reads the body back as a bystander: rename the constant in
+ *     speech.ts and that test goes red rather than the feature going quietly
+ *     dark again.
+ *
+ *  3. MODERATION-GRADE. Fail closed, and split by who is actually owed the
+ *     information:
+ *       - `block` — the blocker alone. Not operators, and above all not the
+ *         blocked party: telling someone they were blocked is the retaliation
+ *         vector the block existed to close.
+ *       - `report` — the reporter and operators. Never the target, same
+ *         reason.
+ *       - `report_resolved`, `operator_bootstrap` — operators. One names a
+ *         moderation decision, the other is the privilege-escalation record.
+ *       - `suspended`, `prompt_injection_flag` — operators, plus the subject
+ *         and the subject's owner. An owner has to be able to see why their
+ *         agent went quiet; publishing it more widely would turn a heuristic
+ *         accusation into a public accusation, and would teach an attacker
+ *         exactly which phrasings trip the filter.
+ *       - `key_rotated` / `key_revoked` — the agent's owner and operators.
+ *         Credential timing is an attacker's signal.
+ *       - `instruction` — the owner alone (plus operators). The owner→agent
+ *         leash is private; even the instruction KIND ("stop") is a statement
+ *         about how someone runs their agent.
+ *
+ *  4. ANONYMOUS VIEWERS. The landing page is public, so the chronicle answers
+ *     signed-out too — but only with the civic skeleton that is already
+ *     public elsewhere: arrivals, claims and permission changes (an agent's
+ *     policy is drawn on the public map and served by GET /api/v1/a/*), and
+ *     movement into non-private worlds. No speech, because
+ *     /rooms/:slug/transcript requires an actor. No notices, because
+ *     GET /notices requires an actor. Nothing moderation-grade. The ledger
+ *     must not be the way around a sign-in gate that already exists.
+ *
+ *  5. UNCLAIMED AGENTS. GET /api/v1/agents/:id and /api/v1/a/* both 404 an
+ *     agent in claim_state 'pending' for anyone but its owner, so a pending
+ *     agent's registration is not public either. It is hidden here too.
+ *
+ *  6. UNKNOWN TYPES FAIL CLOSED. The `ELSE` arm of the visibility CASE is
+ *     operators-only. The bridge is about to start writing event types nobody
+ *     has classified yet; the default for an unclassified type must be
+ *     "nobody sees it", not "everybody does". This is the single most
+ *     important line in the file.
+ *
+ *  7. `agent_phase` — THE OWNER AND OPERATORS, NOBODY ELSE. Migration 017
+ *     started writing one ledger row per stretch of pulse verb, so that an
+ *     owner can finally ask what their agent did today rather than only what
+ *     it is doing this second (see the file header there for the cost).
+ *
+ *     The tempting argument is that a pulse is already public: verb, detail,
+ *     url and error_text are drawn on the live map and served, unauthenticated,
+ *     by GET /api/v1/world/minimap. But the minimap publishes ONE INSTANT per
+ *     body. A retained series of captions is a different object: a day of
+ *     "fixing the room scope", "npm test (api)", a PR url and two stack traces
+ *     reconstructs how somebody's agent — and by extension somebody's work —
+ *     actually went. No existing route publishes that, and the standing rule
+ *     in this file is never to publish more than one already does.
+ *
+ *     So this follows `key_rotated` exactly: `$2::bool OR actor_id IN own`.
+ *     It fails closed, it cannot expose one owner's agent to another, and it
+ *     is trivially widened later if Grove decides a working day is civic.
+ *     Unpublishing it would not be.
+ *
+ * Payloads are never returned raw. Each type has an allow-list of fields
+ * (see `detailFor`), so a payload that later grows a field does not
+ * retroactively publish it.
+ */
+
+/** Coarse bucket, so the page can group and filter without knowing every type. */
+export type ChronicleKind =
+  | "arrival"
+  | "claim"
+  | "movement"
+  | "work"
+  | "speech"
+  | "notice"
+  | "permission"
+  | "instruction"
+  | "credential"
+  | "moderation"
+  | "other";
+
+/**
+ * Who is asking. An agent caller reads as its OWNER human — the same
+ * substitution assertWorldAccess() makes — so an unclaimed agent (no owner)
+ * reads as anonymous and can never see more than a signed-out visitor.
+ */
+export interface ChronicleViewer {
+  humanId: string | null;
+  isOperator: boolean;
+}
+
+export interface ChronicleQuery {
+  /** Inclusive lower bound on created_at. */
+  since?: string | null;
+  /** Exclusive upper bound on created_at. */
+  until?: string | null;
+  actorId?: string | null;
+  types?: string[] | null;
+  kinds?: string[] | null;
+  worldId?: string | null;
+  /** Keyset cursor: the `nextCursor` of the previous page. */
+  cursor?: string | null;
+  limit?: number | null;
+}
+
+export interface ChronicleActor {
+  id: string;
+  kind: "human" | "agent" | "unknown";
+  displayName: string;
+  slug: string | null;
+}
+
+export interface ChronicleEntry {
+  id: string;
+  type: string;
+  kind: ChronicleKind;
+  /** True for the types only a moderator, subject or owner can see. */
+  moderation: boolean;
+  createdAt: string;
+  actor: ChronicleActor | null;
+  worldId: string;
+  roomId: string | null;
+  roomName: string | null;
+  /** One readable line, composed server-side. Never a JSONB dump. */
+  summary: string;
+  /** A spoken line, only when this viewer was allowed to hear it. */
+  body: string | null;
+  /** A line was spoken and this viewer may not read it. Lets the page say so. */
+  bodyWithheld: boolean;
+  /** Allow-listed payload fields, already resolved to names where they were ids. */
+  detail: Record<string, unknown>;
+}
+
+export interface ChroniclePage {
+  entries: ChronicleEntry[];
+  /** Pass back as `cursor`. Null when the window is exhausted. */
+  nextCursor: string | null;
+  window: { since: string | null; until: string | null };
+  /** Totals across the WHOLE visible window, not just this page. */
+  totals: { events: number; byKind: Record<string, number>; byType: Record<string, number> };
+}
+
+const KIND_OF: Record<string, ChronicleKind> = {
+  actor_registered: "arrival",
+  actor_claimed: "claim",
+  actor_joined_room: "movement",
+  // Migration 017: one row per stretch of pulse verb. Its own kind rather than
+  // "other", so an owner can filter a day's work away from a day's events.
+  agent_phase: "work",
+  speech: "speech",
+  notice: "notice",
+  permission_changed: "permission",
+  instruction: "instruction",
+  key_rotated: "credential",
+  key_revoked: "credential",
+  key_bound: "credential",
+  block: "moderation",
+  report: "moderation",
+  prompt_injection_flag: "moderation",
+  operator_bootstrap: "moderation",
+  // The `mod.` namespace: the moderators' own record, written by
+  // ModerationService and FlagService. Listed so the page can offer the
+  // filter; gated below so almost nobody can use it.
+  "mod.report_decided": "moderation",
+  "mod.warn": "moderation",
+  "mod.suspend": "moderation",
+  "mod.unsuspend": "moderation",
+  "mod.injection_reviewed": "moderation",
+  "mod.freeze": "moderation",
+  // Retired writers, kept so historical rows stay classified rather than
+  // falling through to the operators-only default.
+  report_resolved: "moderation",
+  suspended: "moderation",
+};
+
+/**
+ * The vocabulary actually written by the domain layer, derived by reading every
+ * INSERT rather than from any document. Exported so the page can offer a filter
+ * that cannot drift from the writers.
+ */
+export const CHRONICLE_TYPES: string[] = Object.keys(KIND_OF);
+
+export const CHRONICLE_KINDS: ChronicleKind[] = [
+  "arrival",
+  "claim",
+  "movement",
+  "work",
+  "speech",
+  "notice",
+  "permission",
+  "instruction",
+  "credential",
+  "moderation",
+  "other",
+];
+
+function kindOf(type: string): ChronicleKind {
+  return KIND_OF[type] ?? "other";
+}
+
+const MAX_LIMIT = 200;
+const DEFAULT_LIMIT = 60;
+
+/**
+ * $1 viewer human id (nullable)   $6 type filter (text[], nullable)
+ * $2 is operator                  $7 world filter (nullable)
+ * $3 since (nullable)             $8 the commons world id
+ * $4 until (nullable)             $9 keyset cursor (nullable)
+ * $5 actor filter (nullable)     $10 limit
+ *
+ * The totals query uses $1..$8 only; the page query uses all ten.
+ */
+const VISIBLE_CTE = `
+WITH own AS (
+  -- Agents this viewer owns. An owner reads their agent's credential and
+  -- moderation events, because those are facts about their own property.
+  SELECT id FROM agents WHERE $1::text IS NOT NULL AND owner_human_id = $1::text
+),
+visible_worlds AS (
+  -- Rule 1. Identical predicate to campus.listDirectory(): only 'private'
+  -- hides anything, and owning or joining lifts it. No operator bypass.
+  SELECT w.id FROM worlds w
+  WHERE w.policy_preset <> 'private'
+     OR ($1::text IS NOT NULL AND (
+           w.owner_human_id = $1::text
+           OR EXISTS (SELECT 1 FROM world_members m
+                       WHERE m.world_id = w.id AND m.human_id = $1::text)))
+),
+ev AS (
+  SELECT
+    e.id,
+    e.type,
+    e.actor_id,
+    e.payload,
+    e.created_at,
+    -- speech writes 'roomId', presence writes 'room'; everything else is
+    -- worldless and belongs to the commons.
+    COALESCE(r.world_id, $8::text) AS world_id,
+    r.id   AS room_id,
+    r.name AS room_name,
+    ag.claim_state    AS agent_claim_state,
+    ag.owner_human_id AS agent_owner_id,
+    CASE WHEN hu.id IS NOT NULL THEN 'human'
+         WHEN ag.id IS NOT NULL THEN 'agent'
+         ELSE 'unknown' END AS actor_kind,
+    COALESCE(hu.display_name, ag.display_name) AS actor_name,
+    COALESCE(hu.handle::text, ag.slug::text)   AS actor_slug,
+    sp.body AS speech_body,
+    (
+      -- Rule 2, the body half. Sender, delivered recipient, or an operator
+      -- inside a world the world gate already let them see.
+      $2::bool
+      OR ($1::text IS NOT NULL AND (
+            e.actor_id = $1::text
+            OR e.actor_id IN (SELECT id FROM own)
+            OR EXISTS (
+                 SELECT 1 FROM speech_deliveries d
+                 WHERE d.speech_id = e.payload->>'speechId'
+                   AND d.status = 'delivered'
+                   AND (d.recipient_id = $1::text
+                        OR d.recipient_id IN (SELECT id FROM own)
+                        -- speech.ts persists a delivery for the synthetic
+                        -- spectator on exactly the lines it also broadcasts to
+                        -- every logged-out viewer over sse:plaza (one shared
+                        -- expression, not a second rule). Admitting it here
+                        -- keeps the principle intact -- bodies still come from
+                        -- deliveries recorded at the time, never re-derived
+                        -- against today's permissions -- and widens nothing
+                        -- beyond what the live feed already gave away.
+                        OR d.recipient_id = 'hum_spectator')
+               )))
+    ) AS body_allowed
+  FROM world_events e
+  LEFT JOIN rooms  r  ON r.id  = COALESCE(e.payload->>'roomId', e.payload->>'room')
+  LEFT JOIN humans hu ON hu.id = e.actor_id
+  LEFT JOIN agents ag ON ag.id = e.actor_id
+  LEFT JOIN speech sp ON e.type = 'speech' AND sp.id = e.payload->>'speechId'
+  WHERE ($3::timestamptz IS NULL OR e.created_at >= $3::timestamptz)
+    AND ($4::timestamptz IS NULL OR e.created_at <  $4::timestamptz)
+    AND ($5::text  IS NULL OR e.actor_id = $5::text)
+    AND ($6::text[] IS NULL OR e.type = ANY($6::text[]))
+),
+visible AS (
+  SELECT * FROM ev
+  WHERE
+    -- Rule 5: a pending agent is a 404 everywhere else, so it is invisible here.
+    (agent_claim_state IS NULL
+     OR agent_claim_state <> 'pending'
+     OR $2::bool
+     OR agent_owner_id = $1::text)
+    AND ($7::text IS NULL OR world_id = $7::text)
+    AND CASE
+      -- Public: a body appearing, an agent gaining an owner, and what an agent
+      -- is permitted to do. All three are already on the public map or the
+      -- public agent page.
+      WHEN type IN ('actor_registered', 'actor_claimed', 'permission_changed') THEN TRUE
+      WHEN type = 'actor_joined_room' THEN world_id IN (SELECT id FROM visible_worlds)
+      -- GET /notices requires an actor, so this does too.
+      WHEN type = 'notice' THEN $1::text IS NOT NULL
+      WHEN type = 'speech' THEN
+             payload->>'channel' = 'room_say'
+         AND $1::text IS NOT NULL
+         AND world_id IN (SELECT id FROM visible_worlds)
+      WHEN type IN ('key_rotated', 'key_revoked')
+        THEN $2::bool OR actor_id IN (SELECT id FROM own)
+      -- Rule 7. A working day is the owner's, not the world's.
+      WHEN type = 'agent_phase' THEN $2::bool OR actor_id IN (SELECT id FROM own)
+      WHEN type = 'instruction' THEN $2::bool OR actor_id = $1::text
+      WHEN type = 'block' THEN actor_id = $1::text
+      WHEN type = 'report' THEN $2::bool OR actor_id = $1::text
+      WHEN type = 'report_resolved' THEN $2::bool
+      WHEN type IN ('suspended', 'prompt_injection_flag')
+        THEN $2::bool OR actor_id = $1::text OR actor_id IN (SELECT id FROM own)
+      WHEN type = 'operator_bootstrap' THEN $2::bool
+      -- A moderation act AGAINST someone: the subject and the subject's owner
+      -- are owed it, because nobody should have to guess why their agent went
+      -- quiet. The payload carries targetId/owner precisely so this is
+      -- answerable without naming the moderator (see the SELECT below).
+      WHEN type IN ('mod.suspend', 'mod.unsuspend', 'mod.warn') THEN
+             $2::bool
+         OR payload->>'targetId' = $1::text
+         OR payload->>'owner' = $1::text
+         OR payload->>'targetId' IN (SELECT id FROM own)
+      -- Everything else in the moderators' own record — decisions, injection
+      -- reviews, world freezes — is operators-only, and stays that way for any
+      -- mod.* type added after this was written.
+      WHEN type LIKE 'mod.%' THEN $2::bool
+      -- Rule 6. An event type nobody has classified is operators-only.
+      ELSE $2::bool
+    END
+)`;
+
+const PAGE_SQL = `${VISIBLE_CTE}
+SELECT id, type, payload, created_at, world_id, room_id, room_name, body_allowed,
+       -- actor_id on a mod.* row is the MODERATOR. A suspended owner may read
+       -- that they were suspended; they may not read who did it. Blanked here
+       -- rather than in TypeScript so no caller can opt out of it.
+       CASE WHEN type LIKE 'mod.%' AND NOT $2::bool THEN NULL      ELSE actor_id   END AS actor_id,
+       CASE WHEN type LIKE 'mod.%' AND NOT $2::bool THEN 'unknown' ELSE actor_kind END AS actor_kind,
+       CASE WHEN type LIKE 'mod.%' AND NOT $2::bool THEN NULL      ELSE actor_name END AS actor_name,
+       CASE WHEN type LIKE 'mod.%' AND NOT $2::bool THEN NULL      ELSE actor_slug END AS actor_slug,
+       CASE WHEN body_allowed THEN speech_body ELSE NULL END AS body
+FROM visible
+WHERE ($9::bigint IS NULL OR id < $9::bigint)
+ORDER BY id DESC
+LIMIT $10::int`;
+
+const TOTALS_SQL = `${VISIBLE_CTE}
+SELECT type, count(*)::int AS n FROM visible GROUP BY type`;
+
+function parseTime(value: string | null | undefined, field: string): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const t = Date.parse(value);
+  if (Number.isNaN(t)) throw new GroveError("INVALID", `${field} must be an ISO timestamp.`);
+  return new Date(t).toISOString();
+}
+
+function parseCursor(value: string | null | undefined): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (!/^\d{1,19}$/.test(value)) throw new GroveError("INVALID", "cursor must be an event id.");
+  return value;
+}
+
+export class ChronicleService {
+  constructor(private store: GroveStore) {}
+
+  async read(viewer: ChronicleViewer, query: ChronicleQuery = {}): Promise<ChroniclePage> {
+    const since = parseTime(query.since, "since");
+    const until = parseTime(query.until, "until");
+    const cursor = parseCursor(query.cursor);
+    const limit = Math.max(1, Math.min(MAX_LIMIT, Math.trunc(Number(query.limit ?? DEFAULT_LIMIT)) || DEFAULT_LIMIT));
+
+    // A `kinds` filter is sugar over `types`: the caller thinks in buckets, the
+    // ledger stores types. Resolving it here means the browser never has to
+    // know the mapping, and an unknown kind narrows to nothing rather than
+    // silently widening the query.
+    let types: string[] | null = null;
+    if (query.types && query.types.length) types = query.types.filter((t) => typeof t === "string");
+    if (query.kinds && query.kinds.length) {
+      const wanted = new Set(query.kinds);
+      const fromKinds = CHRONICLE_TYPES.filter((t) => wanted.has(kindOf(t)));
+      types = types ? types.filter((t) => fromKinds.includes(t)) : fromKinds;
+    }
+    if (types && types.length === 0) {
+      // An impossible filter. Answer honestly instead of dropping the clause,
+      // which would return everything.
+      return {
+        entries: [],
+        nextCursor: null,
+        window: { since, until },
+        totals: { events: 0, byKind: {}, byType: {} },
+      };
+    }
+    if (types && types.length > 40) throw new GroveError("INVALID", "Too many type filters.");
+
+    const base: unknown[] = [
+      viewer.humanId,
+      viewer.isOperator,
+      since,
+      until,
+      query.actorId ?? null,
+      types,
+      query.worldId ?? null,
+      WORLD_ID,
+    ];
+
+    const { rows } = await this.store.pg.query(PAGE_SQL, [...base, cursor, limit]);
+    const { rows: totalRows } = await this.store.pg.query(TOTALS_SQL, base);
+
+    const byType: Record<string, number> = {};
+    const byKind: Record<string, number> = {};
+    let events = 0;
+    for (const r of totalRows) {
+      const n = Number(r.n);
+      const type = String(r.type);
+      byType[type] = n;
+      byKind[kindOf(type)] = (byKind[kindOf(type)] ?? 0) + n;
+      events += n;
+    }
+
+    const names = await this.resolveNames(rows);
+    const entries = rows.map((r) => this.toEntry(r as Record<string, unknown>, names));
+
+    return {
+      entries,
+      nextCursor: rows.length === limit && entries.length ? (entries[entries.length - 1]!.id ?? null) : null,
+      window: { since, until },
+      totals: { events, byKind, byType },
+    };
+  }
+
+  /**
+   * Second-hop id → name lookup for the handful of payload fields that hold an
+   * id (`owner`, `agentId`, `targetId`). Deliberately done AFTER the visibility
+   * CTE, over the rows that survived it, so resolving a name can never be the
+   * thing that discloses one.
+   */
+  private async resolveNames(rows: Array<Record<string, unknown>>): Promise<Map<string, string>> {
+    const wanted = new Set<string>();
+    for (const r of rows) {
+      const p = (r.payload ?? {}) as Record<string, unknown>;
+      for (const key of ["owner", "agentId", "targetId"]) {
+        const v = p[key];
+        if (typeof v === "string" && v) wanted.add(v);
+      }
+    }
+    const out = new Map<string, string>();
+    if (!wanted.size) return out;
+    const ids = [...wanted];
+    const { rows: hs } = await this.store.pg.query(
+      `SELECT id, handle::text AS label FROM humans WHERE id = ANY($1::text[])
+       UNION ALL
+       SELECT id, slug::text AS label FROM agents WHERE id = ANY($1::text[])`,
+      [ids],
+    );
+    for (const r of hs) out.set(String(r.id), String(r.label));
+    return out;
+  }
+
+  private toEntry(row: Record<string, unknown>, names: Map<string, string>): ChronicleEntry {
+    const type = String(row.type);
+    const payload = (row.payload ?? {}) as Record<string, unknown>;
+    const actorId = row.actor_id === null || row.actor_id === undefined ? null : String(row.actor_id);
+    const actorKindRaw = String(row.actor_kind ?? "unknown");
+    const actor: ChronicleActor | null = actorId
+      ? {
+          id: actorId,
+          kind: actorKindRaw === "human" || actorKindRaw === "agent" ? actorKindRaw : "unknown",
+          displayName: row.actor_name ? String(row.actor_name) : "someone since departed",
+          slug: row.actor_slug ? String(row.actor_slug) : null,
+        }
+      : null;
+    const roomName = row.room_name ? String(row.room_name) : null;
+    const isSpeech = type === "speech";
+    const body = row.body === null || row.body === undefined ? null : String(row.body);
+
+    return {
+      id: String(row.id),
+      type,
+      kind: kindOf(type),
+      moderation: kindOf(type) === "moderation",
+      createdAt: new Date(row.created_at as string).toISOString(),
+      actor,
+      worldId: String(row.world_id ?? WORLD_ID),
+      roomId: row.room_id ? String(row.room_id) : null,
+      roomName,
+      summary: summaryFor(type, actor, roomName, payload, names),
+      body,
+      bodyWithheld: isSpeech && body === null,
+      detail: detailFor(type, payload, names),
+    };
+  }
+}
+
+/**
+ * How a stretch of each verb reads in a sentence. Past tense, because by the
+ * time a row exists the stretch is over — an open stretch is still `presence`,
+ * and the map is where you read that.
+ */
+const PHASE_PHRASE: Record<string, string> = {
+  think: "spent",
+  tool: "worked for",
+  read: "read for",
+  say: "was speaking for",
+  wait: "waited",
+  idle: "was idle for",
+  offline: "was offline for",
+  error: "was faulted for",
+  blocked: "was blocked for",
+};
+
+/** "4h 12m", "36m", "48s". Rounded the way a person would say it aloud. */
+export function humanDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 90) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `${h}h ${rem}m` : `${h}h`;
+}
+
+function who(actor: ChronicleActor | null): string {
+  if (!actor) return "The world";
+  if (actor.kind === "human" && actor.slug) return `@${actor.slug}`;
+  return actor.displayName;
+}
+
+function named(id: unknown, names: Map<string, string>): string | null {
+  if (typeof id !== "string" || !id) return null;
+  const label = names.get(id);
+  if (label) return id.startsWith("hum_") ? `@${label}` : label;
+  return "someone since departed";
+}
+
+/** One readable sentence per event. The page renders these, never the payload. */
+function summaryFor(
+  type: string,
+  actor: ChronicleActor | null,
+  roomName: string | null,
+  payload: Record<string, unknown>,
+  names: Map<string, string>,
+): string {
+  const room = roomName ?? "a room";
+  switch (type) {
+    case "actor_registered":
+      return payload.kind === "agent"
+        ? `${who(actor)} was registered as an agent.`
+        : `${who(actor)} arrived in Grove.`;
+    case "actor_claimed": {
+      const owner = named(payload.owner, names);
+      return owner ? `${who(actor)} was claimed by ${owner}.` : `${who(actor)} was claimed.`;
+    }
+    case "actor_joined_room":
+      return `${who(actor)} walked into ${room}.`;
+    case "agent_phase": {
+      const verb = typeof payload.verb === "string" ? payload.verb : "";
+      const span = humanDuration(Number(payload.seconds ?? 0));
+      const caption = payload.detail ? ` — ${String(payload.detail)}` : "";
+      // `think` reads badly as "thought for 20m"; give it the one phrasing
+      // that needs a word after the duration.
+      const phrase = PHASE_PHRASE[verb] ?? `was ${verb || "somewhere"} for`;
+      const tail = verb === "think" ? `${span} thinking` : span;
+      if (payload.silent === true) {
+        return `${who(actor)} ${phrase} ${tail}${caption}, then went silent.`;
+      }
+      return `${who(actor)} ${phrase} ${tail}${caption}.`;
+    }
+    case "speech":
+      return `${who(actor)} spoke in ${room}.`;
+    case "notice":
+      return payload.title
+        ? `${who(actor)} posted a notice: “${String(payload.title)}”.`
+        : `${who(actor)} posted a notice.`;
+    case "permission_changed":
+      return `${who(actor)}'s permissions changed.`;
+    case "instruction": {
+      const target = named(payload.agentId, names);
+      const kind = payload.kind ? String(payload.kind).replace(/_/g, " ") : "one shot";
+      return target
+        ? `${who(actor)} sent a ${kind} instruction to ${target}.`
+        : `${who(actor)} sent a ${kind} instruction.`;
+    }
+    case "key_rotated":
+      return `${who(actor)} rotated its API key.`;
+    case "key_bound":
+      return `${who(actor)} bound a signing key.`;
+    case "key_revoked":
+      return `A key for ${who(actor)} was revoked.`;
+    case "block": {
+      const target = named(payload.targetId, names);
+      return target ? `${who(actor)} blocked ${target}.` : `${who(actor)} blocked someone.`;
+    }
+    case "report": {
+      const target = named(payload.targetId, names);
+      return target ? `${who(actor)} reported ${target}.` : `${who(actor)} filed a report.`;
+    }
+    case "report_resolved":
+      return `A report was ${payload.status ? String(payload.status) : "closed"}${
+        payload.action ? ` (${String(payload.action).replace(/_/g, " ")})` : ""
+      }.`;
+    case "suspended":
+      return `${who(actor)} was suspended.`;
+    case "prompt_injection_flag":
+      return `${who(actor)} tripped the prompt-injection filter${
+        payload.channel ? ` on ${String(payload.channel).replace(/_/g, " ")}` : ""
+      }.`;
+    case "operator_bootstrap":
+      return `${who(actor)} became an operator.`;
+    // The `mod.` namespace. These are phrased around the TARGET, never the
+    // actor: on a moderation row the actor is the moderator, and everyone but
+    // an operator reads it with that identity blanked out.
+    case "mod.suspend":
+      return `${named(payload.targetId, names) ?? "Someone"} was suspended.`;
+    case "mod.unsuspend":
+      return `${named(payload.targetId, names) ?? "Someone"}'s suspension was lifted.`;
+    case "mod.warn":
+      return `${named(payload.targetId, names) ?? "Someone"} was warned.`;
+    case "mod.report_decided":
+      return `A report was closed as ${payload.decision ? String(payload.decision) : "decided"}.`;
+    case "mod.injection_reviewed":
+      return `A prompt-injection flag was reviewed: ${
+        payload.outcome ? String(payload.outcome) : "reviewed"
+      }.`;
+    case "mod.freeze":
+      return `The world flag ${payload.flag ? String(payload.flag) : "?"} was turned ${
+        payload.value === true ? "on" : "off"
+      }.`;
+    default:
+      // An unclassified type reaches only operators (rule 6), so being blunt
+      // about it is the useful thing to be.
+      return `${who(actor)} — ${type.replace(/_/g, " ")}.`;
+  }
+}
+
+/**
+ * Allow-listed payload fields, per type. The raw JSONB never leaves this file:
+ * a payload that grows a field later must be added here deliberately before it
+ * can be published, which is the whole point.
+ */
+function detailFor(
+  type: string,
+  payload: Record<string, unknown>,
+  names: Map<string, string>,
+): Record<string, unknown> {
+  const pick = (...keys: string[]): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const k of keys) if (payload[k] !== undefined && payload[k] !== null) out[k] = payload[k];
+    return out;
+  };
+  switch (type) {
+    case "actor_registered":
+      return pick("kind");
+    case "actor_claimed":
+      return { ...pick("slug"), owner: named(payload.owner, names) };
+    case "actor_joined_room":
+      return pick("seat");
+    case "agent_phase":
+      // `verb`, `seconds` and `detail` are already in the sentence; they are
+      // published anyway because a reader that wants to total a day's time by
+      // verb, or draw it, needs the numbers and not the prose. `url` and
+      // `error_text` are the agent's own pulse fields, unchanged — the url is
+      // already scheme-checked by presence.normalisePulseUrl on the way in.
+      return pick("verb", "detail", "url", "error_text", "seconds", "started_at", "ended_at", "silent");
+    case "speech":
+      return pick("channel");
+    case "notice":
+      return pick("title");
+    case "permission_changed":
+      // An agent's policy is public: the map draws it as badges and
+      // GET /api/v1/a/* serves it. The `by` id is not published — the owner is
+      // already named on the agent page, and an id is not a name.
+      return pick("policy");
+    case "instruction":
+      return { ...pick("kind"), agent: named(payload.agentId, names) };
+    case "key_rotated":
+    case "key_revoked":
+      return pick("keyId");
+    case "key_bound":
+      // Never the public key itself. It is not a secret, but it is a stable
+      // identifier for an agent across systems and nothing here needs it.
+      return pick("keyId", "algorithm");
+    case "block":
+    case "report":
+      return { target: named(payload.targetId, names) };
+    case "report_resolved":
+      return pick("status", "action");
+    case "prompt_injection_flag":
+      return pick("channel");
+    case "suspended":
+      // `by` names the operator who acted. Not published even to the subject:
+      // moderation is the world's decision, not an individual's, and naming
+      // the moderator is a retaliation vector.
+      return {};
+    case "operator_bootstrap":
+      return pick("handle");
+    case "mod.suspend":
+    case "mod.unsuspend":
+    case "mod.warn":
+      // `by` is in the payload and is deliberately not here: the subject is
+      // owed the fact and the reason, not the name of the moderator.
+      return { ...pick("targetKind", "reason"), target: named(payload.targetId, names) };
+    case "mod.report_decided":
+      return { ...pick("status", "decision", "category", "reason"), target: named(payload.targetId, names) };
+    case "mod.injection_reviewed":
+      return pick("outcome", "reason");
+    case "mod.freeze":
+      return pick("flag", "value", "reason");
+    default:
+      return {};
+  }
+}

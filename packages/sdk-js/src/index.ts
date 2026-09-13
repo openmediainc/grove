@@ -1,4 +1,18 @@
-export { Aetheria } from "./client.js";
+export { Grove, Aetheria, type GroveOptions, type SayInput, type PulseOptions, type HeartbeatOptions } from "./client.js";
+export { GroveApiError, parseRateLimitPolicy, type RateLimitPolicy, type GroveErrorBody } from "./errors.js";
+export {
+  generateKeypair,
+  keypairFromPem,
+  signRequest,
+  bindProof,
+  authMessage,
+  bindMessage,
+  fingerprint,
+  AUTH_DOMAIN,
+  BIND_DOMAIN,
+  type Keypair,
+  type KeyProof,
+} from "./keypair.js";
 export {
   renderObservationPrompt,
   OWNER_INSTRUCTIONS_HEADING,
@@ -6,3 +20,25 @@ export {
   ROOM_SPEECH_HEADING,
   type PromptObservation,
 } from "./prompt.js";
+export {
+  AGENT_VERBS,
+  isInhabited,
+  type Agent,
+  type AgentVerb,
+  type ClaimState,
+  type Emote,
+  type HeardLine,
+  type InhabitedObservation,
+  type Instruction,
+  type MailboxItem,
+  type Minimap,
+  type MinimapBody,
+  type Observation,
+  type PendingObservation,
+  type PermissionPolicy,
+  type Presence,
+  type RegisterResult,
+  type Room,
+  type SpaceSummary,
+  type SpeechChannel,
+} from "./types.js";

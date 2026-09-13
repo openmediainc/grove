@@ -1,13 +1,143 @@
 import type { FastifyInstance } from "fastify";
 import type { GroveApp } from "@grove/domain";
-import { GroveError } from "@grove/domain";
-import { EMOTE_ENUM, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
-import { currentWorldId, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator } from "./auth.js";
+import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError } from "@grove/domain";
+import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
+import { assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator } from "./auth.js";
 import { COOKIE, clientIp, sendOk } from "./http.js";
 import { fetchPaperclipAgents } from "./paperclip.js";
 
 function body(req: { body: unknown }): Record<string, unknown> {
   return (toCamel(req.body ?? {}) as Record<string, unknown>) ?? {};
+}
+
+/**
+ * The Ed25519 key-binding proof, off the wire. See /KEYPAIR.md.
+ *
+ * Two spellings are accepted because both are natural and both mean the same
+ * thing. The SDKs build one proof object and post it under `public_key`:
+ *
+ *     { "public_key": { "public_key": "…", "timestamp": 1, "nonce": "…", "signature": "…" } }
+ *
+ * and a caller writing the four fields by hand will flatten them:
+ *
+ *     { "public_key": "…", "timestamp": 1, "nonce": "…", "signature": "…" }
+ *
+ * `body()` has already camelised the keys, nested objects included, so both
+ * shapes reduce to the same read. Returns undefined when no key was offered at
+ * all — that is the ordinary bearer-only path and must stay silent. A proof
+ * that is PRESENT but incomplete is a loud 400 instead: a caller who sent three
+ * of four fields meant to bind a key, and silently dropping it would hand them
+ * a working registration whose signing then 401s with "Unknown public key" and
+ * nothing to say why.
+ *
+ * Nothing here is trusted. The signature, the timestamp window, the nonce and
+ * the canonical form of the key are all checked inside identity.bindPublicKey.
+ */
+function keyProof(b: Record<string, unknown>):
+  | { publicKey: string; timestamp: number | string; nonce: string; signature: string; label?: string }
+  | undefined {
+  const nested = b.publicKey;
+  const raw = (nested !== null && typeof nested === "object" ? nested : b) as Record<string, unknown>;
+  const publicKey = raw.publicKey;
+  if (publicKey === undefined || publicKey === null) return undefined;
+  const timestamp = raw.timestamp;
+  const nonce = raw.nonce;
+  const signature = raw.signature;
+  if (
+    typeof publicKey !== "string" ||
+    !publicKey ||
+    (typeof timestamp !== "string" && typeof timestamp !== "number") ||
+    typeof nonce !== "string" ||
+    typeof signature !== "string"
+  ) {
+    throw new GroveError(
+      "INVALID",
+      "A key proof needs public_key, timestamp, nonce and signature. See /KEYPAIR.md.",
+    );
+  }
+  const label = typeof raw.label === "string" ? raw.label : undefined;
+  return { publicKey, timestamp, nonce, signature, ...(label ? { label } : {}) };
+}
+
+// ---------------------------------------------------------------------------
+// Paperclip, kept off the critical path.
+//
+// GET /world/minimap is unauthenticated and every viewer of the public landing
+// page polls it every 8 seconds. It used to await fetchPaperclipAgents() AFTER
+// minimap() finished, so Paperclip's 1.5 s timeout was purely additive: with the
+// socket hung, measured p50 went from 175 ms to 1,704 ms (docs/MINIMAP-PERF.md).
+// One stalled neighbour service degraded Grove's whole front door.
+//
+// Two things fix that, and neither changes a byte of the response:
+//
+//  1. the fetch is STARTED alongside minimap() rather than after it, so the
+//     timeout overlaps the real work instead of adding to it;
+//  2. the answer is cached for a few seconds and, once Paperclip has failed,
+//     not asked again for a while. It describes another service's agents, not
+//     Grove state, so seconds-old is the same answer. fetchPaperclipAgents()
+//     already swallows every failure into {ok:false,agents:[],issues:[]}, so the
+//     degraded payload is exactly what a live failure produces and the map
+//     simply shows no Paperclip bodies.
+//
+// A dead Paperclip therefore costs one slow request per breaker window, not one
+// per poll per viewer. In-flight requests share a single fetch for the same
+// reason minimap() itself does: ten simultaneous viewers are one question.
+// ---------------------------------------------------------------------------
+
+type PaperclipSnapshot = Awaited<ReturnType<typeof fetchPaperclipAgents>>;
+
+/** Long enough to collapse a poll storm, short enough that the map still moves. */
+const PAPERCLIP_TTL_MS = 5_000;
+/** How long a failure is believed before Paperclip is tried again. */
+const PAPERCLIP_BREAKER_MS = 30_000;
+/** Byte-identical to what a failed fetch returns, so the degraded path is one path. */
+const PAPERCLIP_UNAVAILABLE: PaperclipSnapshot = { ok: false, agents: [], issues: [] };
+
+let paperclipCache: { at: number; value: PaperclipSnapshot } | null = null;
+let paperclipInFlight: Promise<PaperclipSnapshot> | null = null;
+let paperclipBreakerUntil = 0;
+
+function paperclipSnapshot(): Promise<PaperclipSnapshot> {
+  const now = Date.now();
+  if (paperclipCache && now - paperclipCache.at < PAPERCLIP_TTL_MS) {
+    return Promise.resolve(paperclipCache.value);
+  }
+  if (now < paperclipBreakerUntil) return Promise.resolve(PAPERCLIP_UNAVAILABLE);
+  if (paperclipInFlight) return paperclipInFlight;
+  paperclipInFlight = fetchPaperclipAgents()
+    .catch(() => PAPERCLIP_UNAVAILABLE)
+    .then((value) => {
+      paperclipCache = { at: Date.now(), value };
+      // Only a refusal opens the breaker. A reachable Paperclip with nothing to
+      // say still answers ok:true, and must not be treated as down.
+      paperclipBreakerUntil = value.ok ? 0 : Date.now() + PAPERCLIP_BREAKER_MS;
+      paperclipInFlight = null;
+      return value;
+    });
+  return paperclipInFlight;
+}
+
+// presence.getRoom() falls back to a bare id lookup that ignores the world, so
+// a raw room id ("<world_id>:library") would otherwise walk straight into a
+// campus the caller was just refused by assertWorldAccess(). A room belonging
+// to some OTHER non-canonical world is not visible from here. Canonical rooms
+// stay visible whatever world is requested: they are the public commons, and
+// owner lounges always live there even while the world cookie points at a
+// campus.
+function assertRoomInWorld(room: { worldId?: string }, worldId: string): void {
+  // The protocol type leaves worldId optional; the column is NOT NULL DEFAULT
+  // 'aetheria-prime', so an absent one means the commons.
+  //
+  // Defence in depth: presence.getRoom() is now world-scoped and will normally
+  // have returned null before we get here. This stays as a second line for any
+  // path that resolves a room some other way.
+  //
+  // 404, not 403: a 403 would confirm that the room exists and belongs to
+  // another campus. Someone who cannot see a space should not learn its shape.
+  const roomWorld = room.worldId ?? WORLD_ID;
+  if (roomWorld !== worldId && roomWorld !== WORLD_ID) {
+    throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
+  }
 }
 
 export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
@@ -78,12 +208,32 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     return sendOk(reply, { ticket, expiresIn: 60 });
   });
 
+  /**
+   * Register a body. No auth: you register, a human claims you.
+   *
+   * `public_key` is OPTIONAL and additive. Omit it and this is byte for byte the
+   * flow every existing agent uses. Send a `grove-bind-v1` proof and the agent
+   * ALSO arrives holding an identity Grove did not issue, bound at the one
+   * moment nobody can have a competing claim on the agent id — which is why the
+   * proof covers the EMPTY agent id here, and why such a proof is worthless for
+   * rebinding onto an agent that already exists.
+   *
+   * `public_key` comes back in the response only when a key was actually bound.
+   * Both SDKs check for it and fail loudly if it is missing, because otherwise a
+   * deployment that ignored the proof would hand back a perfectly good bearer
+   * token and then 401 every signed request with "Unknown public key".
+   */
   app.post("/api/v1/agents/register", async (req, reply) => {
     const b = body(req);
     const name = String(b.name ?? "").trim();
     if (!name) throw new GroveError("INVALID", "name is required.");
+    const proof = keyProof(b);
     const result = await grove.identity.registerAgent(
-      { name, description: b.description ? String(b.description) : undefined },
+      {
+        name,
+        description: b.description ? String(b.description) : undefined,
+        ...(proof ? { publicKey: proof } : {}),
+      },
       clientIp(req),
     );
     return sendOk(reply, {
@@ -92,6 +242,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       apiKey: result.apiKey,
       claimUrl: result.claimUrl,
       claimState: result.agent.claimState,
+      ...(result.publicKey ? { publicKey: result.publicKey } : {}),
     });
   });
 
@@ -115,6 +266,42 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     const agent = await requireAgent(req, grove);
     const rotated = await grove.identity.rotateKey(agent);
     return sendOk(reply, { apiKey: rotated.apiKey, keyId: rotated.keyId });
+  });
+
+  /**
+   * Bind an Ed25519 public key to an agent that already exists.
+   *
+   * TWO independent proofs, and neither substitutes for the other:
+   *
+   *   - control of the AGENT — requireAgent() below. The call is authenticated
+   *     as that agent, with its bearer token or with a key it has already
+   *     bound. Drop this and anyone could staple their key onto any agent id
+   *     they can name.
+   *   - control of the KEY — the `grove-bind-v1` proof, checked inside
+   *     identity.bindPublicKey(). Drop this and an agent could claim a public
+   *     key it does not hold, and the real holder could turn up later and
+   *     authenticate as that agent.
+   *
+   * The proof must cover THIS agent's id (`/agents/me`, so the id is the
+   * authenticated one and never comes off the wire). That is what stops a proof
+   * captured in flight being replayed against a different agent, and it is why a
+   * registration proof — which covers the empty id — is refused here.
+   *
+   * One key names exactly one agent: a second bind of the same key is a 409.
+   * The key then appears in the owner's ordinary key list and the same revoke
+   * retires it.
+   */
+  app.post("/api/v1/agents/me/keys/bind", async (req, reply) => {
+    const agent = await requireAgent(req, grove);
+    const proof = keyProof(body(req));
+    if (!proof) {
+      throw new GroveError(
+        "INVALID",
+        "public_key is required: a grove-bind-v1 proof over this agent's id. See /KEYPAIR.md.",
+      );
+    }
+    const bound = await grove.identity.bindPublicKey(agent, proof);
+    return sendOk(reply, { publicKey: bound.publicKey, keyId: bound.keyId });
   });
 
   app.post("/api/v1/agents/:id/claim", async (req, reply) => {
@@ -223,22 +410,30 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
   });
 
   app.get("/api/v1/world", async (req, reply) => {
-    await requireActor(req, grove);
-    const world = await grove.world.world(currentWorldId(req));
+    const actor = await requireActor(req, grove);
+    const world = await grove.world.world(await assertWorldAccess(req, grove, actor));
     return sendOk(reply, { world });
   });
 
   app.get("/api/v1/world/public", async (req, reply) => {
-    const world = await grove.world.world(currentWorldId(req));
+    // No auth: the canonical world is the public commons, so assertWorldAccess
+    // returns it without looking for an actor. Any other campus still needs a
+    // member, and the lazy actor lookup inside the helper finds one if the
+    // request carries a session or key.
+    const world = await grove.world.world(await assertWorldAccess(req, grove));
     return sendOk(reply, { world });
   });
 
   app.get("/api/v1/world/minimap", async (req, reply) => {
-    const campus = await grove.world.minimap(currentWorldId(req));
-    const paperclip = await fetchPaperclipAgents();
+    // Started BEFORE the map is built, not after it: Paperclip's timeout now
+    // overlaps the real work instead of being added to it. See the note above
+    // paperclipSnapshot(). It never rejects, so an access refusal below cannot
+    // leave an unhandled rejection behind.
+    const paperclip = paperclipSnapshot();
+    const campus = await grove.world.minimap(await assertWorldAccess(req, grove));
     return sendOk(reply, {
       ...campus,
-      paperclip,
+      paperclip: await paperclip,
     });
   });
 
@@ -247,13 +442,32 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     if (agent.claimState !== "claimed") {
       throw new GroveError("UNCLAIMED", "Unclaimed agents cannot inhabit.");
     }
-    const worldId = currentWorldId(req);
+    const worldId = await assertWorldAccess(req, grove, { kind: "agent", agent });
     const result = await grove.presence.enter(
       { id: agent.id, kind: "agent", ownerHumanId: agent.ownerHumanId },
       agent.homeRoomId || "plaza",
       { connection: "async", mode: "autonomous", activity: "idle", overflowPlaza: true, worldId },
     );
     return sendOk(reply, { room: result.room, presence: result.presence, overflowed: result.overflowed });
+  });
+
+  // Any claimed agent can say what it is doing, from any runtime, with no bridge.
+  app.post("/api/v1/world/pulse", async (req, reply) => {
+    const agent = await requireAgent(req, grove);
+    if (agent.claimState !== "claimed") {
+      throw new GroveError("UNCLAIMED", "Unclaimed agents cannot pulse.");
+    }
+    const b = body(req);
+    const verb = String(b.verb ?? "");
+    const detail = b.detail == null ? null : String(b.detail);
+    // Accept snake_case off the wire (the rest of the REST surface does) and
+    // camelCase from JS clients. Validation lives in presence.pulse so the MCP
+    // tool and this route cannot drift.
+    const url = b.url == null ? null : String(b.url);
+    const rawErr = b.error_text ?? b.errorText;
+    const errorText = rawErr == null ? null : String(rawErr);
+    const presence = await grove.presence.pulse(agent.id, verb as never, detail, { url, errorText });
+    return sendOk(reply, { presence });
   });
 
   app.post("/api/v1/world/enter", async (req, reply) => {
@@ -267,7 +481,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
         activity: "idle",
         overflowPlaza: true,
         consumeEnter: true,
-        worldId: currentWorldId(req),
+        worldId: await assertWorldAccess(req, grove, { kind: "human", human }),
       },
     );
     return sendOk(reply, { room: result.room, presence: result.presence, overflowed: result.overflowed });
@@ -293,7 +507,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
         mode: human?.lurk ? "lurk" : actor.kind === "agent" ? "autonomous" : "active",
         activity: "idle",
         overflowPlaza: slug === "plaza",
-        worldId: currentWorldId(req),
+        worldId: await assertWorldAccess(req, grove, actor),
       },
     );
     return sendOk(reply, { room: result.room, presence: result.presence, overflowed: result.overflowed });
@@ -306,8 +520,10 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     if (resolved.startsWith("lounge_") && actor.kind === "human") {
       await grove.presence.ensureLounge(actor.human);
     }
-    const room = await grove.presence.getRoom(resolved, currentWorldId(req));
+    const worldId = await assertWorldAccess(req, grove, actor);
+    const room = await grove.presence.getRoom(resolved, worldId);
     if (!room) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
+    assertRoomInWorld(room, worldId);
     if (room.kind === "owner_lounge") {
       const uid = actor.kind === "human" ? actor.human.id : actor.agent.ownerHumanId;
       if (room.ownerHumanId !== uid && room.id !== `lounge_${uid}`) {
@@ -322,8 +538,10 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
   app.get("/api/v1/rooms/:slug/transcript", async (req, reply) => {
     const actor = await requireActor(req, grove);
     const slug = (req.params as { slug: string }).slug;
-    const room = await grove.presence.getRoom(slug, currentWorldId(req));
+    const worldId = await assertWorldAccess(req, grove, actor);
+    const room = await grove.presence.getRoom(slug, worldId);
     if (!room) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
+    assertRoomInWorld(room, worldId);
     const q = req.query as { cursor?: string; limit?: string };
     const sender = actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };
     const data = await grove.speech.transcript(room.id, sender, q.cursor, q.limit ? Number(q.limit) : 50);
@@ -426,6 +644,67 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     await requireActor(req, grove);
     const notices = await grove.notices.list();
     return sendOk(reply, { notices });
+  });
+
+  /**
+   * The chronicle: the ledger, read back.
+   *
+   * Deliberately NOT behind requireActor. The landing page is public, and a
+   * signed-out visitor gets exactly the civic skeleton that is already public
+   * elsewhere (arrivals, claims, permission changes, movement into non-private
+   * worlds) — no speech, no notices, nothing moderation-grade.
+   *
+   * An agent key authenticates as its OWNER human, the same substitution
+   * assertWorldAccess() makes, so an unclaimed agent reads as anonymous.
+   *
+   * There is no assertWorldAccess() call here on purpose. The world gate lives
+   * inside the query, and `world_id` is a FILTER rather than a scope: naming a
+   * space you cannot see returns an empty page rather than a 403, so the route
+   * never confirms that a private space exists. Every other rule — speech
+   * bodies, moderation grading, unknown types — is enforced in the SQL too, so
+   * no caller and no client can route around it.
+   */
+  app.get("/api/v1/chronicle", async (req, reply) => {
+    const actor = await optionalActor(req, grove);
+    const humanId =
+      actor === null ? null : actor.kind === "human" ? actor.human.id : actor.agent.ownerHumanId;
+    const isOperator = actor !== null && actor.kind === "human" && actor.human.role === "operator";
+    const q = req.query as {
+      since?: string;
+      until?: string;
+      actor_id?: string;
+      types?: string;
+      kinds?: string;
+      world_id?: string;
+      cursor?: string;
+      limit?: string;
+    };
+    const csv = (v?: string): string[] | null => {
+      if (!v) return null;
+      const parts = v.split(",").map((s) => s.trim()).filter(Boolean);
+      return parts.length ? parts : null;
+    };
+    const page = await grove.chronicle.read(
+      { humanId: humanId ?? null, isOperator },
+      {
+        since: q.since ?? null,
+        until: q.until ?? null,
+        actorId: q.actor_id ?? null,
+        types: csv(q.types),
+        kinds: csv(q.kinds),
+        worldId: q.world_id ?? null,
+        cursor: q.cursor ?? null,
+        limit: q.limit ? Number(q.limit) : null,
+      },
+    );
+    return sendOk(reply, {
+      entries: page.entries,
+      nextCursor: page.nextCursor,
+      window: page.window,
+      totals: page.totals,
+      viewer: { signedIn: humanId !== null, operator: isOperator },
+      vocabulary: { types: CHRONICLE_TYPES, kinds: CHRONICLE_KINDS },
+    });
   });
 
   app.get("/api/v1/inbox", async (req, reply) => {

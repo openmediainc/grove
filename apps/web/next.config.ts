@@ -4,6 +4,19 @@ const api = process.env.GROVE_API_ORIGIN ?? "http://127.0.0.1:3511";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@grove/protocol", "@grove/ui", "@grove/policy"],
+  // The workspace packages ship TypeScript source and spell their internal
+  // imports with a `.js` suffix, because Node's ESM loader requires it. tsc
+  // rewrites that silently; webpack does not, and looks for a literal `.js`
+  // that never existed — which fails at runtime while `pnpm typecheck` stays
+  // green. Teach the bundler the same rule so shared code is importable here.
+  webpack(config) {
+    config.resolve = config.resolve ?? {};
+    config.resolve.extensionAlias = {
+      ...(config.resolve.extensionAlias ?? {}),
+      ".js": [".ts", ".tsx", ".js"],
+    };
+    return config;
+  },
   basePath: "/grove",
   skipTrailingSlashRedirect: true,
   allowedDevOrigins: ["q-ai.tail735569.ts.net", "127.0.0.1", "localhost"],

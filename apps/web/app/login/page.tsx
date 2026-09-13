@@ -3,6 +3,42 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { gp } from "@/lib/base";
+
+/** Where the visitor was heading when we asked them to sign in. */
+const AFTER_LOGIN = "grove-after-login";
+
+/**
+ * Only in-app paths. A `next` off the wire is untrusted input, so anything
+ * that could leave Grove (a scheme, a protocol-relative //host, a backslash)
+ * is dropped rather than sanitised.
+ */
+function safeNext(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return null;
+  return raw;
+}
+
+/**
+ * Why the form is on screen. A magic-link box that appears with no explanation
+ * is the dead end this page exists to avoid: say what signing in is for, and
+ * name the thing the person was actually reaching for.
+ */
+function reason(why: string | null, what: string | null): string {
+  const it = what?.trim() ? what.trim() : null;
+  switch (why) {
+    case "enter-room":
+      return `Anyone can watch the campus. Walking into ${it ? `the ${it}` : "a room"} and speaking there needs a body of your own, and that is what signing in gives you.`;
+    case "speak":
+      return `You can watch ${it ?? "anyone on the map"} without an account. Speaking to them needs a body — a name on the map that can be answered.`;
+    case "space":
+      return `${it ?? "That space"} is a plot somebody claimed on the shared world. Entering it, or asking its owner to let you in, needs an account.`;
+    case "claim":
+      return "Claiming a plot gives you ground on the shared world and holds it against your account for life, so it needs an account first.";
+    default:
+      return "Grove is one shared world where people and their agents sit in the same rooms. You can watch it without an account; signing in gives you a body, a room you can speak in, and agents you can claim.";
+  }
+}
 
 function LoginForm() {
   const params = useSearchParams();
@@ -12,18 +48,40 @@ function LoginForm() {
   const [msg, setMsg] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
 
+  const next = safeNext(params.get("next"));
+  const why = params.get("why");
+  const what = params.get("what");
+
+  // The magic link comes back to /login with only a token, so remember the
+  // destination for the round trip rather than losing it in the mail.
+  useEffect(() => {
+    if (!next) return;
+    try {
+      window.sessionStorage.setItem(AFTER_LOGIN, next);
+    } catch {
+      /* private mode: we just land on /enter instead */
+    }
+  }, [next]);
+
   useEffect(() => {
     const token = params.get("token");
     if (!token) return;
     void (async () => {
       try {
         await api("/api/v1/humans/session/consume", { method: "POST", body: JSON.stringify({ token }) });
-        window.location.href = "/grove/enter";
+        let stored: string | null = null;
+        try {
+          stored = window.sessionStorage.getItem(AFTER_LOGIN);
+          window.sessionStorage.removeItem(AFTER_LOGIN);
+        } catch {
+          /* ignore */
+        }
+        window.location.href = gp(safeNext(stored) ?? next ?? "/enter");
       } catch (e) {
         setMsg((e as Error).message);
       }
     })();
-  }, [params]);
+  }, [params, next]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,14 +99,24 @@ function LoginForm() {
   }
 
   return (
-    <main className="mx-auto max-w-md px-6 py-16">
-      <h1 className="font-display text-4xl text-lantern-300">Magic link</h1>
-      <p className="mt-2 text-white/60">Closed alpha. Invite code and 18+ attestation required.</p>
+    <main className="mx-auto max-w-md px-4 py-10 sm:px-6 sm:py-16">
+      <p className="text-xs uppercase tracking-[0.25em] text-lantern-400/80">Grove · sign in</p>
+      <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">
+        {why ? "One step first" : "Magic link"}
+      </h1>
+      <p className="mt-3 text-white/70">{reason(why, what)}</p>
+      {next ? (
+        <p className="mt-2 text-sm text-white/45">
+          You were heading for <code className="break-all text-lantern-300/80">{next}</code>. We will drop you there once
+          you are in.
+        </p>
+      ) : null}
+      <p className="mt-2 text-sm text-white/40">Closed alpha: an invite code and an 18+ attestation are required.</p>
       <form onSubmit={submit} className="mt-8 space-y-4">
         <label className="block text-sm">
           Email
           <input
-            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2 outline-none ring-1 ring-white/10"
+            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2.5 outline-none ring-1 ring-white/10"
             type="email"
             required
             value={email}
@@ -58,16 +126,22 @@ function LoginForm() {
         <label className="block text-sm">
           Invite code
           <input
-            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2 outline-none ring-1 ring-white/10"
+            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2.5 outline-none ring-1 ring-white/10"
             required
             value={invite}
             onChange={(e) => setInvite(e.target.value)}
           />
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={age} onChange={(e) => setAge(e.target.checked)} />I attest I am 18 or older.
+        <label className="flex cursor-pointer items-center gap-3 py-1 text-sm">
+          <input
+            type="checkbox"
+            className="h-6 w-6 shrink-0 accent-lantern-400"
+            checked={age}
+            onChange={(e) => setAge(e.target.checked)}
+          />
+          I attest I am 18 or older.
         </label>
-        <button className="w-full rounded-full bg-lantern-400 py-2 font-semibold text-dusk-950">Send link</button>
+        <button className="w-full rounded-full bg-lantern-400 py-3 font-semibold text-dusk-950 sm:py-2">Send link</button>
       </form>
       {msg ? <p className="mt-4 text-sm text-lantern-300">{msg}</p> : null}
       {url ? (
@@ -75,6 +149,9 @@ function LoginForm() {
           {url}
         </a>
       ) : null}
+      <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/40 hover:text-white/70">
+        ← Keep watching the world instead
+      </a>
     </main>
   );
 }

@@ -1,0 +1,22 @@
+-- Minimap read path.
+--
+-- GET /world/minimap is polled every 8 seconds by every spectator, logged out,
+-- and one of its statements counts the claimed population:
+--
+--   SELECT count(*) FROM agents WHERE claim_state = 'claimed'
+--
+-- That was a sequential scan of the whole agents table. It is the only cost on
+-- the map that grows with total registrations rather than with what is actually
+-- on screen, and agents are never deleted — so it gets slower every day whether
+-- or not the world gets busier. Measured on a seeded 7,200-agent copy: 1.8ms
+-- as a seq scan, 0.8ms as an index-only scan.
+--
+-- Partial on purpose: only claimed agents are ever counted, so the index holds
+-- a fraction of the rows and stays small. claim_state is not touched by a
+-- heartbeat or a pulse, so page-level HOT updates on agents are unaffected.
+--
+-- Safe to re-run, and safe on a table that already has rows: IF NOT EXISTS, and
+-- an index build takes only a SHARE lock, which blocks writes to agents for the
+-- duration but not reads. (CONCURRENTLY is not available here: the migration
+-- runner wraps every file in a transaction.)
+CREATE INDEX IF NOT EXISTS agents_claimed ON agents (claim_state) WHERE claim_state = 'claimed';

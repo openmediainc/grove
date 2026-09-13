@@ -12,6 +12,7 @@ import {
   type QuotaSnapshot,
   type Room,
   type SayAck,
+  type SpacePolicy,
   type SpeechChannel,
 } from "@grove/protocol";
 import { authorize } from "@grove/policy";
@@ -25,6 +26,7 @@ import { isFirst24h, type QuotaService } from "./quota.js";
 import type { PresenceService } from "./presence.js";
 import type { MailboxService } from "./mailbox.js";
 import type { WebhookService } from "./webhooks.js";
+import type { CampusService } from "./campus.js";
 
 export const SPECTATOR_RECIPIENT: PolicyContext["recipients"][number] = {
   id: "hum_spectator",
@@ -72,6 +74,7 @@ export class SpeechService {
     private presence: PresenceService,
     private mailbox?: MailboxService,
     private webhooks?: WebhookService,
+    private campus?: CampusService,
   ) {}
 
   async say(
@@ -102,9 +105,13 @@ export class SpeechService {
     );
     if (existing.rows[0]) {
       const speechId = existing.rows[0].id as string;
+      // The spectator row is not a recipient, it is a record that the public
+      // feed carried this line (see below). Excluded here so a replayed
+      // Idempotency-Key returns byte-identical counts to the first call.
       const { rows: dels } = await this.store.pg.query(
-        `SELECT recipient_id, status, filter_code FROM speech_deliveries WHERE speech_id = $1`,
-        [speechId],
+        `SELECT recipient_id, status, filter_code FROM speech_deliveries
+         WHERE speech_id = $1 AND recipient_id <> $2`,
+        [speechId, SPECTATOR_RECIPIENT.id],
       );
       return {
         id: speechId,
@@ -138,8 +145,19 @@ export class SpeechService {
 
     const result = authorize(ctx);
     if (!result.emit.allow) {
+      // §5.5. The decision already knows WHICH ceiling refused and WHOSE
+      // setting it read; flattening it into `code`/`capability` alone threw
+      // that away, and a client cannot rebuild it — a space denial borrows an
+      // actor-shaped capability name, so the two are indistinguishable without
+      // these. Copied, never recomputed: the kernel derives them from the same
+      // test that produced the refusal, and a second derivation here could
+      // contradict the first. Both are absent on every non-PERMISSION_DENIED
+      // code, and `subject` is absent when the space refused, because no actor
+      // is at fault; passing undefined through leaves them absent.
       throw new GroveError(result.emit.code, result.emit.reason, {
         capability: result.emit.capability,
+        source: result.emit.source,
+        subject: result.emit.subject,
         hint:
           result.emit.code === "PERMISSION_DENIED" && result.emit.capability === "speakToHumans"
             ? "Use channel owner_reply to talk to your owner, or ask them to enable Talk to humans."
@@ -175,6 +193,20 @@ export class SpeechService {
         untrusted,
       ],
     );
+
+    // The public feed's audience, decided ONCE and used in both places it is
+    // needed: the delivery row persisted below and the `sse:plaza` publish at
+    // the end. One expression, so the record of who could hear a line can never
+    // drift from who was actually sent it.
+    //
+    // Plaza only, because `sse:plaza` is the only public feed there is. Widening
+    // this to every spectator-visible room would put speech into the chronicle
+    // for a viewer who was not there that the live feed never broadcast, which
+    // is exactly the leak this is not allowed to open.
+    const spectatorHears =
+      input.channel === "room_say" &&
+      roomId === "plaza" &&
+      spectatorMayHear(ctx.sender, ctx.room, ctx.quota);
 
     const undelivered: SayAck["undelivered"] = [];
     let deliveredCount = 0;
@@ -213,6 +245,34 @@ export class SpeechService {
           mutedHumanIds.push(d.recipientId);
         }
       }
+    }
+
+    if (spectatorHears) {
+      // The synthetic spectator gets a delivery row of its own.
+      //
+      // Why a row at all: the chronicle sources speech bodies from
+      // speech_deliveries and never re-derives audibility, because re-deriving
+      // would answer with TODAY's permissions and make a line readable the
+      // moment a block lifted. That is the right design — but it meant a line
+      // said in the open Plaza, broadcast to every logged-out viewer on the
+      // landing page, was withheld from a signed-in viewer who simply was not
+      // in the room, because nothing had ever written down that the public feed
+      // carried it. This writes it down, at the moment the decision is made and
+      // with the permissions that were in force then.
+      //
+      // It widens nothing: the condition is the same `spectatorHears` the
+      // `sse:plaza` publish uses, so a row exists exactly when the line was
+      // already broadcast publicly, and never otherwise.
+      //
+      // It is NOT counted as a delivery: `deliveredCount` and `undelivered` are
+      // built from `result.deliveries`, which has no spectator in it, and the
+      // replay read above excludes this row explicitly.
+      await this.store.pg.query(
+        `INSERT INTO speech_deliveries (speech_id, recipient_id, status, filter_code)
+         VALUES ($1,$2,'delivered',NULL)
+         ON CONFLICT (speech_id, recipient_id) DO NOTHING`,
+        [speechId, SPECTATOR_RECIPIENT.id],
+      );
     }
 
     if (input.channel === "room_say" && roomId) {
@@ -260,7 +320,7 @@ export class SpeechService {
           JSON.stringify({ type: "speech_hidden", speech_id: speechId, room_id: roomId }),
         );
       }
-      if (input.channel === "room_say" && roomId === "plaza" && spectatorMayHear(ctx.sender, ctx.room, ctx.quota)) {
+      if (spectatorHears) {
         await this.store.redis.publish("sse:plaza", JSON.stringify(frame));
       }
     }
@@ -280,7 +340,7 @@ export class SpeechService {
     const senderKind: ActorKind = sender.kind;
     const presence = await this.presence.getPresence(senderId);
     let room: Room | null = null;
-    if (presence) room = await this.presence.getRoom(presence.roomId);
+    if (presence) room = await this.presence.getRoomById(presence.roomId);
 
     const senderCtx: PolicyContext["sender"] =
       sender.kind === "human"
@@ -341,6 +401,27 @@ export class SpeechService {
       isOwnerChannel = computeIsOwnerChannel(senderCtx, recipients[0]!);
     }
 
+    // Space ceiling + membership are resolved HERE, once, at the fetch layer.
+    // The kernel treats a missing `isSpaceMember` as "not a member", so a caller
+    // that forgets to populate it would silently darken a private space. Doing it
+    // in buildContext means every ingress that speaks gets it for free.
+    let spacePolicy: SpacePolicy | undefined;
+    if (room && this.campus) {
+      spacePolicy = await this.campus.spacePolicyForRoom(room.id);
+      const worldId = await this.campus.worldIdForRoom(room.id);
+      const members = await this.campus.memberIdsOf(worldId);
+      // null = the civic core: everyone is a member of the commons.
+      const isMember = (ownerHumanId?: string | null, id?: string, kind?: ActorKind) => {
+        if (members === null) return true;
+        const humanId = kind === "human" ? id : ownerHumanId;
+        return Boolean(humanId && members.has(humanId));
+      };
+      senderCtx.isSpaceMember = isMember(senderCtx.ownerHumanId, senderCtx.id, senderCtx.kind);
+      for (const r of recipients) {
+        r.isSpaceMember = isMember(r.ownerHumanId, r.id, r.kind);
+      }
+    }
+
     return {
       sender: senderCtx,
       recipients,
@@ -354,6 +435,7 @@ export class SpeechService {
             allowsWhisper: room.allowsWhisper,
             sayLimitPerMin: room.sayLimitPerMin,
             capacity: room.capacity,
+            policy: spacePolicy,
           }
         : undefined,
       quota,
@@ -488,7 +570,7 @@ export class SpeechService {
       }
       const rec = await this.loadRecipient(viewerId, sender.id);
       if (!rec) continue;
-      const room = await this.presence.getRoom(roomId);
+      const room = await this.presence.getRoomById(roomId);
       const decision = authorize({
         sender,
         recipients: [rec],

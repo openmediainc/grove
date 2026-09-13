@@ -1,3 +1,4 @@
+import type { AgentVerb } from "./agent-verbs.js";
 import type { AgentId, HumanId, RoomId } from "./ids.js";
 import type { AutonomyMode, PermissionPolicy, PrivacyPolicy } from "./policy.js";
 
@@ -52,6 +53,15 @@ export interface Presence {
   mode: PresenceMode;
   activity: PresenceActivity;
   lastSeenAt: string;
+  /** Last self-reported loop state. Absent until the agent pulses. */
+  verb?: AgentVerb | null;
+  /** Short note attached to the pulse, e.g. the tool or file in play. */
+  detail?: string | null;
+  pulsedAt?: string | null;
+  /** External thing being worked on — PR, ticket, run. http/https only. */
+  url?: string | null;
+  /** What went wrong, carried by `error` / `blocked` pulses. */
+  errorText?: string | null;
 }
 
 export type PermissionBadge =

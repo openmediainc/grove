@@ -2,7 +2,8 @@ import { EMOTE_ENUM, type Agent, type EmoteKind, type Human } from "@grove/proto
 import type { GroveStore } from "../store.js";
 import { GroveError } from "../errors.js";
 import { newId } from "../ids.js";
-import type { PresenceService } from "./presence.js";
+import { isStalledPulse, pulseAgeSeconds, STALL_AFTER_SECONDS, type PresenceService } from "./presence.js";
+import { spectatorMayHear } from "./speech.js";
 import type { IdentityService } from "./identity.js";
 import type { FlagService } from "./flags.js";
 import type { MailboxService } from "./mailbox.js";
@@ -94,8 +95,69 @@ export class WorldService {
     return { id: instructionId, acked: true };
   }
 
+  /**
+   * The last few public lines a logged-out spectator is allowed to hear.
+   * A quiet Plaza reads as a dead world, so the landing needs history, not just
+   * the live feed. Who may hear what is decided by `spectatorMayHear` — the same
+   * exported gate the live SSE path uses — rather than re-implemented here.
+   */
+  async recentPublicSpeech(limit = 3) {
+    const { rows } = await this.store.pg.query(
+      `SELECT s.id, s.body, s.created_at, s.sender_id, s.sender_kind,
+              a.policy AS agent_policy, a.privacy AS agent_privacy, a.claim_state,
+              a.owner_human_id, h.privacy AS human_privacy,
+              COALESCE(a.display_name, h.display_name) AS display_name
+         FROM speech s
+         LEFT JOIN agents a ON a.id = s.sender_id
+         LEFT JOIN humans h ON h.id = s.sender_id
+        WHERE s.channel = 'room_say' AND s.room_id = 'plaza'
+          AND s.created_at > now() - interval '6 hours'
+        ORDER BY s.created_at DESC LIMIT 40`,
+    );
+    const room = {
+      id: "plaza",
+      kind: "public" as const,
+      allowsRoomSay: true,
+      allowsWhisper: true,
+      sayLimitPerMin: null,
+      capacity: 80,
+    };
+    // Historical read: the sender already passed rate limiting when they spoke,
+    // so replaying must not deny them a second time.
+    const quota = { roomSayRemaining: 8, roomSayGapOk: true, writeRemaining: 30, roomWindowCount: 0 };
+    const out: Array<{ speechId: string; senderId: string; senderName: string; body: string; createdAt: string }> = [];
+    for (const r of rows) {
+      const kind = r.sender_kind as "human" | "agent";
+      const sender =
+        kind === "agent"
+          ? {
+              id: String(r.sender_id),
+              kind: "agent" as const,
+              ownerHumanId: (r.owner_human_id as string | null) ?? null,
+              claimState: r.claim_state as Agent["claimState"],
+              policy: jsonPolicy(r.agent_policy),
+              privacy: jsonPrivacy(r.agent_privacy),
+            }
+          : {
+              id: String(r.sender_id),
+              kind: "human" as const,
+              privacy: jsonPrivacy(r.human_privacy),
+            };
+      if (!spectatorMayHear(sender, room, quota)) continue;
+      out.push({
+        speechId: String(r.id),
+        senderId: String(r.sender_id),
+        senderName: String(r.display_name ?? r.sender_id),
+        body: String(r.body),
+        createdAt: new Date(String(r.created_at)).toISOString(),
+      });
+      if (out.length >= limit) break;
+    }
+    return out.reverse();
+  }
+
   async plazaSnapshot() {
-    const room = await this.presence.getRoom("plaza");
+    const room = await this.presence.getRoomById("plaza");
     const nearby = await this.presence.nearby("plaza");
     return {
       room,
@@ -109,10 +171,34 @@ export class WorldService {
         ownerHandle: n.ownerHandle,
         avatarId: n.avatarId,
       })),
+      recentSpeech: await this.recentPublicSpeech(),
     };
   }
 
+  /**
+   * The public map. Polled by every spectator every 8 seconds, logged out, so
+   * it is the one read where duplicated work is multiplied by the audience.
+   *
+   * Concurrent callers for the same world share ONE build rather than each
+   * running the same dozen statements: whoever arrives while a build is in
+   * flight is handed that build's promise. This is deliberately NOT a timed
+   * cache — nothing is ever served after its build finished, so a caller that
+   * asks after a write still sees that write, and read-after-write (an agent
+   * pulsing and then looking at the map) keeps working exactly as before.
+   */
   async minimap(worldId: string = WORLD_ID) {
+    const inFlight = this.minimapInFlight.get(worldId);
+    if (inFlight) return inFlight;
+    const build = this.buildMinimap(worldId).finally(() => {
+      if (this.minimapInFlight.get(worldId) === build) this.minimapInFlight.delete(worldId);
+    });
+    this.minimapInFlight.set(worldId, build);
+    return build;
+  }
+
+  private minimapInFlight = new Map<string, Promise<MinimapSnapshot>>();
+
+  private async buildMinimap(worldId: string = WORLD_ID) {
     const rooms = await this.presence.listPublicRooms(worldId);
     const bodies: Array<{
       id: string;
@@ -123,11 +209,35 @@ export class WorldService {
       roomSlug: string;
       activity: string;
       connection: string;
+      /** The social contract, already computed by `nearby()`. The map draws it
+       *  so a watcher can see why an agent will or will not answer them. */
+      badges: string[];
+      verb: string | null;
+      detail: string | null;
+      pulsedAt: string | null;
+      /** Seconds since the last pulse; null if this body has never pulsed. */
+      pulseAgeSeconds: number | null;
+      /** Claiming an active verb but silent past the stall threshold. */
+      stalled: boolean;
+      url: string | null;
+      errorText: string | null;
+      /** Org identity, already resolved here so the map never asks per body.
+       *  Null when this body reads as no org in this world. */
+      orgId: string | null;
+      orgColour: string | null;
       source: "grove";
     }> = [];
+    // One clock, one rule: every consumer of the minimap agrees on what is
+    // stalled instead of each client reimplementing the age arithmetic.
+    const now = Date.now();
+    // One statement for every room, not one per room: see nearbyByRooms().
+    const byRoom = await this.presence.nearbyByRooms(rooms.map((r) => r.id));
+    // Kept beside the payload, never in it: who owns an agent is not public
+    // map data, it is only how a tint finds the body's org.
+    const ownerOf = new Map<string, string | null>();
     for (const room of rooms) {
-      const nearby = await this.presence.nearby(room.id);
-      for (const n of nearby) {
+      for (const n of byRoom.get(room.id) ?? []) {
+        ownerOf.set(n.actorId, n.kind === "human" ? n.actorId : (n.ownerHumanId ?? null));
         bodies.push({
           id: n.actorId,
           kind: n.kind,
@@ -137,17 +247,212 @@ export class WorldService {
           roomSlug: room.slug,
           activity: n.presence.activity,
           connection: n.presence.connection,
+          badges: n.badges as unknown as string[],
+          verb: n.presence.verb ?? null,
+          detail: n.presence.detail ?? null,
+          pulsedAt: n.presence.pulsedAt ?? null,
+          pulseAgeSeconds: pulseAgeSeconds(n.presence.pulsedAt, now),
+          stalled: isStalledPulse(n.presence.verb, n.presence.pulsedAt, now),
+          url: n.presence.url ?? null,
+          errorText: n.presence.errorText ?? null,
+          orgId: null,
+          orgColour: null,
           source: "grove",
         });
       }
     }
+    // Claimed land. The minimap is public, so a private space shows that it is
+    // held and at what access level, but not its name or owner — permission
+    // state is public (SoW 5.5), the contents behind it are not.
+    const { rows: spaceRows } = await this.store.pg.query(
+      `SELECT w.id, w.slug, w.name, w.plot_index, w.policy_preset, h.handle AS owner_handle,
+              (SELECT count(*)::int FROM presence p
+                 JOIN rooms r ON r.id = p.room_id WHERE r.world_id = w.id) AS occupancy,
+              -- Bound orgs inline, the same subselect (and order) the space
+              -- directory uses, so a plot can be tinted without a call per plot.
+              COALESCE((SELECT json_agg(json_build_object(
+                          'id', o.id, 'slug', o.slug, 'name', o.name, 'colour', o.colour)
+                          ORDER BY wo.created_at, o.id)
+                        FROM world_orgs wo JOIN orgs o ON o.id = wo.org_id
+                        WHERE wo.world_id = w.id), '[]'::json) AS orgs
+       FROM worlds w LEFT JOIN humans h ON h.id = w.owner_human_id
+       WHERE w.plot_index IS NOT NULL
+       ORDER BY w.plot_index`,
+    );
+    const spaces = spaceRows.map((r) => {
+      const preset = String(r.policy_preset);
+      const open = preset !== "private";
+      return {
+        id: String(r.id),
+        plotIndex: Number(r.plot_index),
+        policyPreset: preset,
+        occupancy: Number(r.occupancy),
+        slug: open ? String(r.slug) : null,
+        name: open ? String(r.name) : null,
+        ownerHandle: open && r.owner_handle ? String(r.owner_handle) : null,
+        // Which orgs live on a plot is part of what is behind a private door,
+        // so it redacts with the name and the owner rather than separately.
+        orgs: open ? ((r.orgs as OrgBadge[] | null) ?? []) : [],
+      };
+    });
+
+    // Org colour for the bodies standing in THIS world. Safe to publish: the
+    // caller already had to pass the world gate to get a minimap at all, so a
+    // private space's membership never reaches someone outside it — and the
+    // plots above (other worlds) redact their orgs with their names.
+    const orgRenderMode = await this.orgRenderMode(worldId);
+    const orgs = await this.boundOrgs(worldId);
+    if (orgs.length) {
+      const tints = await this.orgTints(worldId, orgRenderMode, orgs[0]!, bodies, ownerOf);
+      for (const b of bodies) {
+        const tint = tints.get(b.id);
+        if (!tint) continue;
+        b.orgId = tint.orgId;
+        b.orgColour = tint.colour;
+      }
+    }
+
     const { rows } = await this.store.pg.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM agents WHERE claim_state = 'claimed'`,
     );
     return {
       rooms: rooms.map((r) => ({ id: r.id, slug: r.slug, name: r.name, occupancy: r.occupancy })),
       bodies,
+      spaces,
+      recentSpeech: await this.recentPublicSpeech(3),
       claimedAgents: rows[0]?.n ?? 0,
+      stallAfterSeconds: STALL_AFTER_SECONDS,
+      /** How this world paints its orgs; see campus.orgRenderFor(). */
+      orgRenderMode,
+      /** Legend for the colours on the bodies above. */
+      orgs,
     };
   }
+
+  /** How this world paints bound orgs. Unknown values read as 'shared'. */
+  private async orgRenderMode(worldId: string): Promise<"shared" | "dedicated"> {
+    const { rows } = await this.store.pg.query<{ org_render_mode: string | null }>(
+      `SELECT org_render_mode FROM worlds WHERE id = $1`,
+      [worldId],
+    );
+    return rows[0]?.org_render_mode === "dedicated" ? "dedicated" : "shared";
+  }
+
+  /**
+   * Orgs bound to a world, public fields only. Same ordering as
+   * campus.orgsOf(): first bound wins wherever a body could take two colours,
+   * so the map and the space page never disagree about which colour that is.
+   */
+  private async boundOrgs(worldId: string): Promise<OrgBadge[]> {
+    const { rows } = await this.store.pg.query(
+      `SELECT o.id, o.slug, o.name, o.colour
+         FROM world_orgs wo JOIN orgs o ON o.id = wo.org_id
+        WHERE wo.world_id = $1
+        ORDER BY wo.created_at, o.id`,
+      [worldId],
+    );
+    return rows.map((r) => ({
+      id: String(r.id),
+      slug: String(r.slug),
+      name: String(r.name),
+      colour: String(r.colour),
+    }));
+  }
+
+  /**
+   * One tint per body, by the same two rules campus.orgRenderFor() applies:
+   *
+   *   dedicated — the space IS one org's home, so every body standing in it
+   *               takes that org's colour, member or not.
+   *   shared    — a body takes ITS OWN org's colour, and only when that org is
+   *               bound here. A body in no bound org stays untinted.
+   *
+   * A body's org is its owner human's: an agent holds no membership of its
+   * own, so it inherits through owner_human_id.
+   */
+  private async orgTints(
+    worldId: string,
+    mode: "shared" | "dedicated",
+    home: OrgBadge,
+    bodies: Array<{ id: string; kind: "human" | "agent" }>,
+    /** body id -> the human it counts as: itself, or an agent's owner. */
+    ownerOf: Map<string, string | null>,
+  ): Promise<Map<string, { orgId: string; colour: string }>> {
+    const out = new Map<string, { orgId: string; colour: string }>();
+    if (bodies.length === 0) return out;
+    if (mode === "dedicated") {
+      for (const b of bodies) out.set(b.id, { orgId: home.id, colour: home.colour });
+      return out;
+    }
+    // A body's org is its owner human's; an agent holds no membership of its
+    // own. The owner came back with the body (nearbyByRooms already joins it),
+    // so this no longer costs a second pass over `agents`.
+    const humanOf = (b: { id: string; kind: "human" | "agent" }) =>
+      b.kind === "human" ? b.id : ownerOf.get(b.id) ?? null;
+    const humanIds = [...new Set(bodies.map(humanOf).filter((id): id is string => Boolean(id)))];
+    if (humanIds.length === 0) return out;
+    const { rows } = await this.store.pg.query(
+      // DISTINCT ON keeps one colour per human: a human in two bound orgs takes
+      // the one bound first, the same tie-break campus.orgRenderFor() uses, so
+      // the map never flickers between two colours.
+      //
+      // The id list arrives as a table (unnest) rather than as `= ANY(array)`:
+      // with a crowd on the map that array is thousands long and Postgres
+      // rescans it for every membership row, which is quadratic. Joined, it is
+      // hashed once. Same rows, same order, same tie-break.
+      `SELECT DISTINCT ON (om.human_id) om.human_id, o.id AS org_id, o.colour
+         FROM org_members om
+         JOIN unnest($2::text[]) AS want(human_id) ON want.human_id = om.human_id
+         JOIN world_orgs wo ON wo.org_id = om.org_id AND wo.world_id = $1
+         JOIN orgs o ON o.id = wo.org_id
+        ORDER BY om.human_id, wo.created_at, o.id`,
+      [worldId, humanIds],
+    );
+    const byHuman = new Map<string, { orgId: string; colour: string }>(
+      rows.map((r) => [String(r.human_id), { orgId: String(r.org_id), colour: String(r.colour) }]),
+    );
+    for (const b of bodies) {
+      const humanId = humanOf(b);
+      const tint = humanId ? byHuman.get(humanId) : undefined;
+      if (tint) out.set(b.id, tint);
+    }
+    return out;
+  }
+}
+
+/** What buildMinimap() returns; named so concurrent callers can share one. */
+type MinimapSnapshot = Awaited<ReturnType<WorldService["buildMinimap"]>>;
+
+/** An org as the map needs it: enough to draw and name a colour, nothing more. */
+type OrgBadge = { id: string; slug: string; name: string; colour: string };
+
+/** presence/agent JSONB -> the camelCase shapes the kernel expects. */
+function jsonPolicy(raw: unknown): Agent["policy"] {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    speakToAgents: Boolean(o.speak_to_agents ?? o.speakToAgents),
+    speakToHumans: Boolean(o.speak_to_humans ?? o.speakToHumans),
+    listenToAgents: Boolean(o.listen_to_agents ?? o.listenToAgents),
+    listenToHumans: Boolean(o.listen_to_humans ?? o.listenToHumans),
+  };
+}
+
+/** Absent keys default to true, matching the column defaults. */
+function jsonPrivacy(raw: unknown): {
+  addressableByAgents: boolean;
+  addressableByHumans: boolean;
+  overhearableByAgents: boolean;
+  overhearableByHumans: boolean;
+} {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const pick = (a: string, b: string) => {
+    const v = o[a] ?? o[b];
+    return v === undefined ? true : Boolean(v);
+  };
+  return {
+    addressableByAgents: pick("addressable_by_agents", "addressableByAgents"),
+    addressableByHumans: pick("addressable_by_humans", "addressableByHumans"),
+    overhearableByAgents: pick("overhearable_by_agents", "overhearableByAgents"),
+    overhearableByHumans: pick("overhearable_by_humans", "overhearableByHumans"),
+  };
 }

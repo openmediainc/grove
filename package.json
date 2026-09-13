@@ -9,9 +9,11 @@
   "scripts": {
     "dev": "pnpm --filter @grove/api --filter @grove/web --parallel dev",
     "build": "pnpm -r --filter './packages/**' build && pnpm --filter @grove/api --filter @grove/web --filter @grove/mcp build",
-    "test": "pnpm -r --filter './packages/**' --filter @grove/api test",
+    "test": "echo 'Use: pnpm test:safe (throwaway db). Bare vitest against .env writes to the LIVE world.' && exit 1",
     "migrate": "pnpm --filter @grove/domain migrate",
     "lint": "pnpm -r --if-present lint",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test:safe": "bash infra/test-db.sh",
+    "test:units": "pnpm -r --filter './packages/**' test"
   }
 }

@@ -1,4 +1,5 @@
 import type { HumanId, RoomId } from "./ids.js";
+import type { SpacePolicy, SpacePolicyPreset } from "./policy.js";
 
 export interface Room {
   id: RoomId;
@@ -12,6 +13,10 @@ export interface Room {
   sayLimitPerMin: number | null;
   ownerHumanId?: HumanId | null;
   worldId?: string;
+  /** §5.3 per-space access level, as the owner picked it. */
+  policyPreset?: SpacePolicyPreset;
+  /** Resolved form of `policyPreset`. Absent ⇒ the space narrows nothing. */
+  policy?: SpacePolicy;
 }
 
 export const PUBLIC_ROOMS: Array<Pick<Room, "id" | "slug" | "name" | "kind" | "capacity" | "spectatorVisible" | "sayLimitPerMin">> = [

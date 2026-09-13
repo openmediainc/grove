@@ -1,8 +1,10 @@
 {
   "name": "@grove/sdk-py",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "description": "Workspace wrapper so the Python SDK's tests run in the monorepo suite. The published artifact is built from pyproject.toml.",
   "scripts": {
-    "test": "python3 -m unittest discover -s tests -p 'test_*.py'"
+    "test": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "build:wheel": "python3 -m pip wheel . --no-deps --no-build-isolation -w dist && rm -rf build grove_sdk.egg-info"
   }
 }

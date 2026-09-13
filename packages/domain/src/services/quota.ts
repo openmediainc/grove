@@ -161,6 +161,33 @@ export class QuotaService {
     if (n > limit) throw new GroveError("RATE_LIMITED", "Whisper rate limiter exhausted.");
   }
 
+  /** Pulse is cheap but must not become a firehose: 1/s per actor. */
+  async consumePulse(actorId: string): Promise<void> {
+    if (await this.limiter.exists(`ratelimit:${actorId}:pulse:gap`)) {
+      throw new GroveError("RATE_LIMITED", "Pulse cooldown (1 per second).");
+    }
+    await this.limiter.setPx(`ratelimit:${actorId}:pulse:gap`, "1", 1000);
+  }
+
+  /**
+   * Asking to join a space. Cheap to send, expensive to read: an owner should
+   * never be able to be buried. Two windows, same shape as consumeRegister —
+   * a burst cap and a daily cap — and the daily one is tighter in the first 24h
+   * because a fresh account asking twenty spaces at once is what abuse looks
+   * like, not what a new member does.
+   */
+  async consumeJoinRequest(humanId: string, first24h: boolean): Promise<void> {
+    const hour = await this.limiter.incr(`ratelimit:${humanId}:join_request:hour`, HOUR);
+    if (hour > 3) {
+      throw new GroveError("RATE_LIMITED", "Join request rate limiter exhausted (3 per hour).");
+    }
+    const dayLimit = first24h ? 5 : 10;
+    const day = await this.limiter.incr(`ratelimit:${humanId}:join_request:day`, DAY);
+    if (day > dayLimit) {
+      throw new GroveError("RATE_LIMITED", `Join request rate limiter exhausted (${dayLimit} per day).`);
+    }
+  }
+
   async consumeReport(actorId: string, first24h: boolean): Promise<void> {
     const limit = first24h ? 5 : 10;
     const n = await this.limiter.incr(`ratelimit:${actorId}:report:day`, DAY);
