@@ -172,6 +172,30 @@ describe.skipIf(!hasDb)("ops overview against the database", () => {
     expect(after.agent_faults!.days).toHaveLength(8);
   });
 
+  it("every metric's range scan can use an index (031): no table is forced into a seq scan", async () => {
+    // Tables are tiny in a test DB, so the planner would happily seq scan. With
+    // enable_seqscan off a seq scan is still chosen when NO usable index exists,
+    // so any Seq Scan left in the plan means a missing index.
+    const client = await pg.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL enable_seqscan = off");
+      for (const m of OPS_METRICS) {
+        const { rows } = await client.query(`EXPLAIN (FORMAT JSON) ${m.sql}`);
+        const seq: string[] = [];
+        const walk = (node: Record<string, unknown>) => {
+          if (node["Node Type"] === "Seq Scan") seq.push(String(node["Relation Name"]));
+          for (const child of (node.Plans as Array<Record<string, unknown>>) ?? []) walk(child);
+        };
+        walk((rows[0]["QUERY PLAN"] as Array<{ Plan: Record<string, unknown> }>)[0]!.Plan);
+        expect(seq, `${m.key} seq scans`).toEqual([]);
+      }
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+  });
+
   it("the overview carries every section, with schema names for the operator", async () => {
     const o = await grove.ops.overview();
     expect(o.health.postgres.ok).toBe(true);
