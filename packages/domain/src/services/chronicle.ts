@@ -295,6 +295,11 @@ const KIND_OF: Record<string, ChronicleKind> = {
   // the kind a reader skims past in a run rather than stops on.
   "stage.started": "movement",
   "stage.ended": "movement",
+  // Queue #35: a space changed hands or moved plot. Place-gated like every row
+  // (the payload names the space's plaza), so a private plot's moves reach its
+  // members only; on a public plot they are as public as its owner and its plot.
+  "space.transferred": "claim",
+  "space.relocated": "movement",
   // Migration 017: one row per stretch of pulse verb. Its own kind rather than
   // "other", so an owner can filter a day's work away from a day's events.
   agent_phase: "work",
@@ -462,6 +467,9 @@ visible AS (
       -- /api/v1/civic/stage already serve this to a signed-out visitor for
       -- every world the same gate lets them reach.
       WHEN type IN ('stage.started', 'stage.ended') THEN TRUE
+      -- Queue #35. The holder and the plot of a non-private space are already
+      -- public (directory, minimap); a private one is behind the place gate.
+      WHEN type IN ('space.transferred', 'space.relocated') THEN TRUE
       -- GET /notices requires an actor, so this does too. The place gate above
       -- applies like everywhere else; the title is gated separately (rule 9).
       WHEN type = 'notice' THEN $1::text IS NOT NULL
@@ -815,7 +823,7 @@ export class ChronicleService {
     const wanted = new Set<string>();
     for (const r of rows) {
       const p = (r.payload ?? {}) as Record<string, unknown>;
-      for (const key of ["owner", "agentId", "targetId"]) {
+      for (const key of ["owner", "agentId", "targetId", "from", "to"]) {
         const v = p[key];
         if (typeof v === "string" && v) wanted.add(v);
       }
@@ -968,6 +976,15 @@ function summaryFor(
       return payload.title
         ? `“${String(payload.title)}” finished in ${room}.`
         : `An event finished in ${room}.`;
+    case "space.transferred": {
+      const to = named(payload.to, names) ?? "a new holder";
+      const space = typeof payload.space === "string" ? payload.space : "A space";
+      return `${space} was handed to ${to}.`;
+    }
+    case "space.relocated": {
+      const space = typeof payload.space === "string" ? payload.space : "A space";
+      return `${space} moved from plot ${String(payload.fromPlot ?? "?")} to plot ${String(payload.toPlot ?? "?")}.`;
+    }
     case "speech":
       return `${who(actor)} spoke in ${room}.`;
     case "notice":
@@ -1074,6 +1091,10 @@ function detailFor(
       // rows. `eventId` and `roomId` are deliberately absent: one is an internal
       // handle and the other is already resolved to `roomName` on the entry.
       return pick("title", "startsAt", "endsAt");
+    case "space.transferred":
+      return { ...pick("space", "plot", "fromLeft"), from: named(payload.from, names), to: named(payload.to, names) };
+    case "space.relocated":
+      return pick("space", "fromPlot", "toPlot");
     case "speech":
       return pick("channel");
     case "notice":

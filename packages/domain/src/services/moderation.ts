@@ -882,7 +882,8 @@ export class ModerationService {
       `SELECT w.id, w.type, w.actor_id, w.payload, w.created_at, h.handle::text AS handle
          FROM world_events w
          LEFT JOIN humans h ON h.id = w.actor_id
-        WHERE w.type LIKE 'mod.%'
+        -- Queue #35: a space changing hands or plot is on the operators' record too.
+        WHERE w.type LIKE 'mod.%' OR w.type IN ('space.transferred', 'space.relocated')
         ORDER BY w.created_at DESC
         LIMIT $1`,
       [cap],

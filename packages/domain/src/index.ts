@@ -66,6 +66,8 @@ export {
 } from "./services/guests.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
 export { BrandingService, normaliseSiteUrl } from "./services/branding.js";
+export { SpaceMoveService } from "./services/space-moves.js";
+export type { SpaceTransfer, TransferCandidates, RelocationPlan } from "./services/space-moves.js";
 export { SiteFetchSession, SiteFetchError, isBlockedAddress, SITE_FETCH_USER_AGENT } from "./site-fetch.js";
 export type { SiteFetchOptions, ResolvedAddress } from "./site-fetch.js";
 export { suggestBrandingFromSite, extractPageFacts, decodePng, decodeIco, dominantColour, parseCssColour } from "./site-branding.js";
@@ -256,6 +258,7 @@ import { GuestService } from "./services/guests.js";
 import { CardService } from "./services/cards.js";
 import { BrandingService } from "./services/branding.js";
 import { EstateService } from "./services/estates.js";
+import { SpaceMoveService } from "./services/space-moves.js";
 import { SupporterService } from "./services/supporters.js";
 import { FollowService } from "./services/follows.js";
 import { SearchService } from "./services/search.js";
@@ -295,6 +298,8 @@ export class GroveApp {
   cards: CardService;
   branding: BrandingService;
   estates: EstateService;
+  /** Transfer a space to a member or bound org, or move it to a free plot (039). */
+  spaceMoves: SpaceMoveService;
   /** Cosmetic supporter tier via Stripe Checkout; inert unless all four env vars are set (036). */
   supporters: SupporterService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
@@ -343,6 +348,7 @@ export class GroveApp {
     this.cards = new CardService(this.store, this.identity, this.campus);
     this.branding = new BrandingService(this.store, this.campus, this.quota);
     this.estates = new EstateService(this.store, this.campus);
+    this.spaceMoves = new SpaceMoveService(this.store, this.campus);
     // Written on the event: the three sources call back into this after their
     // own write. Late-bound because all three are built before speech/mailbox.
     this.follows = new FollowService(this.store, this.identity, this.campus, this.presence, this.speech, this.mailbox, this.quota);

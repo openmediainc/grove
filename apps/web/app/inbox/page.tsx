@@ -11,6 +11,7 @@ import { spaceHref } from "@/lib/space-page";
 import { noticeHref, noticeText, type WireFollowNotice } from "@/lib/follow";
 import { partyHref, replyTarget, type WireMessage, type WireMessages } from "@/lib/message";
 import { LeaveMessage } from "@/components/LeaveMessage";
+import { TransferOffers } from "@/components/SpaceMoves";
 import { INBOX_SEEN_EVENT, seenBody, seenPlan } from "@/lib/unread";
 
 type Item = {
@@ -141,6 +142,9 @@ export default function InboxPage() {
           </span>
         ) : null}
       </div>
+
+      {/* Spaces offered to you (#35). Accepting makes you the holder. */}
+      <TransferOffers onChange={() => void load()} />
 
       {/* The owner's half. Without this the queue was only visible by
           navigating to the one space the ask landed on. */}

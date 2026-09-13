@@ -17,6 +17,7 @@ import { registerUsage } from "./usage.js";
 import { registerCards } from "./cards.js";
 import { registerBranding } from "./branding.js";
 import { registerEstates } from "./estates.js";
+import { registerSpaceMoves } from "./space-moves.js";
 import { registerFollows } from "./follows.js";
 import { registerGuests } from "./guests.js";
 import { registerSearch } from "./search.js";
@@ -67,6 +68,7 @@ export async function buildApp(grove: GroveApp) {
   await registerCards(app, grove);
   await registerBranding(app, grove);
   await registerEstates(app, grove);
+  await registerSpaceMoves(app, grove);
   await registerFollows(app, grove);
   await registerGuests(app, grove);
   await registerSearch(app, grove);

@@ -32,6 +32,7 @@ import { Activity } from "@/components/Activity";
 import { CardFields, CardPanel, useCard, useCardLex } from "@/components/Card";
 import { BrandingPanel, type WireBranding } from "@/components/Branding";
 import { EstatePanel } from "@/components/EstateName";
+import { RelocatePanel, TransferPanel } from "@/components/SpaceMoves";
 import { FollowButton } from "@/components/Follow";
 import { Tabs } from "@/components/Tabs";
 import { roomHref } from "@/lib/world-url";
@@ -77,6 +78,10 @@ type Detail = {
   members: Array<{ human_id: string; handle: string; display_name: string; is_owner: boolean }>;
   is_member: boolean;
   is_owner: boolean;
+  /** The human holding the space (not an operator operating it): may transfer or move it (#35). */
+  is_holder?: boolean;
+  /** Set when the space was handed to an org (#35). */
+  holder_org?: Org | null;
   org_render_mode: "shared" | "dedicated";
   orgs: Org[];
   /** Per-body tint the mode resolves to. The map renderer reads this. */
@@ -205,6 +210,7 @@ export default function SpacePage() {
             ) : (
               <span className="text-sm text-white/40">the civic core</span>
             )}
+            {d.holder_org ? <span className="text-sm text-white/50">held for {d.holder_org.name}</span> : null}
             {isOwner ? <span className="text-sm text-lantern-300/80">yours</span> : d.is_member ? <span className="text-sm text-white/50">member</span> : null}
           </p>
           <p className="mt-1 text-sm text-white/40">{copy.line}</p>
@@ -383,6 +389,12 @@ function Manage({ detail, reload }: { detail: Detail; reload: () => Promise<void
       <BrandingPanel worldId={detail.world.id} space={detail.world} orgs={detail.orgs} branding={detail.branding ?? null} reload={reload} />
       <EstatePanel orgs={detail.orgs} />
       <CardPanel target={{ subject: "space", ref: detail.world.id }} saveId={detail.world.id} title="Card" />
+      {detail.is_holder && detail.world.plot_index != null ? (
+        <>
+          <RelocatePanel space={detail.world} reload={reload} />
+          <TransferPanel space={detail.world} reload={reload} />
+        </>
+      ) : null}
     </div>
   );
 }

@@ -80,7 +80,7 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
     if (world.policyPreset === "private" && !isMember) {
       throw new GroveError("NOT_FOUND", "Not found.", { httpStatus: 404 });
     }
-    const [rooms, members, orgRender, branding] = await Promise.all([
+    const [rooms, members, orgRender, branding, holderOrg] = await Promise.all([
       grove.campus.roomsOf(world.id),
       // A public space lists its rooms to anyone, but who is inside it is
       // member-only: presence is not permission state.
@@ -88,6 +88,8 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
       grove.campus.orgRenderFor(world.id),
       // 035: past the same door as the name, so safe to carry here.
       grove.branding.ofWorld(world.id),
+      // 039: the org a handed-over space is held for. Past the same door.
+      grove.spaceMoves.holderOrg(world.id),
     ]);
     return sendOk(reply, {
       world,
@@ -95,6 +97,10 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
       members,
       isMember,
       isOwner: Boolean(human && grove.campus.canOperate(human, world)),
+      // The human who holds the space (not an operator operating it): only they
+      // may hand it over or move its plot (#35).
+      isHolder: Boolean(human && world.ownerHumanId === human.id),
+      holderOrg,
       // Enough for a renderer to tint a body by its org: which orgs are bound,
       // in what mode, and the per-body assignment the mode resolves to. The
       // per-body list follows the roster, so it is member-only for the same

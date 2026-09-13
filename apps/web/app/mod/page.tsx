@@ -630,6 +630,11 @@ export default function ModPage() {
                 <span className="text-white/60">by @{e.actor_handle ?? e.actor_id ?? "unknown"}</span>
                 {e.payload.target_id ? <span className="text-white/50"> → {String(e.payload.target_id)}</span> : null}
                 {e.payload.flag ? <span className="text-white/50"> {String(e.payload.flag)}={String(e.payload.value)}</span> : null}
+                {e.payload.space ? <span className="text-white/50"> {String(e.payload.space)}</span> : null}
+                {e.payload.to_plot != null ? (
+                  <span className="text-white/50"> plot {String(e.payload.from_plot)} → {String(e.payload.to_plot)}</span>
+                ) : null}
+                {e.type === "space.transferred" && e.payload.to ? <span className="text-white/50"> → {String(e.payload.to)}</span> : null}
                 {e.payload.reason ? <span className="text-white/70"> — {String(e.payload.reason)}</span> : null}
               </li>
             ))}
