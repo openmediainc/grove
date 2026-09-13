@@ -243,8 +243,14 @@ export class PgRedis extends EventEmitter {
 }
 
 export function createBus(pg: Pool, redisUrl: string, databaseUrl: string): Redis {
-  if (redisUrl === "pg" || redisUrl === "postgres" || redisUrl === "memory://pg") {
+  const usePg =
+    !redisUrl ||
+    redisUrl === "pg" ||
+    redisUrl === "postgres" ||
+    redisUrl === "memory://pg" ||
+    (Boolean(process.env.VERCEL) && redisUrl.includes("localhost"));
+  if (usePg) {
     return new PgRedis(pg, databaseUrl) as unknown as Redis;
   }
-  return new Redis(redisUrl);
+  return new Redis(redisUrl, { maxRetriesPerRequest: 1, connectTimeout: 5000, lazyConnect: false });
 }
