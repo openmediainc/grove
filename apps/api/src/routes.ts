@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { GroveApp } from "@grove/domain";
-import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError, fromAddress, pulseBatchFromWire, pulseInputFromWire } from "@grove/domain";
+import type { GroveApp, SchemaStatus } from "@grove/domain";
+import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError, fromAddress, pulseBatchFromWire, pulseInputFromWire, schemaStatus } from "@grove/domain";
 import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
 import { assertRoomAccess, assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
 import { COOKIE, clientIp, sendOk } from "./http.js";
@@ -196,10 +196,23 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     try {
       await grove.store.pg.query("SELECT 1");
       await grove.store.redis.ping();
-      return { ok: true, postgres: true, redis: true };
     } catch {
       return reply.status(503).send({ ok: false, error: { code: "NOT_READY", message: "postgres or redis down" } });
     }
+    // Schema drift is REPORTED here, not turned into a 503: boot migrations are
+    // off, so a restart cannot fix a pending migration, and a 503 would only make
+    // a watchdog bounce the service. On the public deploy /ready is world-readable,
+    // so it says whether and how far the schema is off, never which files.
+    let schema: Record<string, unknown>;
+    try {
+      const s: SchemaStatus = await schemaStatus(grove.store.pg);
+      schema = grove.store.config.publicDeploy
+        ? { ok: s.ok, on_disk: s.onDisk, applied: s.applied, pending: s.pending.length, unknown: s.unknown.length }
+        : { ok: s.ok, on_disk: s.onDisk, applied: s.applied, pending: s.pending, unknown: s.unknown };
+    } catch (err) {
+      schema = grove.store.config.publicDeploy ? { ok: null } : { ok: null, error: (err as Error).message.slice(0, 200) };
+    }
+    return { ok: true, postgres: true, redis: true, schema };
   });
 
   app.post("/api/v1/humans/session", async (req, reply) => {

@@ -152,6 +152,26 @@ describe.skipIf(!hasDb)("api integration", () => {
     expect(h.statusCode).toBe(200);
     const r = await server.inject({ method: "GET", url: "/ready" });
     expect(r.statusCode).toBe(200);
+    // The test database was migrated from this tree, so disk and ledger agree.
+    // The alert runner treats anything else as schema drift (docs/ALERTS.md).
+    const schema = (r.json() as { schema: Record<string, unknown> }).schema;
+    expect(schema.ok).toBe(true);
+    expect(schema.pending).toEqual([]);
+    expect(schema.unknown).toEqual([]);
+    expect(schema.on_disk).toBe(schema.applied);
+
+    // A ledger row with no file behind it is drift too, and must be named.
+    const ghost = "999_alerts_ghost_migration.sql";
+    await grove!.store.pg.query("INSERT INTO schema_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING", [ghost]);
+    try {
+      const drift = (await server.inject({ method: "GET", url: "/ready" })).json() as {
+        schema: { ok: boolean; unknown: string[] };
+      };
+      expect(drift.schema.ok).toBe(false);
+      expect(drift.schema.unknown).toContain(ghost);
+    } finally {
+      await grove!.store.pg.query("DELETE FROM schema_migrations WHERE id = $1", [ghost]);
+    }
   });
 
   it("listen-only room_say 403 vs owner_reply 200; unclaimed observe has no room", async () => {

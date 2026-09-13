@@ -47,6 +47,37 @@ export async function pendingMigrations(databaseUrl: string): Promise<string[]> 
   }
 }
 
+export interface SchemaStatus {
+  /** True when every migration on disk is recorded and nothing unknown is. */
+  ok: boolean;
+  onDisk: number;
+  applied: number;
+  /** On disk but not in schema_migrations: the code expects schema that is not there. */
+  pending: string[];
+  /** In schema_migrations but not on disk: the database is ahead of (or apart from) this tree. */
+  unknown: string[];
+}
+
+/**
+ * Disk versus ledger, on a pool the caller already owns. Read-only and cheap
+ * (one readdir, at most two queries), so /ready can answer it on every probe.
+ * Catches "deployed before migrating", which boot migrations (off) no longer hide.
+ */
+export async function schemaStatus(pool: Pool): Promise<SchemaStatus> {
+  const files = migrationFiles();
+  const done = await appliedIds(pool);
+  const onDisk = new Set(files);
+  const pending = files.filter((f) => !done.has(f));
+  const unknown = [...done].filter((id) => !onDisk.has(id)).sort();
+  return {
+    ok: pending.length === 0 && unknown.length === 0,
+    onDisk: files.length,
+    applied: done.size,
+    pending,
+    unknown,
+  };
+}
+
 export async function migrate(databaseUrl: string): Promise<void> {
   const pool = createPool(databaseUrl);
   try {

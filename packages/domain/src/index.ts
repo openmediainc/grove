@@ -1,7 +1,8 @@
 export { loadConfig, isProduction, mayReturnMagicLink, type GroveConfig } from "./config.js";
 export { createPool, withTx, type Pool } from "./db.js";
 export { createBus, PgRedis } from "./pg-redis.js";
-export { migrate, pendingMigrations } from "./migrate.js";
+export { migrate, pendingMigrations, schemaStatus } from "./migrate.js";
+export type { SchemaStatus } from "./migrate.js";
 export { GroveError } from "./errors.js";
 export { newId } from "./ids.js";
 export type { GroveStore } from "./store.js";

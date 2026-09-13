@@ -418,10 +418,35 @@ export function sendOk(reply: FastifyReply, data: Record<string, unknown>, statu
   return reply.status(status).send(toSnake({ ok: true, ...data }));
 }
 
-export function clientIp(req: FastifyRequest): string {
-  const xf = req.headers["x-forwarded-for"];
-  if (typeof xf === "string") return xf.split(",")[0]!.trim();
+/**
+ * The caller's IP, for rate limits. Never the left-most X-Forwarded-For entry:
+ * the client writes that one, so trusting it let anyone reset the register
+ * limiter by sending a new header.
+ *
+ * - Vercel sets `x-vercel-forwarded-for` itself and clients cannot override it.
+ * - On the Mini, Tailscale Serve -> nginx (127.0.0.1) forwards the header as is and
+ *   Serve APPENDS the real tailnet peer, so the RIGHT-most entry is trustworthy —
+ *   and only when the request actually arrived from a local proxy.
+ */
+export function clientIp(req: Pick<FastifyRequest, "headers" | "ip">, env: NodeJS.ProcessEnv = process.env): string {
+  const header = (name: string): string | undefined => {
+    const v = req.headers[name];
+    return (Array.isArray(v) ? v.join(",") : v)?.trim() || undefined;
+  };
+  if (env.VERCEL) {
+    const vercel = header("x-vercel-forwarded-for");
+    return vercel ? vercel.split(",")[0]!.trim() : req.ip;
+  }
+  const xf = header("x-forwarded-for");
+  if (xf && isLoopback(req.ip)) {
+    const hops = xf.split(",").map((h) => h.trim()).filter(Boolean);
+    return hops[hops.length - 1] ?? req.ip;
+  }
   return req.ip;
+}
+
+function isLoopback(ip: string): boolean {
+  return ip === "::1" || ip.startsWith("127.") || ip.startsWith("::ffff:127.");
 }
 
 export function bearer(req: FastifyRequest): string | undefined {
