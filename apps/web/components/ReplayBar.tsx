@@ -18,8 +18,8 @@ import {
  *
  * WHERE IT LIVES, AND WHY. On the map, not on a page of its own: the question
  * is "what happened HERE while I was away", and the answer is the same bodies
- * in the same rooms, moving. The entry point is one button beside Kiosk in the
- * map's own control row; while replay is on, this bar takes the bottom of the
+ * in the same rooms, moving. The entry point is the map's History drawer
+ * (Watch ▾ → History, or H); while replay is on, this bar takes the bottom of the
  * screen and a pill takes the top, so the state cannot be missed from either
  * end — and the map's frame turns amber so a screenshot says it too.
  *
@@ -43,24 +43,6 @@ function useReplayView(controller: ReplayController): ReplayView {
     (fn) => controller.subscribe(fn),
     () => controller.view,
     () => controller.view,
-  );
-}
-
-export function ReplayEntry({ controller }: { controller: ReplayController }) {
-  const view = useReplayView(controller);
-  if (view.active) return null;
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        const now = Date.now();
-        void controller.open(now - 3600_000, now);
-      }}
-      title="Replay the last hour of the world on this map"
-      className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
-    >
-      Replay
-    </button>
   );
 }
 

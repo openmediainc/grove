@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { legacyRedirects } from "./lib/agent-page";
 import { spaceRedirects } from "./lib/space-page";
+import { worldRedirects } from "./lib/world-url";
 
 const api = process.env.VERCEL ? null : (process.env.GROVE_API_ORIGIN ?? "http://127.0.0.1:3511");
 const base = process.env.NEXT_PUBLIC_GROVE_BASE;
@@ -32,7 +33,12 @@ const nextConfig: NextConfig = {
   // Old agent routes land on the agent page or /me, old space routes on Explore
   // or the space page (DECISIONS #5: never a 404).
   async redirects() {
-    return [...legacyRedirects({ publicDeploy: Boolean(process.env.VERCEL) }), ...spaceRedirects()];
+    return [
+      ...legacyRedirects({ publicDeploy: Boolean(process.env.VERCEL) }),
+      ...spaceRedirects(),
+      // Rooms and the History are drawers on the map; the walk-in is a sheet there.
+      ...worldRedirects(),
+    ];
   },
   async rewrites() {
     if (!api) return [];

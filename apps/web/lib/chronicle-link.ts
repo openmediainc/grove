@@ -1,7 +1,7 @@
 /**
  * The chronicle's "only this" filter as a link someone can share.
  *
- * `/chronicle?actor=` takes `@handle` for a person, the slug for an agent, or a
+ * `/?history=1&actor=` (the map's History drawer) takes `@handle` for a person, the slug for an agent, or a
  * raw actor id when neither is known. The server resolves it and applies the
  * chronicle's own visibility rules, so a link never shows its reader more than
  * they could see by clicking "only this" themselves.
@@ -18,9 +18,9 @@ export function actorRef(actor: ChronicleActorLike): string | null {
   return actor.id || null;
 }
 
-/** The unprefixed in-app path for one actor's slice of the chronicle. */
+/** The unprefixed in-app path for one actor's slice of the History. */
 export function chronicleActorHref(ref: string): string {
-  return `/chronicle?${new URLSearchParams({ [ACTOR_PARAM]: ref }).toString()}`;
+  return `/?${new URLSearchParams({ history: "1", [ACTOR_PARAM]: ref }).toString()}`;
 }
 
 /** `?actor=` off a query string; blank is no filter. */

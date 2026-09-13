@@ -46,11 +46,11 @@ export function isOperator(v: Viewer): boolean {
 }
 
 /**
- * Where the nav's world link goes. A spectator gets the map, which anyone may
- * watch; only a body can walk into the plaza (it answers 401 otherwise).
+ * Where the nav's world link goes: the map, for everyone. Rooms are drawers on
+ * it now, and the map's own Walk in button is the way into the Plaza.
  */
-export function campusHref(v: Viewer): string {
-  return isSignedIn(v) ? "/w/plaza" : "/";
+export function campusHref(_v: Viewer): string {
+  return "/";
 }
 
 /** The You menu's profile link, or null until the handle is known. */

@@ -25,6 +25,7 @@ import { CardPanel, useCardLex } from "@/components/Card";
 import { FollowButton } from "@/components/Follow";
 import { LeaveMessage } from "@/components/LeaveMessage";
 import { Tabs } from "@/components/Tabs";
+import { roomHref } from "@/lib/world-url";
 
 /**
  * One agent, one page: Activity · Card · Settings (`?tab=`).
@@ -245,7 +246,7 @@ export default function AgentPage() {
         <ArrivalToast
           title={where ? `${claimed.name} is ${where.standing ? "in" : "headed for"} the ${where.name}.` : `${claimed.name} is yours.`}
           line={toastLine}
-          action={where ? { label: `Visit the ${where.name} →`, href: `/w/${where.slug}` } : undefined}
+          action={where ? { label: `Visit the ${where.name} →`, href: roomHref(where.slug) } : undefined}
         />
       ) : null}
 

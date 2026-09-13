@@ -47,6 +47,8 @@ import { Reactions } from "@/components/Reactions";
  *   summary        rendered between the filters and the list with the chosen
  *                  window, for a view that adds its own roll-up (the owner's day).
  *   emptyText      what an empty window says.
+ *   inPanel        the list scrolls inside a drawer (the map's History), so day
+ *                  headings stick to the panel's top rather than under the nav.
  *
  * PERMISSIONS: none decided here. GET /api/v1/chronicle filtered every row in
  * SQL for this viewer and withheld any body they may not read (DECISIONS #4:
@@ -61,6 +63,7 @@ export type ActivityProps = {
   urlSync?: boolean;
   summary?: (w: ActivityWindow) => ReactNode;
   emptyText?: string;
+  inPanel?: boolean;
 };
 
 function ActorFace({ entry }: { entry: ActivityEntry }) {
@@ -137,6 +140,7 @@ export function Activity({
   urlSync = true,
   summary,
   emptyText = "Nothing in this window.",
+  inPanel = false,
 }: ActivityProps) {
   const defaults = useMemo(() => ({ win: defaultWindow }), [defaultWindow]);
   const [filters, setFilters] = useState<ActivityFilters>({ win: defaultWindow, kinds: [], actor: null });
@@ -293,7 +297,7 @@ export function Activity({
             return (
               <h3
                 key={b.key}
-                className="sticky top-14 z-10 -mx-2 mb-1 mt-8 bg-dusk-950/80 px-2 py-1 font-display text-lg text-lantern-300/80 backdrop-blur first:mt-0"
+                className={`sticky ${inPanel ? "top-0" : "top-14"} z-10 -mx-2 mb-1 mt-8 bg-dusk-950/80 px-2 py-1 font-display text-lg text-lantern-300/80 backdrop-blur first:mt-0`}
               >
                 {b.label}
               </h3>

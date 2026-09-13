@@ -14,6 +14,7 @@ import type { CardTarget } from "./card";
 import { accessWord } from "./access";
 import { buildDeepLink, parseFollow } from "./deep-link";
 import { spaceHref } from "./space-page";
+import { roomHref } from "./world-url";
 
 /** A body on the commons map, as the API sends it. */
 export type WireOnline = {
@@ -177,7 +178,7 @@ export function resultPath(item: SearchItem): string {
       return spaceHref(item.slug);
     case "room":
       // A space's room is reached through its space, whose door decides.
-      return item.spaceSlug ? spaceHref(item.spaceSlug) : `/w/${encodeURIComponent(item.slug)}`;
+      return item.spaceSlug ? spaceHref(item.spaceSlug) : roomHref(item.slug);
   }
 }
 

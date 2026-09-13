@@ -46,8 +46,8 @@ describe("card rows", () => {
 
 describe("walk over", () => {
   it("walks a body into its room, asking a spectator to sign in first", () => {
-    expect(walkOverTarget({ kind: "body", room: "workshop" }, true)).toEqual({ path: "/w/workshop", needsLogin: false });
-    expect(walkOverTarget({ kind: "body", room: "workshop" }, false)).toEqual({ path: "/w/workshop", needsLogin: true });
+    expect(walkOverTarget({ kind: "body", room: "workshop" }, true)).toEqual({ path: "/?room=workshop", needsLogin: false });
+    expect(walkOverTarget({ kind: "body", room: "workshop" }, false)).toEqual({ path: "/?room=workshop", needsLogin: true });
     // Still finding out: the room page itself will ask.
     expect(walkOverTarget({ kind: "body", room: "plaza" }, null).needsLogin).toBe(false);
   });

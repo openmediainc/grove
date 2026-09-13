@@ -9,6 +9,7 @@ import { groupResults, jumpHref, resultPath, searchApiPath, type WireSearch } fr
 import { exploreOrder, spaceHref, suggestSlug, type DirectorySpace } from "@/lib/space-page";
 import { hasSignedInHint } from "@/lib/unread";
 import { GeoAvatar } from "@/components/Avatar";
+import { roomHref } from "@/lib/world-url";
 
 /**
  * Explore: every space on the world, who is online right now, and Create space.
@@ -211,7 +212,7 @@ function LobbyDoors({ space }: { space: DirectorySpace }) {
     setErr(null);
     try {
       await api(`/api/v1/worlds/${space.id}/enter`, { method: "POST", body: JSON.stringify({ room: slug }) });
-      window.location.href = gp(`/w/${slug}`);
+      window.location.href = gp(roomHref(slug));
     } catch (e) {
       const status = (e as { status?: number }).status;
       if (status === 401) window.location.href = gp(`/login?next=${encodeURIComponent("/explore")}`);

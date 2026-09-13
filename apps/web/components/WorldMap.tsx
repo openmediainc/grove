@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { asPermissionBadges, consequenceOf, STANCES, type Rect, type Speaker } from "@grove/ui";
 import { AWAY_ALPHA, describeToolCall, normaliseMarks, type SpaceMark, type ToolCallView } from "@grove/protocol";
 import { api } from "@/lib/api";
@@ -57,15 +57,29 @@ import {
   worldBounds,
   type MapRegion,
 } from "@/lib/map-layout";
-import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
+import { SpectatorPeek, loginHref, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { deepLinkApplies, parseDeepLink, type DeepLink } from "@/lib/deep-link";
 import { layoutSignboard, signContent, signboardVisible } from "@/lib/signboard";
 import { WATCH_HEADER, formatHeadcount, makeWatchToken } from "@/lib/headcount";
 import { AttentionBell } from "./AttentionBell";
-import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
+import { FirstVisitCard, MAP_KEYS, MapMenu, MapPanel, MenuHeading, MenuItem, MenuLink } from "./MapMenu";
+import { RoomDrawer, type RoomPublicView } from "./RoomDrawer";
+import { HistoryDrawer } from "./HistoryDrawer";
+import { WalkInSheet, type Arrival } from "./WalkInSheet";
+import { ArrivalToast } from "./ArrivalToast";
+import { readWorldUrl, roomHref, withHistory, withRoom, type WorldUrl } from "@/lib/world-url";
+import {
+  FIRST_VISIT_KEY,
+  WALK_IN_SEEN_KEY,
+  autoWalkIn,
+  browserStore,
+  mapCta,
+  readFlag,
+  writeFlag,
+} from "@/lib/walk-in";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
 import { TvDirector, type TvActor, type TvShotKind, type TvStage } from "@/lib/tv/director";
-import { ReplayBadge, ReplayBar, ReplayEntry } from "./ReplayBar";
+import { ReplayBadge, ReplayBar } from "./ReplayBar";
 import { ReplayController, startVisitClock, type LiveContext } from "@/lib/replay/controller";
 import { ReplayMotion } from "@/lib/replay/motion";
 import { ResourceBar } from "./ResourceBar";
@@ -702,8 +716,26 @@ function drawHealthMark(
   ctx.restore();
 }
 
+/**
+ * Reads the address for the map. Its own component inside a Suspense boundary,
+ * so `useSearchParams` never takes the map's server render with it; and the
+ * one source of truth for which drawer is open, whether the address changed by
+ * a click here, a <Link> elsewhere, or the back button.
+ */
+function WorldUrlSync({ onChange }: { onChange: (u: WorldUrl) => void }) {
+  const params = useSearchParams();
+  const key = params.toString();
+  useEffect(() => {
+    onChange(readWorldUrl(key));
+  }, [key, onChange]);
+  return null;
+}
+
+/** A button's shape in the bottom row. */
+const CONTROL =
+  "pointer-events-auto flex h-11 items-center rounded-full border border-white/15 bg-dusk-950/80 px-4 text-xs uppercase tracking-widest text-white/80 sm:h-9";
+
 export function WorldMap() {
-  const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const actorsRef = useRef<Actor[]>([]);
   const costCarryRef = useRef(new CostCarry());
@@ -887,6 +919,72 @@ export function WorldMap() {
       replay.dispose();
     };
   }, [replay]);
+
+  /* --- drawers (DECISIONS #1) ---------------------------------------- *
+   * A room and the History are drawers over the running map, and the address
+   * says which one is open (lib/world-url): `/?room=<slug>`, `/?history=1`.
+   * Opening pushes a history entry, so Back closes the drawer; everything else
+   * in the address (theme pin, follow, at) is left alone.
+   * ------------------------------------------------------------------- */
+  const [worldUrl, setWorldUrl] = useState<WorldUrl>({ room: null, history: false, arrived: false });
+  const worldUrlRef = useRef(worldUrl);
+  worldUrlRef.current = worldUrl;
+  const [roomExpanded, setRoomExpanded] = useState(false);
+  const onUrl = useCallback((u: WorldUrl) => setWorldUrl(u), []);
+  const navigateWorld = useCallback((qs: string, mode: "push" | "replace" = "push") => {
+    try {
+      const { pathname, hash } = window.location;
+      const href = `${pathname}${qs}${hash}`;
+      if (mode === "push") window.history.pushState(null, "", href);
+      else window.history.replaceState(null, "", href);
+    } catch {
+      /* the drawer still opens from state below */
+    }
+    setWorldUrl(readWorldUrl(qs));
+  }, []);
+  const openRoom = useCallback(
+    (slug: string, opts: { arrived?: boolean } = {}) => {
+      setPeek(null);
+      const cur = worldUrlRef.current;
+      // Moving from one room to the next replaces; Back still leaves the room.
+      navigateWorld(withRoom(window.location.search, slug, opts), cur.room ? "replace" : "push");
+    },
+    [navigateWorld],
+  );
+  const closeDrawer = useCallback(() => {
+    let qs = withRoom(window.location.search, null);
+    qs = withHistory(qs, false);
+    // Replace, so Back after closing does not reopen what was just closed.
+    navigateWorld(qs, "replace");
+  }, [navigateWorld]);
+  const openHistory = useCallback(() => {
+    setPeek(null);
+    navigateWorld(withHistory(window.location.search, true), worldUrlRef.current.room ? "replace" : "push");
+  }, [navigateWorld]);
+  const openRoomRef = useRef(openRoom);
+  openRoomRef.current = openRoom;
+  const closeDrawerRef = useRef(closeDrawer);
+  closeDrawerRef.current = closeDrawer;
+  const toggleHistoryRef = useRef<() => void>(() => {});
+  toggleHistoryRef.current = () => (worldUrlRef.current.history ? closeDrawer() : openHistory());
+
+  /** The signed-in viewer's actor id, and whether their body is on the map. Null = not known yet. */
+  const myIdRef = useRef<string | null>(null);
+  const [meInside, setMeInside] = useState<boolean | null>(null);
+  const [walkIn, setWalkIn] = useState(false);
+  const [arrival, setArrival] = useState<Arrival | null>(null);
+  const [panel, setPanel] = useState<"keys" | "legend" | null>(null);
+  const [firstVisit, setFirstVisit] = useState(false);
+  useEffect(() => setFirstVisit(!readFlag(browserStore(), FIRST_VISIT_KEY)), []);
+  const dismissFirstVisit = useCallback(() => {
+    setFirstVisit(false);
+    writeFlag(browserStore(), FIRST_VISIT_KEY);
+  }, []);
+  useEffect(() => {
+    if (!arrival) return;
+    const t = window.setTimeout(() => setArrival(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [arrival]);
 
   const zoomIn = useCallback(() => controlsRef.current?.zoomBy(1.25), []);
   const zoomOut = useCallback(() => controlsRef.current?.zoomBy(1 / 1.25), []);
@@ -1160,7 +1258,7 @@ export function WorldMap() {
     jumpRef.current = jumpTo;
   }, [jumpTo]);
 
-  const bookmarks: Bookmark[] = [
+  const bookmarks: Array<{ key: string; label: string; title: string }> = [
     ...BOOKMARK_REGIONS.map(({ key, region }) => ({
       key,
       label: lex.regions[region].title,
@@ -1179,6 +1277,7 @@ export function WorldMap() {
       .then((res) => {
         if (cancelled) return;
         signedInRef.current = true;
+        myIdRef.current = (res.human as { id?: string } | undefined)?.id ?? null;
         // The handle is what the public minimap names a plot's owner with, so
         // it is the one field that lets "my space" be resolved without asking
         // a second endpoint for something the map already has.
@@ -1189,6 +1288,7 @@ export function WorldMap() {
         if (cancelled) return;
         signedInRef.current = false;
         setSignedIn(false);
+        setMeInside(false);
       });
     return () => {
       cancelled = true;
@@ -1443,6 +1543,11 @@ export function WorldMap() {
           : null;
         actorsRef.current = actors;
         seatsRef.current = assignSeats(actors);
+        // Whether the viewer's own body is standing somewhere: the CTA hides then.
+        if (!replaying && myIdRef.current) {
+          const mine = myIdRef.current;
+          setMeInside(actors.some((a) => a.id === mine));
+        }
         // ?follow=<slug>: hand the body to the follow-cam once it is on the map.
         // A slug the public map does not carry after a few polls is dropped
         // quietly; the link names nothing this viewer may see.
@@ -1921,11 +2026,11 @@ export function WorldMap() {
       if (!wasDragging || moved > 6) return;
       const { tx, ty } = tileFromClient(ev.clientX, ev.clientY);
       const target = peekAt(tx, ty);
-      // Someone with a body clicked a room to walk into it, and still does.
-      // A spectator gets the read-only view instead of a bounce to a login
-      // form — which is the one thing the first click must never be.
-      if (target?.kind === "region" && signedInRef.current !== false) {
-        router.push(`/w/${target.region}`);
+      // A room opens as a drawer over the running map, for everyone: a body
+      // gets the room, a spectator its public face and "Sign in to speak" —
+      // never a bounce to a login form. A wall display keeps the card.
+      if (target?.kind === "region" && !kioskRef.current) {
+        openRoomRef.current(target.region);
         return;
       }
       if (target?.kind === "body") {
@@ -1978,6 +2083,12 @@ export function WorldMap() {
           ev.preventDefault();
           return;
         }
+        // An open drawer is the innermost thing on the map.
+        if (!kioskRef.current && (worldUrlRef.current.room || worldUrlRef.current.history)) {
+          closeDrawerRef.current();
+          ev.preventDefault();
+          return;
+        }
         if (followRef.current) {
           followRef.current = null;
           setFollowing(null);
@@ -1999,6 +2110,9 @@ export function WorldMap() {
       else if ((ev.key === "v" || ev.key === "V") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) tvModeRef.current(!tvRef.current);
       // T walks the themes. Works in kiosk mode too, where there is no switcher.
       else if ((ev.key === "t" || ev.key === "T") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) themeKeyRef.current();
+      // H opens the History drawer (and closes it again).
+      else if ((ev.key === "h" || ev.key === "H") && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !kioskRef.current)
+        toggleHistoryRef.current();
       // The bookmarks. A modified key is somebody else's shortcut — cmd-1 is a
       // browser tab, not the Plaza — so only the bare keystroke jumps.
       else if (!ev.metaKey && !ev.ctrlKey && !ev.altKey && BOOKMARK_KEYS.has(ev.key.toLowerCase()))
@@ -3008,7 +3122,41 @@ export function WorldMap() {
       canvas.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKey);
     };
-  }, [router]);
+  }, []);
+
+  const drawerOpen = Boolean(worldUrl.room || worldUrl.history);
+  const cta = mapCta({ signedIn, inside: meInside === true, roomOpen: Boolean(worldUrl.room) });
+  // Once after sign-in: the walk-in sheet opens by itself on a bare map.
+  useEffect(() => {
+    const store = browserStore();
+    if (
+      autoWalkIn({
+        signedIn,
+        inside: meInside !== false,
+        seen: readFlag(store, WALK_IN_SEEN_KEY),
+        drawerOpen,
+        kiosk,
+      })
+    ) {
+      writeFlag(store, WALK_IN_SEEN_KEY);
+      setWalkIn(true);
+    }
+  }, [signedIn, meInside, drawerOpen, kiosk]);
+  const roomRegion = worldUrl.room && worldUrl.room in lex.regions ? (worldUrl.room as RoomRegion) : null;
+  const publicView: RoomPublicView | null = roomRegion
+    ? {
+        here: actorsRef.current
+          .filter((a) => a.region === roomRegion)
+          .map((a) => ({ name: a.name, detail: a.detail ?? VERB_LABEL[a.verb] })),
+        recent: recentRef.current,
+      }
+    : null;
+  const regionsLex = lex.regions;
+  const roomTitleFor = useCallback(
+    (slug: string) => (slug in regionsLex ? regionsLex[slug as RoomRegion].title : null),
+    [regionsLex],
+  );
+  const drawerWidth = worldUrl.history ? "420px" : roomExpanded ? "min(880px, calc(100% - 2rem))" : "420px";
 
   return (
     <section
@@ -3066,104 +3214,133 @@ export function WorldMap() {
           ))}
         </ol>
       </div>
-      {/* Top overlay. On a phone the display heading and the HUD together used
-          to eat the screen the world is supposed to fill, so at small widths the
-          title drops to a readable 24px, the decorative line stands down, and
-          the HUD becomes one compact strip instead of a column beside it.
-
-          Gone entirely in kiosk mode: on a wall display this is the half of the
-          page that is talking to somebody who is not there. */}
+      {/* The one-line HUD: how many bodies, how many watching, the campus hour.
+          Everything the old panel said besides is behind ⋯ Legend. Gone in
+          kiosk mode, which keeps its own corner line below. */}
+      <h1 className="sr-only">{lex.headline}</h1>
       <div
-        className={`pointer-events-none absolute inset-x-0 top-0 flex-col gap-2 bg-gradient-to-b from-dusk-950/90 via-dusk-950/55 to-transparent p-4 pb-8 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:bg-none sm:p-6 ${
-          // Not the `hidden` attribute: a utility class carrying `display:flex`
-          // is an author style and beats the user agent's [hidden] rule, so the
-          // overlay would have stayed on the wall display.
+        className={`pointer-events-none absolute left-0 top-0 z-10 flex max-w-full flex-col items-start gap-2 p-3 sm:p-5 ${
           kiosk ? "hidden sm:hidden" : "flex"
         }`}
       >
-        <div className="min-w-0 sm:max-w-xl">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/80 sm:text-xs">{lex.eyebrow}</p>
-          <h1 className="font-display mt-1 text-2xl leading-tight text-lantern-300 sm:text-4xl md:text-5xl">
-            {lex.headline}
-          </h1>
-          <p className="mt-2 hidden max-w-xl text-sm text-white/70 sm:block">
-            {lex.subline}
-          </p>
-          {signedIn === false ? (
-            <p className="mt-1 max-w-xl text-xs text-white/60 sm:text-white/45">
-              You are watching as a spectator. Tap anyone, any room, or any claimed plot to see what is public
-              about it.
-            </p>
-          ) : null}
-        </div>
-        <div data-speech-avoid className="pointer-events-auto w-full shrink-0 rounded-2xl border border-lantern-400/20 bg-dusk-950/80 px-3 py-2 text-[11px] uppercase tracking-widest text-lantern-300/80 sm:w-auto sm:px-4 sm:py-3 sm:text-xs">
-          <ResourceBar signedIn={signedIn} />
+        <div
+          data-speech-avoid
+          data-headcount={hud.live ? "" : undefined}
+          className="pointer-events-auto flex max-w-full items-center gap-2 truncate rounded-full border border-lantern-400/20 bg-dusk-950/80 px-3 py-1.5 text-[11px] tabular-nums text-lantern-200 sm:text-xs"
+          title="Bodies on the map right now, how many open maps have checked in over the last minute (counted, never named), and the campus hour in UTC."
+        >
           {hud.live ? (
-            <div
-              data-headcount
-              className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-lantern-400/25 bg-lantern-400/10 px-2 py-0.5 text-[10px] normal-case tracking-normal text-lantern-200 tabular-nums sm:text-[11px]"
-              title="Bodies on the map right now, and how many open maps have checked in over the last minute. Counted, never named."
-            >
-              <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 motion-reduce:animate-none" />
-              <span>{formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, lex.hud)}</span>
-            </div>
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-400 motion-reduce:animate-none" />
           ) : null}
-          <div className="flex items-baseline justify-between gap-3">
-            <span>{status}</span>
-            {/* The campus clock. UTC and said so: the world is one place, and
-                two people watching it from two continents are watching the
-                same hour of it, whatever their own clocks say. */}
+          <span className="truncate">
+            {hud.live ? formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, lex.hud) : status}
             {sky ? (
-              <span className="shrink-0 tabular-nums text-lantern-300/70" title={`${sky.label} ${lex.skyPlace}`}>
-                {sky.clock} <span className="text-white/40">UTC</span>
-              </span>
+              <>
+                {" · "}
+                {sky.clock} <span className="text-white/45">{sky.label}</span>
+              </>
             ) : null}
-          </div>
-          {sky ? <div className="mt-0.5 text-[10px] text-white/40">{sky.label}</div> : null}
-          <div className="mt-1 text-white/60">
-            {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep} · {lex.hud.fog} {hud.radius}
-            {hud.world ? ` · ${lex.hud.world} ${hud.world}` : ""}
-            {hud.spaces ? ` · ${hud.spaces} ${lex.hud.claimed}` : ""}
-          </div>
-          <div className="mt-1 truncate text-[11px] normal-case tracking-normal text-white/45 sm:mt-2 sm:max-w-[240px]">
-            {hud.lastHeard || lex.hud.quiet}
-          </div>
-          <div className="mt-2 hidden flex-wrap gap-2 text-[10px] normal-case tracking-normal text-white/50 sm:flex">
-            {lex.legend.map((word) => (
-              <span key={word}>{word}</span>
-            ))}
-          </div>
-          {hud.orgs.length ? (
-            <div className="mt-2 hidden flex-wrap items-center gap-2 border-t border-white/10 pt-2 text-[10px] normal-case tracking-normal text-white/55 sm:flex">
-              {hud.orgs.map((o) => (
-                <span key={o.id} className="inline-flex items-center gap-1">
-                  <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: o.colour }} />
-                  {o.name}
-                </span>
-              ))}
-              <span className="text-white/35">
-                {hud.orgMode === "dedicated" ? "· everyone here flies it" : "· by membership"}
-              </span>
-            </div>
-          ) : null}
+          </span>
         </div>
+        {firstVisit && !drawerOpen ? <FirstVisitCard onDismiss={dismissFirstVisit} howHref="/how-it-works" /> : null}
       </div>
-      {peek ? <SpectatorPeek peek={peek} signedIn={signedIn} lex={lex.card} onClose={() => setPeek(null)} /> : null}
-      {/* Bottom overlay. These were three separately-pinned clusters that landed
-          on top of each other at phone width — the zoom buttons sat underneath
-          the "Enter as yourself" pill and could not be pressed at all. One
-          column that wraps keeps every control reachable at any width. */}
+      {peek ? (
+        <SpectatorPeek
+          peek={peek}
+          signedIn={signedIn}
+          lex={lex.card}
+          onClose={() => setPeek(null)}
+          onOpenRoom={(slug) => openRoom(slug)}
+        />
+      ) : null}
+      {!kiosk && worldUrl.room ? (
+        <RoomDrawer
+          key="room-drawer"
+          room={worldUrl.room}
+          signedIn={signedIn}
+          arrived={worldUrl.arrived}
+          themedTitle={roomRegion ? lex.regions[roomRegion].title : null}
+          titleFor={roomTitleFor}
+          publicView={publicView}
+          signInHref={loginHref({
+            next: roomHref(worldUrl.room),
+            why: "enter-room",
+            what: roomRegion ? lex.regions[roomRegion].title : "",
+          })}
+          onClose={closeDrawer}
+          onOpenRoom={(slug) => openRoom(slug)}
+          onExpandedChange={setRoomExpanded}
+        />
+      ) : null}
+      {!kiosk && worldUrl.history ? <HistoryDrawer controller={replay} onClose={closeDrawer} /> : null}
+      {walkIn && !kiosk ? (
+        <WalkInSheet
+          placeName={lex.regions.plaza.title}
+          onClose={() => setWalkIn(false)}
+          onArrived={(a) => {
+            setWalkIn(false);
+            setMeInside(true);
+            setArrival(a);
+            openRoom(a.slug, { arrived: true });
+          }}
+        />
+      ) : null}
+      {arrival ? <ArrivalToast title={arrival.title} line={arrival.line} onDismiss={() => setArrival(null)} /> : null}
+      {panel && !kiosk ? (
+        <MapPanel title={panel === "keys" ? "Keyboard" : "Legend"} onClose={() => setPanel(null)}>
+          {panel === "keys" ? (
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+              {MAP_KEYS.map((k) => (
+                <div key={k.keys} className="contents">
+                  <dt className="text-right font-mono text-lantern-300/80">{k.keys}</dt>
+                  <dd className="text-white/70">{k.what}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <div className="space-y-2 text-xs text-white/65">
+              <p className="flex flex-wrap gap-x-3 gap-y-1">
+                {lex.legend.map((word) => (
+                  <span key={word}>{word}</span>
+                ))}
+              </p>
+              {hud.orgs.length ? (
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-2">
+                  {hud.orgs.map((o) => (
+                    <span key={o.id} className="inline-flex items-center gap-1">
+                      <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: o.colour }} />
+                      {o.name}
+                    </span>
+                  ))}
+                  <span className="text-white/35">
+                    {hud.orgMode === "dedicated" ? "· everyone here flies it" : "· by membership"}
+                  </span>
+                </p>
+              ) : null}
+              <p className="border-t border-white/10 pt-2 tabular-nums">
+                {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep} · {lex.hud.fog} {hud.radius}
+                {hud.world ? ` · ${lex.hud.world} ${hud.world}` : ""}
+                {hud.spaces ? ` · ${hud.spaces} ${lex.hud.claimed}` : ""}
+              </p>
+              <p className="text-white/45">{status}</p>
+              <p className="break-words text-white/45">{hud.lastHeard || lex.hud.quiet}</p>
+            </div>
+          )}
+        </MapPanel>
+      ) : null}
+      {/* Bottom overlay: one row of consolidated controls (Go to ▾, the bell,
+          Watch ▾, ⋯, zoom on a pointer that has no pinch) and ONE call to
+          action that knows where you are. It moves out from under an open
+          drawer on a wide screen, so the drawer never covers the way out. */}
       <div
-        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-end gap-2 p-4 sm:p-6 ${
-          // Kiosk keeps the bell — a wall display exists to show you the alarm —
-          // and the exit pill is pinned under it, so the column gets out of its
-          // way. Both breakpoints: `sm:p-6` above would otherwise win the
-          // padding-bottom back at exactly the widths a wall display runs at.
+        className={`pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-end gap-2 p-3 sm:p-5 ${
           kiosk ? "pb-16 sm:pb-20" : ""
+        } ${drawerOpen && !kiosk ? "sm:pr-[calc(var(--drawer-w)+1.25rem)]" : ""} ${
+          drawerOpen && !kiosk ? "max-sm:hidden" : ""
         }`}
+        style={{ "--drawer-w": drawerWidth } as React.CSSProperties}
       >
-        {kiosk ? null : <CameraBookmarks items={bookmarks} onGo={jumpTo} goToLabel={lex.controls.goTo} />}
-        <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} />
+        {kiosk ? <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} /> : null}
         <ReplayBar controller={replay} />
         {following && !tv ? (
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-lantern-400/40 bg-dusk-950/90 py-1.5 pl-4 pr-1.5 text-xs text-lantern-300">
@@ -3179,73 +3356,160 @@ export function WorldMap() {
             </button>
           </div>
         ) : null}
-        <div
-          className={`w-full flex-wrap items-center justify-between gap-2 ${kiosk ? "hidden" : "flex"}`}
-        >
-          <div className="pointer-events-auto flex flex-wrap gap-2 text-sm">
-            {/* A signed-in viewer already is themself; the nav's You menu has the rest. */}
-            {signedIn ? null : (
-              <a href={gp("/login")} className="rounded-full bg-lantern-400 px-5 py-3 font-semibold text-dusk-950 sm:py-2">
-                Enter as yourself
+        <div className={`w-full flex-wrap items-center justify-between gap-2 ${kiosk ? "hidden" : "flex"}`}>
+          <div className="pointer-events-auto flex gap-2 text-sm">
+            {cta === "sign-in" ? (
+              <a href={gp("/login")} className="flex h-11 items-center rounded-full bg-lantern-400 px-5 font-semibold text-dusk-950 sm:h-9">
+                Sign in
               </a>
-            )}
-            <a href={gp("/how-it-works#agents")} className="rounded-full border border-white/15 bg-dusk-950/70 px-5 py-3 text-white/80 sm:bg-transparent sm:py-2">
-              Bring an agent
-            </a>
+            ) : cta === "walk-in" ? (
+              <button
+                type="button"
+                onClick={() => setWalkIn(true)}
+                className="flex h-11 items-center rounded-full bg-lantern-400 px-5 font-semibold text-dusk-950 sm:h-9"
+              >
+                Walk in
+              </button>
+            ) : null}
           </div>
-          <div className="pointer-events-auto ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={zoomOut}
-              aria-label="Zoom out"
-              title="Zoom out (−)"
-              className="h-11 w-11 rounded-full border border-white/15 bg-dusk-950/80 text-xl leading-none text-white/80 sm:h-9 sm:w-9 sm:text-lg"
-            >
-              −
-            </button>
-            <button
-              type="button"
-              onClick={zoomIn}
-              aria-label="Zoom in"
-              title="Zoom in (+)"
-              className="h-11 w-11 rounded-full border border-white/15 bg-dusk-950/80 text-xl leading-none text-white/80 sm:h-9 sm:w-9 sm:text-lg"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              onClick={resetView}
-              title="Back to the core (0)"
-              className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
-            >
-              {lex.controls.resetView}
-            </button>
-            <button
-              type="button"
-              onClick={() => setKioskMode(true)}
-              title="Kiosk mode: the world with no chrome, for a wall display (K). Escape leaves."
-              className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
-            >
-              {lex.controls.kiosk}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTvMode(true)}
-              title="Grove TV: kiosk mode with a director. The camera goes to faults, tool-call bursts, conversations, arrivals and the Stage, with a caption (V). Escape leaves."
-              className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
-            >
-              {lex.controls.tv}
-            </button>
-            <button
-              type="button"
-              onClick={() => void savePostcard()}
-              title={lex.postcard.buttonTitle}
-              className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
-            >
-              {lex.postcard.button}
-            </button>
-            <ReplayEntry controller={replay} />
-            <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+            <MapMenu label={<>{lex.controls.goTo} ▾</>} title="Move the camera to a room, the busiest room or your own ground" align="right">
+              {(close) => (
+                <>
+                  <MenuHeading>Rooms</MenuHeading>
+                  {BOOKMARK_REGIONS.map(({ key, region }) => (
+                    <MenuItem
+                      key={key}
+                      hint={key}
+                      title={`${lex.regions[region].bookmark} — opens the room`}
+                      onSelect={() => {
+                        close();
+                        jumpTo(key);
+                        openRoom(region);
+                      }}
+                    >
+                      {lex.regions[region].title}
+                    </MenuItem>
+                  ))}
+                  <MenuHeading>Camera</MenuHeading>
+                  {bookmarks
+                    .filter((b) => b.key === "b" || b.key === "m")
+                    .map((b) => (
+                      <MenuItem
+                        key={b.key}
+                        hint={b.key}
+                        title={b.title}
+                        onSelect={() => {
+                          close();
+                          jumpTo(b.key);
+                        }}
+                      >
+                        {b.label}
+                      </MenuItem>
+                    ))}
+                </>
+              )}
+            </MapMenu>
+            <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} />
+            <MapMenu label={<>Watch ▾</>} title="TV, kiosk, and the History with replay" align="right">
+              {(close) => (
+                <>
+                  <MenuItem
+                    hint="v"
+                    title="Kiosk mode with a director: the camera goes to faults, tool-call bursts, conversations, arrivals and the Stage, with a caption. Escape leaves."
+                    onSelect={() => {
+                      close();
+                      setTvMode(true);
+                    }}
+                  >
+                    {lex.controls.tv}
+                  </MenuItem>
+                  <MenuItem
+                    hint="k"
+                    title="The world with no chrome, for a wall display. Escape leaves."
+                    onSelect={() => {
+                      close();
+                      setKioskMode(true);
+                    }}
+                  >
+                    {lex.controls.kiosk}
+                  </MenuItem>
+                  <MenuItem
+                    hint="h"
+                    title="What happened: replay it on the map, or read the record"
+                    onSelect={() => {
+                      close();
+                      openHistory();
+                    }}
+                  >
+                    History &amp; replay
+                  </MenuItem>
+                </>
+              )}
+            </MapMenu>
+            <MapMenu label={<span aria-label="More">⋯</span>} title="Postcard, theme, reset view, keyboard, legend" align="right">
+              {(close) => (
+                <>
+                  {signedIn ? (
+                    <div className="px-2 pt-1 text-xs">
+                      <ResourceBar signedIn={signedIn} />
+                    </div>
+                  ) : null}
+                  <MenuItem
+                    title={lex.postcard.buttonTitle}
+                    onSelect={() => {
+                      close();
+                      void savePostcard();
+                    }}
+                  >
+                    {lex.postcard.button}
+                  </MenuItem>
+                  <div className="px-1 py-1">
+                    <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />
+                  </div>
+                  <MenuItem
+                    hint="0"
+                    onSelect={() => {
+                      close();
+                      resetView();
+                    }}
+                  >
+                    {lex.controls.resetView}
+                  </MenuItem>
+                  <MenuItem
+                    onSelect={() => {
+                      close();
+                      setPanel("keys");
+                    }}
+                  >
+                    Keyboard help
+                  </MenuItem>
+                  <MenuItem
+                    onSelect={() => {
+                      close();
+                      setPanel("legend");
+                    }}
+                  >
+                    Legend
+                  </MenuItem>
+                  <MenuLink href="/how-it-works#agents" onSelect={close}>
+                    Bring an agent
+                  </MenuLink>
+                  <MenuLink href="/how-it-works" onSelect={close}>
+                    How it works
+                  </MenuLink>
+                </>
+              )}
+            </MapMenu>
+            {/* Zoom buttons only where there is no pinch: a fine pointer that hovers. */}
+            <div className="hidden gap-2 [@media(hover:hover)_and_(pointer:fine)]:flex">
+              <button type="button" onClick={zoomOut} aria-label="Zoom out" title="Zoom out (−)" className={`${CONTROL} w-9 justify-center px-0 text-lg`}>
+                −
+              </button>
+              <button type="button" onClick={zoomIn} aria-label="Zoom in" title="Zoom in (+)" className={`${CONTROL} w-9 justify-center px-0 text-lg`}>
+                +
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -3258,6 +3522,9 @@ export function WorldMap() {
           {hud.live ? ` · ${formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, lex.hud)}` : ""}
         </div>
       ) : null}
+      <Suspense fallback={null}>
+        <WorldUrlSync onChange={onUrl} />
+      </Suspense>
     </section>
   );
 }

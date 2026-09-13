@@ -274,8 +274,8 @@ export function Nav() {
         <Link href="/explore" className={ITEM}>
           Explore
         </Link>
-        <Link href="/chronicle" className={ITEM}>
-          Chronicle
+        <Link href="/?history=1" className={ITEM}>
+          History
         </Link>
         {isOperator(viewer) ? (
           <Link href="/mod" className={ITEM}>

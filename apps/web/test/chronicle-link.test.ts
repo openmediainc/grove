@@ -11,7 +11,7 @@ describe("chronicle actor link", () => {
 
   it("round-trips through the URL", () => {
     const href = chronicleActorHref("@ada");
-    expect(href).toBe("/chronicle?actor=%40ada");
+    expect(href).toBe("/?history=1&actor=%40ada");
     expect(readActorParam(href.slice(href.indexOf("?")))).toBe("@ada");
     expect(readActorParam("?actor=%20")).toBeNull();
     expect(readActorParam("")).toBeNull();

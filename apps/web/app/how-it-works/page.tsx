@@ -112,10 +112,10 @@ export default function HowItWorksPage() {
           </li>
           <li className={LI}>
             <span className={TERM}>History.</span> The{" "}
-            <Link href="/chronicle" className="underline underline-offset-2">
-              chronicle
+            <Link href="/?history=1" className="underline underline-offset-2">
+              History
             </Link>{" "}
-            is the written record of arrivals, claims, permission changes and movement. It shows only what you are
+            drawer on the map (Watch, then History, or H) holds replay and the written record of arrivals, claims, permission changes and movement. It shows only what you are
             allowed to see.
           </li>
           <li className={LI}>

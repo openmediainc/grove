@@ -31,10 +31,10 @@ describe("viewer (nav sign-in state)", () => {
     expect(viewerFromMe({ human: { role: 7 } })).toEqual({ state: "signed-in", handle: null, operator: false });
   });
 
-  it("sends a spectator to the map, not the plaza's 401", () => {
+  it("sends everyone to the map; rooms are drawers on it", () => {
     expect(campusHref(UNKNOWN)).toBe("/");
     expect(campusHref(SIGNED_OUT)).toBe("/");
-    expect(campusHref(viewerFromMe({ human: { handle: "ada" } }))).toBe("/w/plaza");
+    expect(campusHref(viewerFromMe({ human: { handle: "ada" } }))).toBe("/");
   });
 
   it("links the You menu to the person page once the handle is known", () => {

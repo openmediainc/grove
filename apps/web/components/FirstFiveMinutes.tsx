@@ -125,7 +125,7 @@ export function FirstFiveMinutes({
   me: { id: string; handle?: string } | null;
   nearby: Nearby[];
   lines: TranscriptLine[];
-  /** Walked straight in from /enter. The arrival is still the subject; stay open. */
+  /** Walked straight in from the walk-in sheet. The arrival is still the subject; stay open. */
   arrived: boolean;
   /**
    * Whether the reader is actually in this room, or merely looking at it.

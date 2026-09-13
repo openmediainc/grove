@@ -83,7 +83,7 @@ function LoginForm() {
     try {
       window.sessionStorage.setItem(AFTER_LOGIN, next);
     } catch {
-      /* private mode: we just land on /enter instead */
+      /* private mode: we just land on the map instead */
     }
   }, [next]);
 
@@ -117,7 +117,7 @@ function LoginForm() {
         } catch {
           /* ignore */
         }
-        window.location.href = gp(safeNext(stored) ?? next ?? "/enter");
+        window.location.href = gp(safeNext(stored) ?? next ?? "/");
       } catch (e) {
         setMsg((e as Error).message);
       }

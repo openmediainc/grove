@@ -32,6 +32,7 @@ import { Activity } from "@/components/Activity";
 import { CardFields, CardPanel, useCard, useCardLex } from "@/components/Card";
 import { FollowButton } from "@/components/Follow";
 import { Tabs } from "@/components/Tabs";
+import { roomHref } from "@/lib/world-url";
 
 /**
  * One space, one page: About · Activity · Manage (`?tab=`).
@@ -146,7 +147,7 @@ export default function SpacePage() {
         method: "POST",
         body: JSON.stringify(room ? { room } : {}),
       });
-      window.location.href = gp(`/w/${room ?? "plaza"}`);
+      window.location.href = gp(roomHref(room ?? "plaza"));
     } catch (e) {
       if ((e as { status?: number }).status === 401) {
         window.location.href = gp(`/login?why=space&next=${encodeURIComponent(spaceHref(slug))}`);

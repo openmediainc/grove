@@ -9,6 +9,7 @@
 import { CARD_EDITABLE, CARD_LINKS_MAX, type CardField, type CardLink, type CardSubject } from "@grove/protocol";
 import type { ThemeLexicon } from "./themes/types";
 import { spaceHref } from "./space-page";
+import { roomHref } from "./world-url";
 
 export type CardTarget =
   | { subject: "agent"; slug: string }
@@ -70,7 +71,7 @@ export function walkOverTarget(
   t: { kind: "body"; room: string } | { kind: "space"; slug: string },
   signedIn: boolean | null,
 ): { path: string; needsLogin: boolean } {
-  const path = t.kind === "body" ? `/w/${encodeURIComponent(t.room)}` : spaceHref(t.slug);
+  const path = t.kind === "body" ? roomHref(t.room) : spaceHref(t.slug);
   return { path, needsLogin: t.kind === "body" && signedIn === false };
 }
 

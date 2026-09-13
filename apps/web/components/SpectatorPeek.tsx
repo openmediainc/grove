@@ -11,6 +11,7 @@ import { CardFields, useCard } from "./Card";
 import { FollowButton } from "./Follow";
 import { LeaveMessage } from "./LeaveMessage";
 import { messageTargetFromCard } from "@/lib/message";
+import { roomHref } from "@/lib/world-url";
 
 type CardLex = ThemeLexicon["card"];
 
@@ -144,6 +145,7 @@ export function SpectatorPeek({
   signedIn,
   lex,
   onClose,
+  onOpenRoom,
 }: {
   peek: Peek;
   /** The theme's card words: working on, walk over, follow… */
@@ -151,6 +153,8 @@ export function SpectatorPeek({
   /** null while we are still finding out; the copy stays honest either way. */
   signedIn: boolean | null;
   onClose: () => void;
+  /** Open a room's drawer on this map rather than loading the map again. */
+  onOpenRoom?: (slug: string) => void;
 }) {
   return (
     /* On a phone this is a sheet the thumb can reach, sitting above the map
@@ -172,11 +176,11 @@ export function SpectatorPeek({
         </button>
       </div>
 
-      {peek.kind === "body" ? <BodyPeek peek={peek} signedIn={signedIn} lex={lex} /> : null}
+      {peek.kind === "body" ? <BodyPeek peek={peek} signedIn={signedIn} lex={lex} onOpenRoom={onOpenRoom} /> : null}
       {peek.kind === "space" ? <SpacePeek peek={peek} signedIn={signedIn} lex={lex} /> : null}
       {peek.kind === "region" ? (
         <>
-          <RegionPeek peek={peek} signedIn={signedIn} />
+          <RegionPeek peek={peek} signedIn={signedIn} onOpenRoom={onOpenRoom} />
           <CopyLink share={peek.share} />
         </>
       ) : null}
@@ -198,12 +202,14 @@ function CardActions({
   share,
   signedIn,
   lex,
+  onOpenRoom,
 }: {
   walk: { kind: "body"; room: string; what: string } | { kind: "space"; slug: string; what: string } | null;
   follow: FollowTarget | null;
   share: ShareTarget;
   signedIn: boolean | null;
   lex: CardLex;
+  onOpenRoom?: (slug: string) => void;
 }) {
   const target = walk ? walkOverTarget(walk, signedIn) : null;
   return (
@@ -211,6 +217,13 @@ function CardActions({
       {target && walk ? (
         <a
           href={target.needsLogin ? loginHref({ next: target.path, why: "enter-room", what: walk.what }) : gp(target.path)}
+          onClick={(e) => {
+            // A body's room opens as a drawer right here; the map keeps running.
+            if (walk.kind === "body" && !target.needsLogin && onOpenRoom) {
+              e.preventDefault();
+              onOpenRoom(walk.room);
+            }
+          }}
           className={ACTION}
         >
           {lex.walkOver}
@@ -230,10 +243,12 @@ function BodyPeek({
   peek,
   signedIn,
   lex,
+  onOpenRoom,
 }: {
   peek: Extract<Peek, { kind: "body" }>;
   signedIn: boolean | null;
   lex: CardLex;
+  onOpenRoom?: (slug: string) => void;
 }) {
   const { card } = useCard(peek.card);
   return (
@@ -261,6 +276,7 @@ function BodyPeek({
         share={peek.share}
         signedIn={signedIn}
         lex={lex}
+        onOpenRoom={onOpenRoom}
       />
       {/* Leave a message: a Grove person or agent only (a Paperclip body has
           no door to leave one at). Opens a compose box right here. */}
@@ -274,7 +290,7 @@ function BodyPeek({
       ) : null}
       {signedIn ? null : (
         <a
-          href={loginHref({ next: "/enter", why: peek.speakable ? "speak" : "", what: peek.speakable ? peek.title : "" })}
+          href={loginHref({ next: "/", why: peek.speakable ? "speak" : "", what: peek.speakable ? peek.title : "" })}
           className="mt-4 block rounded-full bg-lantern-400 px-4 py-3 text-center font-semibold text-dusk-950 sm:py-2"
         >
           {peek.speakable ? `Sign in to speak to ${peek.title}` : "Sign in to get a body of your own"}
@@ -360,7 +376,15 @@ function SpacePeek({
   );
 }
 
-function RegionPeek({ peek, signedIn }: { peek: Extract<Peek, { kind: "region" }>; signedIn: boolean | null }) {
+function RegionPeek({
+  peek,
+  signedIn,
+  onOpenRoom,
+}: {
+  peek: Extract<Peek, { kind: "region" }>;
+  signedIn: boolean | null;
+  onOpenRoom?: (slug: string) => void;
+}) {
   return (
     <>
       <h2 className="font-display mt-1 text-2xl text-lantern-300">{peek.title}</h2>
@@ -396,7 +420,7 @@ function RegionPeek({ peek, signedIn }: { peek: Extract<Peek, { kind: "region" }
       {signedIn === false ? (
         <>
           <a
-            href={loginHref({ next: `/w/${peek.region}`, why: "enter-room", what: peek.title })}
+            href={loginHref({ next: roomHref(peek.region), why: "enter-room", what: peek.title })}
             className="mt-4 block rounded-full bg-lantern-400 px-4 py-3 text-center font-semibold text-dusk-950 sm:py-2"
           >
             Sign in to enter the {peek.title}
@@ -407,7 +431,12 @@ function RegionPeek({ peek, signedIn }: { peek: Extract<Peek, { kind: "region" }
         </>
       ) : (
         <a
-          href={gp(`/w/${peek.region}`)}
+          href={gp(roomHref(peek.region))}
+          onClick={(e) => {
+            if (!onOpenRoom) return;
+            e.preventDefault();
+            onOpenRoom(peek.region);
+          }}
           className="mt-4 block rounded-full bg-lantern-400 px-4 py-3 text-center font-semibold text-dusk-950 sm:py-2"
         >
           Walk into the {peek.title}
