@@ -349,6 +349,12 @@ export interface ThemeLexicon {
     resetView: string;
     theme: string;
   };
+
+  /**
+   * Postcard: the map saved to this device as a PNG with a caption strip.
+   * `greeting` + `world` is the caption's title; `replay` tags a picture of the past.
+   */
+  postcard: { button: string; buttonTitle: string; greeting: string; world: string; replay: string };
 }
 
 export interface Theme {

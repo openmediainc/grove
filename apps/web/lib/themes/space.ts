@@ -684,6 +684,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
     resetView: "Reset view",
     theme: "Theme",
   },
+  postcard: { button: "Postcard", buttonTitle: "Save a still of this view to this device. Nothing is transmitted.", greeting: "Transmission from", world: "Aetheria Station", replay: "Archive" },
 };
 
 export const SPACE_PALETTE: ThemePalette = {

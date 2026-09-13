@@ -38,7 +38,11 @@ declared `satisfies Theme`, so leaving one out fails `pnpm -r typecheck`
 Plus `ThemePalette` (plot tints, fog, edges, nameplates, lamp glow, daylight
 colour, hover card, chrome tokens, display font) and `ThemeLexicon` (every UI word:
 heading, human/agent nouns, region names + bookmark sentences, access labels +
-blurbs, construction word, bell words, HUD/legend, control labels). Room slugs in
+blurbs, construction word, bell words, HUD/legend, control labels, postcard words).
+The Postcard control (`lib/postcard.ts`) saves the canvas plus a caption strip —
+`postcard.greeting` + `postcard.world`, the UTC hour, and the followed or mid-frame
+body in civic-region words — as a local PNG download; nothing is posted, and the
+caption never names a private plot. Room slugs in
 URLs (`/w/library`) never change.
 
 Chrome re-skins through CSS variables: the section sets `--g-dusk-*`,

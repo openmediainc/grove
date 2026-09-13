@@ -295,6 +295,7 @@ export const AOE_LEXICON: ThemeLexicon = {
     resetView: "Reset view",
     theme: "Theme",
   },
+  postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Greetings from", world: "Aetheria", replay: "Replay" },
 };
 
 export const AOE_PALETTE: ThemePalette = {

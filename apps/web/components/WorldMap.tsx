@@ -68,6 +68,7 @@ import { ReplayBadge, ReplayBar, ReplayEntry } from "./ReplayBar";
 import { ReplayController, startVisitClock, type LiveContext } from "@/lib/replay/controller";
 import { ReplayMotion } from "@/lib/replay/motion";
 import { ResourceBar } from "./ResourceBar";
+import { composePostcard, downloadBlob, nearestToCentre, postcardCaption, postcardFilename } from "@/lib/postcard";
 import { CostCarry } from "./costCarry";
 import { resourceTerms } from "@/lib/cost";
 import { skyAt, type Sky } from "./skyClock";
@@ -763,6 +764,8 @@ export function WorldMap() {
     zoomBy: (f: number) => void;
     reset: () => void;
     goTo: (tx: number, ty: number, zoom: number) => void;
+    /** The body drawn nearest the middle of the frame, if one is close. */
+    centred: () => string | null;
   } | null>(null);
   /** The world's own stall threshold, straight off the minimap. */
   const stallSecondsRef = useRef(DEFAULT_STALL_SECONDS);
@@ -916,6 +919,27 @@ export function WorldMap() {
   useEffect(() => {
     applyTheme(readThemeChoice(), false);
   }, [applyTheme]);
+
+  /** Postcard (lib/postcard): the canvas plus a caption, downloaded locally. Nothing is posted. */
+  const savePostcard = useCallback(async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const id = followRef.current ?? controlsRef.current?.centred() ?? null;
+    const a = id ? actorsRef.current.find((x) => x.id === id) : undefined;
+    const at = replay.view.active ? replay.view.playhead : Date.now();
+    const theme = chosenRef.current;
+    const caption = postcardCaption({
+      lex: theme.lexicon,
+      at,
+      replay: replay.view.active,
+      subject: a
+        ? { name: a.name, kind: a.kind, region: a.region, verb: a.verb, detail: a.detail, followed: a.id === followRef.current }
+        : null,
+      privateNames: plotRef.current.filter((p) => p.preset === "private" && p.name).map((p) => p.name!),
+    });
+    const blob = await composePostcard(canvas, caption, themeRef.current.palette);
+    if (blob) downloadBlob(blob, postcardFilename(at));
+  }, [replay]);
 
   const stopFollowing = useCallback(() => {
     followRef.current = null;
@@ -1663,6 +1687,17 @@ export function WorldMap() {
         // and gives them the display for a while.
         kioskYieldRef.current = Date.now() + KIOSK_YIELD_MS;
         glideRef.current = { tx, ty, zoom, start: performance.now() };
+      },
+      centred: () => {
+        const { ox, oy, w, h } = origin();
+        const v = viewRef.current;
+        const points = actorsRef.current.flatMap((a) => {
+          const at = lastPosRef.current.get(a.id);
+          if (!at) return [];
+          const q = iso(at.x, at.y);
+          return [{ id: a.id, x: (ox + q.x) * v.zoom + v.px, y: (oy + q.y) * v.zoom + v.py }];
+        });
+        return nearestToCentre(points, w / 2, h / 2, 72)?.id ?? null;
       },
     };
 
@@ -3130,6 +3165,14 @@ export function WorldMap() {
               className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
             >
               {lex.controls.tv}
+            </button>
+            <button
+              type="button"
+              onClick={() => void savePostcard()}
+              title={lex.postcard.buttonTitle}
+              className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
+            >
+              {lex.postcard.button}
             </button>
             <ReplayEntry controller={replay} />
             <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />

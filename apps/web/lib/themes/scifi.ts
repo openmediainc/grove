@@ -730,6 +730,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
     resetView: "Reset view",
     theme: "Theme",
   },
+  postcard: { button: "Capture", buttonTitle: "Capture this view as a PNG on this device. Nothing leaves it.", greeting: "Frame captured on", world: "the Aetheria Grid", replay: "Playback" },
 };
 
 export const SCIFI_PALETTE: ThemePalette = {

@@ -666,6 +666,7 @@ export const CITY_LEXICON: ThemeLexicon = {
     resetView: "Reset view",
     theme: "Theme",
   },
+  postcard: { button: "Postcard", buttonTitle: "Save a postcard of this view to this device. Nothing is posted.", greeting: "Wish you were here, from", world: "Aetheria City", replay: "Rerun" },
 };
 
 export const CITY_PALETTE: ThemePalette = {
