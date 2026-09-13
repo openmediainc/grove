@@ -727,11 +727,35 @@ export class SpeechService {
    * Shared by `transcript()` and `liveAudience()` so the two can never disagree.
    */
   private async roomLineGate(roomId: string) {
+    const decide = await this.lineDecider(roomId, "room_say");
+    return async (row: { sender_id: string; sender_kind: string }, viewerId: string): Promise<boolean> => {
+      const decision = await decide(row, viewerId);
+      if (!decision || !decision.emit.allow || !decision.deliveries[0]?.decision.allow) return false;
+      if (decision.deliveries[0]?.decision.code === "MUTED") return false;
+      return true;
+    };
+  }
+
+  /**
+   * The kernel's answer, with TODAY's permissions, for a line already said in
+   * `roomId` on `channel` by `row`'s sender to `recipientId`: the room's ceilings
+   * and membership read once, the sender and recipient (blocks, mutes, grants,
+   * privacy, policy) read per call. Rate limits are not re-judged (the line
+   * already passed them). Null when the recipient no longer exists.
+   *
+   * Shared by the room transcript gate and the whisper history
+   * (services/whispers.ts), so a past line is judged the way a live one is.
+   */
+  async lineDecider(roomId: string, channel: "room_say" | "whisper") {
     const layers = this.campus ? await this.campus.ceilingLayersForRoom(roomId) : undefined;
     const members = layers && this.campus ? await this.campus.memberIdsOf(await this.campus.worldIdForRoom(roomId)) : null;
     const memberOf = (humanId: string | null | undefined) => members === null || Boolean(humanId && members.has(humanId));
     const room = await this.presence.getRoomById(roomId);
-    return async (row: { sender_id: string; sender_kind: string }, viewerId: string): Promise<boolean> => {
+    return async (
+      row: { sender_id: string; sender_kind: string },
+      recipientId: string,
+    ): Promise<ReturnType<typeof authorize> | null> => {
+      const viewerId = recipientId;
       const senderKind = row.sender_kind as ActorKind;
       const sender = {
         id: row.sender_id,
@@ -755,12 +779,13 @@ export class SpeechService {
         if (hu.rows[0]) sender.privacy = mapHuman(hu.rows[0] as Record<string, unknown>).privacy;
       }
       const rec = await this.loadRecipient(viewerId, sender.id);
-      if (!rec) return false;
+      if (!rec) return null;
       rec.isSpaceMember = memberOf(rec.kind === "human" ? rec.id : rec.ownerHumanId);
-      const decision = authorize({
+      return authorize({
         sender: { ...sender, isSpaceMember: memberOf(sender.kind === "human" ? sender.id : sender.ownerHumanId) },
         recipients: [rec],
-        channel: "room_say",
+        channel,
+        requestedTargetId: channel === "whisper" ? rec.id : undefined,
         room: room
           ? {
               id: room.id,
@@ -775,9 +800,6 @@ export class SpeechService {
         quota: { roomSayRemaining: 8, roomSayGapOk: true, writeRemaining: 30, roomWindowCount: 0 },
         isOwnerChannel: false,
       });
-      if (!decision.emit.allow || !decision.deliveries[0]?.decision.allow) return false;
-      if (decision.deliveries[0]?.decision.code === "MUTED") return false;
-      return true;
     };
   }
 

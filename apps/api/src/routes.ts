@@ -752,6 +752,26 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     return sendOk(reply, { reactions });
   });
 
+  /**
+   * The reader's own whispers in this room (sent and received), oldest first,
+   * so the room log survives a reload. Same room gate as the transcript; each
+   * line re-judged by the kernel at read time and gone after 30 days. See
+   * packages/domain/src/services/whispers.ts.
+   */
+  app.get("/api/v1/rooms/:slug/whispers", async (req, reply) => {
+    const actor = await requireActor(req, grove);
+    await chargeRead(grove, actor);
+    const slug = (req.params as { slug: string }).slug;
+    const access = await assertRoomAccess(req, grove, actor, slug);
+    const room = await grove.presence.getRoom(slug, access.worldId);
+    if (!room) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
+    assertRoomInWorld(room, access.worldId);
+    const q = req.query as { limit?: string };
+    const reader = actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };
+    const whispers = await grove.whispers.history(reader, room.id, q.limit ? Number(q.limit) : 50);
+    return sendOk(reply, { whispers });
+  });
+
   app.get("/api/v1/observe", async (req, reply) => {
     const agent = await requireAgent(req, grove);
     await chargeRead(grove, { kind: "agent", agent });

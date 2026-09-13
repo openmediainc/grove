@@ -36,6 +36,7 @@ import {
   type WhisperCheckWire,
   type WhisperLine,
 } from "@/lib/whisper";
+import { fetchWhisperHistory, mergeWhisperLines } from "@/lib/whisper-history";
 
 /**
  * Only a fallback now. The campus list is built from `GET /api/v1/civic`, which
@@ -138,6 +139,7 @@ export default function RoomPage() {
    * Private lines, the reader's own. Separate from `lines` on purpose: the
    * transcript endpoint is room_say only and `load()` replaces `lines`
    * wholesale, which would silently erase every whisper on the next refresh.
+   * Stored history is merged in by `lib/whisper-history` on every load.
    */
   const [whispers, setWhispers] = useState<WhisperLine[]>([]);
   const [sending, setSending] = useState(false);
@@ -162,6 +164,12 @@ export default function RoomPage() {
     setSpace(await loadSpace(r.room as RoomWithWorld));
     const t = await api<{ transcript: TranscriptLine[] }>(`/api/v1/rooms/${r.room.slug}/transcript`);
     setLines(t.transcript);
+    // The reader's own whispers, so the log survives a reload. Replacing lets a
+    // block since hide lines already on screen; a failed read keeps what is there.
+    const whispersAsked = Date.now();
+    void fetchWhisperHistory(r.room.slug)
+      .then((stored) => setWhispers((cur) => mergeWhisperLines(cur, stored, { replaceBefore: whispersAsked })))
+      .catch(() => {});
     // One call for all six rooms: the point of the room states is that you can
     // see what the OTHER rooms are doing without walking into them.
     const c = await api<{ rooms: RoomStatus[] }>("/api/v1/civic").catch(() => ({ rooms: [] }));

@@ -26,6 +26,13 @@ export { ToolCallService, TOOL_CALL_ABANDON_SECONDS, TOOL_CALL_RETENTION_DAYS, t
 export { type WhisperCheck } from "./services/speech.js";
 export { SpeechService, spectatorMayHear, SPECTATOR_RECIPIENT, assertValidOwnerChannelFlag } from "./services/speech.js";
 export type { SayQuota, SayAckWithQuota } from "./services/speech.js";
+export {
+  WhisperService,
+  WHISPER_RETENTION_DAYS,
+  WHISPER_PRUNE_EVERY_MS,
+  WHISPER_HISTORY_MAX,
+  type WhisperHistoryItem,
+} from "./services/whispers.js";
 export { ObserveService } from "./services/observe.js";
 export { WorldService } from "./services/world.js";
 export {
@@ -178,6 +185,7 @@ import { IdentityService } from "./services/identity.js";
 import { PresenceService } from "./services/presence.js";
 import { ToolCallService } from "./services/tool-calls.js";
 import { SpeechService } from "./services/speech.js";
+import { WhisperService } from "./services/whispers.js";
 import { ObserveService } from "./services/observe.js";
 import { WorldService } from "./services/world.js";
 import { ModerationService } from "./services/moderation.js";
@@ -211,6 +219,8 @@ export class GroveApp {
   toolCalls: ToolCallService;
   mailbox: MailboxService;
   speech: SpeechService;
+  /** Whisper history for its two parties, kernel-checked at read time, pruned after 30 days (032). */
+  whispers: WhisperService;
   observe: ObserveService;
   world: WorldService;
   notices: NoticeService;
@@ -256,6 +266,7 @@ export class GroveApp {
     this.jobs = new JobService(this.store);
     this.mailbox = new MailboxService(this.store, this.presence, this.webhooks);
     this.speech = new SpeechService(this.store, this.flags, this.quota, this.presence, this.mailbox, this.webhooks, this.campus);
+    this.whispers = new WhisperService(this.store, this.speech);
     // Before observe: the observation packet carries the day's pin, filtered
     // for the agent asking.
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);

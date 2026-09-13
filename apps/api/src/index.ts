@@ -74,6 +74,7 @@ export async function getApp() {
       setInterval(() => {
         void grove.presence.evictStale();
         void grove.toolCalls.sweep().catch(() => {});
+        void grove.whispers.maybePrune().catch(() => 0);
         void grove.identity.purgeExpiredUnclaimed();
       }, 60_000);
       setInterval(() => {
