@@ -59,7 +59,10 @@ export function CameraBookmarks({
           </button>
         ))}
       </div>
-      <label className="pointer-events-auto w-full sm:hidden">
+      {/* Right-aligned and no wider than a pill. Full width made a banner of it
+          and pushed the controls below into a corner that was already tuned to
+          fit a 390px screen; the option text can be long inside the menu. */}
+      <label className="pointer-events-auto ml-auto w-44 sm:hidden">
         <span className="sr-only">Move the camera to</span>
         <select
           value=""
