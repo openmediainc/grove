@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { gp } from "@/lib/base";
 import { PRESET_ORDER, presetCopy, presetTint, type SpacePolicyPreset } from "./presets";
 
 type Space = {
@@ -194,7 +195,7 @@ function CreateSpace({ onCreated }: { onCreated: () => Promise<void> }) {
         body: JSON.stringify({ name, slug: slug || suggest(name), policy_preset: preset }),
       });
       await onCreated();
-      window.location.href = `/grove/spaces/${created.world.slug}`;
+      window.location.href = gp(`/spaces/${created.world.slug}`);
     } catch (e) {
       const code = (e as { code?: string }).code;
       setErr(code === "SLUG_TAKEN" ? `${(e as Error).message} Try another slug.` : (e as Error).message);

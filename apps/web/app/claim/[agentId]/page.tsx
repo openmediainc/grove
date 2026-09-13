@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import { ArrivalToast, nameList } from "@/components/ArrivalToast";
 
@@ -75,7 +76,7 @@ export default function ClaimPage() {
       setWhere(await locate(res.agent));
     } catch (e) {
       const err = e as { status?: number; message: string };
-      if (err.status === 401) window.location.href = `/grove/login?next=/grove/claim/${params.agentId}`;
+      if (err.status === 401) window.location.href = gp(`/login?next=${gp(`/claim/${params.agentId}`)}`);
       else setMsg(err.message);
     } finally {
       setBusy(false);

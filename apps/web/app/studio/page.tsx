@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 
 export default function StudioList() {
@@ -13,7 +14,7 @@ export default function StudioList() {
     void api<{ agents: typeof agents }>("/api/v1/studio/agents")
       .then((r) => setAgents(r.agents))
       .catch((e) => {
-        if ((e as { status?: number }).status === 401) window.location.href = "/grove/login";
+        if ((e as { status?: number }).status === 401) window.location.href = gp("/login");
         else setErr((e as Error).message);
       });
   }, []);

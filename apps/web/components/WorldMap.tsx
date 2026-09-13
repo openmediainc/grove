@@ -14,8 +14,18 @@ import {
   type ItemKey,
   type ScaffoldStage,
 } from "@/lib/art";
-import { THEMES, DEFAULT_THEME, type Theme } from "@/lib/themes";
-import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
+import {
+  THEMES,
+  THEME_IDS,
+  THEME_QUERY,
+  DEFAULT_THEME,
+  getTheme,
+  readThemeChoice,
+  writeThemeChoice,
+  themeStyle,
+  type Theme,
+} from "@/lib/themes";
+import { HAZARD_COLOUR, STALL_RING, type HazardTone, type ThemeId } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
 import {
   groveVerb,
@@ -709,6 +719,10 @@ export function WorldMap() {
   /** An eased camera move to a bookmark. Cleared by any drag, wheel or follow. */
   const glideRef = useRef<{ tx: number; ty: number; zoom: number; start: number } | null>(null);
   const [kiosk, setKiosk] = useState(false);
+  const [themeId, setThemeId] = useState<ThemeId>(DEFAULT_THEME);
+  const theme = getTheme(themeId);
+  themeRef.current = theme;
+  const lex = theme.lexicon;
   const kioskRef = useRef(false);
   /** Kiosk yields to a person who touches the map, rather than fighting them. */
   const kioskYieldRef = useRef(0);
@@ -870,15 +884,35 @@ export function WorldMap() {
   }, [jumpTo]);
 
   const bookmarks: Bookmark[] = [
-    { key: "1", label: "Plaza", title: "Plaza — where the world talks" },
-    { key: "2", label: "Library", title: "Library — where bodies read" },
-    { key: "3", label: "Workshop", title: "Workshop — where the tools run" },
-    { key: "4", label: "Stage", title: "Stage — what is on" },
-    { key: "5", label: "Garden", title: "Garden — where idle bodies go" },
-    { key: "6", label: "Board", title: "Board — faults and notices" },
-    { key: "b", label: "Busiest", title: "Busiest room right now" },
-    ...(hasMySpace ? [{ key: "m", label: "My space", title: "My space — ground I hold" }] : []),
+    { key: "1", label: lex.regions.plaza.title, title: lex.regions.plaza.bookmark },
+    { key: "2", label: lex.regions.library.title, title: lex.regions.library.bookmark },
+    { key: "3", label: lex.regions.workshop.title, title: lex.regions.workshop.bookmark },
+    { key: "4", label: lex.regions.stage.title, title: lex.regions.stage.bookmark },
+    { key: "5", label: lex.regions.garden.title, title: lex.regions.garden.bookmark },
+    { key: "6", label: lex.regions.board.title, title: lex.regions.board.bookmark },
+    { key: "b", label: lex.controls.busiest, title: lex.controls.busiestTitle },
+    ...(hasMySpace ? [{ key: "m", label: lex.controls.mySpace, title: lex.controls.mySpaceTitle }] : []),
   ];
+
+  useEffect(() => {
+    setThemeId(readThemeChoice());
+  }, []);
+
+  useEffect(() => {
+    void theme.art.prepare();
+  }, [theme]);
+
+  const chooseTheme = useCallback((id: ThemeId) => {
+    setThemeId(id);
+    writeThemeChoice(id);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set(THEME_QUERY, id);
+      window.history.replaceState({}, "", url);
+    } catch {
+      /* private mode */
+    }
+  }, []);
 
   // Who is watching. Deliberately its own effect, deliberately not awaited by
   // anything that draws: the map must paint for a spectator exactly as fast as
@@ -2353,6 +2387,7 @@ export function WorldMap() {
       className={`relative overflow-hidden bg-dusk-950 ${
         kiosk ? "min-h-[100svh]" : "min-h-[calc(100svh-56px)]"
       }`}
+      style={themeStyle(theme)}
     >
       <KioskChrome active={kiosk} onLeave={() => setKioskMode(false)} />
       <canvas
@@ -2377,12 +2412,12 @@ export function WorldMap() {
         }`}
       >
         <div className="min-w-0 sm:max-w-xl">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/80 sm:text-xs">Aetheria · Grove</p>
+          <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/80 sm:text-xs">{lex.eyebrow}</p>
           <h1 className="font-display mt-1 text-2xl leading-tight text-lantern-300 sm:text-4xl md:text-5xl">
-            The campus grows as they do.
+            {lex.headline}
           </h1>
           <p className="mt-2 hidden max-w-xl text-sm text-white/70 sm:block">
-            Idle bodies sit. Awake ones think, tool, wait, or speak — Grove Plaza plus Paperclip on this Mini.
+            {lex.subline}
           </p>
           {signedIn === false ? (
             <p className="mt-1 max-w-xl text-xs text-white/60 sm:text-white/45">
@@ -2398,29 +2433,24 @@ export function WorldMap() {
                 two people watching it from two continents are watching the
                 same hour of it, whatever their own clocks say. */}
             {sky ? (
-              <span className="shrink-0 tabular-nums text-lantern-300/70" title={`${sky.label} over Aetheria`}>
+              <span className="shrink-0 tabular-nums text-lantern-300/70" title={`${sky.label} ${lex.skyPlace}`}>
                 {sky.clock} <span className="text-white/40">UTC</span>
               </span>
             ) : null}
           </div>
           {sky ? <div className="mt-0.5 text-[10px] text-white/40">{sky.label}</div> : null}
           <div className="mt-1 text-white/60">
-            {hud.awake} awake · {hud.asleep} asleep · fog {hud.radius}
-            {hud.world ? ` · world ${hud.world}` : ""}
-            {hud.spaces ? ` · ${hud.spaces} claimed` : ""}
+            {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep} · {lex.hud.fog} {hud.radius}
+            {hud.world ? ` · ${lex.hud.world} ${hud.world}` : ""}
+            {hud.spaces ? ` · ${hud.spaces} ${lex.hud.claimed}` : ""}
           </div>
           <div className="mt-1 truncate text-[11px] normal-case tracking-normal text-white/45 sm:mt-2 sm:max-w-[240px]">
-            {hud.lastHeard || "nobody has spoken here recently"}
+            {hud.lastHeard || lex.hud.quiet}
           </div>
           <div className="mt-2 hidden flex-wrap gap-2 text-[10px] normal-case tracking-normal text-white/50 sm:flex">
-            <span>tool</span>
-            <span>think</span>
-            <span>speak</span>
-            <span>wait</span>
-            <span>blocked</span>
-            <span>fault</span>
-            <span>asleep</span>
-            <span>fading</span>
+            {lex.legend.map((item) => (
+              <span key={item}>{item}</span>
+            ))}
           </div>
           {hud.orgs.length ? (
             <div className="mt-2 hidden flex-wrap items-center gap-2 border-t border-white/10 pt-2 text-[10px] normal-case tracking-normal text-white/55 sm:flex">
@@ -2452,16 +2482,16 @@ export function WorldMap() {
         }`}
       >
         {kiosk ? null : <CameraBookmarks items={bookmarks} onGo={jumpTo} />}
-        <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} />
+        <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} labels={lex.bell} />
         {following ? (
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-lantern-400/40 bg-dusk-950/90 py-1.5 pl-4 pr-1.5 text-xs text-lantern-300">
-            <span className="truncate">Following {following}</span>
+            <span className="truncate">{lex.controls.following} {following}</span>
             <button
               type="button"
               onClick={stopFollowing}
               className="shrink-0 rounded-full border border-white/20 px-4 py-2.5 text-white/80 sm:px-3 sm:py-1"
             >
-              Release
+              {lex.controls.release}
             </button>
           </div>
         ) : null}
@@ -2495,13 +2525,28 @@ export function WorldMap() {
             >
               +
             </button>
+            <label className="flex items-center gap-2 rounded-full border border-white/15 bg-dusk-950/80 px-3 py-2 text-xs uppercase tracking-widest text-white/80">
+              <span className="sr-only sm:not-sr-only">{lex.controls.theme}</span>
+              <select
+                value={themeId}
+                onChange={(e) => chooseTheme(e.target.value as ThemeId)}
+                title={lex.controls.theme}
+                className="max-w-[9.5rem] bg-transparent text-white/90 outline-none"
+              >
+                {THEME_IDS.map((id) => (
+                  <option key={id} value={id} className="bg-dusk-950 text-white">
+                    {THEMES[id].lexicon.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               onClick={resetView}
               title="Back to the core (0)"
               className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
             >
-              Reset view
+              {lex.controls.resetView}
             </button>
             <button
               type="button"
@@ -2509,7 +2554,7 @@ export function WorldMap() {
               title="Kiosk mode: the world with no chrome, for a wall display (K). Escape leaves."
               className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
             >
-              Kiosk
+              {lex.controls.kiosk}
             </button>
           </div>
         </div>
@@ -2519,7 +2564,7 @@ export function WorldMap() {
           a wall rather than of a heading on a page. */}
       {kiosk && sky ? (
         <div className="pointer-events-none absolute bottom-4 left-4 text-[11px] tabular-nums tracking-wide text-white/35">
-          {sky.clock} UTC · {sky.label} · {hud.awake} awake · {hud.asleep} asleep
+          {sky.clock} UTC · {sky.label} · {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep}
         </div>
       ) : null}
     </section>

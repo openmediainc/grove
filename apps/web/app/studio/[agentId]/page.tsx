@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AutonomyMode, ClaimState, PermissionPolicy, SpacePolicyPreset } from "@grove/protocol";
 import { api } from "@/lib/api";
+import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import { PermissionTree, type TreeSpace } from "@/components/PermissionTree";
 
@@ -90,7 +91,7 @@ export default function StudioAgent() {
 
   useEffect(() => {
     void refresh().catch((e) => {
-      if ((e as { status?: number }).status === 401) window.location.href = "/grove/login";
+      if ((e as { status?: number }).status === 401) window.location.href = gp("/login");
     });
   }, [agentId]);
 

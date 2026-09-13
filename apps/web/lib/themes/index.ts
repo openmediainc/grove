@@ -16,11 +16,14 @@
 
 import type { CSSProperties } from "react";
 import { aoe } from "./aoe";
+import { city } from "./city";
+import { scifi } from "./scifi";
+import { space } from "./space";
 import type { Theme, ThemeId } from "./types";
 
 export type { Theme, ThemeId } from "./types";
 
-export const THEMES: Readonly<Record<ThemeId, Theme>> = { aoe };
+export const THEMES: Readonly<Record<ThemeId, Theme>> = { aoe, space, city, scifi };
 
 export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
 

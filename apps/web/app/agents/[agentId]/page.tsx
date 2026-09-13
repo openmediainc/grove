@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import {
   Account,
@@ -87,7 +88,7 @@ export default function AgentDay() {
     void api<{ agents: OwnedAgent[] }>("/api/v1/studio/agents")
       .then((r) => setOwned(r.agents))
       .catch((e) => {
-        if ((e as { status?: number }).status === 401) window.location.href = "/grove/login";
+        if ((e as { status?: number }).status === 401) window.location.href = gp("/login");
         else setOwned([]);
       });
   }, []);

@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { gp } from "@/lib/base";
 
 type Actor = {
   id: string;
@@ -184,7 +185,7 @@ export default function ModPage() {
   useEffect(() => {
     void load().catch(async (e) => {
       if ((e as { status?: number }).status === 401) {
-        window.location.href = "/grove/login";
+        window.location.href = gp("/login");
         return;
       }
       try {

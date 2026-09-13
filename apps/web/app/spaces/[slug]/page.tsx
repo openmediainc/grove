@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { GROVE_BASE } from "@/lib/base";
+import { GROVE_BASE, gp } from "@/lib/base";
 import { PRESET_ORDER, presetCopy, presetTint, type SpacePolicyPreset } from "../presets";
 
 type Org = { id: string; slug: string; name: string; colour: string };
@@ -66,7 +66,7 @@ export default function SpaceDetail() {
     setErr(null);
     try {
       await api(`/api/v1/worlds/${d!.world.id}/enter`, { method: "POST", body: "{}" });
-      window.location.href = "/grove/w/plaza";
+      window.location.href = gp("/w/plaza");
     } catch (e) {
       setErr((e as Error).message);
     }

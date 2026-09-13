@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { GeoAvatar, Badges } from "./Avatar";
 import { PixelRoom } from "./PixelRoom";
 import type { Nearby } from "@/lib/api";
+import { gp } from "@/lib/base";
 import { readPixelFlag } from "@/lib/pixel";
 
 type Speech = { speech_id: string; sender_id: string; body: string; sender_kind: string };
@@ -24,7 +25,7 @@ export function PlazaStage({ live = true, capacity = 80 }: { live?: boolean; cap
 
   useEffect(() => {
     if (!live) return;
-    const es = new EventSource("/grove/api/v1/sse/plaza");
+    const es = new EventSource(gp("/api/v1/sse/plaza"));
     es.addEventListener("state", (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as { nearby?: Nearby[] };
       setNearby((data.nearby ?? []).filter((n) => actorIdOf(n)));

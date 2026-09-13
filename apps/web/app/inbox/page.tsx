@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import { presetCopy, presetTint } from "../spaces/presets";
 
@@ -61,7 +62,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     void load().catch((e) => {
-      if ((e as { status?: number }).status === 401) window.location.href = "/grove/login";
+      if ((e as { status?: number }).status === 401) window.location.href = gp("/login");
       else setErr((e as Error).message);
     });
   }, [load]);

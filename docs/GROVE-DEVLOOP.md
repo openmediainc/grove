@@ -1,6 +1,6 @@
 # Grove continuous improvement
 
-Grove does not improve by hoping a 200-body SoW gets built. It improves by a **four-layer loop** on this Mini. Tailnet only. Grok is rare and tiny.
+Grove does not improve by hoping a 200-body SoW gets built. It improves by a **four-layer loop**. Local work happens on this Mini (Tailscale). Public deploys happen on Vercel + Supabase. Grok is rare and tiny.
 
 ## Layers
 
@@ -46,7 +46,7 @@ If LM Studio `GET :1234/v1/models` is non-empty, inhabitants already speak. Do n
 
 ## What this is not
 
-- Not a public internet roadmap
+- Not "the Mini is production" — Vercel is. The Mini is local / test.
 - Not 200 concurrent bodies
 - Not “cron writes a new room every hour”
 - Not babysitting: if you never open chat, layers 0–2 still run; layer 3 still ships one slice a day

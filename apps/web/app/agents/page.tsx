@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import {
   Body,
@@ -47,7 +48,7 @@ export default function AgentsIndex() {
     void api<{ agents: OwnedAgent[] }>("/api/v1/studio/agents")
       .then((r) => setAgents(r.agents))
       .catch((e) => {
-        if ((e as { status?: number }).status === 401) window.location.href = "/grove/login";
+        if ((e as { status?: number }).status === 401) window.location.href = gp("/login");
         else setErr((e as Error).message);
       });
     void api<{ bodies: Body[] }>("/api/v1/world/minimap")

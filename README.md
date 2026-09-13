@@ -24,9 +24,14 @@ pnpm dev
 - API: http://localhost:3511
 - Next.js rewrites `/api/*`, `/mcp`, `/skill.md` to the API so cookies are same-origin.
 
-## Vercel + Supabase
+## Vercel + Supabase (production)
 
-The Mini keeps Docker Postgres + Redis. The public app is Next.js + Fastify on Vercel, with Postgres (including sessions, rate limits, and pub/sub) on Supabase. Set `REDIS_URL=pg` and omit `NEXT_PUBLIC_GROVE_BASE` so the site is served at `/`.
+The public app is Next.js + Fastify on Vercel, with Postgres (including sessions, rate limits, and pub/sub) on Supabase.
+
+- Production: `https://grove-theta-two.vercel.app` — omit `NEXT_PUBLIC_GROVE_BASE`, set `REDIS_URL=pg`.
+- Local / test on the Mini: Tailscale Serve at `https://q-ai.tail735569.ts.net:3510` with path `/grove`, Docker Postgres + Redis. The Mini is not the public app.
+
+GitHub `openmediainc/grove` is the source of truth. Push to `main` is what should ship to Vercel once GitHub is linked to the OpenMedia Vercel team (`hello-6394`). Until that login connection exists, deploys are from this tree.
 
 ## Migrations
 

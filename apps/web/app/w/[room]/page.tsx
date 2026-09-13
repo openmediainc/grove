@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, WS_ORIGIN, type RoomPayload } from "@/lib/api";
+import { gp } from "@/lib/base";
 import type { RefusalInput } from "@grove/ui";
 import { GeoAvatar } from "@/components/Avatar";
 import { FirstFiveMinutes, noteSpoke, type TranscriptLine } from "@/components/FirstFiveMinutes";
@@ -149,7 +150,7 @@ export default function RoomPage() {
 
   useEffect(() => {
     void load().catch((e) => {
-      if ((e as { status?: number }).status === 401) window.location.href = "/grove/login";
+      if ((e as { status?: number }).status === 401) window.location.href = gp("/login");
       setErr((e as Error).message);
     });
   }, [room]);
@@ -192,7 +193,7 @@ export default function RoomPage() {
 
   async function enter(slug: string) {
     await api(`/api/v1/rooms/${slug}/enter`, { method: "POST", body: "{}" });
-    if (slug !== room) window.location.href = `/grove/w/${slug}`;
+    if (slug !== room) window.location.href = gp(`/w/${slug}`);
     else await load();
   }
 

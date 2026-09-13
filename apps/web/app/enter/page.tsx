@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, type RoomPayload } from "@/lib/api";
+import { gp } from "@/lib/base";
 import { ArrivalToast, nameList } from "@/components/ArrivalToast";
 
 type EnterResult = {
@@ -36,7 +37,7 @@ export default function EnterPage() {
   useEffect(() => {
     if (!arrival) return;
     const t = setTimeout(() => {
-      window.location.href = `/grove/w/${arrival.slug}?arrived=1`;
+      window.location.href = gp(`/w/${arrival.slug}?arrived=1`);
     }, 2600);
     return () => clearTimeout(t);
   }, [arrival]);
