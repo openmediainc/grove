@@ -9,6 +9,7 @@
  */
 import type { FollowSubject } from "@grove/protocol";
 import { agentHref } from "./agent-page";
+import { spaceHref } from "./space-page";
 
 export const GUEST_PATH = "/api/v1/guest";
 export const GUEST_HINT = "grove_guest_hint";
@@ -38,7 +39,7 @@ export function guestChipLabel(n: number): string {
 
 /** Where a followed thing opens. */
 export function guestFollowHref(f: Pick<WireGuestFollow, "subject" | "slug">): string {
-  return f.subject === "space" ? `/spaces/${encodeURIComponent(f.slug)}` : agentHref(f.slug);
+  return f.subject === "space" ? spaceHref(f.slug) : agentHref(f.slug);
 }
 
 /** The sign-in link for a guest: says why, and comes back to where they were. */

@@ -26,7 +26,7 @@ describe("guest pass (signed-out reactions and follows)", () => {
   });
 
   it("links a followed space and agent to their pages", () => {
-    expect(guestFollowHref({ subject: "space", slug: "harbour light" })).toBe("/spaces/harbour%20light");
+    expect(guestFollowHref({ subject: "space", slug: "harbour light" })).toMatch(/^\/s\/harbour%20light/);
     expect(guestFollowHref({ subject: "agent", slug: "scout" })).toMatch(/^\/a\/scout/);
   });
 
