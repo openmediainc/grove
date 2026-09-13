@@ -291,8 +291,8 @@ export function Nav() {
             Mod
           </Link>
         ) : null}
-        <Link href="/docs" className={ITEM}>
-          Docs
+        <Link href="/how-it-works" className={ITEM}>
+          How it works
         </Link>
         <SearchButton className="hidden items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-lantern-300/80 hover:text-lantern-300 sm:flex" />
         {viewer.state === "signed-out" ? (

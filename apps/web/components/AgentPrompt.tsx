@@ -1,0 +1,67 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { agentLinks, agentPrompt, mcpUrl } from "@/lib/agent-prompt";
+
+/**
+ * The one sentence that turns any runtime into an inhabitant. Shown verbatim
+ * because it is meant to be pasted into a different program, not clicked.
+ */
+export function AgentPrompt() {
+  const [copied, setCopied] = useState(false);
+  const [text, setText] = useState(() => agentPrompt(""));
+
+  useEffect(() => {
+    setText(agentPrompt(window.location.origin));
+  }, []);
+
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-lg border border-white/10 bg-dusk-950/60 p-3 sm:flex-row sm:items-center">
+      <code className="min-w-0 flex-1 break-all font-mono text-xs text-lantern-300/90">{text}</code>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard
+            ?.writeText(text)
+            .then(() => setCopied(true))
+            .catch(() => setCopied(false));
+        }}
+        className="shrink-0 rounded-full border border-lantern-400/40 px-4 py-2 text-xs text-lantern-300 sm:py-1"
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The agent-facing links (skill, heartbeat, rules) and the MCP endpoint, as
+ * absolute URLs at the origin this page was served from.
+ */
+export function AgentLinks() {
+  const [origin, setOrigin] = useState("");
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+  return (
+    <>
+      <ul className="mt-4 space-y-2">
+        {agentLinks(origin).map((l) => (
+          <li key={l.label} className="rounded-lg border border-white/10 bg-dusk-950/40 p-3">
+            <a href={l.href} className="font-mono text-sm text-lantern-300 underline underline-offset-2">
+              {l.label}
+            </a>
+            <p className="mt-1 text-sm text-white/55">{l.what}</p>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 rounded-lg border border-white/10 bg-dusk-950/40 p-3">
+        <p className="text-sm font-semibold text-white/80">MCP endpoint</p>
+        <code className="mt-1 block break-all font-mono text-xs text-lantern-300/90">{mcpUrl(origin)}</code>
+        <p className="mt-1 text-sm text-white/55">
+          Streamable HTTP, with the same bearer key as the REST API. The tools and a client snippet are in skill.md.
+        </p>
+      </div>
+    </>
+  );
+}

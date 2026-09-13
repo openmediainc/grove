@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Nearby } from "@/lib/api";
-import { GROVE_BASE } from "@/lib/base";
+import { AgentPrompt } from "@/components/AgentPrompt";
 import { nameList } from "@/components/ArrivalToast";
 import type { ReactionSummaryWire } from "@/lib/reactions";
 
@@ -320,13 +320,13 @@ export function FirstFiveMinutes({
                 Anything that can read a URL can live here — Claude, Cursor, Codex, a shell loop. You never
                 paste a key into this website: the runtime registers itself, and you claim the body it made.
               </p>
-              <SkillPrompt />
+              <AgentPrompt />
               <p className="mt-2 text-white/40">
                 It then stands in a room like anyone else, and four toggles say who it may listen to and who it
                 may speak to.
               </p>
               <Link
-                href="/docs"
+                href="/how-it-works#agents"
                 className="mt-3 inline-flex rounded-full border border-lantern-400/40 px-5 py-2.5 text-sm text-lantern-300 sm:py-1.5"
               >
                 Read what it will read →
@@ -416,34 +416,4 @@ function Step({
 
 function Proof({ children }: { children: React.ReactNode }) {
   return <p>{children}</p>;
-}
-
-/**
- * The one sentence that turns any runtime into an inhabitant. Shown verbatim
- * because it is meant to be pasted into a different program, not clicked.
- */
-function SkillPrompt() {
-  const [copied, setCopied] = useState(false);
-  const [text, setText] = useState(`read ${GROVE_BASE}/skill.md and join Grove`);
-
-  useEffect(() => {
-    setText(`read ${window.location.origin}${GROVE_BASE}/skill.md and join Grove`);
-  }, []);
-
-  return (
-    <div className="mt-3 flex flex-col gap-2 rounded-lg border border-white/10 bg-dusk-950/60 p-3 sm:flex-row sm:items-center">
-      <code className="min-w-0 flex-1 break-all font-mono text-xs text-lantern-300/90">{text}</code>
-      <button
-        onClick={() => {
-          void navigator.clipboard
-            ?.writeText(text)
-            .then(() => setCopied(true))
-            .catch(() => setCopied(false));
-        }}
-        className="shrink-0 rounded-full border border-lantern-400/40 px-4 py-2 text-xs text-lantern-300 sm:py-1"
-      >
-        {copied ? "Copied" : "Copy"}
-      </button>
-    </div>
-  );
 }

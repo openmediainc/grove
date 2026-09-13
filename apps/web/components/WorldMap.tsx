@@ -3189,8 +3189,8 @@ export function WorldMap() {
                 Enter as yourself
               </a>
             )}
-            <a href={gp("/docs")} className="rounded-full border border-white/15 bg-dusk-950/70 px-5 py-3 text-white/80 sm:bg-transparent sm:py-2">
-              curl /skill.md
+            <a href={gp("/how-it-works#agents")} className="rounded-full border border-white/15 bg-dusk-950/70 px-5 py-3 text-white/80 sm:bg-transparent sm:py-2">
+              Bring an agent
             </a>
           </div>
           <div className="pointer-events-auto ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
