@@ -172,23 +172,42 @@ describe.skipIf(!hasDb)("ops overview against the database", () => {
     expect(after.agent_faults!.days).toHaveLength(8);
   });
 
-  it("every metric's range scan can use an index (031): no table is forced into a seq scan", async () => {
-    // Tables are tiny in a test DB, so the planner would happily seq scan. With
-    // enable_seqscan off a seq scan is still chosen when NO usable index exists,
-    // so any Seq Scan left in the plan means a missing index.
+  it("every metric's range scan is served by an index that leads with its filter (031)", async () => {
+    // Test tables are tiny, so the planner would happily seq scan; with
+    // enable_seqscan off it still picks one when no index exists. And a full
+    // scan of an index that merely CONTAINS created_at (speech_sender_time) is
+    // not a range scan, so each index used must lead with the time column, or
+    // with a column the metric pins by equality (world_events' type).
     const client = await pg.connect();
     try {
       await client.query("BEGIN");
       await client.query("SET LOCAL enable_seqscan = off");
       for (const m of OPS_METRICS) {
+        const [, table, column] = /FROM (\w+)\s+WHERE (\w+) >/.exec(m.sql) ?? [];
+        expect(table && column, `${m.key} sql shape`).toBeTruthy();
         const { rows } = await client.query(`EXPLAIN (FORMAT JSON) ${m.sql}`);
         const seq: string[] = [];
+        const indexes: string[] = [];
         const walk = (node: Record<string, unknown>) => {
           if (node["Node Type"] === "Seq Scan") seq.push(String(node["Relation Name"]));
+          if (typeof node["Index Name"] === "string") indexes.push(node["Index Name"]);
           for (const child of (node.Plans as Array<Record<string, unknown>>) ?? []) walk(child);
         };
         walk((rows[0]["QUERY PLAN"] as Array<{ Plan: Record<string, unknown> }>)[0]!.Plan);
         expect(seq, `${m.key} seq scans`).toEqual([]);
+        expect(indexes.length, `${m.key} uses an index`).toBeGreaterThan(0);
+        for (const name of indexes) {
+          const lead = await client.query<{ col: string }>(
+            `SELECT a.attname AS col
+               FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+               JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+              WHERE c.relname = $1`,
+            [name],
+          );
+          const col = lead.rows[0]?.col ?? "";
+          const pinned = new RegExp(`\\b${col}\\s*=`).test(m.sql);
+          expect(col === column || pinned, `${m.key}: ${name} leads with ${col}, not ${column}`).toBe(true);
+        }
       }
     } finally {
       await client.query("ROLLBACK");
