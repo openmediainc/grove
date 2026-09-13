@@ -8,6 +8,7 @@ import type { IdentityService } from "./identity.js";
 import type { FlagService } from "./flags.js";
 import type { MailboxService } from "./mailbox.js";
 import type { ToolCallService } from "./tool-calls.js";
+import { UsageService } from "./usage.js";
 import { WORLD_ID, WORLD_PUBLIC_NAME } from "@grove/protocol";
 
 export class WorldService {
@@ -236,6 +237,10 @@ export class WorldService {
        * does not report spans — which the map shows as "no shape", not as idle.
        */
       toolCalls: ToolCallView[];
+      /** A turn that just finished and reported usage: the body carries a load
+       *  to the treasury. Time and priced-or-not only, never an amount — this
+       *  payload is readable by anyone who can see the world. See migration 021. */
+      deposit: { at: string; costed: boolean } | null;
       source: "grove";
     }> = [];
     // One clock, one rule: every consumer of the minimap agrees on what is
@@ -270,6 +275,7 @@ export class WorldService {
           orgColour: null,
           stance: n.stance ?? null,
           toolCalls: [],
+          deposit: null,
           source: "grove",
         });
       }
@@ -279,6 +285,11 @@ export class WorldService {
       const agentIds = bodies.filter((b) => b.kind === "agent").map((b) => b.id);
       const spans = await this.toolCalls.forActors(agentIds, now);
       for (const b of bodies) b.toolCalls = spans.get(b.id) ?? [];
+    }
+    {
+      const agentIds = bodies.filter((b) => b.kind === "agent").map((b) => b.id);
+      const deposits = await new UsageService(this.store).recentDeposits(agentIds);
+      for (const b of bodies) b.deposit = deposits.get(b.id) ?? null;
     }
     // Claimed land. The minimap is public, so a private space shows that it is
     // held and at what access level, but not its name or owner — permission

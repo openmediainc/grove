@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizePaperclipAgent, sanitizePaperclipIssue } from "../src/paperclip.js";
+import { sanitizePaperclipBudgets, sanitizePaperclipAgent, sanitizePaperclipIssue } from "../src/paperclip.js";
 
 describe("sanitizePaperclipAgent", () => {
   it("keeps presence fields and drops adapter secrets", () => {
@@ -55,3 +55,30 @@ describe("sanitizePaperclipIssue", () => {
   });
 });
 
+
+describe("sanitizePaperclipBudgets", () => {
+  const agents = [
+    { id: "a1", name: "Hermes", budgetMonthlyCents: 5000, spentMonthlyCents: 1234, adapterConfig: { secret: "x" } },
+    { id: "a2", name: "OpenCode", budgetMonthlyCents: 0, spentMonthlyCents: 0 },
+  ];
+
+  it("reads a Paperclip 0 budget as no budget, not a $0 budget", () => {
+    const out = sanitizePaperclipBudgets(agents, [{ agentId: "a1", costCents: 1234 }], null);
+    expect(out.agents.find((a) => a.id === "a2")!.budgetMonthlyCents).toBeNull();
+    expect(out.agents.find((a) => a.id === "a1")!.budgetMonthlyCents).toBe(5000);
+  });
+
+  it("reads spend as not reported unless Paperclip has cost events for the agent", () => {
+    const out = sanitizePaperclipBudgets(agents, [{ agentId: "a1" }], { budgetCents: 5000, spendCents: 1234 });
+    expect(out.agents.find((a) => a.id === "a1")!.spentMonthlyCents).toBe(1234);
+    expect(out.agents.find((a) => a.id === "a2")!.spentMonthlyCents).toBeNull();
+    expect(out.company).toEqual({ budgetMonthlyCents: 5000, spentMonthlyCents: 1234 });
+    expect(JSON.stringify(out)).not.toMatch(/secret/);
+  });
+
+  it("with no cost events anywhere, even the company total is unknown", () => {
+    const out = sanitizePaperclipBudgets(agents, [], { budgetCents: 5000, spendCents: 0 });
+    expect(out.company!.spentMonthlyCents).toBeNull();
+    expect(out.agents.every((a) => a.spentMonthlyCents === null)).toBe(true);
+  });
+});

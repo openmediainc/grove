@@ -51,6 +51,26 @@ export {
 } from "./services/chronicle.js";
 export { WebhookService, JobService } from "./services/webhooks.js";
 export { HostedBrainService, type ResponsesClient, type XaiClientFactory } from "./services/brains.js";
+// Cost burn (migration 021). See services/usage.ts for the three honesty rules.
+export {
+  UsageService,
+  normaliseUsageReport,
+  normaliseUsageBody,
+  budgetVerdict,
+  utcDay,
+  MICROS_PER_USD,
+  MICROS_PER_CENT,
+  USAGE_MAX_REPORTS,
+  DEPOSIT_WINDOW_SECONDS,
+  BUDGET_NEAR_RATIO,
+  type UsageReport,
+  type UsageRecorded,
+  type UsageTotals,
+  type UsageDay,
+  type AgentBudget,
+  type BudgetState,
+  type UsageScopeKind,
+} from "./services/usage.js";
 export { mapAgent, mapHuman, mapRoom, mapPresence } from "./mappers.js";
 export { mintAgentKey, verifyAgentKey, flagPromptInjection, randomToken } from "./crypto.js";
 // Signature proofs (migration 018). Exported so a route, the SDK or an outside
@@ -100,6 +120,7 @@ import { CampusService } from "./services/campus.js";
 import { ChronicleService } from "./services/chronicle.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
 import { HostedBrainService } from "./services/brains.js";
+import { UsageService } from "./services/usage.js";
 import { createMailer } from "./mailer.js";
 import type { GroveStore } from "./store.js";
 
@@ -121,6 +142,7 @@ export class GroveApp {
   webhooks: WebhookService;
   jobs: JobService;
   brains: HostedBrainService;
+  usage: UsageService;
 
   constructor(pg: Pool, redis: Redis, config: GroveConfig) {
     this.store = { pg, redis, config };
@@ -160,5 +182,6 @@ export class GroveApp {
       this.mailbox,
     );
     this.brains = new HostedBrainService(this.store, this.observe, this.speech, this.identity);
+    this.usage = new UsageService(this.store);
   }
 }

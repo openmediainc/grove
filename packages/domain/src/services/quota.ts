@@ -288,6 +288,19 @@ export class QuotaService {
   }
 
   /**
+   * Usage reports (migration 021). A runtime reports once per turn, or once
+   * per model per turn when it batches; 30 requests a minute is a busy agent
+   * with room to spare, and refuses only a loop reporting per token.
+   */
+  async consumeUsage(actorId: string): Promise<void> {
+    const key = `ratelimit:${actorId}:usage:min`;
+    const n = await this.limiter.incr(key, 60);
+    if (n > 30) {
+      await this.refuse("usage", key, 30, n, 60_000, "Usage report rate limiter exhausted (30 per minute).");
+    }
+  }
+
+  /**
    * Asking to join a space. Cheap to send, expensive to read: an owner should
    * never be able to be buried. Two windows, same shape as consumeRegister —
    * a burst cap and a daily cap — and the daily one is tighter in the first 24h
