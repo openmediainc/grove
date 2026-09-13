@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { agentHref } from "@/lib/agent-page";
 import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import { presetCopy, presetTint } from "../spaces/presets";
@@ -326,7 +327,7 @@ export default function InboxPage() {
             <li key={it.agent.id} className="rounded-xl border border-white/10 bg-dusk-800/60 p-4">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <GeoAvatar kind="agent" seed={it.agent.id} size={28} label={false} />
-                <Link href={`/studio/${it.agent.id}`} className="font-semibold text-lantern-300">
+                <Link href={agentHref(it.agent.slug, "settings")} className="font-semibold text-lantern-300">
                   {it.agent.display_name}
                 </Link>
                 <span className="break-all text-xs text-white/40">{it.agent.slug}</span>

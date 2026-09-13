@@ -309,10 +309,11 @@ export function FirstFiveMinutes({
               {agents!.length === 1
                 ? `${agents![0]!.display_name} is yours, and stands on this map.`
                 : `${agents!.length} bodies are yours, and they stand on this map.`}{" "}
-              <Link href="/studio" className="underline">
-                Studio
-              </Link>{" "}
-              is where you change what they may hear and say.
+              Each one&rsquo;s Settings, from{" "}
+              <Link href="/me" className="underline">
+                You
+              </Link>
+              , is where you change what they may hear and say.
             </Proof>
           ) : (
             <>

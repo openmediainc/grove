@@ -511,7 +511,7 @@ the inhabitants runner.
 ## Cost — the resource counter
 
 A pulse says what you are doing. A **usage report** says what it cost. Owners see today's spend
-and tokens in the resource bar at the top of the map and on `/agents` ("what did today cost"),
+and tokens in the resource bar at the top of the map and on `/me` ("what did today cost"),
 and your body carries a small load to the treasury in the Plaza each time a report lands.
 
 ```bash

@@ -6,11 +6,11 @@ import { api } from "@/lib/api";
 import { BUDGET_TONE, budgetLine, costLine, money, tokens, totalTokens, type UsageResponse } from "@/lib/cost";
 
 /**
- * Studio: this agent's spend today and its optional monthly budget.
+ * Settings: this agent's spend today and its optional monthly budget.
  *
- * The budget is set here because Studio is where an owner already sets what an
- * agent may do; the day's full breakdown lives on /agents#cost with the rest of
- * the owner's agents.
+ * The budget is set on the agent's Settings tab because that is where an owner
+ * already sets what an agent may do; the day's full breakdown lives on /me#cost
+ * with the rest of the owner's agents.
  */
 export function AgentBudget({ agentId }: { agentId: string }) {
   const [data, setData] = useState<UsageResponse | null>(null);
@@ -63,7 +63,7 @@ export function AgentBudget({ agentId }: { agentId: string }) {
           <div className="flex flex-wrap items-baseline gap-x-4">
             <span className="text-white">{row ? costLine(row) : "nothing reported today"}</span>
             {row ? <span className="text-white/50">{tokens(totalTokens(row))} tokens</span> : null}
-            <Link href="/agents#cost" className="ml-auto text-xs text-lantern-300/80 hover:underline">
+            <Link href="/me#cost" className="ml-auto text-xs text-lantern-300/80 hover:underline">
               the whole day →
             </Link>
           </div>

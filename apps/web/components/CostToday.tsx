@@ -4,6 +4,7 @@ import { gp } from "@/lib/base";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { agentHref } from "@/lib/agent-page";
 import {
   BUDGET_TONE,
   budgetLine,
@@ -20,10 +21,9 @@ import {
 /**
  * "What did today cost" — per agent, per model, per hour.
  *
- * Lives on /agents, the owner's "which of my agents needs me" page, rather than
- * on a new top-level page: that page is already the owner's day across all of
- * their agents, and spend is the other half of the same question. Studio is one
- * agent; a space page is one plot, and an agent's spend is not tied to a plot.
+ * Lives on /me (#cost), beside the owner's agents: spend is the other half of
+ * "how did today go". An agent's own budget is set on its Settings tab; a space
+ * page is one plot, and an agent's spend is not tied to a plot.
  *
  * Every number here came from GET /api/v1/usage, which decided in SQL what this
  * viewer may see. The page adds no rule of its own.
@@ -79,7 +79,7 @@ export function CostToday() {
   const peak = u ? Math.max(1, ...u.by_hour.map((h) => (priced ? h.cost_micros ?? 0 : totalTokens(h)))) : 1;
 
   return (
-    <section id="cost" className="mt-10 scroll-mt-20">
+    <section className="mt-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="font-display text-2xl text-lantern-300">What did {day === today ? "today" : day} cost</h2>
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -184,7 +184,7 @@ export function CostToday() {
                         return (
                           <tr key={a.agent_id} className="border-t border-white/5 align-top">
                             <td className="py-1.5 pr-3">
-                              <Link href={`/studio/${a.agent_id}`} className="hover:underline">
+                              <Link href={agentHref(a.agent_id, "settings")} className="hover:underline">
                                 {a.display_name}
                               </Link>
                               {line && a.budget ? <span className={`block text-[10px] ${BUDGET_TONE[a.budget.state]}`}>{line}</span> : null}

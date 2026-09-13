@@ -113,7 +113,7 @@ export function ResourceBar({ signedIn }: { signedIn: boolean | null }) {
           ))}
         </select>
       ) : null}
-      <Link href="/agents#cost" className="text-[10px] text-lantern-300/80 underline-offset-2 hover:underline" title={costLine(t)}>
+      <Link href="/me#cost" className="text-[10px] text-lantern-300/80 underline-offset-2 hover:underline" title={costLine(t)}>
         what did today cost
       </Link>
     </div>

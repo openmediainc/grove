@@ -5,7 +5,7 @@
  * from GET /api/v1/chronicle, which decided in SQL whether this viewer may see
  * it; if a row is here, the viewer is allowed to read it, and if a field is
  * missing the server withheld it. This file only groups, totals and phrases —
- * the same division of labour the world-wide chronicle page already keeps.
+ * the same division of labour components/Activity keeps.
  *
  * Why the roll-up lives in the browser rather than in ChronicleService, where
  * the rest of Grove composes its sentences: the account needs a route of its
@@ -14,28 +14,12 @@
  * move behind it — unchanged, apart from losing the fetch.
  */
 
-export type ChronicleEntry = {
-  id: string;
-  type: string;
-  kind: string;
-  moderation: boolean;
-  created_at: string;
-  actor: { id: string; kind: string; display_name: string; slug: string | null } | null;
-  room_id: string | null;
-  room_name: string | null;
-  summary: string;
-  body: string | null;
-  body_withheld: boolean;
-  detail: Record<string, unknown>;
-};
+import { clock } from "./activity";
+import type { ActivityEntry, ActivityPage } from "./activity";
 
-export type ChroniclePage = {
-  entries: ChronicleEntry[];
-  next_cursor: string | null;
-  window: { since: string | null; until: string | null };
-  totals: { events: number; by_kind: Record<string, number>; by_type: Record<string, number> };
-  viewer: { signed_in: boolean; operator: boolean };
-};
+export { clock };
+export type ChronicleEntry = ActivityEntry;
+export type ChroniclePage = ActivityPage;
 
 /** One closed stretch of a single pulse verb, as migration 017 records it. */
 export type Phase = {
@@ -104,9 +88,6 @@ export function humanDuration(seconds: number): string {
   return rem ? `${h}h ${rem}m` : `${h}h`;
 }
 
-export function clock(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-}
 
 export function phaseOf(entry: ChronicleEntry): Phase | null {
   if (entry.type !== "agent_phase") return null;
@@ -212,7 +193,7 @@ export function accountSentences(a: Account, windowLabel: string): string[] {
 
   if (a.neverPulsed) {
     out.push(
-      `Grove has no record of what this agent was doing ${w}. It kept no verb history because it never pulsed — an agent that does not pulse has a body on the map, but no account of its day.`,
+      `Glasshouse has no record of what this agent was doing ${w}. It kept no verb history because it never pulsed — an agent that does not pulse has a body on the map, but no account of its day.`,
     );
   } else {
     const parts: string[] = [];
@@ -266,7 +247,7 @@ export function liveSentence(name: string, body: Body | null, a: Account): strin
   if (!body) {
     const last = a.lastAt;
     return last
-      ? `${name} is not on the map right now. The last thing Grove recorded was at ${clock(last)}.`
+      ? `${name} is not on the map right now. The last thing Glasshouse recorded was at ${clock(last)}.`
       : `${name} is not on the map right now, and has no recorded history in this window.`;
   }
   if (!body.verb) {
@@ -280,7 +261,7 @@ export function liveSentence(name: string, body: Body | null, a: Account): strin
   const runFor = a.lastAt ? humanDuration((Date.now() - Date.parse(a.lastAt)) / 1000) : null;
   if (body.stalled) {
     const age = body.pulse_age_seconds ?? 0;
-    return `${name} still claims it is ${noun}${caption}, but it has not pulsed for ${humanDuration(age)}. Grove calls that stalled, not working.`;
+    return `${name} still claims it is ${noun}${caption}, but it has not pulsed for ${humanDuration(age)}. Glasshouse calls that stalled, not working.`;
   }
   if (TROUBLE.has(body.verb)) {
     const how = runFor ? ` for ${runFor}, since ${clock(a.lastAt!)}` : "";
@@ -300,22 +281,4 @@ function sentenceList(parts: string[], empty: string): string {
 
 function capitalise(s: string): string {
   return s ? s[0]!.toUpperCase() + s.slice(1) : s;
-}
-
-/** The windows an owner actually asks for. `hours: null` means "since local midnight". */
-export const WINDOWS: Array<{ key: string; label: string; hours: number | null }> = [
-  { key: "today", label: "Today", hours: null },
-  { key: "12h", label: "Overnight", hours: 12 },
-  { key: "24h", label: "24 hours", hours: 24 },
-  { key: "7d", label: "7 days", hours: 24 * 7 },
-];
-
-export function sinceFor(key: string): string {
-  const w = WINDOWS.find((x) => x.key === key) ?? WINDOWS[0]!;
-  if (w.hours === null) {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
-  }
-  return new Date(Date.now() - w.hours * 3600_000).toISOString();
 }

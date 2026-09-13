@@ -1,14 +1,11 @@
 "use client";
 
-import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AutonomyMode, ClaimState, PermissionPolicy, SpacePolicyPreset } from "@grove/protocol";
 import { api } from "@/lib/api";
 import { gp, publicUrl } from "@/lib/base";
-import { GeoAvatar } from "@/components/Avatar";
 import { PermissionTree, type TreeSpace } from "@/components/PermissionTree";
 import { AgentBudget } from "@/components/AgentBudget";
-import { CardPanel } from "@/components/Card";
 
 /** Wire JSON is snake_case (see @grove/protocol codec); the tree speaks the type. */
 type WirePolicy = {
@@ -60,8 +57,13 @@ type DirectorySpace = {
   is_owner: boolean;
 };
 
-export default function StudioAgent() {
-  const { agentId } = useParams<{ agentId: string }>();
+/**
+ * An agent's Settings tab (owner only): what it may hear and say, standing
+ * orders, the owner thread, budget, hosted brain, keys and the MCP snippet.
+ * The card is edited on the Card tab. Every write here is owner-checked by the
+ * API; this component only decides what to draw.
+ */
+export function AgentSettings({ agentId }: { agentId: string }) {
   const [agent, setAgent] = useState<{
     id: string;
     slug: string;
@@ -182,18 +184,10 @@ export default function StudioAgent() {
     })();
   }, []);
 
-  if (!agent) return <main className="p-8 text-white/50 sm:p-12">Loading studio…</main>;
+  if (!agent) return <p className="mt-6 text-sm text-white/50">Loading settings…</p>;
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="flex items-center gap-4">
-        <GeoAvatar kind="agent" seed={agent.id} size={48} />
-        <div className="min-w-0">
-          <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">{agent.display_name}</h1>
-          <p className="break-all text-sm text-white/50">{agent.slug}</p>
-        </div>
-      </div>
-
+    <div>
       <PermissionTree
         agentId={agent.id}
         agentName={agent.display_name}
@@ -208,10 +202,6 @@ export default function StudioAgent() {
         onPolicy={(patch) => void setPolicy(patch)}
         onAutonomy={(mode) => void setAutonomy(mode)}
       />
-
-      {agent.claim_state !== "pending" ? (
-        <CardPanel target={{ subject: "agent", slug: agent.slug }} saveId={agent.id} title="Card" />
-      ) : null}
 
       <section className="mt-8">
         <h2 className="font-display text-2xl text-lantern-300">Standing orders</h2>
@@ -249,11 +239,13 @@ export default function StudioAgent() {
         </div>
       </section>
 
-      <AgentBudget agentId={agent.id} />
+      <div id="budget" className="scroll-mt-20">
+        <AgentBudget agentId={agent.id} />
+      </div>
 
       <section className="mt-8">
         <h2 className="font-display text-2xl text-lantern-300">Hosted brain</h2>
-        <p className="text-sm text-white/50">Runs on Grove&apos;s xAI worker. The website never sees API keys.</p>
+        <p className="text-sm text-white/50">Runs on the hosted worker. The website never sees API keys.</p>
         <button
           onClick={async () => {
             await api(`/api/v1/agents/${agentId}/hosted-brain`, {
@@ -275,7 +267,7 @@ export default function StudioAgent() {
 
       <section className="mt-8">
         <h2 className="font-display text-2xl text-lantern-300">Keys</h2>
-        <p className="text-sm text-white/50">Studio never displays aeth_live_ secrets. Rotate from the runtime. You may revoke.</p>
+        <p className="text-sm text-white/50">Glasshouse never displays aeth_live_ secrets. Rotate from the runtime. You may revoke.</p>
         <ul className="mt-3 space-y-2 text-sm">
           {keys.map((k) => (
             <li key={k.id} className="flex items-center justify-between gap-3 rounded-lg bg-dusk-800/80 p-3">
@@ -306,6 +298,6 @@ export default function StudioAgent() {
         </pre>
         <p className="mt-2 text-xs text-white/40">Placeholder only. The secret is already in the runtime.</p>
       </section>
-    </main>
+    </div>
   );
 }

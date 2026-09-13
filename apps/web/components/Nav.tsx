@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { gp } from "@/lib/base";
+import { signOut } from "@/lib/session";
 import { SEARCH_EVENT } from "@/lib/search";
 import {
   INBOX_SEEN_EVENT,
@@ -16,7 +16,6 @@ import {
   type WireUnread,
 } from "@/lib/unread";
 import {
-  LOGOUT_PATH,
   ME_PATH,
   SIGNED_OUT,
   UNKNOWN,
@@ -125,15 +124,6 @@ function useViewer(): Viewer {
   return viewer;
 }
 
-/** Ends the session server-side (cookie + session key), then back to the map. */
-async function signOut() {
-  try {
-    await api(LOGOUT_PATH, { method: "POST", body: "{}" });
-  } catch {
-    /* already gone: the map is still the right place to land */
-  }
-  window.location.href = gp("/");
-}
 
 function Badge({ total, className = "" }: { total: number; className?: string }) {
   const text = badgeText(total);
@@ -190,6 +180,9 @@ function YouMenu({ viewer, unread }: { viewer: Viewer; unread: number }) {
           role="menu"
           className="absolute right-0 top-full z-30 mt-2 flex w-48 flex-col rounded-xl border border-white/10 bg-dusk-900/95 p-1 text-sm shadow-xl backdrop-blur-md"
         >
+          <Link role="menuitem" href="/me" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 hover:bg-white/5">
+            You
+          </Link>
           {profile ? (
             <Link role="menuitem" href={profile} onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 hover:bg-white/5">
               Your page
@@ -283,9 +276,6 @@ export function Nav() {
         <Link href="/chronicle" className={ITEM}>
           Chronicle
         </Link>
-        <Link href="/studio" className={ITEM}>
-          Studio
-        </Link>
         {isOperator(viewer) ? (
           <Link href="/mod" className={ITEM}>
             Mod
@@ -307,6 +297,9 @@ export function Nav() {
         {signedIn ? (
           <div className="mt-1 flex flex-col gap-0.5 border-t border-white/10 pt-1 sm:hidden">
             <span className="px-3 pt-2 text-[11px] uppercase tracking-widest text-white/35">You</span>
+            <Link href="/me" className={ITEM}>
+              Your agents and spaces
+            </Link>
             {profile ? (
               <Link href={profile} className={ITEM}>
                 Your page
