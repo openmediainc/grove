@@ -8,6 +8,8 @@ import type { ThemeLexicon } from "@/lib/themes/types";
 import { followTargetFromCard, type FollowTarget } from "@/lib/follow";
 import { CardFields, useCard } from "./Card";
 import { FollowButton } from "./Follow";
+import { LeaveMessage } from "./LeaveMessage";
+import { messageTargetFromCard } from "@/lib/message";
 
 type CardLex = ThemeLexicon["card"];
 
@@ -256,6 +258,16 @@ function BodyPeek({
         signedIn={signedIn}
         lex={lex}
       />
+      {/* Leave a message: a Grove person or agent only (a Paperclip body has
+          no door to leave one at). Opens a compose box right here. */}
+      {peek.speakable ? (
+        <LeaveMessage
+          target={messageTargetFromCard(peek.card, peek.title)}
+          label={lex.message}
+          signedIn={signedIn}
+          className={`${ACTION} mt-2 w-full gap-1.5`}
+        />
+      ) : null}
       {signedIn ? null : (
         <a
           href={loginHref({ next: "/enter", why: peek.speakable ? "speak" : "", what: peek.speakable ? peek.title : "" })}

@@ -28,6 +28,18 @@ export class MailboxService {
     return id;
   }
 
+  /**
+   * Always enqueue, and wake the agent if it is offline. For items addressed to
+   * the agent itself (a message left for it), which must wait whether or not it
+   * is connected right now.
+   */
+  async deliver(agentId: string, kind: string, payload: Record<string, unknown>): Promise<string> {
+    const id = await this.enqueue(agentId, kind, payload);
+    const p = await this.presence.getPresence(agentId);
+    if (!p || p.connection === "offline") await this.webhooks?.enqueueWake(agentId, kind, { mailboxId: id });
+    return id;
+  }
+
   async enqueueIfOffline(agentId: string, kind: string, payload: Record<string, unknown>): Promise<string | null> {
     if (!agentId.startsWith("agt_")) return null;
     const p = await this.presence.getPresence(agentId);

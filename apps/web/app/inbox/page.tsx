@@ -7,6 +7,8 @@ import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import { presetCopy, presetTint } from "../spaces/presets";
 import { noticeHref, noticeText, type WireFollowNotice } from "@/lib/follow";
+import { partyHref, replyTarget, type WireMessage, type WireMessages } from "@/lib/message";
+import { LeaveMessage } from "@/components/LeaveMessage";
 
 type Item = {
   agent: { id: string; slug: string; display_name: string; claim_state: string };
@@ -56,15 +58,19 @@ export default function InboxPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notices, setNotices] = useState<{ items: WireFollowNotice[]; unread: number } | null>(null);
+  const [messages, setMessages] = useState<WireMessages | null>(null);
+  const [replying, setReplying] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [r, n] = await Promise.all([
+    const [r, n, m] = await Promise.all([
       api<Inbox>("/api/v1/inbox"),
-      // Follow notices are their own read: the inbox still works if it fails.
+      // Follow notices and messages are their own reads: the inbox still works if one fails.
       api<{ items: WireFollowNotice[]; unread: number }>("/api/v1/follows/notices").catch(() => null),
+      api<WireMessages>("/api/v1/messages").catch(() => null),
     ]);
     setInbox(r);
     setNotices(n);
+    setMessages(m);
   }, []);
 
   async function markNoticesRead() {
@@ -72,6 +78,19 @@ export default function InboxPage() {
     setBusy("notices");
     try {
       await api("/api/v1/follows/notices/seen", { method: "POST", body: JSON.stringify({}) });
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function markMessagesRead() {
+    setErr(null);
+    setBusy("messages");
+    try {
+      await api("/api/v1/messages/seen", { method: "POST", body: JSON.stringify({}) });
       await load();
     } catch (e) {
       setErr((e as Error).message);
@@ -126,7 +145,7 @@ export default function InboxPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">Inbox</h1>
-          <p className="mt-2 text-white/60">Asks at your doors, answers to yours, and the agent leash.</p>
+          <p className="mt-2 text-white/60">Messages, asks at your doors, answers to yours, and the agent leash.</p>
         </div>
         {waiting ? (
           <span className="shrink-0 rounded-full bg-lantern-400 px-3 py-1 text-sm font-semibold text-dusk-950">
@@ -236,6 +255,59 @@ export default function InboxPage() {
         </section>
       ) : null}
 
+      {/* Messages left at your door. Each was judged by the permission kernel
+          before it was written; a muted sender's never arrive here, and
+          blocking or muting someone hides what they already sent. The body is
+          their words, shown as plain text. */}
+      {messages && (messages.received.length || messages.sent.length) ? (
+        <section className="mt-10">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 className="font-display text-2xl text-lantern-300">
+              Messages {messages.unread ? <span className="text-white/40">({messages.unread} new)</span> : null}
+            </h2>
+            {messages.unread ? (
+              <button
+                onClick={() => void markMessagesRead()}
+                disabled={busy === "messages"}
+                className="rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/50 disabled:opacity-40 sm:px-3 sm:py-1"
+              >
+                Mark all read
+              </button>
+            ) : null}
+          </div>
+          {messages.received.length ? (
+            <ul className="mt-3 space-y-3">
+              {messages.received.map((m) => (
+                <MessageRow
+                  key={m.id}
+                  m={m}
+                  replying={replying === m.id}
+                  onReply={() => setReplying(replying === m.id ? null : m.id)}
+                  onSent={() => void load()}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-white/40">Nothing left for you yet.</p>
+          )}
+          {messages.sent.length ? (
+            <details className="mt-4">
+              <summary className="cursor-pointer text-sm text-white/50">Sent ({messages.sent.length})</summary>
+              <ul className="mt-2 space-y-2">
+                {messages.sent.map((m) => (
+                  <li key={m.id} className="rounded-xl border border-white/10 bg-dusk-800/40 p-3">
+                    <div className="text-xs text-white/40">
+                      to <PartyLink party={m.to} /> · {new Date(m.created_at).toLocaleString()}
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm text-white/65">{m.body}</p>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* The heart's half: what the spaces and agents you follow did. Every row
           was judged by the permission kernel when it was written, so nothing
           here comes from a room you could not have watched. */}
@@ -305,10 +377,61 @@ export default function InboxPage() {
         {items.length === 0 ? <p className="mt-3 text-white/40">No claimed agents.</p> : null}
       </section>
 
-      {inbox && !requests.length && !answers.length && !items.length && !notices?.items.length ? (
+      {inbox && !requests.length && !answers.length && !items.length && !notices?.items.length && !messages?.received.length ? (
         <p className="mt-8 text-white/40">Nothing waiting.</p>
       ) : null}
       {err ? <p className="mt-4 text-red-300">{err}</p> : null}
     </main>
+  );
+}
+
+function PartyLink({ party }: { party: WireMessage["from"] }) {
+  const href = partyHref(party);
+  const label = party.kind === "human" && party.ref ? `${party.name} (@${party.ref})` : party.name;
+  return href ? (
+    <Link href={href} className="text-lantern-300">
+      {label}
+    </Link>
+  ) : (
+    <span>{label}</span>
+  );
+}
+
+function MessageRow({
+  m,
+  replying,
+  onReply,
+  onSent,
+}: {
+  m: WireMessage;
+  replying: boolean;
+  onReply: () => void;
+  onSent: () => void;
+}) {
+  const target = replyTarget(m);
+  return (
+    <li className={`rounded-xl border p-4 ${m.read_at ? "border-white/10 bg-dusk-800/40" : "border-lantern-400/25 bg-dusk-800/70"}`}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/45">
+        <PartyLink party={m.from} />
+        <span>{m.from.kind === "agent" ? "an agent" : "a person"}</span>
+        <span>· {new Date(m.created_at).toLocaleString()}</span>
+        {m.reply_to ? <span>· a reply</span> : null}
+      </div>
+      <p className={`mt-2 whitespace-pre-wrap break-words text-sm ${m.read_at ? "text-white/65" : "text-white/85"}`}>{m.body}</p>
+      {target ? (
+        <div className="mt-2">
+          {replying ? (
+            <LeaveMessage target={target} label="Reply" signedIn replyTo={m.id} startOpen onSent={onSent} />
+          ) : (
+            <button
+              onClick={onReply}
+              className="rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/60 hover:text-lantern-300 sm:px-3 sm:py-1"
+            >
+              Reply
+            </button>
+          )}
+        </div>
+      ) : null}
+    </li>
   );
 }

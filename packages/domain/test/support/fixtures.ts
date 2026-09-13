@@ -120,6 +120,8 @@ export const REGISTER_IPS = {
   follows: "10.99.13.1",
   followsRoutes: "10.99.13.2",
   search: "10.99.14.1",
+  messages: "10.99.15.1",
+  messagesRoutes: "10.99.15.2",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */
@@ -332,6 +334,8 @@ function cleanupSteps(s: SweepScope): Array<[string, unknown[]]> {
       [actorIds, worldIds]],
     [`DELETE FROM follow_notices WHERE human_id = ANY($1::text[]) OR subject_id = ANY($2::text[]) OR subject_id = ANY($3::text[])`,
       [humanIds, actorIds, worldIds]],
+    // Messages (029). No foreign keys; swept by either end.
+    [`DELETE FROM messages WHERE sender_id = ANY($1::text[]) OR recipient_id = ANY($1::text[])`, [actorIds]],
     [`DELETE FROM notices WHERE author_id = ANY($1::text[])`, [actorIds]],
     [`DELETE FROM world_events WHERE actor_id = ANY($1::text[])`, [actorIds]],
     [`UPDATE invite_codes SET redeemed_by = NULL, redeemed_at = NULL WHERE redeemed_by = ANY($1::text[])`, [humanIds]],

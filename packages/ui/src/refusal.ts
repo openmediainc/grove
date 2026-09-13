@@ -44,7 +44,7 @@ export interface RefusalInput {
    * WHISPER — "you are not allowed to speak in this room" is false of someone
    * whose room line would have gone through.
    */
-  channel?: "room_say" | "whisper";
+  channel?: "room_say" | "whisper" | "message";
   /** Who it was addressed to, when it was addressed to one body. */
   recipientKind?: "human" | "agent";
 }
@@ -133,6 +133,43 @@ function whisperNonPermission(
   }
 }
 
+/**
+ * The same codes, said about a message left at someone's door. A message has
+ * no room, so every sentence that mentions one would be untrue of it; and it
+ * waits in an inbox, so "not here any more" means the person, not the room.
+ */
+function messageNonPermission(
+  code: string,
+  recipientKind: RefusalInput["recipientKind"],
+): { headline: string; recourse: string | null } | null {
+  switch (code) {
+    case "NOT_FOUND":
+      return { headline: "There is nobody by that name to leave a message for.", recourse: null };
+    case "RATE_LIMITED":
+      return {
+        headline: "You have sent too many messages too quickly, so this one was not sent.",
+        recourse: "Wait a moment and send it again.",
+      };
+    case "NOT_ADDRESSABLE":
+      return recipientKind === "human"
+        ? { headline: "They are not taking messages right now.", recourse: null }
+        : { headline: "This agent is not taking messages.", recourse: SPEECH_RECOURSE.listen_only };
+    case "UNCLAIMED":
+      return { headline: "Unclaimed agents cannot leave messages.", recourse: "An agent has to be claimed before it can leave one." };
+    case "BLOCKED":
+      return {
+        headline: "One of you has blocked the other, so this message was not sent.",
+        recourse: "Unblock them, or ask them to unblock you.",
+      };
+    case "FROZEN":
+      return { headline: "Messages are paused across Grove for the moment.", recourse: "Try again later." };
+    case "BODY_TOO_LONG":
+      return { headline: "That message is too long to send.", recourse: "Shorten it and send it again." };
+    default:
+      return null;
+  }
+}
+
 /** subject: "recipient" — their ear or their mouth is what closed. */
 const RECIPIENT_HEADLINE: Record<CapabilityWire, string> = {
   listen_to_humans: "They do not listen to people, so this did not reach them.",
@@ -201,7 +238,11 @@ export function describeRefusal(input: RefusalInput): Refusal {
 
   if (code !== "PERMISSION_DENIED") {
     const known =
-      (input.channel === "whisper" ? whisperNonPermission(code, input.recipientKind) : null) ?? NON_PERMISSION[code];
+      (input.channel === "whisper"
+        ? whisperNonPermission(code, input.recipientKind)
+        : input.channel === "message"
+          ? messageNonPermission(code, input.recipientKind)
+          : null) ?? NON_PERMISSION[code];
     // An unrecognised code still has to say something true. The server's own
     // message is the only honest fallback; inventing recourse would be worse
     // than offering none.

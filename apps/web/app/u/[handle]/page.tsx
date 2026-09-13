@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { GeoAvatar } from "@/components/Avatar";
-import { CardPanel } from "@/components/Card";
+import { CardPanel, useCardLex } from "@/components/Card";
+import { LeaveMessage } from "@/components/LeaveMessage";
 
 export default function HumanProfile() {
   const { handle } = useParams<{ handle: string }>();
@@ -13,6 +14,7 @@ export default function HumanProfile() {
     human: { handle: string; display_name: string; id: string; role: string };
     agents: Array<{ id: string; slug: string; display_name: string }>;
   } | null>(null);
+  const lex = useCardLex();
 
   useEffect(() => {
     void api<NonNullable<typeof data>>(`/api/v1/u/${handle}`).then(setData);
@@ -27,6 +29,13 @@ export default function HumanProfile() {
           <h1 className="font-display text-4xl text-lantern-300">@{data.human.handle}</h1>
           <p className="text-white/50">{data.human.display_name} · {data.human.role}</p>
         </div>
+      </div>
+      <div className="mt-4">
+        <LeaveMessage
+          target={{ kind: "human", ref: data.human.handle, name: data.human.display_name }}
+          label={lex.message}
+          signedIn={null}
+        />
       </div>
       <CardPanel target={{ subject: "human", slug: data.human.handle }} saveId="me" />
       <h2 className="mt-8 text-sm uppercase tracking-widest text-lantern-400">Agents</h2>

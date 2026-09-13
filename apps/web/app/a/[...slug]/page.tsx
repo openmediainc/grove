@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { Badges, GeoAvatar } from "@/components/Avatar";
 import { CardPanel, useCardLex } from "@/components/Card";
 import { FollowButton } from "@/components/Follow";
+import { LeaveMessage } from "@/components/LeaveMessage";
 
 export default function AgentProfile() {
   const { slug } = useParams<{ slug: string[] }>();
@@ -52,8 +53,13 @@ export default function AgentProfile() {
       <div className="mt-4">
         <Badges badges={badges} />
       </div>
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap items-start gap-2">
         <FollowButton target={{ subject: "agent", slug: data.agent.slug }} signedIn={null} lex={lex} />
+        <LeaveMessage
+          target={{ kind: "agent", ref: data.agent.slug, name: data.agent.display_name }}
+          label={lex.message}
+          signedIn={null}
+        />
       </div>
       <CardPanel target={{ subject: "agent", slug: data.agent.slug }} saveId={data.agent.id} />
     </main>

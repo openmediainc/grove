@@ -403,8 +403,15 @@ export interface PolicyContext {
  * act already happened, so emit only refuses an owner lounge, and each delivery
  * asks whether that follower could hear the sender in that room (blocks, mutes,
  * the recipient's own ear, the space and room ceilings with their membership).
+ *
+ * `message`: a note left for one person or agent (messages.ts). Sender = the
+ * author, recipients = exactly the one addressee, and NO room: it lands in an
+ * inbox, not in the room the addressee is standing in, so no space or room
+ * ceiling is consulted and a refusal can never disclose where they are. Judged
+ * like a whisper (their door, a block, both actors' own settings) but charged
+ * to the write limiter only.
  */
-export type PolicyChannel = SpeechChannel | "reaction" | "follow_notice";
+export type PolicyChannel = SpeechChannel | "reaction" | "follow_notice" | "message";
 
 export interface AuthorizeResult {
   emit: PolicyDecision;

@@ -328,6 +328,8 @@ export interface ThemeLexicon {
     follow: string;
     /** The heart once it is on: "Following" in this theme's words. */
     following: string;
+    /** Leave a message for a person or an agent, in this theme's words. */
+    message: string;
   };
 
   /** Controls. */

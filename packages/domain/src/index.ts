@@ -56,6 +56,7 @@ export {
   ONLINE_LIMIT,
   type SearchResults,
 } from "./services/search.js";
+export { MessageService, type MessageActor } from "./services/messages.js";
 export { AudienceService, AUDIENCE_CAP, AUDIENCE_BUCKET_SECONDS, isWatchToken } from "./services/audience.js";
 export {
   FlagService,
@@ -172,6 +173,7 @@ import { ReactionService } from "./services/reactions.js";
 import { CardService } from "./services/cards.js";
 import { FollowService } from "./services/follows.js";
 import { SearchService } from "./services/search.js";
+import { MessageService } from "./services/messages.js";
 import { AudienceService } from "./services/audience.js";
 import { ReplayService } from "./services/replay.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
@@ -203,6 +205,8 @@ export class GroveApp {
   follows: FollowService;
   /** `/` search across bodies, spaces and rooms, plus who is online (no private results). */
   search: SearchService;
+  /** Leave a message: notes addressed to one person or agent (029). */
+  messages: MessageService;
   /** "N watching" on the map: counted tab heartbeats, never identities. */
   audience: AudienceService;
   replay: ReplayService;
@@ -240,6 +244,7 @@ export class GroveApp {
     this.presence.follows = this.follows;
     this.toolCalls.follows = this.follows;
     this.campus.follows = this.follows;
+    this.messages = new MessageService(this.store, this.identity, this.speech, this.mailbox, this.quota, this.flags);
     this.reactions = new ReactionService(
       this.store,
       this.chronicle,

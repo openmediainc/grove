@@ -280,7 +280,7 @@ export const AOE_LEXICON: ThemeLexicon = {
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "all hands busy" },
   hud: { hereNow: "here now", watching: "watching", awake: "awake", asleep: "asleep", fog: "fog", world: "world", claimed: "claimed", quiet: "nobody has spoken here recently" },
   legend: ["tool", "think", "speak", "wait", "blocked", "fault", "asleep", "fading"],
-  card: { workingOn: "Working on", lookingFor: "Looking for", latest: "Latest", links: "Links", fromToolCalls: "from its tool calls", fromPulse: "from its pulse", empty: "Nothing on this card yet.", walkOver: "Walk over", follow: "Follow", following: "Following" },
+  card: { workingOn: "Working on", lookingFor: "Looking for", latest: "Latest", links: "Links", fromToolCalls: "from its tool calls", fromPulse: "from its pulse", empty: "Nothing on this card yet.", walkOver: "Walk over", follow: "Follow", following: "Following", message: "Leave a note" },
   controls: {
     goTo: "go to",
     busiest: "Busiest",

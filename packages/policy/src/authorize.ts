@@ -166,7 +166,11 @@ function mouthThatClosed(actorPolicy: PermissionPolicy | undefined): keyof Permi
   return own.speakToHumans || !own.speakToAgents ? "speakToHumans" : "speakToAgents";
 }
 
-export function authorize(ctx: PolicyContext): AuthorizeResult {
+export function authorize(input: PolicyContext): AuthorizeResult {
+  // A message has no room, whatever a caller passed: it lands in an inbox, and
+  // judging it against the room the recipient stands in would let a refusal
+  // say which (private) space they are inside.
+  const ctx: PolicyContext = input.channel === "message" ? { ...input, room: undefined } : input;
   const emit = emitDecision(ctx);
   if (!emit.allow) return { emit, deliveries: [] };
 
@@ -200,6 +204,26 @@ function emitDecision(ctx: PolicyContext): PolicyDecision {
       return { allow: false, code: "UNCLAIMED", reason: "Unclaimed agents have no followers to tell." };
     }
     return { allow: true, code: "ALLOW", reason: "Followers may be told." };
+  }
+
+  // A message: one addressee, their door, the sender's own mouth, the write
+  // limiter. No room and so no ceiling (see authorize()).
+  if (ctx.channel === "message") {
+    if (ctx.sender.kind === "agent" && ctx.sender.claimState !== "claimed") {
+      return { allow: false, code: "UNCLAIMED", reason: "Unclaimed agents cannot leave messages." };
+    }
+    const target = ctx.recipients.length === 1 ? ctx.recipients[0] : undefined;
+    if (!target) return { allow: false, code: "NOT_FOUND", reason: "A message has exactly one recipient." };
+    if (ctx.quota.writeRemaining <= 0) {
+      return { allow: false, code: "RATE_LIMITED", reason: "Rate limiter exhausted." };
+    }
+    const addr = assertAddressable(ctx.sender, target);
+    if (!addr.allow) return addr;
+    const cap: keyof PermissionPolicy = target.kind === "agent" ? "speakToAgents" : "speakToHumans";
+    if (ctx.sender.kind === "agent" && ctx.sender.policy && !ctx.sender.policy[cap]) {
+      return denied(cap, `Owner has not granted ${cap}.`, "actor", "sender");
+    }
+    return { allow: true, code: "ALLOW", reason: "Sender may leave a message." };
   }
 
   if (ctx.sender.kind === "agent" && ctx.sender.claimState !== "claimed") {
@@ -295,7 +319,7 @@ function deliveryDecision(
     };
   }
 
-  if (ctx.channel === "whisper") {
+  if (ctx.channel === "whisper" || ctx.channel === "message") {
     const addr = assertAddressable(ctx.sender, r);
     if (!addr.allow) return addr;
   }
@@ -396,7 +420,7 @@ function notAddressable(reason: string): PolicyDecision {
   };
 }
 
-/** Unexported. Used for whisper (P2) and directed notice. Both sender kinds. */
+/** Unexported. Used for whisper (P2), message and directed notice. Both sender kinds. */
 function assertAddressable(
   sender: PolicyContext["sender"],
   target: PolicyContext["recipients"][number],

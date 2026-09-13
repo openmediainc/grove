@@ -260,6 +260,8 @@ const ROUTE_BUCKETS: Record<string, string[]> = {
   "POST /api/v1/worlds/:id/enter": ["move"],
   "POST /api/v1/worlds/:id/join-requests": ["join_request", "join_request_new"],
   "POST /api/v1/reports": ["report"],
+  // Leave a message: judged by the kernel against the write limiter, then charged to it.
+  "POST /api/v1/messages": ["write", "write_new"],
   "POST /api/v1/humans/session": ["magic_link"],
   // /say is split by channel below; this is the fallback when the body is unreadable.
   "POST /api/v1/say": ["room_say", "room_say_new", "write", "whisper"],
