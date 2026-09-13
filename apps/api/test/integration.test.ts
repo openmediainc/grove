@@ -342,7 +342,7 @@ describe.skipIf(!hasDb)("api integration", () => {
       method: "POST",
       url: "/api/v1/worlds",
       headers: { cookie: owner.cookie },
-      payload: { name: "Closed Campus", slug: `grove-closed-${Date.now()}` },
+      payload: { name: "Closed Campus", slug: `grove-closed-${Date.now()}`, policy_preset: "private" },
     });
     expect(created.statusCode).toBe(201);
     const world = (created.json() as { world: { id: string } }).world;
@@ -740,7 +740,11 @@ describe.skipIf(!hasDb)("api integration", () => {
       method: "POST",
       url: "/api/v1/worlds",
       headers: { cookie: ownerCookie },
-      payload: { name: `${tag} campus`, slug: `grove-${tag}-${Date.now()}${Math.floor(Math.random() * 1000)}` },
+      payload: {
+        name: `${tag} campus`,
+        slug: `grove-${tag}-${Date.now()}${Math.floor(Math.random() * 1000)}`,
+        policy_preset: "private",
+      },
     });
     expect(created.statusCode).toBe(201);
     const world = (created.json() as { world: { id: string } }).world;
@@ -940,13 +944,15 @@ describe.skipIf(!hasDb)("api integration", () => {
     const world = (created.json() as { world: { id: string } }).world;
     trackWorld(world.id);
 
-    // Entering is refused before the ask: membership is the gate, not interest.
+    // A public_view space lets the guest in as a VISITOR before any ask, but
+    // walking in never makes anyone a member: that still takes an approval.
     const early = await server.inject({
       method: "POST",
       url: `/api/v1/worlds/${world.id}/enter`,
       headers: { cookie: guest.cookie },
     });
-    expect(early.statusCode).toBe(403);
+    expect(early.statusCode).toBe(200);
+    expect(await grove!.campus.isMember(world.id, guest.id)).toBe(false);
 
     const asked = await server.inject({
       method: "POST",

@@ -168,11 +168,14 @@ describe.skipIf(!hasDb)("room policy routes", () => {
     const server = await boot();
     const owner = await signIn("pbo");
     const visitor = await signIn("pbv");
-    const say = (worldId: string, body: string) =>
+    // A second visitor for public_write: a brand-new human's first-day say
+    // limits would otherwise count the refused public_view attempt against it.
+    const talker = await signIn("pbt");
+    const say = (who: { cookie: string }, worldId: string, body: string) =>
       server.inject({
         method: "POST",
         url: "/api/v1/say",
-        headers: { cookie: visitor.cookie, "x-grove-world": worldId, "idempotency-key": `pb-${Date.now()}-${body}` },
+        headers: { cookie: who.cookie, "x-grove-world": worldId, "idempotency-key": `pb-${Date.now()}-${body}` },
         payload: { channel: "room_say", body },
       });
 
@@ -183,14 +186,15 @@ describe.skipIf(!hasDb)("room policy routes", () => {
     expect((inView.json() as { room: { id: string } }).room.id).toBe(`${view.id}:plaza`);
     expect(await grove!.campus.isMember(view.id, visitor.id)).toBe(false);
     expect((await server.inject({ method: "GET", url: "/api/v1/rooms/plaza", headers: { cookie: visitor.cookie, "x-grove-world": view.id } })).statusCode).toBe(200);
-    const muted = await say(view.id, "hi-view");
+    const muted = await say(visitor, view.id, "hi-view");
     expect(muted.statusCode).toBe(403);
     expect((muted.json() as { error: Record<string, unknown> }).error).toMatchObject({ code: "PERMISSION_DENIED", membership: "non_member" });
 
     // public_write: in, and may speak.
     const write = await spaceWith(owner, "public_write");
-    expect((await server.inject({ method: "POST", url: `/api/v1/worlds/${write.id}/enter`, headers: { cookie: visitor.cookie }, payload: {} })).statusCode).toBe(200);
-    expect((await say(write.id, "hi-write")).statusCode).toBe(200);
+    expect((await server.inject({ method: "POST", url: `/api/v1/worlds/${write.id}/enter`, headers: { cookie: talker.cookie }, payload: {} })).statusCode).toBe(200);
+    expect((await say(talker, write.id, "hi-write")).statusCode).toBe(200);
+    expect(await grove!.campus.isMember(write.id, talker.id)).toBe(false);
 
     // A private room inside a public space stays closed.
     const closed = await server.inject({
