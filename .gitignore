@@ -11,6 +11,7 @@ dist
 coverage
 *.tsbuildinfo
 .pnpm-store
+.vercel
 .vitest
 .idea
 .vscode
