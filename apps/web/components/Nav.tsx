@@ -1,8 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import { SEARCH_EVENT } from "@/lib/search";
+import {
+  INBOX_SEEN_EVENT,
+  UNREAD_PATH,
+  UNREAD_POLL_MS,
+  badgeText,
+  inboxLabel,
+  shouldPoll,
+  unreadTotal,
+  type WireUnread,
+} from "@/lib/unread";
 
 /**
  * One bar, two shapes. Wide enough and the sections sit inline as they always
@@ -32,9 +43,64 @@ function SearchButton({ className }: { className: string }) {
   );
 }
 
+/**
+ * Unseen messages plus follow notices. A signed-out visitor (no hint cookie)
+ * sends nothing; a signed-in one asks once on load, then at most once a minute
+ * while the tab is visible, and again when it comes back into view. /inbox
+ * clears it the moment it has marked what it showed.
+ */
+function useUnread(): number {
+  const [total, setTotal] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    let last = 0;
+    const check = () => {
+      if (!shouldPoll(document.cookie, document.visibilityState)) return;
+      const now = Date.now();
+      if (now - last < UNREAD_POLL_MS - 1_000) return;
+      last = now;
+      api<WireUnread>(UNREAD_PATH)
+        .then((u) => alive && setTotal(unreadTotal(u)))
+        .catch(() => alive && setTotal(0));
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    const onSeen = () => {
+      last = Date.now();
+      setTotal(0);
+    };
+    check();
+    const timer = window.setInterval(check, UNREAD_POLL_MS);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener(INBOX_SEEN_EVENT, onSeen);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(INBOX_SEEN_EVENT, onSeen);
+    };
+  }, []);
+  return total;
+}
+
+function Badge({ total, className = "" }: { total: number; className?: string }) {
+  const text = badgeText(total);
+  if (!text) return null;
+  return (
+    <span
+      aria-hidden
+      className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-lantern-400 px-1.5 text-[11px] font-semibold leading-5 text-dusk-950 ${className}`}
+    >
+      {text}
+    </span>
+  );
+}
+
 export function Nav() {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+  const unread = useUnread();
 
   return (
     <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/5 bg-dusk-950/50 px-4 py-2.5 backdrop-blur-md sm:px-6 sm:py-3">
@@ -57,12 +123,16 @@ export function Nav() {
           aria-expanded={open}
           aria-controls="grove-sections"
           onClick={() => setOpen((o) => !o)}
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-lantern-300/80"
+          className="relative flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-lantern-300/80"
         >
+          {!open ? <Badge total={unread} className="absolute -right-1 -top-1" /> : null}
           <span aria-hidden className="text-xl leading-none">
             {open ? "×" : "≡"}
           </span>
-          <span className="sr-only">{open ? "Close menu" : "Open menu"}</span>
+          <span className="sr-only">
+            {open ? "Close menu" : "Open menu"}
+            {unread > 0 ? `, ${inboxLabel(unread)}` : ""}
+          </span>
         </button>
       </div>
 
@@ -82,8 +152,9 @@ export function Nav() {
         <Link href="/chronicle" className={ITEM}>
           Chronicle
         </Link>
-        <Link href="/inbox" className={ITEM}>
+        <Link href="/inbox" aria-label={inboxLabel(unread)} className={`${ITEM} flex items-center gap-1.5`}>
           Inbox
+          <Badge total={unread} />
         </Link>
         <Link href="/studio" className={ITEM}>
           Studio

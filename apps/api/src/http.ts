@@ -460,3 +460,19 @@ export function bearer(req: FastifyRequest): string | undefined {
 
 export const COOKIE = "grove_session";
 export const WORLD_COOKIE = "grove_world";
+
+/**
+ * A script-readable "a session probably exists" flag, beside the httpOnly
+ * session cookie. It carries nothing secret and grants nothing: it only lets
+ * the nav skip its unread poll for a signed-out visitor without asking the
+ * server. Set wherever a session is proven, cleared on logout or a 401.
+ */
+export const SIGNED_IN_HINT = "grove_signed_in";
+
+export function setSignedInHint(reply: FastifyReply, on: boolean, secure: boolean) {
+  if (!on) {
+    reply.clearCookie(SIGNED_IN_HINT, { path: "/" });
+    return;
+  }
+  reply.setCookie(SIGNED_IN_HINT, "1", { httpOnly: false, sameSite: "lax", path: "/", secure, maxAge: 30 * 24 * 3600 });
+}

@@ -65,6 +65,12 @@ type Row = {
  * is consumed before the row is written), and only for a new message: a
  * retried Idempotency-Key returns the first message and costs nothing.
  */
+/** A received row the reader may see: not muted at send, sender not since blocked or muted. */
+const VISIBLE_RECEIVED = `NOT m.hidden
+      AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = m.recipient_id AND b.blocked_id = m.sender_id)
+                                               OR (b.blocker_id = m.sender_id AND b.blocked_id = m.recipient_id))
+      AND NOT EXISTS (SELECT 1 FROM mutes u WHERE u.muter_id = m.recipient_id AND u.muted_id = m.sender_id)`;
+
 export class MessageService {
   constructor(
     private store: GroveStore,
@@ -215,10 +221,7 @@ export class MessageService {
   ): Promise<{ received: MessageView[]; sent: MessageView[]; unread: number }> {
     const id = actorId(actor);
     const n = Math.max(1, Math.min(MESSAGES_LIST_MAX, Math.floor(limit) || 50));
-    const visible = `NOT m.hidden
-      AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = m.recipient_id AND b.blocked_id = m.sender_id)
-                                               OR (b.blocker_id = m.sender_id AND b.blocked_id = m.recipient_id))
-      AND NOT EXISTS (SELECT 1 FROM mutes u WHERE u.muter_id = m.recipient_id AND u.muted_id = m.sender_id)`;
+    const visible = VISIBLE_RECEIVED;
     const [received, sent, unread] = await Promise.all([
       this.store.pg.query<Row>(
         `SELECT m.* FROM messages m WHERE m.recipient_id = $1 AND ${visible} ORDER BY m.created_at DESC LIMIT $2`,
@@ -228,18 +231,28 @@ export class MessageService {
         `SELECT m.* FROM messages m WHERE m.sender_id = $1 ORDER BY m.created_at DESC LIMIT $2`,
         [id, Math.min(n, 20)],
       ),
-      this.store.pg.query<{ n: number }>(
-        `SELECT count(*)::int AS n FROM messages m WHERE m.recipient_id = $1 AND m.read_at IS NULL AND ${visible}`,
-        [id],
-      ),
+      this.unreadCount(actor),
     ]);
     const views = await this.views([...received.rows, ...sent.rows]);
     return {
       received: views.slice(0, received.rows.length),
       // What you sent reads as sent: its read receipt is the recipient's, not yours to see.
       sent: views.slice(received.rows.length).map((v) => ({ ...v, readAt: null })),
-      unread: unread.rows[0]?.n ?? 0,
+      unread,
     };
+  }
+
+  /**
+   * How many received messages are unread, counted exactly as the inbox counts
+   * them (never a muted row, nor one from someone since blocked or muted). The
+   * nav badge polls this, so it is one indexed count and nothing else.
+   */
+  async unreadCount(actor: MessageActor): Promise<number> {
+    const { rows } = await this.store.pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM messages m WHERE m.recipient_id = $1 AND m.read_at IS NULL AND ${VISIBLE_RECEIVED}`,
+      [actorId(actor)],
+    );
+    return rows[0]?.n ?? 0;
   }
 
   async markRead(actor: MessageActor, ids?: string[]): Promise<number> {

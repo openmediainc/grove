@@ -173,10 +173,7 @@ export class FollowService implements FollowHooks {
           WHERE human_id = $1 ORDER BY created_at DESC LIMIT $2`,
         [humanId, n],
       ),
-      this.store.pg.query<{ n: number }>(
-        `SELECT count(*)::int AS n FROM follow_notices WHERE human_id = $1 AND read_at IS NULL`,
-        [humanId],
-      ),
+      this.unreadCount(humanId),
     ]);
     const items: FollowNoticeView[] = [];
     for (const r of list.rows) {
@@ -189,7 +186,16 @@ export class FollowService implements FollowHooks {
         readAt: r.read_at ? new Date(String(r.read_at)).toISOString() : null,
       });
     }
-    return { items, unread: count.rows[0]?.n ?? 0 };
+    return { items, unread: count };
+  }
+
+  /** Unread notices for the nav badge: one count on the partial unread index. */
+  async unreadCount(humanId: string): Promise<number> {
+    const { rows } = await this.store.pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM follow_notices WHERE human_id = $1 AND read_at IS NULL`,
+      [humanId],
+    );
+    return rows[0]?.n ?? 0;
   }
 
   async markSeen(humanId: string, ids?: string[]): Promise<number> {

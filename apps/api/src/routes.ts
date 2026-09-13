@@ -3,7 +3,7 @@ import type { GroveApp, SchemaStatus } from "@grove/domain";
 import { AUDIENCE_CAP, CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError, fromAddress, pulseBatchFromWire, pulseInputFromWire, schemaStatus } from "@grove/domain";
 import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
 import { assertRoomAccess, assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
-import { COOKIE, clientIp, sendOk } from "./http.js";
+import { COOKIE, SIGNED_IN_HINT, clientIp, sendOk, setSignedInHint } from "./http.js";
 import { fetchPaperclipAgents } from "./paperclip.js";
 
 function body(req: { body: unknown }): Record<string, unknown> {
@@ -258,6 +258,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       secure: grove.store.config.nodeEnv === "production",
       maxAge: 30 * 24 * 3600,
     });
+    setSignedInHint(reply, true, grove.store.config.nodeEnv === "production");
     return sendOk(reply, { human });
   });
 
@@ -265,11 +266,18 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     const sid = req.cookies[COOKIE];
     if (sid) await grove.store.redis.del(`session:${sid}`);
     reply.clearCookie(COOKIE, { path: "/" });
+    setSignedInHint(reply, false, false);
     return sendOk(reply, {});
   });
 
   app.get("/api/v1/humans/me", async (req, reply) => {
-    const human = await requireHuman(req, grove);
+    const human = await optionalHuman(req, grove);
+    // Sessions from before the hint existed pick it up here (the map asks on load).
+    if (!human) {
+      if (req.cookies[SIGNED_IN_HINT]) setSignedInHint(reply, false, false);
+      throw new GroveError("UNAUTHORIZED", "Sign in required.", { httpStatus: 401 });
+    }
+    if (!req.cookies[SIGNED_IN_HINT]) setSignedInHint(reply, true, grove.store.config.nodeEnv === "production");
     return sendOk(reply, { human });
   });
 
@@ -970,6 +978,26 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     const human = await requireHuman(req, grove);
     const inbox = await grove.identity.inbox(human.id);
     return sendOk(reply, inbox);
+  });
+
+  /**
+   * The nav badge: unseen messages and follow notices, two indexed counts and
+   * nothing else. Polled at most once a minute, only while the tab is visible
+   * and only when the SIGNED_IN_HINT cookie says a session may exist; a 401
+   * clears that hint so a lapsed session stops polling.
+   */
+  app.get("/api/v1/inbox/unread", async (req, reply) => {
+    const human = await optionalHuman(req, grove);
+    if (!human) {
+      setSignedInHint(reply, false, false);
+      throw new GroveError("UNAUTHORIZED", "Sign in required.", { httpStatus: 401 });
+    }
+    const [messages, notices] = await Promise.all([
+      grove.messages.unreadCount({ kind: "human", human }),
+      grove.follows.unreadCount(human.id),
+    ]);
+    reply.header("cache-control", "private, no-store");
+    return sendOk(reply, { messages, notices });
   });
 
   app.post("/api/v1/ops/freeze", async (req, reply) => {

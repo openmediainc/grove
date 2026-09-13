@@ -125,4 +125,49 @@ describe.skipIf(!hasDb)("message routes", () => {
     expect(limited.statusCode).toBe(429);
     await redis.del(`ratelimit:${bo.id}:write:min`);
   });
+
+  it("counts the nav badge (messages + notices), clears on seen, and keeps the signed-in hint honest", async () => {
+    const cy = await signIn("unrcy");
+    const di = await signIn("unrdi");
+
+    const signedOut = await app.inject({ method: "GET", url: "/api/v1/inbox/unread" });
+    expect(signedOut.statusCode).toBe(401);
+    expect(String(signedOut.headers["set-cookie"] ?? "")).toMatch(/grove_signed_in=;/);
+
+    const zero = await app.inject({ method: "GET", url: "/api/v1/inbox/unread", headers: { cookie: di.cookie } });
+    expect(zero.statusCode).toBe(200);
+    expect(zero.json()).toMatchObject({ messages: 0, notices: 0 });
+    expect(String(zero.headers["cache-control"])).toContain("no-store");
+
+    // A session from before the hint existed picks it up on /humans/me.
+    const me = await app.inject({ method: "GET", url: "/api/v1/humans/me", headers: { cookie: di.cookie } });
+    expect(String(me.headers["set-cookie"] ?? "")).toMatch(/grove_signed_in=1/);
+
+    const sent = await app.inject({
+      method: "POST",
+      url: "/api/v1/messages",
+      headers: { cookie: cy.cookie },
+      payload: { to: { kind: "human", ref: di.handle }, body: "badge me" },
+    });
+    expect(sent.statusCode).toBe(201);
+    await pg.query(
+      `INSERT INTO follow_notices (id, human_id, kind, subject_kind, subject_id, payload)
+       VALUES ($1, $2, 'agent.error', 'agent', 'agt_x', '{}'::jsonb), ($3, $2, 'agent.error', 'agent', 'agt_x', '{}'::jsonb)`,
+      [`fnt_unr_${di.id}_1`, di.id, `fnt_unr_${di.id}_2`],
+    );
+    const counted = await app.inject({ method: "GET", url: "/api/v1/inbox/unread", headers: { cookie: di.cookie } });
+    expect(counted.json()).toMatchObject({ messages: 1, notices: 2 });
+    // The sender's badge is untouched by what they sent.
+    expect((await app.inject({ method: "GET", url: "/api/v1/inbox/unread", headers: { cookie: cy.cookie } })).json()).toMatchObject({ messages: 0, notices: 0 });
+
+    // A muted sender's message stops counting, as it stops showing.
+    await pg.query(`INSERT INTO mutes (muter_id, muted_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [di.id, cy.id]);
+    expect((await app.inject({ method: "GET", url: "/api/v1/inbox/unread", headers: { cookie: di.cookie } })).json()).toMatchObject({ messages: 0, notices: 2 });
+    await pg.query(`DELETE FROM mutes WHERE muter_id = $1 AND muted_id = $2`, [di.id, cy.id]);
+
+    await app.inject({ method: "POST", url: "/api/v1/messages/seen", headers: { cookie: di.cookie }, payload: {} });
+    await app.inject({ method: "POST", url: "/api/v1/follows/notices/seen", headers: { cookie: di.cookie }, payload: {} });
+    expect((await app.inject({ method: "GET", url: "/api/v1/inbox/unread", headers: { cookie: di.cookie } })).json()).toMatchObject({ messages: 0, notices: 0 });
+    await pg.query(`DELETE FROM follow_notices WHERE human_id = $1`, [di.id]);
+  });
 });

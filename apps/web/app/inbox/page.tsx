@@ -9,6 +9,7 @@ import { presetCopy, presetTint } from "../spaces/presets";
 import { noticeHref, noticeText, type WireFollowNotice } from "@/lib/follow";
 import { partyHref, replyTarget, type WireMessage, type WireMessages } from "@/lib/message";
 import { LeaveMessage } from "@/components/LeaveMessage";
+import { INBOX_SEEN_EVENT, seenBody, seenPlan } from "@/lib/unread";
 
 type Item = {
   agent: { id: string; slug: string; display_name: string; claim_state: string };
@@ -71,33 +72,18 @@ export default function InboxPage() {
     setInbox(r);
     setNotices(n);
     setMessages(m);
+    // Seen by being shown: mark what this view drew (it keeps its "new" styling
+    // until the next load), then clear the nav badge. A failed mark only means
+    // the badge stays; the inbox itself is already on screen.
+    const marks: Promise<unknown>[] = [];
+    const mPlan = m ? seenPlan(m.received, m.unread) : null;
+    if (mPlan) marks.push(api("/api/v1/messages/seen", { method: "POST", body: JSON.stringify(seenBody(mPlan)) }));
+    const nPlan = n ? seenPlan(n.items, n.unread) : null;
+    if (nPlan) marks.push(api("/api/v1/follows/notices/seen", { method: "POST", body: JSON.stringify(seenBody(nPlan)) }));
+    void Promise.allSettled(marks).then((done) => {
+      if (done.every((d) => d.status === "fulfilled")) window.dispatchEvent(new Event(INBOX_SEEN_EVENT));
+    });
   }, []);
-
-  async function markNoticesRead() {
-    setErr(null);
-    setBusy("notices");
-    try {
-      await api("/api/v1/follows/notices/seen", { method: "POST", body: JSON.stringify({}) });
-      await load();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function markMessagesRead() {
-    setErr(null);
-    setBusy("messages");
-    try {
-      await api("/api/v1/messages/seen", { method: "POST", body: JSON.stringify({}) });
-      await load();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }
 
   useEffect(() => {
     void load().catch((e) => {
@@ -265,15 +251,6 @@ export default function InboxPage() {
             <h2 className="font-display text-2xl text-lantern-300">
               Messages {messages.unread ? <span className="text-white/40">({messages.unread} new)</span> : null}
             </h2>
-            {messages.unread ? (
-              <button
-                onClick={() => void markMessagesRead()}
-                disabled={busy === "messages"}
-                className="rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/50 disabled:opacity-40 sm:px-3 sm:py-1"
-              >
-                Mark all read
-              </button>
-            ) : null}
           </div>
           {messages.received.length ? (
             <ul className="mt-3 space-y-3">
@@ -318,15 +295,6 @@ export default function InboxPage() {
               From what you follow{" "}
               {notices.unread ? <span className="text-white/40">({notices.unread} new)</span> : null}
             </h2>
-            {notices.unread ? (
-              <button
-                onClick={() => void markNoticesRead()}
-                disabled={busy === "notices"}
-                className="rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/50 disabled:opacity-40 sm:px-3 sm:py-1"
-              >
-                Mark all read
-              </button>
-            ) : null}
           </div>
           <ul className="mt-3 space-y-2">
             {notices.items.map((n) => {
