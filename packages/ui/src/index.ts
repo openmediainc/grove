@@ -57,3 +57,22 @@ export {
   type Stance,
   type Unlock,
 } from "./tech-tree";
+export {
+  DEFAULT_SPEECH_METRICS,
+  SPEECH_TIER_ZOOM,
+  byRelevance,
+  fitLines,
+  layoutSpeech,
+  leaderStart,
+  pipFor,
+  speechTier,
+  type LayoutInput,
+  type Pip,
+  type PlacedBubble,
+  type Rect,
+  type Speaker,
+  type SpeechFont,
+  type SpeechLayout,
+  type SpeechMetrics,
+  type SpeechTier,
+} from "./speech-layout";

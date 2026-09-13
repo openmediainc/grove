@@ -9,8 +9,8 @@
     }
   },
   "scripts": {
-    "test": "node -e \"process.exit(0)\"",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "peerDependencies": {
     "react": "^19.0.0"
@@ -18,7 +18,8 @@
   "devDependencies": {
     "@types/react": "^19.0.2",
     "react": "^19.0.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
   },
   "dependencies": {
     "@grove/protocol": "workspace:*"
