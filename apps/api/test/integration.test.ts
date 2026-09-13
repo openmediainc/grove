@@ -845,6 +845,27 @@ describe.skipIf(!hasDb)("api integration", () => {
     expect(named.statusCode).toBe(200);
   });
 
+  it("the minimap counts watching tabs by opaque token, never by who", async () => {
+    const server = await boot();
+    const tag = Math.random().toString(36).slice(2, 10);
+    const poll = (token?: string) =>
+      server.inject({
+        method: "GET",
+        url: "/api/v1/world/minimap",
+        headers: token ? { "x-grove-watch": token } : {},
+      });
+    await poll(`tabA-${tag}-aaaaaaaa`);
+    await poll(`tabA-${tag}-aaaaaaaa`);
+    const second = (await poll(`tabB-${tag}-bbbbbbbb`)).json() as { watching: number; audience_cap: number };
+    expect(second.watching).toBeGreaterThanOrEqual(2);
+    expect(second.audience_cap).toBeGreaterThan(0);
+    // A poll with no token (or a malformed one) reads the count but adds nothing.
+    const bare = (await poll()).json() as { watching: number };
+    const junk = (await poll("x")).json() as { watching: number };
+    expect(bare.watching).toBe(second.watching);
+    expect(junk.watching).toBe(second.watching);
+  });
+
   it("an agent reaches a campus only through its owner's membership", async () => {
     const server = await boot();
     const owner = await signIn(server, "agow");

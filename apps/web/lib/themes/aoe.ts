@@ -238,7 +238,7 @@ export const AOE_LEXICON: ThemeLexicon = {
   claimedPlot: "claimed",
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "all hands busy" },
-  hud: { awake: "awake", asleep: "asleep", fog: "fog", world: "world", claimed: "claimed", quiet: "nobody has spoken here recently" },
+  hud: { hereNow: "here now", watching: "watching", awake: "awake", asleep: "asleep", fog: "fog", world: "world", claimed: "claimed", quiet: "nobody has spoken here recently" },
   legend: ["tool", "think", "speak", "wait", "blocked", "fault", "asleep", "fading"],
   controls: {
     goTo: "go to",

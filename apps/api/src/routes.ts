@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { GroveApp, SchemaStatus } from "@grove/domain";
-import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError, fromAddress, pulseBatchFromWire, pulseInputFromWire, schemaStatus } from "@grove/domain";
+import { AUDIENCE_CAP, CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError, fromAddress, pulseBatchFromWire, pulseInputFromWire, schemaStatus } from "@grove/domain";
 import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
 import { assertRoomAccess, assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
 import { COOKIE, clientIp, sendOk } from "./http.js";
@@ -513,9 +513,16 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     // paperclipSnapshot(). It never rejects, so an access refusal below cannot
     // leave an unhandled rejection behind.
     const paperclip = paperclipSnapshot();
-    const campus = await grove.world.minimap(await assertWorldAccess(req, grove));
+    const worldId = await assertWorldAccess(req, grove);
+    // "N watching": this poll is a heartbeat from a tab-made random token (no
+    // session, no IP), counted and never read back as anything but a number.
+    // Only after access is granted, so a refused campus leaves no trace.
+    const watching = grove.audience.heartbeat(worldId, req.headers["x-grove-watch"]);
+    const campus = await grove.world.minimap(worldId);
     return sendOk(reply, {
       ...campus,
+      watching: await watching,
+      audience_cap: AUDIENCE_CAP,
       paperclip: await paperclip,
     });
   });

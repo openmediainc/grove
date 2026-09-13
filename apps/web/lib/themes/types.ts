@@ -279,7 +279,8 @@ export interface ThemeLexicon {
   bell: { faulted: string; stalled: string; fading: string; idle: string; allBusy: string };
 
   /** HUD counters and legend. */
-  hud: { awake: string; asleep: string; fog: string; world: string; claimed: string; quiet: string };
+  /** hereNow/watching: the live headcount pill ("N here now · N watching"). */
+  hud: { hereNow: string; watching: string; awake: string; asleep: string; fog: string; world: string; claimed: string; quiet: string };
   legend: readonly string[];
 
   /** Controls. */

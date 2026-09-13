@@ -45,6 +45,7 @@ export {
 export { MailboxService } from "./services/mailbox.js";
 export { NoticeService } from "./services/notices.js";
 export { ReactionService } from "./services/reactions.js";
+export { AudienceService, AUDIENCE_CAP, AUDIENCE_BUCKET_SECONDS, isWatchToken } from "./services/audience.js";
 export {
   FlagService,
   FREEZE_FLAGS,
@@ -157,6 +158,7 @@ import { QuotaService, RedisRateLimiter } from "./services/quota.js";
 import { CampusService } from "./services/campus.js";
 import { ChronicleService } from "./services/chronicle.js";
 import { ReactionService } from "./services/reactions.js";
+import { AudienceService } from "./services/audience.js";
 import { ReplayService } from "./services/replay.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
 import { HostedBrainService } from "./services/brains.js";
@@ -181,6 +183,8 @@ export class GroveApp {
   campus: CampusService;
   chronicle: ChronicleService;
   reactions: ReactionService;
+  /** "N watching" on the map: counted tab heartbeats, never identities. */
+  audience: AudienceService;
   replay: ReplayService;
   webhooks: WebhookService;
   jobs: JobService;
@@ -192,6 +196,7 @@ export class GroveApp {
     this.store = { pg, redis, config };
     this.flags = new FlagService(this.store);
     this.quota = new QuotaService(new RedisRateLimiter(redis));
+    this.audience = new AudienceService(redis);
     const mailer = createMailer(config);
     // ONB-07: every magic-link send goes through the delivery ledger.
     this.emailDeliveries = new EmailDeliveryService(this.store, mailer);

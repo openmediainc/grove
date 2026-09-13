@@ -672,7 +672,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
   claimedPlot: "claimed node",
   construction: "compiling",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle units", allBusy: "all units running" },
-  hud: { awake: "online", asleep: "dormant", fog: "range", world: "grid", claimed: "nodes", quiet: "no broadcasts recently" },
+  hud: { hereNow: "connected", watching: "observing", awake: "online", asleep: "dormant", fog: "range", world: "grid", claimed: "nodes", quiet: "no broadcasts recently" },
   legend: ["execute", "process", "broadcast", "wait", "blocked", "fault", "dormant", "fading"],
   controls: {
     goTo: "jump to",

@@ -614,7 +614,7 @@ export const CITY_LEXICON: ThemeLexicon = {
   claimedPlot: "claimed lot",
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "everyone's at work" },
-  hud: { awake: "at work", asleep: "off shift", fog: "limits", world: "city", claimed: "lots", quiet: "the street is quiet" },
+  hud: { hereNow: "in town", watching: "watching", awake: "at work", asleep: "off shift", fog: "limits", world: "city", claimed: "lots", quiet: "the street is quiet" },
   legend: ["work", "think", "talk", "wait", "blocked", "fault", "off shift", "fading"],
   controls: {
     goTo: "go to",

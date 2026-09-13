@@ -629,7 +629,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
   claimedPlot: "claimed module",
   construction: "fabricating",
   bell: { faulted: "faulted", stalled: "stalled", fading: "losing signal", idle: "idle crew", allBusy: "all crew at stations" },
-  hud: { awake: "on duty", asleep: "in cryo", fog: "scan", world: "sector", claimed: "modules", quiet: "no transmissions recently" },
+  hud: { hereNow: "aboard", watching: "on the feed", awake: "on duty", asleep: "in cryo", fog: "scan", world: "sector", claimed: "modules", quiet: "no transmissions recently" },
   legend: ["fabricate", "compute", "transmit", "wait", "blocked", "fault", "cryo", "fading"],
   controls: {
     goTo: "set course",

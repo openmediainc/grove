@@ -58,6 +58,7 @@ import {
 } from "@/lib/map-layout";
 import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { deepLinkApplies, parseDeepLink, type DeepLink } from "@/lib/deep-link";
+import { WATCH_HEADER, formatHeadcount, makeWatchToken } from "@/lib/headcount";
 import { AttentionBell } from "./AttentionBell";
 import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
@@ -314,6 +315,9 @@ type Minimap = {
   spaces?: SpaceView[];
   claimed_agents?: number;
   claimedAgents?: number;
+  /** Distinct map tabs heard from recently (AudienceService); null = not counted. */
+  watching?: number | null;
+  audience_cap?: number;
   paperclip?: { ok: boolean; agents: PaperclipBody[]; issues?: PaperclipIssue[] };
 };
 
@@ -819,7 +823,18 @@ export function WorldMap() {
     orgs: [] as OrgBadge[],
     orgMode: "shared" as "shared" | "dedicated",
     attn: { idle: 0, stalled: 0, hazard: 0, fading: 0 },
+    /** The headcount pill: live only, never during replay. */
+    live: false,
+    here: 0,
+    watching: null as number | null,
+    watchCap: null as number | null,
   });
+  /**
+   * This tab's audience token: random, in memory only, new on every load. It
+   * lets the server count distinct watchers without knowing who any of them is
+   * (lib/headcount, AudienceService).
+   */
+  const watchTokenRef = useRef<string | null>(null);
   const [status, setStatus] = useState("charting the dusk…");
 
   /* --- replay (MAP-04) ----------------------------------------------- *
@@ -1155,7 +1170,9 @@ export function WorldMap() {
         const replaying = replay.view.active;
         const data: Minimap = replaying
           ? (replay.snapshot(lastLiveRef.current) as unknown as Minimap)
-          : await api<Minimap>("/api/v1/world/minimap");
+          : await api<Minimap>("/api/v1/world/minimap", {
+              headers: { [WATCH_HEADER]: (watchTokenRef.current ??= makeWatchToken()) },
+            });
         if (cancelled) return;
         // A live poll that was in flight when replay began must not paint over it.
         if (replay.view.active !== replaying) return;
@@ -1422,6 +1439,10 @@ export function WorldMap() {
           orgs: orgList,
           orgMode,
           attn,
+          live: !replaying,
+          here: grove.length,
+          watching: replaying ? null : (data.watching ?? null),
+          watchCap: data.audience_cap ?? null,
         });
         setStatus(
           replaying
@@ -2954,6 +2975,16 @@ export function WorldMap() {
         </div>
         <div data-speech-avoid className="pointer-events-auto w-full shrink-0 rounded-2xl border border-lantern-400/20 bg-dusk-950/80 px-3 py-2 text-[11px] uppercase tracking-widest text-lantern-300/80 sm:w-auto sm:px-4 sm:py-3 sm:text-xs">
           <ResourceBar signedIn={signedIn} />
+          {hud.live ? (
+            <div
+              data-headcount
+              className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-lantern-400/25 bg-lantern-400/10 px-2 py-0.5 text-[10px] normal-case tracking-normal text-lantern-200 tabular-nums sm:text-[11px]"
+              title="Bodies on the map right now, and how many open maps have checked in over the last minute. Counted, never named."
+            >
+              <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 motion-reduce:animate-none" />
+              <span>{formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, lex.hud)}</span>
+            </div>
+          ) : null}
           <div className="flex items-baseline justify-between gap-3">
             <span>{status}</span>
             {/* The campus clock. UTC and said so: the world is one place, and
@@ -3090,6 +3121,7 @@ export function WorldMap() {
       {kiosk && sky ? (
         <div className="pointer-events-none absolute bottom-4 left-4 text-[11px] tabular-nums tracking-wide text-white/35">
           {sky.clock} UTC · {sky.label} · {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep}
+          {hud.live ? ` · ${formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, lex.hud)}` : ""}
         </div>
       ) : null}
     </section>
