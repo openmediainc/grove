@@ -1,5 +1,7 @@
 import { GroveError } from "../errors.js";
+import type { ToolCallView } from "@grove/protocol";
 import type { ChronicleDensity, ChronicleEntry, ChronicleService, ChronicleViewer } from "./chronicle.js";
+import { toToolCallView } from "./tool-calls.js";
 
 /**
  * Replay: the last hour (or day) of the world, in order, for the map to play.
@@ -22,6 +24,14 @@ import type { ChronicleDensity, ChronicleEntry, ChronicleService, ChronicleViewe
  * `speech_deliveries` is the world's own record, frozen at say-time, of who was
  * allowed to hear each line, and the chronicle reads bodies from it. Replay
  * therefore shows a body exactly when the moment itself delivered it.
+ *
+ * SPEECH, EXACTLY AS THE ROOM FEED FILTERED IT. The live WebSocket drops a
+ * speech frame for anyone not in its delivered_to audience
+ * (realtime.roomFrameFor): a non-recipient never learns a line was said. The
+ * chronicle, for its own reading-list purposes, tells a bystander THAT a line
+ * was spoken with the body withheld. Replay is a re-run of the room, not a
+ * reading list, so it applies the room's rule: a speech row whose body this
+ * viewer may not read is dropped entirely, from pages and from density.
  *
  * Where replay is deliberately NARROWER than live:
  *   - Pulse verbs. The live minimap publishes one instant per body; a retained
@@ -89,7 +99,14 @@ export interface ReplayPage {
   trailing: ChronicleEntry[];
   /** Oldest first. */
   entries: ChronicleEntry[];
+  /** First page only: tool-call spans overlapping the window, owner/operator only. */
+  toolCalls: Array<ToolCallView & { actorId: string }>;
   nextCursor: string | null;
+}
+
+/** roomFrameFor's rule, applied to history: no body for you means no frame for you. */
+function audible(entries: ChronicleEntry[]): ChronicleEntry[] {
+  return entries.filter((e) => e.type !== "speech" || e.body !== null);
 }
 
 function iso(value: string, field: string): number {
@@ -134,13 +151,14 @@ export class ReplayService {
         keyframe: null,
         density: null,
         trailing: [],
-        entries: page.entries,
+        entries: audible(page.entries),
+        toolCalls: [],
         nextCursor: page.nextCursor,
       };
     }
 
     const lookbackSince = new Date(sinceMs - REPLAY_KEYFRAME_LOOKBACK_MS).toISOString();
-    const [moves, density, trailingPage] = await Promise.all([
+    const [moves, density, trailingPage, spanRows] = await Promise.all([
       this.chronicle.lastMovements(viewer, { since: lookbackSince, until: since, worldId }),
       this.chronicle.density(viewer, {
         since,
@@ -160,7 +178,11 @@ export class ReplayService {
         },
         { maxLimit: PAGE_MAX, withTotals: false },
       ),
+      this.chronicle.toolCallHistory(viewer, { since, until, worldId }),
     ]);
+    // `stalled` is judged at the END of the window (the clock the page is read
+    // with); the timeline re-judges it per instant from updated_at.
+    const toolCalls = spanRows.map((r) => ({ ...toToolCallView(r, untilMs), actorId: String(r.actor_id) }));
 
     const bodies: ReplayKeyframeBody[] = moves
       .filter((m) => m.type === "actor_joined_room" && m.actor)
@@ -188,7 +210,8 @@ export class ReplayService {
       keyframe: { at: since, lookbackSince, bodies },
       density,
       trailing,
-      entries: page.entries,
+      entries: audible(page.entries),
+      toolCalls,
       nextCursor: page.nextCursor,
     };
   }

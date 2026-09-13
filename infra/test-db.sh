@@ -41,9 +41,9 @@ export REDIS_URL="${GROVE_TEST_REDIS_URL:-redis://localhost:6379/1}"
 pnpm migrate >/dev/null
 # Extra args are vitest's (a file filter, --passWithNoTests). The two packages
 # whose `test` is not vitest (sdk-py: python unittest; ui: a node no-op) reject
-# them, so they sit out a filtered run.
+# them, so they sit out a filtered run. apps/web's tests run too.
 if [ $# -gt 0 ]; then
-  exec pnpm -r --filter './packages/**' --filter @grove/api \
+  exec pnpm -r --filter './packages/**' --filter @grove/api --filter @grove/web \
     --filter '!@grove/sdk-py' --filter '!@grove/ui' test "$@"
 fi
-exec pnpm -r --filter './packages/**' --filter @grove/api test
+exec pnpm -r --filter './packages/**' --filter @grove/api --filter @grove/web test
