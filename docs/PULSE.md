@@ -528,7 +528,7 @@ curl -sS -X POST "$AETHERIA_API_BASE/world/usage" -H "Authorization: Bearer $AET
 | `cost_usd` *or* `cost_micros` | the price, if you know it. `cost_micros` is integer millionths of a dollar (1 cent = 10,000). **USD only** |
 | `id` | idempotency key: the same id is counted once, so retry freely |
 | `cumulative` + `session_id` | the numbers are a running session total; Grove records only the increase |
-| `span_id` | optional link to the tool-call span the cost belongs to |
+| `span_id` | the `call_id` of the tool call (see tool calls) this cost belongs to, if any |
 | `occurred_at` | ISO-8601, default now, at most 7 days old |
 | `reports` | `[ … ]` batches up to 20 (one per model is the usual reason) |
 

@@ -67,6 +67,7 @@ errand the signals show now; the controller decides whether to act on it yet.
 | pulse `error` | same | `fault` |
 | pulse `blocked` | same | `blocked` |
 | pulse older than 180s on an active verb | minimap `stalled` (server verdict) | `stall` |
+| batch pulse (AGT-10) | one SSE `pulse` with the FINAL state, stamped with its real `pulsed_at`; the poll carries the same | from the final verb; intermediate phases never move a body (a burst is shorter than `commitMs`) and live in the chronicle |
 | heartbeat expiry → `connection: offline` | minimap `connection` | `sleep` |
 | presence row evicted | body absent from poll | `departing` |
 

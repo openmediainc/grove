@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { asPermissionBadges, consequenceOf } from "@grove/ui";
+import { asPermissionBadges, consequenceOf, STANCES } from "@grove/ui";
+import { describeToolCall, type ToolCallView } from "@grove/protocol";
 import { api } from "@/lib/api";
 import {
   BUILDING,
@@ -12,21 +13,23 @@ import {
   type AccessLevel,
   type CharKey,
   type ItemKey,
-  type ScaffoldStage,
 } from "@/lib/art";
 import {
-  THEMES,
+  DEFAULT_THEME,
   THEME_IDS,
   THEME_QUERY,
-  DEFAULT_THEME,
-  getTheme,
+  THEMES,
   readThemeChoice,
-  writeThemeChoice,
   themeStyle,
+  writeThemeChoice,
   type Theme,
+  type ThemeId,
 } from "@/lib/themes";
-import { HAZARD_COLOUR, STALL_RING, type HazardTone, type ThemeId } from "@/lib/themes/types";
+import { ThemeSwitcher } from "./ThemeSwitcher";
+import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
+import { MotionDirector, mergeSpan, spanFromWire, OUTCOME_MARK_MS } from "@/lib/motion/director";
+import { drawOutcomeMark, drawStanceMark, drawWorkBar, scaffoldStageFor } from "@/lib/motion/marks";
 import {
   groveVerb,
   isActiveVerb,
@@ -56,6 +59,9 @@ import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { AttentionBell } from "./AttentionBell";
 import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
+import { ResourceBar } from "./ResourceBar";
+import { CostCarry } from "./costCarry";
+import { resourceTerms } from "@/lib/cost";
 import { skyAt, type Sky } from "./skyClock";
 import {
   DEPART_MS,
@@ -114,8 +120,6 @@ const AMBIENT_POSE = {
 /** Captions are clipped to roughly the body sprite's width. */
 const BODY_W = 40;
 const CAPTION_W = 48;
-/** How long a body takes to walk to a new seat. */
-const WALK_MS = 1200;
 /**
  * Level of detail for the world dressing.
  *
@@ -131,13 +135,11 @@ const WALK_MS = 1200;
 const LOD_DRESSING = LOD_PLOTS;
 const LOD_SCATTER = LOD_LABELS;
 /**
- * Scaffolding grows with how long a body has been on the same piece of work.
- * There is no progress field anywhere in Grove to read, and inventing a
- * percentage would be a lie; elapsed time is the one honest signal available.
- * It is measured from when THIS tab first saw the work, so a reload stakes the
- * site out again — which is the cost of not fabricating a number.
+ * Scaffolding used to grow on a clock: 90 s to stage 2, 5 min to stage 3, from
+ * when this tab first saw a url. A clock is not progress, so that is gone. The
+ * stage now follows a tool-call span's REPORTED progress, and a site with none
+ * stays at stage 1 — staked out, amount unknown. See docs/design/MOTION.md §6.
  */
-const SCAFFOLD_STAGE_MS: readonly number[] = [90_000, 300_000];
 
 /* --- the hour ------------------------------------------------------ *
  * Day and night, from skyClock.ts. Two things live here rather than there
@@ -199,6 +201,13 @@ type GroveBody = {
   orgId?: string | null;
   org_colour?: string | null;
   orgColour?: string | null;
+  /** A usage report just landed: time and priced-or-not, never an amount. See costCarry.ts. */
+  deposit?: { at: string; costed: boolean } | null;
+  /** Agent stance (autonomy_mode); null for humans. */
+  stance?: string | null;
+  /** Open tool-call spans, then any finished in the last 30 s (migration 020). */
+  tool_calls?: Array<Record<string, unknown>>;
+  toolCalls?: Array<Record<string, unknown>>;
   source: "grove";
 };
 
@@ -254,28 +263,22 @@ type Plot = {
   orgs: OrgBadge[];
 };
 
-/** Access level is public even when the space's contents are not. The tint lives in the theme. */
-const PRESET_LABEL: Record<string, string> = {
-  private: "private",
-  public_view: "view only",
-  public_write: "open",
-};
-/** The same access level, said in a sentence a spectator can act on. */
-const PRESET_BLURB: Record<string, string> = {
-  private: "Held privately. The world says the ground is taken, and nothing else.",
-  public_view: "Open to look at. Anyone may watch; only its members speak here.",
-  public_write: "Open ground — anyone with a body may walk in and speak.",
-};
-const REGION_TITLE: Record<string, string> = {
-  plaza: "Plaza",
-  library: "Library",
-  workshop: "Workshop",
-  stage: "Stage",
-  garden: "Garden",
-  board: "Board",
-};
-function regionTitle(region: string): string {
-  return REGION_TITLE[region] ?? region;
+/*
+ * Access-level words, room names and every other UI word the map says now come
+ * from the active theme's lexicon (lib/themes). Access level is public even
+ * when the space's contents are not.
+ */
+function accessLabel(theme: Theme, preset: string): string {
+  return (theme.lexicon.access as Record<string, { label: string } | undefined>)[preset]?.label ?? preset;
+}
+function accessBlurb(theme: Theme, preset: string): string {
+  return (
+    (theme.lexicon.access as Record<string, { blurb: string } | undefined>)[preset]?.blurb ??
+    theme.lexicon.accessUnknown
+  );
+}
+function regionTitle(theme: Theme, region: string): string {
+  return (theme.lexicon.regions as Record<string, { title: string } | undefined>)[region]?.title ?? region;
 }
 
 type Minimap = {
@@ -321,6 +324,12 @@ type Actor = {
   pulseAgeSeconds?: number | null;
   /** Offline, so counting down to eviction. Set from `connection`, not inferred. */
   fading?: boolean;
+  /** When it last pulsed, verbatim. The motion model dates an errand from it. */
+  pulsedAt?: string | null;
+  /** Its tool-call spans, as the server published them. Empty = no shape reported. */
+  toolCalls?: ToolCallView[];
+  /** Stance (autonomy_mode), agents only. */
+  stance?: string | null;
 };
 
 /**
@@ -458,8 +467,6 @@ type Seat = { x: number; y: number };
 /** How far a crowd may spill past its region before we accept overlap. */
 const SPILL_RINGS = 6;
 
-/** Where a body actually is right now, as it walks between seats. */
-type Walk = { fromX: number; fromY: number; toX: number; toY: number; start: number };
 
 /**
  * Bodies must never share a tile — a stack of overlapping sprites is the fastest
@@ -554,6 +561,21 @@ function assignSeats(actors: Actor[]): Map<string, Seat> {
  * permission, and guessing at one would put the map right back in the business
  * of inventing sentences.
  */
+/**
+ * What a body's tool calls say, as sentences for the hover card and peek: the
+ * call running now (or gone quiet), then the most recent finish while the
+ * server still carries it. Nothing when the body reports no spans.
+ */
+function toolLines(a: Actor): string[] {
+  const calls = a.toolCalls ?? [];
+  const out: string[] = [];
+  const open = calls.find((c) => c.finishedAt === null);
+  if (open) out.push(`${open.stalled ? "Tool gone quiet" : "Running"}: ${describeToolCall(open)}`);
+  const done = calls.find((c) => c.finishedAt !== null);
+  if (done) out.push(`Last tool: ${describeToolCall(done)}${done.result ? ` — ${done.result}` : ""}`);
+  return out;
+}
+
 function badgeConsequence(badges?: string[]): string | null {
   return consequenceOf(asPermissionBadges(badges));
 }
@@ -569,11 +591,6 @@ function unIso(x: number, y: number): { tx: number; ty: number } {
 
 function clamp(n: number, lo: number, hi: number): number {
   return n < lo ? lo : n > hi ? hi : n;
-}
-
-/** Gentle in-out so a body eases off its seat and settles onto the next. */
-function ease(p: number): number {
-  return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
 }
 
 function readMaxFog(): number {
@@ -657,12 +674,15 @@ export function WorldMap() {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const actorsRef = useRef<Actor[]>([]);
+  const costCarryRef = useRef(new CostCarry());
   const radiusRef = useRef(4);
   const plotsRef = useRef(0);
   const plotRef = useRef<Plot[]>([]);
   const seatsRef = useRef<Map<string, Seat>>(new Map());
   const lastHeardRef = useRef<string | null>(null);
-  const walkRef = useRef<Map<string, Walk>>(new Map());
+  /** Where every body is going and why: docs/design/MOTION.md. */
+  const motionRef = useRef<MotionDirector | null>(null);
+  if (!motionRef.current) motionRef.current = new MotionDirector();
   const hoverRef = useRef<Actor | null>(null);
   /** The last few public lines, for the spectator panel. */
   const recentRef = useRef<Array<{ who: string; body: string }>>([]);
@@ -680,8 +700,6 @@ export function WorldMap() {
   const flaggedRef = useRef<Set<string>>(new Set());
   /** Poll counter, so the chronicle is asked a quarter as often as the minimap. */
   const pullNoRef = useRef(0);
-  /** When each body started its current piece of work, for the scaffold stage. */
-  const workRef = useRef<Map<string, { url: string; start: number }>>(new Map());
   /** Called by the "." key; owned by the effect that builds the attention list. */
   const cycleRef = useRef<() => void>(() => {});
   /** Called by the bookmark keys; owned by the effect that can resolve them. */
@@ -695,6 +713,15 @@ export function WorldMap() {
    * re-skins the next frame with no remount; see lib/themes for the contract.
    */
   const themeRef = useRef<Theme>(THEMES[DEFAULT_THEME]);
+  /**
+   * The theme the viewer CHOSE. The chrome follows it at once; the canvas
+   * follows it as soon as its art is prepared, so a switch never paints a
+   * frame of missing sprites.
+   */
+  const [themeId, setThemeId] = useState<ThemeId>(DEFAULT_THEME);
+  const chosenRef = useRef<Theme>(THEMES[DEFAULT_THEME]);
+  const theme = THEMES[themeId];
+  const lex = theme.lexicon;
   const controlsRef = useRef<{
     zoomBy: (f: number) => void;
     reset: () => void;
@@ -719,10 +746,6 @@ export function WorldMap() {
   /** An eased camera move to a bookmark. Cleared by any drag, wheel or follow. */
   const glideRef = useRef<{ tx: number; ty: number; zoom: number; start: number } | null>(null);
   const [kiosk, setKiosk] = useState(false);
-  const [themeId, setThemeId] = useState<ThemeId>(DEFAULT_THEME);
-  const theme = getTheme(themeId);
-  themeRef.current = theme;
-  const lex = theme.lexicon;
   const kioskRef = useRef(false);
   /** Kiosk yields to a person who touches the map, rather than fighting them. */
   const kioskYieldRef = useRef(0);
@@ -749,6 +772,44 @@ export function WorldMap() {
   const zoomIn = useCallback(() => controlsRef.current?.zoomBy(1.25), []);
   const zoomOut = useCallback(() => controlsRef.current?.zoomBy(1 / 1.25), []);
   const resetView = useCallback(() => controlsRef.current?.reset(), []);
+  /**
+   * Re-skin the world live. `persist` is false for the choice read on mount
+   * (it is already wherever it came from) and true for a viewer's click. If
+   * the URL is pinning a theme, the pin is moved too, so the address bar never
+   * disagrees with what is on screen.
+   */
+  const applyTheme = useCallback((id: ThemeId, persist: boolean) => {
+    const next = THEMES[id];
+    chosenRef.current = next;
+    setThemeId(id);
+    void next.art.prepare().then(() => {
+      if (chosenRef.current === next) themeRef.current = next;
+    });
+    if (!persist) return;
+    writeThemeChoice(id);
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has(THEME_QUERY)) {
+        url.searchParams.set(THEME_QUERY, id);
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    } catch {
+      /* the theme still switches */
+    }
+  }, []);
+  const themeKeyRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    themeKeyRef.current = () => {
+      const i = THEME_IDS.indexOf(chosenRef.current.id);
+      applyTheme(THEME_IDS[(i + 1) % THEME_IDS.length]!, true);
+    };
+  }, [applyTheme]);
+  // Deliberately after mount: the server renders the default, and a stored
+  // choice that differed would otherwise be a hydration mismatch.
+  useEffect(() => {
+    applyTheme(readThemeChoice(), false);
+  }, [applyTheme]);
+
   const stopFollowing = useCallback(() => {
     followRef.current = null;
     setFollowing(null);
@@ -884,35 +945,14 @@ export function WorldMap() {
   }, [jumpTo]);
 
   const bookmarks: Bookmark[] = [
-    { key: "1", label: lex.regions.plaza.title, title: lex.regions.plaza.bookmark },
-    { key: "2", label: lex.regions.library.title, title: lex.regions.library.bookmark },
-    { key: "3", label: lex.regions.workshop.title, title: lex.regions.workshop.bookmark },
-    { key: "4", label: lex.regions.stage.title, title: lex.regions.stage.bookmark },
-    { key: "5", label: lex.regions.garden.title, title: lex.regions.garden.bookmark },
-    { key: "6", label: lex.regions.board.title, title: lex.regions.board.bookmark },
+    ...BOOKMARK_REGIONS.map(({ key, region }) => ({
+      key,
+      label: lex.regions[region].title,
+      title: lex.regions[region].bookmark,
+    })),
     { key: "b", label: lex.controls.busiest, title: lex.controls.busiestTitle },
     ...(hasMySpace ? [{ key: "m", label: lex.controls.mySpace, title: lex.controls.mySpaceTitle }] : []),
   ];
-
-  useEffect(() => {
-    setThemeId(readThemeChoice());
-  }, []);
-
-  useEffect(() => {
-    void theme.art.prepare();
-  }, [theme]);
-
-  const chooseTheme = useCallback((id: ThemeId) => {
-    setThemeId(id);
-    writeThemeChoice(id);
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set(THEME_QUERY, id);
-      window.history.replaceState({}, "", url);
-    } catch {
-      /* private mode */
-    }
-  }, []);
 
   // Who is watching. Deliberately its own effect, deliberately not awaited by
   // anything that draws: the map must paint for a spectator exactly as fast as
@@ -1006,6 +1046,11 @@ export function WorldMap() {
             orgColour: b.org_colour ?? b.orgColour ?? null,
             orgName: (orgId ? orgById.get(orgId)?.name : null) ?? null,
             flagged: flaggedIds.has(b.id),
+            pulsedAt,
+            stance: b.stance ?? null,
+            toolCalls: (b.tool_calls ?? b.toolCalls ?? [])
+              .map((raw) => spanFromWire(raw))
+              .filter((v): v is ToolCallView => v !== null),
           };
         });
         const issues = data.paperclip?.issues ?? [];
@@ -1034,6 +1079,7 @@ export function WorldMap() {
           };
         });
         const actors: Actor[] = [...grove, ...paperclip];
+        costCarryRef.current.sync(data.bodies ?? []);
         stallSecondsRef.current =
           data.stall_after_seconds ?? data.stallAfterSeconds ?? DEFAULT_STALL_SECONDS;
         /* --- the fade, and the leaving ------------------------------ *
@@ -1064,20 +1110,6 @@ export function WorldMap() {
           }
           // A body that came back cancels its own departure mid-fade.
           for (const id of live) departedRef.current.delete(id);
-        }
-        // Scaffolding: how long this body has been on THIS url. Work that
-        // changes target starts a fresh site; work that stops takes its
-        // scaffolding down with it.
-        {
-          const work = workRef.current;
-          const live = new Set<string>();
-          for (const a of actors) {
-            if (!a.url || !isActiveVerb(a.verb)) continue;
-            live.add(a.id);
-            const cur = work.get(a.id);
-            if (!cur || cur.url !== a.url) work.set(a.id, { url: a.url, start: Date.now() });
-          }
-          for (const id of [...work.keys()]) if (!live.has(id)) work.delete(id);
         }
         // The attention list, in the order the bell walks it. Sorted by id
         // within each rank so the same world always cycles the same way.
@@ -1135,6 +1167,7 @@ export function WorldMap() {
           : null;
         actorsRef.current = actors;
         seatsRef.current = assignSeats(actors);
+        motionRef.current?.sync(actors, seatsRef.current, Date.now());
         const claimed = data.claimed_agents ?? data.claimedAgents ?? 0;
         const awake = actors.filter((a) => isActiveVerb(a.verb)).length;
         const asleep = actors.length - awake;
@@ -1170,12 +1203,35 @@ export function WorldMap() {
         actor_id?: string;
         verb?: string;
         detail?: string | null;
+        presence?: { pulsed_at?: string | null; pulsedAt?: string | null };
+        batch?: { last_pulsed_at?: string | null };
       };
       if (!d.actor_id || !d.verb || !(d.verb in VERB_LABEL)) return;
       const verb = d.verb as AgentVerb;
+      // A pulse just arrived, so for this body "gone quiet" is no longer true
+      // until the next poll says otherwise.
+      // A batch pulse (AGT-10) arrives as ONE event carrying the final state,
+      // stamped with when that phase really happened, which may already be
+      // old. Date the errand from that stamp and judge the stall from it too,
+      // rather than pretending it happened the moment the event landed.
+      const at = d.presence?.pulsed_at ?? d.presence?.pulsedAt ?? d.batch?.last_pulsed_at ?? new Date().toISOString();
+      const ageS = (Date.now() - Date.parse(at)) / 1000;
+      const stalled = isActiveVerb(verb) && Number.isFinite(ageS) && ageS > stallSecondsRef.current;
       actorsRef.current = actorsRef.current.map((a) =>
-        a.id === d.actor_id ? { ...a, verb, detail: d.detail || VERB_LABEL[verb] } : a,
+        a.id === d.actor_id ? { ...a, verb, detail: d.detail || VERB_LABEL[verb], stalled, pulsedAt: at } : a,
       );
+      motionRef.current?.sync(actorsRef.current, seatsRef.current, Date.now());
+    });
+    // Tool-call spans, live (Plaza only, like every other SSE event). The next
+    // poll replaces the list wholesale, so a missed event heals in 8 seconds.
+    es.addEventListener("tool_call", (ev) => {
+      const d = JSON.parse((ev as MessageEvent).data) as { actor_id?: string; tool_call?: Record<string, unknown> };
+      const span = d.tool_call ? spanFromWire(d.tool_call) : null;
+      if (!d.actor_id || !span) return;
+      actorsRef.current = actorsRef.current.map((a) =>
+        a.id === d.actor_id ? { ...a, toolCalls: mergeSpan(a.toolCalls, span) } : a,
+      );
+      motionRef.current?.sync(actorsRef.current, seatsRef.current, Date.now());
     });
     es.addEventListener("speech", (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as { sender_id?: string; body?: string };
@@ -1200,6 +1256,15 @@ export function WorldMap() {
     let raf = 0;
     let cancelled = false;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    /**
+     * Is this body on this tile? Asked of where it was last DRAWN, not of its
+     * home seat: a body at the Workshop is clicked at the Workshop.
+     */
+    const standsOn = (a: Actor, tx: number, ty: number): boolean => {
+      const drawn = lastPosRef.current.get(a.id);
+      const at = drawn ?? seatsRef.current.get(a.id) ?? seatInRegion(a.id, a.region);
+      return Math.round(at.x) === tx && Math.round(at.y) === ty;
+    };
 
     /* ---- the one transform ---------------------------------------- */
 
@@ -1398,11 +1463,7 @@ export function WorldMap() {
       }
       const { tx, ty } = tileFromClient(ev.clientX, ev.clientY);
       const actors = actorsRef.current;
-      hoverRef.current =
-        actors.find((a) => {
-          const seat = seatsRef.current.get(a.id) ?? seatInRegion(a.id, a.region);
-          return seat.x === tx && seat.y === ty;
-        }) ?? null;
+      hoverRef.current = actors.find((a) => standsOn(a, tx, ty)) ?? null;
       canvas.style.cursor = regionAt(tx, ty) !== "wild" ? "pointer" : "grab";
     };
 
@@ -1423,10 +1484,7 @@ export function WorldMap() {
      */
     const peekAt = (tx: number, ty: number): Peek | null => {
       if (!tileExplored(tx, ty, radiusRef.current)) return null;
-      const body = actorsRef.current.find((a) => {
-        const seat = seatsRef.current.get(a.id) ?? seatInRegion(a.id, a.region);
-        return seat.x === tx && seat.y === ty;
-      });
+      const body = actorsRef.current.find((a) => standsOn(a, tx, ty));
       if (body) {
         const facts: string[] = [];
         if (body.flagged) facts.push("Flagged for prompt injection — the chronicle holds the record.");
@@ -1436,14 +1494,17 @@ export function WorldMap() {
         // the reader has to have learnt. Always shown for a Grove body: "it is
         // beating" is the answer an owner came here for as often as the alarm.
         if (body.source === "grove") facts.push(healthNote(healthOf(body)));
+        for (const line of toolLines(body)) facts.push(line);
+        const stance = body.stance ? STANCES[body.stance as keyof typeof STANCES] : undefined;
+        if (stance) facts.push(`Stance: ${stance.label}. ${stance.blurb} ${stance.enforcementNote}`);
         const consequence = badgeConsequence(body.badges);
         if (consequence) facts.push(consequence);
         if (body.source === "paperclip") facts.push("Runs on Paperclip next door, so it has no Grove body to answer you.");
         return {
           kind: "body",
           title: body.name,
-          subtitle: `${body.kind === "human" ? "A person" : "An agent"} · ${body.detail ?? VERB_LABEL[body.verb]}`,
-          region: regionTitle(body.region),
+          subtitle: `${body.kind === "human" ? chosenRef.current.lexicon.aHuman : chosenRef.current.lexicon.anAgent} · ${body.detail ?? VERB_LABEL[body.verb]}`,
+          region: regionTitle(chosenRef.current, body.region),
           facts,
           org:
             body.orgColour && body.orgName
@@ -1464,8 +1525,8 @@ export function WorldMap() {
           name: plot.name,
           slug: plot.slug,
           plotIndex: plot.plotIndex,
-          access: PRESET_LABEL[plot.preset] ?? plot.preset,
-          accessBlurb: PRESET_BLURB[plot.preset] ?? "Somebody holds this ground.",
+          access: accessLabel(chosenRef.current, plot.preset),
+          accessBlurb: accessBlurb(chosenRef.current, plot.preset),
           ownerHandle: plot.ownerHandle,
           occupancy: plot.occupancy,
           orgs: plot.orgs,
@@ -1476,7 +1537,7 @@ export function WorldMap() {
       return {
         kind: "region",
         region,
-        title: regionTitle(region),
+        title: regionTitle(chosenRef.current, region),
         here: actorsRef.current
           .filter((a) => a.region === region)
           .map((a) => ({ name: a.name, detail: a.detail ?? VERB_LABEL[a.verb] })),
@@ -1506,10 +1567,7 @@ export function WorldMap() {
      *  already opens the read-only card and a spectator needs that more. */
     const onDoubleClick = (ev: MouseEvent) => {
       const { tx, ty } = tileFromClient(ev.clientX, ev.clientY);
-      const body = actorsRef.current.find((a) => {
-        const seat = seatsRef.current.get(a.id) ?? seatInRegion(a.id, a.region);
-        return seat.x === tx && seat.y === ty;
-      });
+      const body = actorsRef.current.find((a) => standsOn(a, tx, ty));
       if (!body) return;
       ev.preventDefault();
       followRef.current = body.id;
@@ -1556,6 +1614,8 @@ export function WorldMap() {
       else if (ev.key === "-" || ev.key === "_") controlsRef.current?.zoomBy(1 / 1.25);
       else if (ev.key === "0") reset();
       else if (ev.key === "k" || ev.key === "K") kioskModeRef.current(!kioskRef.current);
+      // T walks the themes. Works in kiosk mode too, where there is no switcher.
+      else if ((ev.key === "t" || ev.key === "T") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) themeKeyRef.current();
       // The bookmarks. A modified key is somebody else's shortcut — cmd-1 is a
       // browser tab, not the Plaza — so only the bare keystroke jumps.
       else if (!ev.metaKey && !ev.ctrlKey && !ev.altKey && BOOKMARK_KEYS.has(ev.key.toLowerCase()))
@@ -1616,27 +1676,9 @@ export function WorldMap() {
         return sprite;
       };
 
-      /** Where a body is this frame, in (fractional) tile coords. */
-      const bodyAt = (id: string, seat: Seat, now: number): { x: number; y: number } => {
-        const walks = walkRef.current;
-        const cur = walks.get(id);
-        if (!cur) {
-          // First sighting: stand at the seat. Nobody slides in from nowhere.
-          walks.set(id, { fromX: seat.x, fromY: seat.y, toX: seat.x, toY: seat.y, start: now - WALK_MS });
-          return { x: seat.x, y: seat.y };
-        }
-        if (cur.toX !== seat.x || cur.toY !== seat.y) {
-          const p = reduceMotion.matches ? 1 : ease(clamp((now - cur.start) / WALK_MS, 0, 1));
-          cur.fromX = cur.fromX + (cur.toX - cur.fromX) * p;
-          cur.fromY = cur.fromY + (cur.toY - cur.fromY) * p;
-          cur.toX = seat.x;
-          cur.toY = seat.y;
-          cur.start = now;
-        }
-        if (reduceMotion.matches) return { x: cur.toX, y: cur.toY };
-        const p = ease(clamp((now - cur.start) / WALK_MS, 0, 1));
-        return { x: cur.fromX + (cur.toX - cur.fromX) * p, y: cur.fromY + (cur.toY - cur.fromY) * p };
-      };
+      /** Where a body is this frame, in (fractional) tile coords, and what it is doing about its errand. */
+      const bodyAt = (id: string, seat: Seat) =>
+        motionRef.current!.frame(id, seat, Date.now(), reduceMotion.matches);
 
       type Label = {
         x: number;
@@ -1884,11 +1926,11 @@ export function WorldMap() {
           ctx.textAlign = "center";
           ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
           ctx.fillStyle = pal.plotName;
-          ctx.fillText(plot.name ?? "claimed", lx, ly - 2);
+          ctx.fillText(plot.name ?? theme.lexicon.claimedPlot, lx, ly - 2);
           ctx.font = "9px ui-sans-serif, system-ui, sans-serif";
           ctx.fillStyle = tint.replace(/[\d.]+\)$/, "0.95)");
           ctx.fillText(
-            `${PRESET_LABEL[plot.preset] ?? plot.preset}${plot.occupancy ? ` · ${plot.occupancy} here` : ""}`,
+            `${accessLabel(theme, plot.preset)}${plot.occupancy ? ` · ${plot.occupancy} here` : ""}`,
             lx,
             ly + 10,
           );
@@ -1903,9 +1945,8 @@ export function WorldMap() {
         // are pruned on the same pass, but only once the departure that needs
         // them has finished playing — that is the one entry a leaver still has
         // a use for after it is gone.
-        if (walkRef.current.size > actors.length) {
+        if (lastPosRef.current.size > actors.length) {
           const live = new Set(actors.map((a) => a.id));
-          for (const id of [...walkRef.current.keys()]) if (!live.has(id)) walkRef.current.delete(id);
           for (const id of [...lastPosRef.current.keys()]) {
             if (!live.has(id) && !departedRef.current.has(id)) lastPosRef.current.delete(id);
           }
@@ -1994,13 +2035,20 @@ export function WorldMap() {
 
         for (const a of actors) {
           const seat = seatsRef.current.get(a.id) ?? seatInRegion(a.id, a.region);
-          if (!tileExplored(seat.x, seat.y, radius)) continue;
-          const at = bodyAt(a.id, seat, t);
+          // The motion model decides where the body is; the renderer only draws it.
+          const at = bodyAt(a.id, seat);
+          if (!tileExplored(Math.round(at.x), Math.round(at.y), radius)) continue;
           if (!near(Math.round(at.x), Math.round(at.y), 1, 1)) continue;
           const p = iso(at.x, at.y);
           const active = isActiveVerb(a.verb);
-          const walk = active ? Math.sin(t / 160 + seat.x) * 5 : 0;
-          const bob = Math.sin(t / (active ? 160 : 400) + seat.y) * (active ? 2.5 : a.verb === "offline" ? 0 : 1.2);
+          // Silence freezes: a stalled body neither sways nor bobs. A walking body
+          // is already moving, so the work sway only plays once it has arrived.
+          const still = at.state === "stalled";
+          const walking = at.state === "dispatched" || at.state === "returning" || at.state === "approaching";
+          const walk = active && !still && !walking ? Math.sin(t / 160 + seat.x) * 5 : 0;
+          const bob = still
+            ? 0
+            : Math.sin(t / (active ? 160 : 400) + seat.y) * (active ? 2.5 : a.verb === "offline" ? 0 : 1.2);
           const x = ox + p.x + walk;
           const y = oy + p.y - 18 + bob;
           /* --- idle, asleep, and going --------------------------------
@@ -2015,6 +2063,7 @@ export function WorldMap() {
             a.verb === "offline" ? sleepingAlpha(health.drift) : a.verb === "idle" ? 0.72 : 1;
           const tone = hazardOf(a);
           if (tone) hazards.push({ x, y, tone });
+          costCarryRef.current.note(a.id, x, y);
           if (healthVisible(health)) meters.push({ x, y, drift: health.drift });
           // Remember where this body stood, so that if it is gone by the next
           // poll its departure can start from the seat and not from nowhere.
@@ -2029,20 +2078,22 @@ export function WorldMap() {
             } else lastPosRef.current.set(a.id, { x: at.x, y: at.y, alpha, sprite, at: 0 });
           }
 
-          // Scaffolding. A body working a url raises a site three tiles north
-          // of itself, so the frame stands BEHIND the worker rather than
-          // burying them — the scaffold's south-most tile is one north of the
-          // seat, which is what puts it earlier in this list.
-          const job = workRef.current.get(a.id);
-          if (job && z >= LOD_DRESSING) {
-            const elapsed = nowMs - job.start;
-            const stage: ScaffoldStage =
-              elapsed < SCAFFOLD_STAGE_MS[0]! ? 1 : elapsed < SCAFFOLD_STAGE_MS[1]! ? 2 : 3;
+          // Scaffolding. A body working a url stakes out a site three tiles north
+          // of its HOME seat — the thing it is building lives where it lives, even
+          // while it walks to the Workshop to run a tool. The stage is the
+          // reported progress of its open span, and stays at 1 when none was
+          // reported: nothing on this map grows on a clock.
+          if (a.url && isActiveVerb(a.verb) && z >= LOD_DRESSING) {
+            const open = a.toolCalls?.find((c) => c.finishedAt === null && c.progress != null);
+            const stage = scaffoldStageFor(open?.progress);
             const sx = seat.x - 3;
             const sy = seat.y - 3;
             if (near(sx, sy, SCAFFOLD.fw, SCAFFOLD.fh))
               anchored((px, py) => art.scaffold(ctx, stage, px, py), sx, sy, SCAFFOLD, 0.92);
           }
+          const workSpan = at.span;
+          const mark = at.mark;
+          const stance = a.kind === "agent" ? a.stance : null;
 
           scene.push({
             // Bodies stand on the tile's NORTH vertex while a footprint covers
@@ -2087,6 +2138,10 @@ export function WorldMap() {
               // same thing twice beside it.
               const carried = z >= LOD_DRESSING ? itemForActor(a) : null;
               if (!(carried && art.carry(ctx, carried, x + 11, y + 3))) art.glyph(ctx, a.verb, x, y, t);
+              // Motion marks (lib/motion/marks.ts): fixed semantics, not theme art.
+              if (workSpan && z >= LOD_DRESSING) drawWorkBar(ctx, workSpan, x, y, t, reduceMotion.matches);
+              if (mark) drawOutcomeMark(ctx, mark.outcome, x, y, (Date.now() - mark.at) / OUTCOME_MARK_MS, reduceMotion.matches);
+              if (stance && z >= LOD_LABELS) drawStanceMark(ctx, stance, x, y);
               ctx.restore();
             },
           });
@@ -2264,6 +2319,18 @@ export function WorldMap() {
           if (sx < -20 || sx > cssW + 20 || sy < -20 || sy > cssH + 20) continue;
           art.hazard(ctx, sx, sy, h.tone, t);
         }
+        // Carry and deposit (costCarry.ts): a turn that reported usage sends its
+        // load to the treasury at the Plaza's centre. Screen space, fixed size.
+        {
+          const bank = iso(PLAZA_CENTER.x, PLAZA_CENTER.y);
+          costCarryRef.current.draw(
+            ctx,
+            (lx, ly) => ({ x: lx * z + v.px, y: ly * z + v.py }),
+            { x: ox + bank.x, y: oy + bank.y },
+            reduceMotion.matches,
+            resourceTerms(theme),
+          );
+        }
         // The heartbeat rings, at the same fixed size and for the same reason.
         // Offset to the right of the hazard slot so a body that is both faulted
         // and drifting shows both marks rather than one on top of the other.
@@ -2282,7 +2349,7 @@ export function WorldMap() {
             followRef.current = null;
           } else {
             const seat = seatsRef.current.get(target.id) ?? seatInRegion(target.id, target.region);
-            const at = bodyAt(target.id, seat, t);
+            const at = bodyAt(target.id, seat);
             const q = iso(at.x, at.y);
             const v = viewRef.current;
             const wantX = cssW / 2 - (ox + q.x) * v.zoom;
@@ -2341,13 +2408,16 @@ export function WorldMap() {
         }
         const hover = hoverRef.current;
         if (hover) {
-          const lines: string[] = [`${hover.name} · ${hover.detail ?? hover.verb} · ${hover.region}`];
+          const lines: string[] = [
+            `${hover.name} · ${hover.detail ?? hover.verb} · ${regionTitle(theme, hover.region)}`,
+          ];
           if (hover.flagged) lines.push("Flagged for prompt injection — the chronicle holds the record.");
           if (hover.stalled) lines.push("Stopped reporting — it says it is working, but has gone quiet.");
           if (hover.errorText) lines.push(`Fault: ${hover.errorText.slice(0, 90)}`);
           const hoverHealth = healthOf(hover);
           if (healthVisible(hoverHealth)) lines.push(healthNote(hoverHealth));
-          if (hover.url) lines.push(hover.url.slice(0, 90));
+          for (const line of toolLines(hover)) lines.push(line.slice(0, 90));
+          if (hover.url) lines.push(`${theme.lexicon.construction} · ${hover.url.slice(0, 90)}`);
           if (hover.orgName) lines.push(`Flying ${hover.orgName} colours here.`);
           const consequence = badgeConsequence(hover.badges);
           if (consequence) lines.push(consequence);
@@ -2384,10 +2454,11 @@ export function WorldMap() {
 
   return (
     <section
+      data-grove-theme={theme.id}
+      style={themeStyle(theme)}
       className={`relative overflow-hidden bg-dusk-950 ${
         kiosk ? "min-h-[100svh]" : "min-h-[calc(100svh-56px)]"
       }`}
-      style={themeStyle(theme)}
     >
       <KioskChrome active={kiosk} onLeave={() => setKioskMode(false)} />
       <canvas
@@ -2427,6 +2498,7 @@ export function WorldMap() {
           ) : null}
         </div>
         <div className="pointer-events-auto w-full shrink-0 rounded-2xl border border-lantern-400/20 bg-dusk-950/80 px-3 py-2 text-[11px] uppercase tracking-widest text-lantern-300/80 sm:w-auto sm:px-4 sm:py-3 sm:text-xs">
+          <ResourceBar signedIn={signedIn} />
           <div className="flex items-baseline justify-between gap-3">
             <span>{status}</span>
             {/* The campus clock. UTC and said so: the world is one place, and
@@ -2448,8 +2520,8 @@ export function WorldMap() {
             {hud.lastHeard || lex.hud.quiet}
           </div>
           <div className="mt-2 hidden flex-wrap gap-2 text-[10px] normal-case tracking-normal text-white/50 sm:flex">
-            {lex.legend.map((item) => (
-              <span key={item}>{item}</span>
+            {lex.legend.map((word) => (
+              <span key={word}>{word}</span>
             ))}
           </div>
           {hud.orgs.length ? (
@@ -2481,11 +2553,13 @@ export function WorldMap() {
           kiosk ? "pb-16 sm:pb-20" : ""
         }`}
       >
-        {kiosk ? null : <CameraBookmarks items={bookmarks} onGo={jumpTo} />}
-        <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} labels={lex.bell} />
+        {kiosk ? null : <CameraBookmarks items={bookmarks} onGo={jumpTo} goToLabel={lex.controls.goTo} />}
+        <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} />
         {following ? (
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-lantern-400/40 bg-dusk-950/90 py-1.5 pl-4 pr-1.5 text-xs text-lantern-300">
-            <span className="truncate">{lex.controls.following} {following}</span>
+            <span className="truncate">
+              {lex.controls.following} {following}
+            </span>
             <button
               type="button"
               onClick={stopFollowing}
@@ -2525,21 +2599,6 @@ export function WorldMap() {
             >
               +
             </button>
-            <label className="flex items-center gap-2 rounded-full border border-white/15 bg-dusk-950/80 px-3 py-2 text-xs uppercase tracking-widest text-white/80">
-              <span className="sr-only sm:not-sr-only">{lex.controls.theme}</span>
-              <select
-                value={themeId}
-                onChange={(e) => chooseTheme(e.target.value as ThemeId)}
-                title={lex.controls.theme}
-                className="max-w-[9.5rem] bg-transparent text-white/90 outline-none"
-              >
-                {THEME_IDS.map((id) => (
-                  <option key={id} value={id} className="bg-dusk-950 text-white">
-                    {THEMES[id].lexicon.name}
-                  </option>
-                ))}
-              </select>
-            </label>
             <button
               type="button"
               onClick={resetView}
@@ -2556,6 +2615,7 @@ export function WorldMap() {
             >
               {lex.controls.kiosk}
             </button>
+            <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />
           </div>
         </div>
       </div>

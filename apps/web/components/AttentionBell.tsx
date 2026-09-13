@@ -33,25 +33,29 @@ export type AttentionCounts = {
   fading: number;
 };
 
+/** The bell's words, from the active theme's lexicon. The ORDER and the colours are not themeable. */
+export type BellWords = { faulted: string; stalled: string; fading: string; idle: string; allBusy: string };
+
+const DEFAULT_WORDS: BellWords = {
+  faulted: "faulted",
+  stalled: "stalled",
+  fading: "fading",
+  idle: "idle",
+  allBusy: "all hands busy",
+};
+
 export function AttentionBell({
   counts,
   position,
   onCycle,
-  labels,
+  words = DEFAULT_WORDS,
 }: {
   counts: AttentionCounts;
   /** "3 of 7 · lantern" while cycling, null when nothing is being followed from here. */
   position: string | null;
   onCycle: () => void;
-  labels?: { faulted: string; stalled: string; fading: string; idle: string; allBusy: string };
+  words?: BellWords;
 }) {
-  const L = labels ?? {
-    faulted: "faulted",
-    stalled: "stalled",
-    fading: "fading",
-    idle: "idle",
-    allBusy: "all hands busy",
-  };
   const total = counts.hazard + counts.stalled + counts.fading + counts.idle;
   const alarming = counts.hazard + counts.stalled;
 
@@ -62,7 +66,7 @@ export function AttentionBell({
         title="Nothing is idle, stalled or faulted."
       >
         <span aria-hidden>◇</span>
-        <span>{L.allBusy}</span>
+        <span>{words.allBusy}</span>
       </div>
     );
   }
@@ -85,22 +89,22 @@ export function AttentionBell({
       <span className="flex items-center gap-2 tabular-nums">
         {counts.hazard > 0 ? (
           <span className="text-red-300" title="Faulted, blocked, or flagged for prompt injection">
-            {counts.hazard} {L.faulted}
+            {counts.hazard} {words.faulted}
           </span>
         ) : null}
         {counts.stalled > 0 ? (
           <span className="text-orange-300" title="Says it is working, but has stopped reporting">
-            {counts.stalled} {L.stalled}
+            {counts.stalled} {words.stalled}
           </span>
         ) : null}
         {counts.fading > 0 ? (
           <span className="text-amber-300" title="Asleep and drifting: the world empties the seat at ten minutes of silence">
-            {counts.fading} {L.fading}
+            {counts.fading} {words.fading}
           </span>
         ) : null}
         {counts.idle > 0 ? (
           <span className={alarming > 0 ? "text-white/55" : ""} title="Idle or asleep">
-            {counts.idle} {L.idle}
+            {counts.idle} {words.idle}
           </span>
         ) : null}
       </span>
