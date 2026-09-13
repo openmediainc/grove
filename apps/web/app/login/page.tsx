@@ -85,6 +85,23 @@ function LoginForm() {
     }
   }, [next]);
 
+  // Already signed in: there is nothing to do here, so go where they were
+  // heading (or the map). A magic-link round trip is handled below instead.
+  useEffect(() => {
+    if (params.get("token")) return;
+    let alive = true;
+    api("/api/v1/humans/me")
+      .then(() => {
+        if (alive) window.location.replace(gp(next ?? "/"));
+      })
+      .catch(() => {
+        /* signed out: show the form */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [params, next]);
+
   useEffect(() => {
     const token = params.get("token");
     if (!token) return;

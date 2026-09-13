@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { actorRef, readActorParam, withActorParam } from "@/lib/chronicle-link";
 import { GeoAvatar } from "@/components/Avatar";
 import { Reactions } from "@/components/Reactions";
 import type { ReactionSummaryWire, ReactionTargetWire } from "@/lib/reactions";
@@ -187,7 +188,7 @@ function ActorFace({ entry }: { entry: Entry }) {
   return <GeoAvatar kind={kind} seed={seed} size={22} label={false} />;
 }
 
-function Row({ entry, onActor, signedIn }: { entry: Entry; onActor: (id: string) => void; signedIn: boolean }) {
+function Row({ entry, onActor, signedIn }: { entry: Entry; onActor: (ref: string) => void; signedIn: boolean }) {
   const chips = detailChips(entry);
   return (
     <li className="flex gap-3 py-2">
@@ -207,7 +208,7 @@ function Row({ entry, onActor, signedIn }: { entry: Entry; onActor: (id: string)
           {entry.summary}
           {entry.actor ? (
             <button
-              onClick={() => onActor(entry.actor!.id)}
+              onClick={() => onActor(actorRef(entry.actor) ?? entry.actor!.id)}
               title="Only this actor"
               className="ml-2 text-[11px] text-white/25 hover:text-lantern-300"
             >
@@ -241,7 +242,21 @@ function Row({ entry, onActor, signedIn }: { entry: Entry; onActor: (id: string)
 export default function ChroniclePage() {
   const [win, setWin] = useState("24h");
   const [kinds, setKinds] = useState<string[]>([]);
-  const [actorId, setActorId] = useState<string | null>(null);
+  // `?actor=` (see lib/chronicle-link): read once on mount, written back with
+  // replaceState so "only this" is a link that can be shared. `urlRead` holds
+  // the first fetch until the URL has been looked at.
+  const [actorRefState, setActorRefState] = useState<string | null>(null);
+  const [urlRead, setUrlRead] = useState(false);
+  useEffect(() => {
+    setActorRefState(readActorParam(window.location.search));
+    setUrlRead(true);
+  }, []);
+  const setActor = useCallback((ref: string | null) => {
+    setActorRefState(ref);
+    const { pathname, search, hash } = window.location;
+    window.history.replaceState(window.history.state, "", `${pathname}${withActorParam(search, ref)}${hash}`);
+  }, []);
+  const actorId = actorRefState;
   const [entries, setEntries] = useState<Entry[]>([]);
   const [meta, setMeta] = useState<Page | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -262,7 +277,7 @@ export default function ChroniclePage() {
         const qs = new URLSearchParams();
         if (since) qs.set("since", since);
         if (kinds.length) qs.set("kinds", kinds.join(","));
-        if (actorId) qs.set("actor_id", actorId);
+        if (actorId) qs.set("actor", actorId);
         if (from) qs.set("cursor", from);
         qs.set("limit", "80");
         const r = await api<Page>(`/api/v1/chronicle?${qs.toString()}`);
@@ -280,8 +295,9 @@ export default function ChroniclePage() {
   );
 
   useEffect(() => {
+    if (!urlRead) return;
     void fetchPage(null);
-  }, [fetchPage]);
+  }, [fetchPage, urlRead]);
 
   const blocks = useMemo<Block[]>(() => {
     const out: Block[] = [];
@@ -393,8 +409,8 @@ export default function ChroniclePage() {
 
       {actorId ? (
         <p className="mt-3 text-xs text-white/45">
-          Showing one actor only.{" "}
-          <button onClick={() => setActorId(null)} className="text-lantern-300">
+          Showing only <code className="break-all text-white/60">{actorId}</code>.{" "}
+          <button onClick={() => setActor(null)} className="text-lantern-300">
             show everyone
           </button>
         </p>
@@ -436,13 +452,13 @@ export default function ChroniclePage() {
                   </span>
                   <span className="ml-auto text-[11px] text-white/30">{open ? "hide" : "show"}</span>
                 </button>
-                {open ? <ul className="pl-2">{b.entries.map((e) => <Row key={e.id} entry={e} onActor={setActorId} signedIn={Boolean(meta?.viewer.signed_in)} />)}</ul> : null}
+                {open ? <ul className="pl-2">{b.entries.map((e) => <Row key={e.id} entry={e} onActor={setActor} signedIn={Boolean(meta?.viewer.signed_in)} />)}</ul> : null}
               </div>
             );
           }
           return (
             <ul key={b.key} className="border-t border-white/5">
-              <Row entry={b.entry} onActor={setActorId} signedIn={Boolean(meta?.viewer.signed_in)} />
+              <Row entry={b.entry} onActor={setActor} signedIn={Boolean(meta?.viewer.signed_in)} />
             </ul>
           );
         })}

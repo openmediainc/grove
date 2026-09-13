@@ -6,3 +6,12 @@ export function gp(path: string): string {
   if (path === GROVE_BASE || path.startsWith(`${GROVE_BASE}/`)) return path;
   return `${GROVE_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }
+
+/**
+ * An absolute URL for copy-paste (curl lines, MCP snippets): the origin the
+ * page was actually served from plus the base path. Before the origin is known
+ * (server render) it is the path alone, never a guessed localhost.
+ */
+export function publicUrl(origin: string, path: string): string {
+  return `${origin.replace(/\/+$/, "")}${gp(path)}`;
+}

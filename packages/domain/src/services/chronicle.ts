@@ -427,7 +427,9 @@ ev AS (
   LEFT JOIN speech sp ON e.type = 'speech' AND sp.id = e.payload->>'speechId'
   WHERE ($3::timestamptz IS NULL OR e.created_at >= $3::timestamptz)
     AND ($4::timestamptz IS NULL OR e.created_at <  $4::timestamptz)
-    AND ($5::text  IS NULL OR e.actor_id = $5::text)
+    -- The actor filter never matches a mod.* row for a non-operator: its actor
+    -- is the moderator, blanked below, and filtering on it would name them.
+    AND ($5::text  IS NULL OR (e.actor_id = $5::text AND (e.type NOT LIKE 'mod.%' OR $2::bool)))
     AND ($6::text[] IS NULL OR e.type = ANY($6::text[]))
 ),
 visible AS (

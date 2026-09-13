@@ -51,7 +51,7 @@ describe("the heart", () => {
   });
 
   it("links a notice to its subject and reads it as one sentence", () => {
-    expect(noticeHref(notice())).toBe("/a/org/scout");
+    expect(noticeHref(notice())).toBe("/chronicle?actor=org%2Fscout");
     expect(noticeText(notice())).toBe("Scout finished Bash after 2m 5s.");
     const stage = notice({
       kind: "space.stage_started",

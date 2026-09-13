@@ -13,6 +13,7 @@ import {
   type FollowSubject,
 } from "@grove/protocol";
 import type { CardTarget } from "./card";
+import { chronicleActorHref } from "./chronicle-link";
 import type { ThemeLexicon } from "./themes/types";
 
 export type FollowTarget = { subject: "space"; ref: string } | { subject: "agent"; slug: string };
@@ -71,10 +72,14 @@ export function heartLabel(state: Pick<WireFollow, "following" | "followers"> | 
   return state && state.followers > 0 ? `${word} · ${state.followers}` : word;
 }
 
-/** Where a notice takes you: the subject's own page. */
+/**
+ * Where a notice takes you. An agent's notice is about something it did, so it
+ * opens that agent's activity (the chronicle filtered to it) rather than its
+ * profile; a space's opens the space page, where its Stage lives.
+ */
 export function noticeHref(n: WireFollowNotice): string {
   const s = n.payload.subject;
-  return s.kind === "space" ? `/spaces/${encodeURIComponent(s.slug)}` : `/a/${enc(s.slug)}`;
+  return s.kind === "space" ? `/spaces/${encodeURIComponent(s.slug)}` : chronicleActorHref(s.slug);
 }
 
 /** The notice as one sentence, in the same words the server's tests use. */

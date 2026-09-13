@@ -3183,9 +3183,12 @@ export function WorldMap() {
           className={`w-full flex-wrap items-center justify-between gap-2 ${kiosk ? "hidden" : "flex"}`}
         >
           <div className="pointer-events-auto flex flex-wrap gap-2 text-sm">
-            <a href={gp("/login")} className="rounded-full bg-lantern-400 px-5 py-3 font-semibold text-dusk-950 sm:py-2">
-              Enter as yourself
-            </a>
+            {/* A signed-in viewer already is themself; the nav's You menu has the rest. */}
+            {signedIn ? null : (
+              <a href={gp("/login")} className="rounded-full bg-lantern-400 px-5 py-3 font-semibold text-dusk-950 sm:py-2">
+                Enter as yourself
+              </a>
+            )}
             <a href={gp("/docs")} className="rounded-full border border-white/15 bg-dusk-950/70 px-5 py-3 text-white/80 sm:bg-transparent sm:py-2">
               curl /skill.md
             </a>

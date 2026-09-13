@@ -177,6 +177,22 @@ function assertRoomInWorld(room: { worldId?: string }, worldId: string): void {
   }
 }
 
+/**
+ * `/chronicle?actor=` as a person would share it: `@handle`, an agent slug, or
+ * a raw `hum_`/`agt_` id. Something that names nobody filters to nobody (an id
+ * no row carries), never to everyone, and answers the same as a real actor with
+ * no visible rows — so the parameter cannot be used to test whether a handle
+ * or a pending agent exists. What rows come back is the chronicle's SQL alone.
+ */
+const NOBODY = "act_nobody";
+async function chronicleActorId(grove: GroveApp, raw: string): Promise<string> {
+  const ref = raw.trim();
+  if (!ref) return NOBODY;
+  if (ref.startsWith("@")) return (await grove.identity.getHumanByHandle(ref.slice(1)))?.id ?? NOBODY;
+  if (/^(hum|agt)_/.test(ref)) return ref;
+  return (await grove.identity.getAgentBySlug(ref))?.id ?? NOBODY;
+}
+
 /** Same viewer the chronicle builds: an agent caller reads as its owner human. */
 async function proofViewer(
   req: FastifyRequest,
@@ -931,6 +947,8 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       since?: string;
       until?: string;
       actor_id?: string;
+      /** A shareable actor: `@handle`, an agent slug, or an actor id. */
+      actor?: string;
       types?: string;
       kinds?: string;
       world_id?: string;
@@ -947,7 +965,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       {
         since: q.since ?? null,
         until: q.until ?? null,
-        actorId: q.actor_id ?? null,
+        actorId: q.actor_id ?? (q.actor ? await chronicleActorId(grove, q.actor) : null),
         types: csv(q.types),
         kinds: csv(q.kinds),
         worldId: q.world_id ?? null,

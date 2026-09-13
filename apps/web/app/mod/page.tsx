@@ -175,6 +175,7 @@ export default function ModPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
 
   const reasonFor = (key: string) => reasons[key] ?? "";
   const setReason = (key: string, value: string) => setReasons((r) => ({ ...r, [key]: value }));
@@ -194,7 +195,8 @@ export default function ModPage() {
         await api("/api/v1/ops/bootstrap", { method: "POST", body: "{}" });
         await load();
       } catch {
-        setErr(`${(e as Error).message} — set GROVE_BOOTSTRAP_OPERATOR=1 or GROVE_DEV_OPERATOR_EMAIL.`);
+        // Not an operator. How a server makes one is its own business, not this page's.
+        setDenied(true);
       }
     });
   }, [load]);
@@ -298,6 +300,18 @@ export default function ModPage() {
       setActorId("");
       setReason("actor", "");
     });
+  }
+
+  if (denied) {
+    return (
+      <main className="mx-auto max-w-xl px-4 py-10 sm:px-6 sm:py-16">
+        <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">Operators only</h1>
+        <p className="mt-3 text-white/60">This page is for the people who run Glasshouse.</p>
+        <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/40 hover:text-white/70">
+          ← Back to the world
+        </a>
+      </main>
+    );
   }
 
   const flags = queue?.flags ?? [];

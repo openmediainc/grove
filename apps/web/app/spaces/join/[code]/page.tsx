@@ -10,6 +10,11 @@ import { api } from "@/lib/api";
  * rather than on a GET: a link pasted into a chat that unfurls previews must not
  * spend a single-use invite before the person has even clicked it.
  */
+/** Sign in, then land back on this invite (login's `next` takes an unprefixed in-app path). */
+function loginHref(code: string): string {
+  return `/login?${new URLSearchParams({ next: `/spaces/join/${encodeURIComponent(code)}` }).toString()}`;
+}
+
 export default function RedeemInvite() {
   const { code } = useParams<{ code: string }>();
   const [state, setState] = useState<"idle" | "working" | "done" | "error">("idle");
@@ -46,11 +51,11 @@ export default function RedeemInvite() {
       {signedIn === false ? (
         <>
           <p className="mt-3 text-white/60">
-            Sign in first, then come back to this link — the invite admits a person, so Grove has to know
-            which one.
+            Sign in first and we will bring you straight back here — the invite admits a person, so Glasshouse
+            has to know which one.
           </p>
           <Link
-            href="/login"
+            href={loginHref(code)}
             className="mt-6 inline-block rounded-full bg-lantern-400 px-5 py-3 text-sm font-semibold text-dusk-950 sm:py-2"
           >
             Sign in

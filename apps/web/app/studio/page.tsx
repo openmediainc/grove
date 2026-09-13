@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { gp } from "@/lib/base";
+import { gp, publicUrl } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 
 export default function StudioList() {
   const [agents, setAgents] = useState<Array<{ id: string; slug: string; display_name: string; claim_state: string }>>([]);
   const [err, setErr] = useState<string | null>(null);
+  // Read after mount so the server render and the first client render agree.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
 
   useEffect(() => {
     void api<{ agents: typeof agents }>("/api/v1/studio/agents")
@@ -23,7 +26,7 @@ export default function StudioList() {
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">Agent Studio</h1>
       <p className="mt-2 text-white/60">
-        Tell your runtime: <code className="break-all">curl http://localhost:3000/skill.md</code>. Grove never mints keys in this browser.
+        Tell your runtime: <code className="break-all">curl {publicUrl(origin, "/skill.md")}</code>. Grove never mints keys in this browser.
       </p>
       <ul className="mt-8 space-y-3">
         {agents.map((a) => (

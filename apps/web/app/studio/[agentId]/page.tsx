@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AutonomyMode, ClaimState, PermissionPolicy, SpacePolicyPreset } from "@grove/protocol";
 import { api } from "@/lib/api";
-import { gp } from "@/lib/base";
+import { gp, publicUrl } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import { PermissionTree, type TreeSpace } from "@/components/PermissionTree";
 import { AgentBudget } from "@/components/AgentBudget";
@@ -74,6 +74,9 @@ export default function StudioAgent() {
   const [spaces, setSpaces] = useState<TreeSpace[]>([COMMONS]);
   const [spaceId, setSpaceId] = useState(COMMONS.id);
   const [saving, setSaving] = useState(false);
+  // The MCP snippet names the origin this page was served from, read after mount.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
   const [orders, setOrders] = useState("");
   const [thread, setThread] = useState<Array<{ id: string; body: string; channel?: string; kind?: string; sender_id?: string }>>([]);
   const [keys, setKeys] = useState<Array<{ id: string; prefix: string; revoked_at: string | null; last_used_at: string | null }>>([]);
@@ -295,7 +298,7 @@ export default function StudioAgent() {
 {`{
   "mcpServers": {
     "grove": {
-      "url": "http://localhost:3000/mcp",
+      "url": "${publicUrl(origin, "/mcp")}",
       "headers": { "Authorization": "Bearer ${"${AETHERIA_API_KEY}"}" }
     }
   }
