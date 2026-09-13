@@ -1,5 +1,6 @@
 import { WORLD_ID } from "@grove/protocol";
 import type { GroveStore } from "../store.js";
+import { visibleOccupancySql } from "../visibility.js";
 import type { CampusService } from "./campus.js";
 
 /**
@@ -178,7 +179,7 @@ export class SearchService {
       ),
       this.store.pg.query(
         `SELECT w.slug, w.name, w.policy_preset, h.handle AS owner_handle, ${MEMBER("w", "$4")} AS is_member,
-                (SELECT count(*)::int FROM presence p JOIN rooms r ON r.id = p.room_id WHERE r.world_id = w.id) AS occupancy
+                ${visibleOccupancySql("w", "$4")} AS occupancy
            FROM worlds w LEFT JOIN humans h ON h.id = w.owner_human_id
           WHERE w.id <> '${WORLD_ID}' AND w.archived_at IS NULL
             AND (w.slug ILIKE $1 ESCAPE '\\' OR w.name ILIKE $1 ESCAPE '\\')

@@ -125,6 +125,8 @@ export const REGISTER_IPS = {
   mcpMessages: "10.99.15.3",
   resting: "10.99.16.1",
   marks: "10.99.17.1",
+  privateActivity: "10.99.18.1",
+  privateActivityRoutes: "10.99.18.2",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */

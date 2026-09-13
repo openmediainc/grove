@@ -1,5 +1,6 @@
 import { EMOTE_ENUM, normaliseMarks, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
 import type { GroveStore } from "../store.js";
+import { visibleOccupancySql } from "../visibility.js";
 import { GroveError } from "../errors.js";
 import { newId } from "../ids.js";
 import { isStalledPulse, pulseAgeSeconds, STALL_AFTER_SECONDS, type PresenceService } from "./presence.js";
@@ -297,8 +298,9 @@ export class WorldService {
     // state is public (SoW 5.5), the contents behind it are not.
     const { rows: spaceRows } = await this.store.pg.query(
       `SELECT w.id, w.slug, w.name, w.plot_index, w.policy_preset, h.handle AS owner_handle,
-              (SELECT count(*)::int FROM presence p
-                 JOIN rooms r ON r.id = p.room_id WHERE r.world_id = w.id) AS occupancy,
+              -- Public map, no viewer: a private plot (or a private room on a
+              -- public one) contributes no headcount. Shared predicate, #50.
+              ${visibleOccupancySql("w", "NULL")} AS occupancy,
               -- Bound orgs inline, the same subselect (and order) the space
               -- directory uses, so a plot can be tinted without a call per plot.
               COALESCE((SELECT json_agg(json_build_object(

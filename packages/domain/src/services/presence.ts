@@ -269,6 +269,12 @@ export class PresenceService {
       targetSlug = `lounge_${actor.ownerHumanId}`;
     }
     if (targetSlug.startsWith("lounge_") && actor.kind === "human") {
+      // Somebody else's lounge is private: it answers exactly like a room that
+      // does not exist (queue #50). Before this a human could walk in by slug
+      // and sit on the owner↔agent room's stream.
+      if (targetSlug !== `lounge_${actor.id}`) {
+        throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
+      }
       const human = await this.identity.getHuman(actor.id);
       if (human) await this.ensureLounge(human);
     }

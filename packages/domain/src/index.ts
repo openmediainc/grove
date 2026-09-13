@@ -5,6 +5,7 @@ export { migrate, pendingMigrations, schemaStatus } from "./migrate.js";
 export type { SchemaStatus } from "./migrate.js";
 export { GroveError } from "./errors.js";
 export { newId } from "./ids.js";
+export { insideSpaceSql, roomActivityVisibleSql, visibleOccupancySql } from "./visibility.js";
 export type { GroveStore } from "./store.js";
 export { IdentityService } from "./services/identity.js";
 export { PresenceService, type PulseBatchResult } from "./services/presence.js";

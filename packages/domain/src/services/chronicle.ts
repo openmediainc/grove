@@ -1,6 +1,7 @@
 import { WORLD_ID, type ReactionTarget } from "@grove/protocol";
 import { GroveError } from "../errors.js";
 import type { GroveStore } from "../store.js";
+import { roomActivityVisibleSql } from "../visibility.js";
 
 /**
  * The reader over `world_events`.
@@ -155,6 +156,19 @@ import type { GroveStore } from "../store.js";
  *     payload carries `roomId` precisely so these rows resolve to a world
  *     instead of falling through to the commons (see publishStage()).
  *     Operators get no bypass, the same way they get none on rule 1.
+ *
+ *  9. `notice` — SIGNED IN, THE PLACE GATE, AND NO TITLE BUT THE AUTHOR'S.
+ *     The board reads every notice through authorize() (blocks, mutes, agent
+ *     policy); the ledger row carries the title too, so republishing it here
+ *     would be the way around that. Everyone signed in reads that a notice was
+ *     posted; the author, their owner and operators read the title.
+ *
+ *  THE PLACE GATE IS NOT PER TYPE (queue #50). Rules 1 and 1b used to be
+ *  written into individual CASE arms, and the `notice` arm did not carry them.
+ *  They are now one column, `place_visible`, computed from the shared predicate
+ *  in visibility.ts and required of every row before any per-type rule runs:
+ *  a type added tomorrow cannot forget it. Owners' lounges are in the same
+ *  predicate (their owner only).
  *
  * Payloads are never returned raw. Each type has an allow-list of fields
  * (see `detailFor`), so a payload that later grows a field does not
@@ -356,25 +370,6 @@ WITH own AS (
   -- moderation events, because those are facts about their own property.
   SELECT id FROM agents WHERE $1::text IS NOT NULL AND owner_human_id = $1::text
 ),
-visible_worlds AS (
-  -- Rule 1. Identical predicate to campus.listDirectory(): only 'private'
-  -- hides anything, and owning or joining lifts it. No operator bypass.
-  SELECT w.id FROM worlds w
-  WHERE w.policy_preset <> 'private'
-     OR ($1::text IS NOT NULL AND (
-           w.owner_human_id = $1::text
-           OR EXISTS (SELECT 1 FROM world_members m
-                       WHERE m.world_id = w.id AND m.human_id = $1::text)))
-),
-member_worlds AS (
-  -- Worlds this viewer is inside (owner or member). Rule 1b uses it for rooms
-  -- whose own preset (migration 023) closes them to non-members.
-  SELECT w.id FROM worlds w
-  WHERE $1::text IS NOT NULL AND (
-          w.owner_human_id = $1::text
-          OR EXISTS (SELECT 1 FROM world_members m
-                      WHERE m.world_id = w.id AND m.human_id = $1::text))
-),
 ev AS (
   SELECT
     e.id,
@@ -387,7 +382,17 @@ ev AS (
     COALESCE(r.world_id, $8::text) AS world_id,
     r.id   AS room_id,
     r.name AS room_name,
-    r.room_preset AS room_preset,
+    -- Rules 1 and 1b, for EVERY type at once (queue #50). A row that names a
+    -- place is visible only where the shared predicate (visibility.ts) says
+    -- activity in that place is: a private space or a private room to people
+    -- inside it, an owner's lounge to its owner. A row naming a room that no
+    -- longer exists fails closed rather than falling through to the commons.
+    -- Worldless rows (registration, claims, permission changes) name no place.
+    CASE
+      WHEN COALESCE(e.payload->>'roomId', e.payload->>'room') IS NULL THEN TRUE
+      WHEN r.id IS NULL THEN FALSE
+      ELSE ${roomActivityVisibleSql("r", "rw", "$1")}
+    END AS place_visible,
     ag.claim_state    AS agent_claim_state,
     ag.owner_human_id AS agent_owner_id,
     CASE WHEN hu.id IS NOT NULL THEN 'human'
@@ -422,6 +427,7 @@ ev AS (
     ) AS body_allowed
   FROM world_events e
   LEFT JOIN rooms  r  ON r.id  = COALESCE(e.payload->>'roomId', e.payload->>'room')
+  LEFT JOIN worlds rw ON rw.id = r.world_id
   LEFT JOIN humans hu ON hu.id = e.actor_id
   LEFT JOIN agents ag ON ag.id = e.actor_id
   LEFT JOIN speech sp ON e.type = 'speech' AND sp.id = e.payload->>'speechId'
@@ -440,12 +446,9 @@ visible AS (
      OR agent_claim_state <> 'pending'
      OR $2::bool
      OR agent_owner_id = $1::text)
-    -- Rule 1b (migration 023). A room can close itself inside a space that is
-    -- open: its room_preset 'private' keeps non-members out live, so what
-    -- happened in it is members-only here too. No operator bypass, as rule 1.
-    -- (A room OPENED inside a private space is not widened: history stays at
-    -- the world gate, the stricter of the two.)
-    AND (room_preset IS DISTINCT FROM 'private' OR world_id IN (SELECT id FROM member_worlds))
+    -- Rules 1 and 1b: the place gate, applied before any per-type rule so no
+    -- type can forget it. No operator bypass. See place_visible above.
+    AND place_visible
     AND ($7::text IS NULL OR world_id = $7::text)
     AND CASE
       -- Public: a body appearing, an agent gaining an owner, and what an agent
@@ -454,18 +457,17 @@ visible AS (
       WHEN type IN ('actor_registered', 'actor_claimed', 'permission_changed') THEN TRUE
       -- Leaving takes joining's rule character for character: the live map
       -- shows a body vanish to exactly the people it showed it arrive to.
-      WHEN type IN ('actor_joined_room', 'actor_left_room') THEN world_id IN (SELECT id FROM visible_worlds)
+      WHEN type IN ('actor_joined_room', 'actor_left_room') THEN TRUE
       -- Rule 8. Identical to the line above, deliberately: /api/v1/civic and
       -- /api/v1/civic/stage already serve this to a signed-out visitor for
       -- every world the same gate lets them reach.
-      WHEN type IN ('stage.started', 'stage.ended')
-        THEN world_id IN (SELECT id FROM visible_worlds)
-      -- GET /notices requires an actor, so this does too.
+      WHEN type IN ('stage.started', 'stage.ended') THEN TRUE
+      -- GET /notices requires an actor, so this does too. The place gate above
+      -- applies like everywhere else; the title is gated separately (rule 9).
       WHEN type = 'notice' THEN $1::text IS NOT NULL
       WHEN type = 'speech' THEN
              payload->>'channel' = 'room_say'
          AND $1::text IS NOT NULL
-         AND world_id IN (SELECT id FROM visible_worlds)
       WHEN type IN ('key_rotated', 'key_revoked')
         THEN $2::bool OR actor_id IN (SELECT id FROM own)
       -- Rule 7. A working day is the owner's, not the world's.
@@ -497,6 +499,12 @@ visible AS (
 
 const SELECT_COLUMNS = `
 SELECT id, type, payload, created_at, world_id, room_id, room_name, body_allowed,
+       -- Rule 9. A notice's title is the author's words; the board shows them
+       -- only through the kernel (NoticeService.board: blocks, mutes, agent
+       -- policy), so the ledger must not republish them past it. The author,
+       -- their owner and operators read it here; everyone else reads that a
+       -- notice was posted, and the board is where the words are.
+       ($2::bool OR ($1::text IS NOT NULL AND (actor_id = $1::text OR agent_owner_id = $1::text))) AS notice_title_allowed,
        -- actor_id on a mod.* row is the MODERATOR. A suspended owner may read
        -- that they were suspended; they may not read who did it. Blanked here
        -- rather than in TypeScript so no caller can opt out of it.
@@ -560,8 +568,9 @@ GROUP BY 1, 2`;
  * owner and operators only. The live minimap shows one instant of a span to
  * anyone in the world; the history of them is not the world's.
  *
- * On top of rule 7, the world gate (rule 1) applies to the room the call ran
- * in, operators included, so a private space's work stays inside it.
+ * On top of rule 7, the place gate (rules 1 and 1b, visibility.ts) applies to
+ * the room the call ran in, operators included, so a private space's or a
+ * private room's work stays inside it.
  *
  * $1 viewer  $2 operator  $3 since  $4 until  $5 world  $6 commons  $7 limit
  */
@@ -574,9 +583,10 @@ JOIN worlds w ON w.id = COALESCE(r.world_id, $6::text)
 WHERE ($2::bool OR ($1::text IS NOT NULL AND t.actor_id IN
         (SELECT id FROM agents WHERE owner_human_id = $1::text)))
   AND w.id = $5::text
-  AND ((w.policy_preset <> 'private' AND r.room_preset IS DISTINCT FROM 'private')
-       OR ($1::text IS NOT NULL AND (w.owner_human_id = $1::text
-            OR EXISTS (SELECT 1 FROM world_members m WHERE m.world_id = w.id AND m.human_id = $1::text))))
+  -- The shared place gate (visibility.ts), as for every ledger row.
+  AND CASE WHEN t.room_id IS NULL THEN TRUE
+           WHEN r.id IS NULL THEN FALSE
+           ELSE ${roomActivityVisibleSql("r", "w", "$1")} END
   AND t.started_at < $4::timestamptz
   AND (t.finished_at IS NULL OR t.finished_at >= $3::timestamptz)
 ORDER BY t.started_at, t.id
@@ -825,7 +835,10 @@ export class ChronicleService {
 
   private toEntry(row: Record<string, unknown>, names: Map<string, string>): ChronicleEntry {
     const type = String(row.type);
-    const payload = (row.payload ?? {}) as Record<string, unknown>;
+    const payload = { ...((row.payload ?? {}) as Record<string, unknown>) };
+    // Rule 9: decided in the SQL (notice_title_allowed); a row without the
+    // column fails closed.
+    if (type === "notice" && row.notice_title_allowed !== true) delete payload.title;
     const actorId = row.actor_id === null || row.actor_id === undefined ? null : String(row.actor_id);
     const actorKindRaw = String(row.actor_kind ?? "unknown");
     const actor: ChronicleActor | null = actorId

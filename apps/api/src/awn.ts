@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { GroveApp } from "@grove/domain";
-import { GroveError } from "@grove/domain";
+import { GroveError, roomActivityVisibleSql } from "@grove/domain";
 import { WORLD_ID, WORLD_PUBLIC_NAME, type PresenceActivity, type SpeechChannel } from "@grove/protocol";
 import { requireAgent } from "./auth.js";
 import { sendOk } from "./http.js";
@@ -37,11 +37,21 @@ export async function registerAwn(app: FastifyInstance, grove: GroveApp) {
     };
   });
 
+  // Unauthenticated, so where a body stands is published only where anyone
+  // could watch it (the shared place predicate with no viewer): an agent inside
+  // a private space, a private room or an owner's lounge is listed with no room
+  // and no activity, the same as one that is nowhere. Queue #50.
   app.get("/world/agents", async () => {
     const { rows } = await grove.store.pg.query(
-      `SELECT a.id, a.slug, a.display_name, a.status_text, a.claim_state, p.room_id, p.activity, p.connection
+      `SELECT a.id, a.slug, a.display_name, a.status_text, a.claim_state,
+              CASE WHEN seen THEN p.room_id END AS room_id,
+              CASE WHEN seen THEN p.activity END AS activity,
+              CASE WHEN seen THEN p.connection END AS connection
        FROM agents a
        LEFT JOIN presence p ON p.actor_id = a.id
+       LEFT JOIN rooms r ON r.id = p.room_id
+       LEFT JOIN worlds w ON w.id = r.world_id
+       CROSS JOIN LATERAL (SELECT (r.id IS NOT NULL AND ${roomActivityVisibleSql("r", "w", "NULL")}) AS seen) v
        WHERE a.claim_state = 'claimed'
        ORDER BY a.claimed_at DESC NULLS LAST
        LIMIT 100`,

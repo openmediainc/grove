@@ -108,7 +108,14 @@ export class ReactionService {
         [target.kind, target.id, actorId, input.emoji],
       );
       if ((del.rowCount ?? 0) > 0) await this.publishCounts(target);
-      return { target, on, summary: (await this.summaries(actorId, [target])).get(reactionTargetKey(target))! };
+      // Taking your own reaction back always works, even on a line you can no
+      // longer see — but the counts come back only for a target you can see.
+      // Otherwise an unreact on any id would read out the tally of a private
+      // space's event or line (queue #50).
+      const summary = (await this.visibleEntry(reactor, target))
+        ? (await this.summaries(actorId, [target])).get(reactionTargetKey(target))!
+        : { counts: {}, mine: [] };
+      return { target, on, summary };
     }
 
     if (reactor.kind === "agent" && reactor.agent.claimState === "suspended") {
@@ -120,22 +127,8 @@ export class ReactionService {
     }
 
     // Question 1: can you see it? A guest sees what a signed-out visitor sees.
-    const viewer = {
-      humanId: reactor.kind === "human" ? reactor.human.id : reactor.kind === "agent" ? reactor.agent.ownerHumanId ?? null : null,
-      isOperator: reactor.kind === "human" && reactor.human.role === "operator",
-    };
-    const entry =
-      target.kind === "speech"
-        ? await this.chronicle.speechEntry(viewer, target.id)
-        : await this.chronicle.entryById(viewer, target.id);
-    if (
-      !entry ||
-      !entry.reactionTarget ||
-      entry.reactionTarget.kind !== target.kind ||
-      entry.reactionTarget.id !== target.id
-    ) {
-      throw notFound();
-    }
+    const entry = await this.visibleEntry(reactor, target);
+    if (!entry) throw notFound();
 
     // Question 2: may you say it?
     const ctx = await this.buildContext(reactor, entry);
@@ -173,6 +166,27 @@ export class ReactionService {
       await this.publishCounts(target);
     }
     return { target, on, summary: (await this.summaries(actorId, [target])).get(reactionTargetKey(target))! };
+  }
+
+  /** The chronicle's row for a target, if and only if this reactor may see it and react to it. */
+  private async visibleEntry(reactor: Reactor, target: ReactionTarget): Promise<ChronicleEntry | null> {
+    const viewer = {
+      humanId: reactor.kind === "human" ? reactor.human.id : reactor.kind === "agent" ? reactor.agent.ownerHumanId ?? null : null,
+      isOperator: reactor.kind === "human" && reactor.human.role === "operator",
+    };
+    const entry =
+      target.kind === "speech"
+        ? await this.chronicle.speechEntry(viewer, target.id)
+        : await this.chronicle.entryById(viewer, target.id);
+    if (
+      !entry ||
+      !entry.reactionTarget ||
+      entry.reactionTarget.kind !== target.kind ||
+      entry.reactionTarget.id !== target.id
+    ) {
+      return null;
+    }
+    return entry;
   }
 
   /**

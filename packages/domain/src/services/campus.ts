@@ -14,6 +14,7 @@ import {
 } from "@grove/protocol";
 import { ceilingFromRow, ceilingToRow, mapRoom } from "../mappers.js";
 import type { GroveStore } from "../store.js";
+import { visibleOccupancySql } from "../visibility.js";
 import { GroveError } from "../errors.js";
 import { newId, newUlid } from "../ids.js";
 import { randomToken } from "../crypto.js";
@@ -376,8 +377,9 @@ export class CampusService {
       `SELECT w.id, w.slug, w.name, w.plot_index, w.policy_preset, w.owner_human_id,
               w.org_render_mode,
               h.handle AS owner_handle,
-              (SELECT count(*)::int FROM presence p
-                 JOIN rooms r ON r.id = p.room_id WHERE r.world_id = w.id) AS occupancy,
+              -- Only bodies this viewer could see: a private plot they are not
+              -- inside counts zero (shared predicate, queue #50).
+              ${visibleOccupancySql("w", "$1")} AS occupancy,
               EXISTS (SELECT 1 FROM world_members m
                         WHERE m.world_id = w.id AND m.human_id = $1) AS is_member,
               -- Bound orgs inline: the minimap tints a plot without a second
