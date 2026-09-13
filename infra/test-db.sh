@@ -17,16 +17,19 @@ LIVE_URL="$(grep '^DATABASE_URL=' .env | cut -d= -f2-)"
 BASE="${LIVE_URL%%\?*}"
 QS=""
 [ "$BASE" != "$LIVE_URL" ] && QS="?${LIVE_URL#*\?}"
-TEST_URL="${BASE%/*}/grove_test${QS}"
+# GROVE_TEST_DB lets parallel worktrees each own a database (must end in _test).
+TEST_DB="${GROVE_TEST_DB:-grove_test}"
+case "$TEST_DB" in *_test) ;; *) echo "refusing: GROVE_TEST_DB must end in _test" >&2; exit 1 ;; esac
+TEST_URL="${BASE%/*}/${TEST_DB}${QS}"
 case "$TEST_URL" in
-  */grove_test|*/grove_test\?*) ;;
-  *) echo "refusing: derived URL does not name grove_test" >&2; exit 1 ;;
+  */"$TEST_DB"|*/"$TEST_DB"\?*) ;;
+  *) echo "refusing: derived URL does not name $TEST_DB" >&2; exit 1 ;;
 esac
 
 docker exec -i infra-postgres-1 psql -U grove -d postgres \
-  -c "SELECT 1 FROM pg_database WHERE datname='grove_test'" </dev/null | grep -q '1 row' \
+  -c "SELECT 1 FROM pg_database WHERE datname='${TEST_DB}'" </dev/null | grep -q '1 row' \
   || docker exec -i infra-postgres-1 psql -U grove -d postgres \
-       -c "CREATE DATABASE grove_test OWNER grove;" </dev/null
+       -c "CREATE DATABASE ${TEST_DB} OWNER grove;" </dev/null
 
 export DATABASE_URL="$TEST_URL"
 export REDIS_URL="${GROVE_TEST_REDIS_URL:-redis://localhost:6379/1}"
