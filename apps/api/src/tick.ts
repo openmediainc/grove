@@ -8,6 +8,7 @@ export async function runTick(grove: GroveApp): Promise<void> {
   await grove.toolCalls.sweep().catch(() => {});
   await grove.identity.purgeExpiredUnclaimed();
   await grove.jobs.processDue();
+  await grove.emailDeliveries.pollDue().catch(() => {});
   if (grove.store.config.xaiApiKey) await grove.brains.tick();
 }
 

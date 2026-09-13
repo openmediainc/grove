@@ -40,6 +40,10 @@ function reason(why: string | null, what: string | null): string {
   }
 }
 
+type SentState = { delivery: "email" | "failed" | "none"; from: string | null; to: string };
+
+const RESEND_COOLDOWN_S = [60, 120, 300];
+
 function LoginForm() {
   const params = useSearchParams();
   const [email, setEmail] = useState("");
@@ -47,6 +51,20 @@ function LoginForm() {
   const [age, setAge] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
+  // ONB-07: the "check your email" state. What the server said happened to the
+  // link, where it came from, and when another may be asked for.
+  const [sent, setSent] = useState<SentState | null>(null);
+  const [sends, setSends] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [cooldownUntil]);
+  const waitSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
 
   const next = safeNext(params.get("next"));
   const why = params.get("why");
@@ -83,19 +101,106 @@ function LoginForm() {
     })();
   }, [params, next]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function requestLink() {
     setMsg(null);
+    setBusy(true);
     try {
-      const res = await api<{ dev_login_url?: string }>("/api/v1/humans/session", {
-        method: "POST",
-        body: JSON.stringify({ email, invite_code: invite, age_attested: age }),
-      });
+      const res = await api<{ dev_login_url?: string; delivery?: SentState["delivery"] | "screen"; mail_from?: string }>(
+        "/api/v1/humans/session",
+        {
+          method: "POST",
+          body: JSON.stringify({ email, invite_code: invite, age_attested: age }),
+        },
+      );
       setUrl(res.dev_login_url ?? null);
-      setMsg(res.dev_login_url ? "Dev login URL ready (also printed in API logs)." : "Check your email.");
+      const delivery = res.delivery ?? (res.dev_login_url ? "screen" : "email");
+      if (delivery === "screen") {
+        setSent(null);
+        setMsg("Dev login URL ready (also printed in API logs).");
+        return;
+      }
+      setSent({ delivery, from: res.mail_from ?? null, to: email });
+      const n = sends + 1;
+      setSends(n);
+      // 60s, then 2 min, then 5 min: resending faster than mail moves only
+      // buries the good link under newer ones (and the server allows 5 an hour).
+      setCooldownUntil(Date.now() + (RESEND_COOLDOWN_S[Math.min(n, RESEND_COOLDOWN_S.length) - 1] ?? 300) * 1000);
+      setNow(Date.now());
     } catch (err) {
       setMsg((err as Error).message);
+    } finally {
+      setBusy(false);
     }
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    await requestLink();
+  }
+
+  if (sent) {
+    return (
+      <main className="mx-auto max-w-md px-4 py-10 sm:px-6 sm:py-16">
+        <p className="text-xs uppercase tracking-[0.25em] text-lantern-400/80">Grove · sign in</p>
+        {sent.delivery === "email" ? (
+          <>
+            <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">Check your email</h1>
+            <p className="mt-3 text-white/70">
+              We sent a sign-in link to <span className="break-all text-white/90">{sent.to}</span>
+              {sent.from ? (
+                <>
+                  {" "}
+                  from <span className="break-all text-lantern-300">{sent.from}</span>
+                </>
+              ) : null}
+              . It works once and expires in 15 minutes.
+            </p>
+            <ul className="mt-5 space-y-2 text-sm text-white/55">
+              <li>Nothing after a minute? Look in spam, junk or Promotions, and search your mail for “Enter Grove”.</li>
+              {sent.from ? <li>Adding {sent.from} to your contacts helps the next one land in your inbox.</li> : null}
+              <li>If you ask again, use the newest email — each one carries a fresh link.</li>
+            </ul>
+          </>
+        ) : sent.delivery === "failed" ? (
+          <>
+            <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">That link didn’t go out</h1>
+            <p className="mt-3 text-white/70">
+              Our mail provider didn’t accept the message just now, so there is no email to wait for. Try again in a
+              minute. If it keeps happening, it is on our side and the operators can see it.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">Email isn’t set up here</h1>
+            <p className="mt-3 text-white/70">
+              This Grove server has no way to send email yet, so no link was sent. Let the operator know.
+            </p>
+          </>
+        )}
+        <button
+          type="button"
+          disabled={busy || waitSeconds > 0}
+          onClick={() => void requestLink()}
+          className="mt-8 w-full rounded-full bg-lantern-400 py-3 font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+        >
+          {busy ? "Sending…" : waitSeconds > 0 ? `Send another link in ${waitSeconds}s` : "Send another link"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setSent(null);
+            setMsg(null);
+          }}
+          className="mt-3 block w-full py-2 text-sm text-white/50 hover:text-white/80"
+        >
+          Use a different address
+        </button>
+        {msg ? <p className="mt-4 text-sm text-lantern-300">{msg}</p> : null}
+        <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/40 hover:text-white/70">
+          ← Keep watching the world instead
+        </a>
+      </main>
+    );
   }
 
   return (
@@ -141,7 +246,12 @@ function LoginForm() {
           />
           I attest I am 18 or older.
         </label>
-        <button className="w-full rounded-full bg-lantern-400 py-3 font-semibold text-dusk-950 sm:py-2">Send link</button>
+        <button
+          disabled={busy}
+          className="w-full rounded-full bg-lantern-400 py-3 font-semibold text-dusk-950 disabled:opacity-50 sm:py-2"
+        >
+          {busy ? "Sending…" : "Send link"}
+        </button>
       </form>
       {msg ? <p className="mt-4 text-sm text-lantern-300">{msg}</p> : null}
       {url ? (

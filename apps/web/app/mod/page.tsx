@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { gp } from "@/lib/base";
+import { EmailHealthPanel } from "@/components/mod/EmailHealth";
 
 type Actor = {
   id: string;
@@ -105,7 +106,7 @@ type Queue = {
   counts: { open: number; open_injection: number; frozen: string[] };
 };
 
-type Tab = "reports" | "injection" | "log";
+type Tab = "reports" | "injection" | "log" | "email";
 
 const STATUSES = ["open", "resolved", "rejected", "all"] as const;
 
@@ -403,6 +404,7 @@ export default function ModPage() {
           ["reports", `Reports (${queue?.counts.open ?? 0} open)`],
           ["injection", `Injection flags (${injection.length})`],
           ["log", "Moderator log"],
+          ["email", "Email"],
         ] as Array<[Tab, string]>).map(([key, label]) => (
           <button
             key={key}
@@ -619,6 +621,8 @@ export default function ModPage() {
           {log.length === 0 ? <p className="mt-4 text-white/40">No moderator actions recorded yet.</p> : null}
         </section>
       ) : null}
+
+      {tab === "email" ? <EmailHealthPanel /> : null}
 
       {msg ? <p className="mt-6 text-lantern-300">{msg}</p> : null}
       {err ? <p className="mt-6 text-red-300">{err}</p> : null}

@@ -87,7 +87,7 @@ describe.skipIf(!hasDb)("room policy (SPC-07 / SPC-10)", () => {
     }
   });
 
-  it("migration 022 is inherit-by-default: a fresh space's rooms carry no override", async () => {
+  it("migration 023 is inherit-by-default: a fresh space's rooms carry no override", async () => {
     const { space } = await makeSpace("private");
     const rooms = await grove.campus.roomsOf(space.id);
     expect(rooms.length).toBeGreaterThan(0);

@@ -44,6 +44,7 @@ import { CampusService } from "./campus.js";
 import type { QuotaService } from "./quota.js";
 import type { FlagService } from "./flags.js";
 import type { Mailer } from "../mailer.js";
+import type { EmailDeliveryService, SendStatus } from "./email-deliveries.js";
 import { isProduction, mayReturnMagicLink } from "../config.js";
 
 const SESSION_TTL = 30 * 24 * 3600;
@@ -147,13 +148,14 @@ export class IdentityService {
     private quota: QuotaService,
     private flags: FlagService,
     private mailer?: Mailer,
+    private deliveries?: EmailDeliveryService,
   ) {}
 
   async requestMagicLink(input: {
     email: string;
     inviteCode: string;
     ageAttested: boolean;
-  }): Promise<{ devLoginUrl?: string; token: string }> {
+  }): Promise<{ devLoginUrl?: string; token: string; sendStatus: SendStatus }> {
     if (!input.ageAttested) {
       throw new GroveError("AGE_GATE", "Grove is 18+. Attest your age to continue.");
     }
@@ -181,20 +183,30 @@ export class IdentityService {
     if (cfg.magicLinkStdout) {
       console.log(`[grove] magic link for ${email}: ${url}`);
     }
-    try {
-      await this.mailer?.sendMagicLink(email, url);
-    } catch (err) {
-      console.warn("[grove] mailer failed:", (err as Error).message);
+    // ONB-07: the ledger sends and records what the provider actually said.
+    // A send failure is still not thrown: the link exists and the dev URL (when
+    // enabled) still works; the caller is told the truth via sendStatus.
+    let sendStatus: SendStatus = "not_sent";
+    if (this.deliveries) {
+      sendStatus = (await this.deliveries.sendMagicLink({ email, token, url, ttlSeconds: MAGIC_TTL })).sendStatus;
+    } else if (this.mailer) {
+      try {
+        sendStatus = (await this.mailer.sendMagicLink(email, url)).sent ? "accepted" : "not_sent";
+      } catch (err) {
+        sendStatus = "error";
+        console.warn("[grove] mailer failed:", (err as Error).message);
+      }
     }
     const includeDevUrl =
       mayReturnMagicLink(cfg) && (!isProduction(cfg) || process.env.GROVE_MAGIC_LINK_STDOUT === "1");
-    return { token, devLoginUrl: includeDevUrl ? url : undefined };
+    return { token, devLoginUrl: includeDevUrl ? url : undefined, sendStatus };
   }
 
   async consumeMagicLink(token: string): Promise<{ human: Human; sessionId: string }> {
     const raw = await this.store.redis.get(`magic:${token}`);
     if (!raw) throw new GroveError("NOT_FOUND", "Magic link expired or invalid.", { httpStatus: 401 });
     await this.store.redis.del(`magic:${token}`);
+    await this.deliveries?.markRedeemed(token);
     const payload = JSON.parse(raw) as { email: string; inviteCode: string; ageAttested: boolean };
     if (!payload.ageAttested) throw new GroveError("AGE_GATE", "Age attestation required.");
 

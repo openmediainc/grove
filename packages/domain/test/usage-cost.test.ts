@@ -115,7 +115,7 @@ describe("budget verdict", () => {
 // The ledger, the rollups and the gate.
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasDb)("cost burn ledger (migration 021)", () => {
+describe.skipIf(!hasDb)("cost burn ledger (migration 024)", () => {
   let grove: GroveApp;
   let pg: ReturnType<typeof createPool>;
   let redis: Redis;

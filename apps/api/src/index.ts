@@ -79,6 +79,11 @@ export async function getApp() {
       setInterval(() => {
         void grove.jobs.processDue();
       }, 15_000);
+      // ONB-07: ask the mail provider what became of accepted magic links. Outbound
+      // only, and a no-op for transports without an events API.
+      setInterval(() => {
+        void grove.emailDeliveries.pollDue().catch((err) => console.warn("[grove] email poll failed:", (err as Error).message));
+      }, 30_000);
       setInterval(() => {
         if (!config.xaiApiKey) return;
         void grove.brains.tick();

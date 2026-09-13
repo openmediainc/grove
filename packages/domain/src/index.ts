@@ -77,7 +77,7 @@ export {
 } from "./services/replay.js";
 export { WebhookService, JobService } from "./services/webhooks.js";
 export { HostedBrainService, type ResponsesClient, type XaiClientFactory } from "./services/brains.js";
-// Cost burn (migration 021). See services/usage.ts for the three honesty rules.
+// Cost burn (migration 024). See services/usage.ts for the three honesty rules.
 export {
   UsageService,
   normaliseUsageReport,
@@ -112,7 +112,17 @@ export {
 } from "./crypto.js";
 export type { ProofViewer } from "./services/identity.js";
 export { signWebhookBody, verifyWebhookSignature } from "./webhook-sign.js";
-export { createMailer, type Mailer } from "./mailer.js";
+export { createMailer, MailSendError, type Mailer, type MailTransport } from "./mailer.js";
+export {
+  EmailDeliveryService,
+  assessEmailHealth,
+  checkSenderDns,
+  fromAddress,
+  type EmailHealthReport,
+  type EmailHealthStatus,
+  type DeliveryRow,
+  type WindowStats,
+} from "./services/email-deliveries.js";
 export { resolveWorldId, WORLD_COOKIE, WORLD_HEADER, type UnverifiedWorldId } from "./world-scope.js";
 export {
   MAP_COLS,
@@ -148,6 +158,7 @@ import { ReplayService } from "./services/replay.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
 import { HostedBrainService } from "./services/brains.js";
 import { UsageService } from "./services/usage.js";
+import { EmailDeliveryService } from "./services/email-deliveries.js";
 import { createMailer } from "./mailer.js";
 import type { GroveStore } from "./store.js";
 
@@ -171,13 +182,16 @@ export class GroveApp {
   jobs: JobService;
   brains: HostedBrainService;
   usage: UsageService;
+  emailDeliveries: EmailDeliveryService;
 
   constructor(pg: Pool, redis: Redis, config: GroveConfig) {
     this.store = { pg, redis, config };
     this.flags = new FlagService(this.store);
     this.quota = new QuotaService(new RedisRateLimiter(redis));
     const mailer = createMailer(config);
-    this.identity = new IdentityService(this.store, this.quota, this.flags, mailer);
+    // ONB-07: every magic-link send goes through the delivery ledger.
+    this.emailDeliveries = new EmailDeliveryService(this.store, mailer);
+    this.identity = new IdentityService(this.store, this.quota, this.flags, mailer, this.emailDeliveries);
     this.presence = new PresenceService(this.store, this.flags, this.quota, this.identity);
     this.toolCalls = new ToolCallService(this.store, this.quota, this.presence);
     this.campus = new CampusService(this.store);

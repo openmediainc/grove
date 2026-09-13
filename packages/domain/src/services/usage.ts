@@ -6,7 +6,7 @@ import { newUlid } from "../ids.js";
 import { withTx } from "../db.js";
 
 /**
- * Cost burn (AGT-11, migration 021): the Age of Empires resource.
+ * Cost burn (AGT-11, migration 024): the Age of Empires resource.
  *
  * Agents report what a turn cost; owners read what a day cost. Three rules run
  * through every function in this file, and every one of them is about honesty:

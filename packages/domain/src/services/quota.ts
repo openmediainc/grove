@@ -288,7 +288,7 @@ export class QuotaService {
   }
 
   /**
-   * Usage reports (migration 021). A runtime reports once per turn, or once
+   * Usage reports (migration 024). A runtime reports once per turn, or once
    * per model per turn when it batches; 30 requests a minute is a busy agent
    * with room to spare, and refuses only a loop reporting per token.
    */

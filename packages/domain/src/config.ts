@@ -40,6 +40,13 @@ export interface GroveConfig {
   smtpUrl: string | null;
   /** Served on the open internet (Vercel), not only over the tailnet. */
   publicDeploy: boolean;
+  /**
+   * HMAC key for email_deliveries.recipient_hash (ONB-07). Optional: falls back
+   * to the database url, which is a secret that already lives beside the data.
+   */
+  mailHashKey?: string | null;
+  /** DKIM selector to check for the sending domain. Resend's is `resend`; SMTP relays vary. */
+  mailDkimSelector?: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
@@ -73,6 +80,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
     mailFrom: env.GROVE_MAIL_FROM || null,
     smtpUrl: env.GROVE_SMTP_URL || null,
     publicDeploy: Boolean(env.VERCEL),
+    mailHashKey: env.GROVE_MAIL_HASH_KEY || null,
+    mailDkimSelector: env.GROVE_MAIL_DKIM_SELECTOR || null,
   };
 }
 

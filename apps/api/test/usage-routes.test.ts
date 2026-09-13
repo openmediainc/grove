@@ -14,7 +14,7 @@ import {
   REGISTER_IPS,
   warnIfNotTestDatabase,
 } from "@grove/domain/test-support";
-import { buildApp } from "../src/app.js";
+import { buildApp } from "../src/create-app.js";
 import { callTool, TOOLS } from "../src/mcp.js";
 
 const REGISTER_IP = REGISTER_IPS.usageRoutes;

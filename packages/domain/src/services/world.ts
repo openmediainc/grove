@@ -240,7 +240,7 @@ export class WorldService {
       toolCalls: ToolCallView[];
       /** A turn that just finished and reported usage: the body carries a load
        *  to the treasury. Time and priced-or-not only, never an amount — this
-       *  payload is readable by anyone who can see the world. See migration 021. */
+       *  payload is readable by anyone who can see the world. See migration 024. */
       deposit: { at: string; costed: boolean } | null;
       source: "grove";
     }> = [];

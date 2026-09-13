@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import Redis from "ioredis";
 import { GroveApp, createPool, loadConfig, migrate } from "@grove/domain";
 import { assertTestDatabase, createFixtures, hasTestDatabase } from "@grove/domain/test-support";
-import { buildApp } from "../src/app.js";
+import { buildApp } from "../src/create-app.js";
 
 /**
  * SPC-07 / SPC-10 over HTTP: the owner route, lobby admission for a non-member,

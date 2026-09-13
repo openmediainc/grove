@@ -9,6 +9,7 @@ import { registerMcp } from "./mcp.js";
 import { registerDocs } from "./docs.js";
 import { registerPlatform } from "./platform.js";
 import { registerModeration } from "./moderation.js";
+import { registerEmailHealth } from "./email-health.js";
 import { registerRooms } from "./rooms.js";
 import { registerAwn } from "./awn.js";
 import { registerUsage } from "./usage.js";
@@ -48,6 +49,7 @@ export async function buildApp(grove: GroveApp) {
   await registerRoutes(app, grove);
   await registerPlatform(app, grove);
   await registerModeration(app, grove);
+  await registerEmailHealth(app, grove);
   await registerRooms(app, grove);
   await registerAwn(app, grove);
   await registerUsage(app, grove);
