@@ -944,12 +944,13 @@ describe.skipIf(!hasDb)("api integration", () => {
     const world = (created.json() as { world: { id: string } }).world;
     trackWorld(world.id);
 
-    // A public_view space lets the guest in as a VISITOR before any ask, but
-    // walking in never makes anyone a member: that still takes an approval.
+    // A public_view space's rooms are open to the guest as a VISITOR before any
+    // ask (a read, so the enter quota stays for the member entry below), but
+    // that never makes anyone a member: membership still takes an approval.
     const early = await server.inject({
-      method: "POST",
-      url: `/api/v1/worlds/${world.id}/enter`,
-      headers: { cookie: guest.cookie },
+      method: "GET",
+      url: "/api/v1/rooms/plaza",
+      headers: { cookie: guest.cookie, "x-grove-world": world.id },
     });
     expect(early.statusCode).toBe(200);
     expect(await grove!.campus.isMember(world.id, guest.id)).toBe(false);
