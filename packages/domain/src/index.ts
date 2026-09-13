@@ -65,7 +65,11 @@ export {
   type MergeResult,
 } from "./services/guests.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
-export { BrandingService } from "./services/branding.js";
+export { BrandingService, normaliseSiteUrl } from "./services/branding.js";
+export { SiteFetchSession, SiteFetchError, isBlockedAddress, SITE_FETCH_USER_AGENT } from "./site-fetch.js";
+export type { SiteFetchOptions, ResolvedAddress } from "./site-fetch.js";
+export { suggestBrandingFromSite, extractPageFacts, decodePng, decodeIco, dominantColour, parseCssColour } from "./site-branding.js";
+export type { SiteBrandingSuggestion } from "./site-branding.js";
 // Supporter plumbing (036): cosmetic, env-gated, off until the owner adds Stripe keys.
 export {
   SupporterService,
@@ -334,7 +338,7 @@ export class GroveApp {
     // for the agent asking.
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);
     this.cards = new CardService(this.store, this.identity, this.campus);
-    this.branding = new BrandingService(this.store, this.campus);
+    this.branding = new BrandingService(this.store, this.campus, this.quota);
     // Written on the event: the three sources call back into this after their
     // own write. Late-bound because all three are built before speech/mailbox.
     this.follows = new FollowService(this.store, this.identity, this.campus, this.presence, this.speech, this.mailbox, this.quota);

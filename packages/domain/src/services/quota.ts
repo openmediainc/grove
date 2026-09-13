@@ -365,6 +365,20 @@ export class QuotaService {
     }
   }
 
+  /**
+   * Reading a website for branding suggestions (queue #34): each call makes the
+   * server fetch a page and up to three icons from the open internet, so it is
+   * metered per person, 10 an hour. Failed reads count too. Human-only, so not
+   * in the agent-facing rate-limit table.
+   */
+  async consumeBrandingSuggest(humanId: string): Promise<void> {
+    const key = `ratelimit:${humanId}:branding_suggest:hour`;
+    const n = await this.limiter.incr(key, HOUR);
+    if (n > 10) {
+      await this.refuse("branding_suggest", key, 10, n, HOUR * 1000, "You have read 10 websites this hour. Try again later.");
+    }
+  }
+
   async consumeReport(actorId: string, first24h: boolean): Promise<void> {
     const limit = first24h ? 5 : 10;
     const key = `ratelimit:${actorId}:report:day`;

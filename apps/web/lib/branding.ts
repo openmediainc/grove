@@ -76,3 +76,44 @@ export function previewPlot(
 }
 
 export { SIGN_TEXT_MAX };
+
+// ------------------------------------------------------------------ from a website (#34)
+
+/** POST /api/v1/spaces/:id/branding/suggest, as it comes off the wire. */
+export type BrandingSuggestion = {
+  name: string | null;
+  accent: { accent: string; original: string; substituted: boolean; note: string | null } | null;
+  source: {
+    url: string;
+    site_name: string | null;
+    title: string | null;
+    theme_color: string | null;
+    favicon: string | null;
+    favicon_colour: string | null;
+    accent_from: "theme_color" | "favicon" | null;
+  };
+  notes: string[];
+};
+
+/**
+ * The draft with a suggestion laid over it: what the preview shows before
+ * Apply, and what Apply puts in the editor. Only the fields the website gave
+ * change; the emblem is never guessed, so it stays as it is.
+ */
+export function applySuggestion(d: BrandingDraft, s: BrandingSuggestion | null): BrandingDraft {
+  if (!s) return d;
+  return {
+    accent: s.accent?.accent ?? d.accent,
+    signText: s.name ?? d.signText,
+    emblem: d.emblem,
+  };
+}
+
+/** One line saying where the colour came from, for the suggestion card. */
+export function suggestionColourLine(s: BrandingSuggestion): string | null {
+  if (!s.accent) return null;
+  const from = s.source.accent_from === "favicon" ? "its icon" : "its theme colour";
+  return s.accent.substituted
+    ? `Colour: ${s.accent.accent} (the website's ${s.accent.original} from ${from} could not be used)`
+    : `Colour: ${s.accent.accent}, from ${from}`;
+}

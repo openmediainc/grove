@@ -273,3 +273,104 @@ export function readStoredBranding(raw: unknown): SpaceBranding | null {
   };
   return out.accent || out.signText || out.emblem ? out : null;
 }
+
+// ------------------------------------------------------------------ from a website (#34)
+
+/**
+ * Sign text taken from a website's name: forbidden characters removed rather
+ * than refused (the owner did not type them), whitespace collapsed, then cut
+ * to SIGN_TEXT_MAX characters at a word boundary when one is close. Null when
+ * nothing usable is left. The result always passes readSignText.
+ */
+export function signTextFromName(raw: string): string | null {
+  const cleaned = raw
+    .replace(new RegExp(FORBIDDEN_TEXT.source, "gu"), " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .normalize("NFC");
+  if (!cleaned) return null;
+  const parts = [...new Intl.Segmenter("und", { granularity: "grapheme" }).segment(cleaned)].map((s) => s.segment);
+  if (parts.length <= SIGN_TEXT_MAX) return cleaned;
+  const cut = parts.slice(0, SIGN_TEXT_MAX).join("");
+  const space = cut.lastIndexOf(" ");
+  const atWordEnd = parts[SIGN_TEXT_MAX] === " ";
+  const text = (atWordEnd || space < 12 ? cut : cut.slice(0, space)).trim();
+  return text || null;
+}
+
+/** Hue in degrees (0..360) and chroma (0..1) of a #rrggbb colour. */
+function hueChroma(hex: string): { hue: number; chroma: number } {
+  const [r, g, b] = rgb(hex);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let hue = 0;
+  if (d > 0) {
+    if (max === r) hue = ((g - b) / d) % 6;
+    else if (max === g) hue = (b - r) / d + 2;
+    else hue = (r - g) / d + 4;
+    hue *= 60;
+    if (hue < 0) hue += 360;
+  }
+  return { hue, chroma: d / 255 };
+}
+
+/** Below this chroma a colour reads as grey, and maps to the palette's grey. */
+const GREY_CHROMA = 0.15;
+
+/**
+ * The palette colour nearest a brand colour that cannot be used as it is. A
+ * failing colour is almost always failing on lightness (too dark for the dark
+ * boards) or on hue (a red, too near the warning colours), so nearness is by
+ * hue: a navy becomes Periwinkle, a forest green Mint. Greys go to Silver.
+ */
+export function nearestPaletteAccent(hex: string): (typeof BRAND_PALETTE)[number] {
+  const src = hueChroma(hex);
+  const silver = BRAND_PALETTE.find((p) => p.key === "silver")!;
+  if (src.chroma < GREY_CHROMA) return silver;
+  let best: (typeof BRAND_PALETTE)[number] = silver;
+  let bestD = Infinity;
+  for (const p of BRAND_PALETTE) {
+    const hc = hueChroma(p.hex);
+    if (hc.chroma < GREY_CHROMA) continue;
+    const raw = Math.abs(hc.hue - src.hue);
+    const d = Math.min(raw, 360 - raw);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
+export type AccentSuggestion = {
+  /** A #rrggbb that readAccent accepts. */
+  accent: string;
+  /** The website's own colour, as found. */
+  original: string;
+  /** True when the website's colour could not be used and a palette colour stands in. */
+  substituted: boolean;
+  /** Plain words for the owner when substituted, else null. */
+  note: string | null;
+};
+
+/**
+ * A website's colour to an accent the sign can use: the colour itself when it
+ * passes #33's rules, otherwise the nearest palette colour, saying why.
+ */
+export function suggestAccent(raw: string): AccentSuggestion | null {
+  const hex = normaliseHex(raw);
+  if (!hex) return null;
+  const problem = accentProblem(hex);
+  if (!problem) return { accent: hex, original: hex, substituted: false, note: null };
+  const pal = nearestPaletteAccent(hex);
+  const why = problem.startsWith("That colour is too close")
+    ? "is too close to the map's warning colours"
+    : "is too dark to read on every theme's sign";
+  return {
+    accent: pal.hex,
+    original: hex,
+    substituted: true,
+    note: `The website's colour ${hex} ${why}, so this suggests ${pal.label}, the nearest palette colour.`,
+  };
+}

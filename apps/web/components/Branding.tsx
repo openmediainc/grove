@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BRAND_EMBLEMS, BRAND_EMBLEM_LABEL, BRAND_PALETTE, type SpaceBranding } from "@grove/protocol";
 import { api } from "@/lib/api";
-import { SIGN_TEXT_MAX, brandingDraft, checkDraft, draftToBody, paletteKeyOf, previewPlot, type BrandingDraft } from "@/lib/branding";
+import {
+  SIGN_TEXT_MAX,
+  applySuggestion,
+  brandingDraft,
+  checkDraft,
+  draftToBody,
+  paletteKeyOf,
+  previewPlot,
+  suggestionColourLine,
+  type BrandingDraft,
+  type BrandingSuggestion,
+} from "@/lib/branding";
 import { layoutSignboard, signContent } from "@/lib/signboard";
 import { THEMES, THEME_IDS } from "@/lib/themes";
 import { drawBrandEmblem } from "@/lib/themes/kit";
@@ -33,14 +44,44 @@ export function BrandingPanel({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [siteUrl, setSiteUrl] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<BrandingSuggestion | null>(null);
+  const [suggestErr, setSuggestErr] = useState<string | null>(null);
   useEffect(() => setD(brandingDraft(branding)), [branding]);
   const check = useMemo(() => checkDraft(d), [d]);
+  // While a website suggestion is waiting, the preview shows it laid over the draft.
+  const previewCheck = useMemo(() => checkDraft(applySuggestion(d, suggestion)), [d, suggestion]);
   const invalid = Boolean(check.accentError || check.signTextError);
   const swatch = paletteKeyOf(d.accent);
 
   function edit(next: Partial<BrandingDraft>) {
     setSaved(false);
     setD((cur) => ({ ...cur, ...next }));
+  }
+
+  async function suggest() {
+    if (!siteUrl.trim()) return;
+    setSuggesting(true);
+    setSuggestErr(null);
+    setSuggestion(null);
+    try {
+      const r = await api<BrandingSuggestion>(`/api/v1/spaces/${worldId}/branding/suggest`, {
+        method: "POST",
+        body: JSON.stringify({ url: siteUrl.trim() }),
+      });
+      if (!r.name && !r.accent) setSuggestErr(r.notes.join(" ") || "Nothing on that website could be used.");
+      else setSuggestion(r);
+    } catch (e) {
+      setSuggestErr((e as Error).message);
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  function applyWebsite() {
+    edit(applySuggestion(d, suggestion));
+    setSuggestion(null);
   }
 
   async function save() {
@@ -65,6 +106,74 @@ export function BrandingPanel({
       </p>
 
       <div className="mt-4 space-y-5">
+        <div className="rounded-lg border border-white/10 p-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void suggest();
+            }}
+            className="flex flex-wrap items-end gap-2"
+          >
+            <label className="block min-w-0 flex-1 text-xs text-white/50">
+              Use my website
+              <input
+                value={siteUrl}
+                onChange={(e) => setSiteUrl(e.target.value)}
+                placeholder="https://example.com"
+                inputMode="url"
+                autoComplete="url"
+                maxLength={2048}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white/85"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={suggesting || !siteUrl.trim()}
+              className="rounded-full border border-lantern-400/50 px-4 py-2 text-sm text-lantern-200 disabled:opacity-50"
+            >
+              {suggesting ? "Reading…" : "Suggest"}
+            </button>
+          </form>
+          <p className="mt-1 text-[11px] text-white/35">
+            Glasshouse reads only the site&apos;s name, theme colour and icon colour. Nothing is saved until you apply and save.
+          </p>
+          {suggestErr ? <p className="mt-2 text-xs text-red-300">{suggestErr}</p> : null}
+          {suggestion ? (
+            <div className="mt-3 space-y-1 text-xs text-white/70" aria-live="polite">
+              <p className="text-white/50">From {suggestion.source.url}</p>
+              {suggestion.name ? <p>Sign text: {suggestion.name}</p> : null}
+              {suggestion.accent ? (
+                <p className="flex items-center gap-2">
+                  <span className="inline-block h-3 w-3 rounded-full border border-white/20" style={{ background: suggestion.accent.accent }} aria-hidden />
+                  {suggestionColourLine(suggestion)}
+                </p>
+              ) : null}
+              {suggestion.notes.map((n) => (
+                <p key={n} className="text-white/45">
+                  {n}
+                </p>
+              ))}
+              <p className="text-white/45">The preview below shows the suggestion.</p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={applyWebsite}
+                  className="rounded-full bg-lantern-400 px-3 py-1 text-xs font-medium text-dusk-950"
+                >
+                  Apply
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSuggestion(null)}
+                  className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/60"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         <div>
           <p className="text-xs text-white/50">Accent colour</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -150,7 +259,7 @@ export function BrandingPanel({
         </div>
 
         <div>
-          <p className="text-xs text-white/50">Preview</p>
+          <p className="text-xs text-white/50">{suggestion ? "Preview of the website suggestion" : "Preview"}</p>
           {space.policy_preset === "private" ? (
             <p className="mt-1 text-xs text-white/40">
               This space is Private, so the map shows a held sign with none of this on it. This is how it will look once it is Watch only or Open.
@@ -158,7 +267,7 @@ export function BrandingPanel({
           ) : null}
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {THEME_IDS.map((id) => (
-              <SignPreview key={id} themeId={id} plot={previewPlot(space, orgs, check.valid)} />
+              <SignPreview key={id} themeId={id} plot={previewPlot(space, orgs, previewCheck.valid)} />
             ))}
           </div>
         </div>

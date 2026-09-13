@@ -31,3 +31,15 @@ describe("register rate limit", () => {
     }
   });
 });
+
+describe("branding suggest rate limit (#34)", () => {
+  it("allows 10 website reads per person per hour, then RATE_LIMITED naming the limiter", async () => {
+    const q = new QuotaService(new MemoryRateLimiter());
+    for (let i = 0; i < 10; i++) await q.consumeBrandingSuggest("hum_a");
+    await expect(q.consumeBrandingSuggest("hum_a")).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      details: { limiter: "branding_suggest", remaining: 0 },
+    });
+    await q.consumeBrandingSuggest("hum_b");
+  });
+});

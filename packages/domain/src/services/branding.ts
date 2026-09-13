@@ -10,6 +10,9 @@ import {
 import type { GroveStore } from "../store.js";
 import { GroveError } from "../errors.js";
 import type { CampusService } from "./campus.js";
+import type { QuotaService } from "./quota.js";
+import { SiteFetchError, type SiteFetchOptions } from "../site-fetch.js";
+import { suggestBrandingFromSite, type SiteBrandingSuggestion } from "../site-branding.js";
 
 const NOT_FOUND = () => new GroveError("NOT_FOUND", "Not found.", { httpStatus: 404 });
 
@@ -26,6 +29,9 @@ export class BrandingService {
   constructor(
     private store: GroveStore,
     private campus: CampusService,
+    private quota: QuotaService,
+    /** Network rules for website suggestions; tests loosen them for a loopback server. */
+    public siteFetchOptions: SiteFetchOptions = {},
   ) {}
 
   /** Raw read for a caller that has already passed the space's door. */
@@ -52,5 +58,40 @@ export class BrandingService {
     const empty = !next.accent && !next.signText && !next.emblem;
     await this.store.pg.query(`UPDATE worlds SET branding = $2 WHERE id = $1`, [world.id, empty ? null : JSON.stringify(next)]);
     return this.ofWorld(world.id);
+  }
+
+  /**
+   * Suggest branding from a website (queue #34). Owner only (anyone else: the
+   * same 404 as a write), metered per person, and it SAVES NOTHING: the owner
+   * reviews the suggestion in the Manage preview and saves through the normal
+   * write above.
+   */
+  async suggestFromWebsite(human: Human, ref: string, rawUrl: unknown): Promise<SiteBrandingSuggestion> {
+    const world = await this.campus.requireWorld(ref);
+    if (world.archivedAt) throw NOT_FOUND();
+    await this.campus.assertOperate(human, world);
+    const url = normaliseSiteUrl(rawUrl);
+    if (!url) throw new GroveError("INVALID", "Enter a website address, like https://example.com.");
+    await this.quota.consumeBrandingSuggest(human.id);
+    try {
+      return await suggestBrandingFromSite(url, this.siteFetchOptions);
+    } catch (e) {
+      if (e instanceof SiteFetchError) throw new GroveError("INVALID", e.message, { details: { reason: e.reason } });
+      throw e;
+    }
+  }
+}
+
+/** What an owner types to a URL string: a missing scheme means https. Null when it is not an address. */
+export function normaliseSiteUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (!s || s.length > 2048 || /\s/.test(s)) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(s) && !/^[^:/]+:\d+(\/|$)/.test(s) ? s : `https://${s}`;
+  try {
+    const u = new URL(withScheme);
+    return u.hostname ? u.toString() : null;
+  } catch {
+    return null;
   }
 }
