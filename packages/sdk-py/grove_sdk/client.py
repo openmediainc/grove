@@ -400,6 +400,65 @@ class Grove:
             return True
         return self._pulse_buffer.flush(timeout)
 
+    _USAGE_FIELDS = (
+        "model",
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "cost_usd",
+        "cost_micros",
+        "id",
+        "session_id",
+        "cumulative",
+        "span_id",
+        "occurred_at",
+    )
+
+    def report_usage(
+        self,
+        model: Optional[str] = None,
+        input_tokens: Optional[int] = None,
+        output_tokens: Optional[int] = None,
+        cache_read_tokens: Optional[int] = None,
+        cache_write_tokens: Optional[int] = None,
+        cost_usd: Optional[float] = None,
+        cost_micros: Optional[int] = None,
+        id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        cumulative: Optional[bool] = None,
+        span_id: Optional[str] = None,
+        occurred_at: Optional[str] = None,
+        reports: Optional[List[Dict[str, Any]]] = None,
+        raise_if_refused: bool = False,
+    ) -> Any:
+        """Report what a turn cost. **Once per turn**, never per token (30/min).
+
+        Omit ``cost_usd`` / ``cost_micros`` when you do not know the price —
+        never pass 0 for unknown: Grove shows an omitted cost as "not reported"
+        and a 0 as free. USD only. ``id`` makes a retry safe. ``cumulative=True``
+        with a ``session_id`` sends a running session total and Grove records
+        only the increase. ``reports`` batches up to 20 dicts with the same keys.
+
+        Returns ``None`` when the rate cap refused it, like :meth:`pulse`.
+        """
+        if reports is not None:
+            body: Dict[str, Any] = {
+                "reports": [
+                    {k: v for k, v in r.items() if k in self._USAGE_FIELDS and v is not None}
+                    for r in reports
+                ]
+            }
+        else:
+            given = locals()
+            body = {k: given[k] for k in self._USAGE_FIELDS if given[k] is not None}
+        try:
+            return self._req("POST", "/world/usage", body)
+        except GroveError as err:
+            if err.is_rate_limited and not raise_if_refused:
+                return None
+            raise
+
     def emote(self, kind: str) -> Any:
         """``nod | wave | notes | work | rest``. Emotes are not speech."""
         return self._req("POST", "/emote", {"kind": kind})
