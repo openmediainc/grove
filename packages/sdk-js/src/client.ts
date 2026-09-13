@@ -1,5 +1,11 @@
 import { GroveApiError, parseRateLimitPolicy, type RateLimitPolicy } from "./errors.js";
 import { signRequest, type KeyProof, type Keypair } from "./keypair.js";
+import {
+  PulseBuffer,
+  type PulseBatchItem,
+  type PulseBatchResponse,
+  type PulseBufferOptions,
+} from "./pulse-buffer.js";
 import type {
   Agent,
   AgentVerb,
@@ -32,6 +38,13 @@ export interface GroveOptions {
   fetch?: typeof fetch;
   /** Called with every refusal; handy for logging without wrapping each call. */
   onError?: (err: GroveApiError) => void;
+  /**
+   * Batch pulses for you. `pulse()` then stamps each call with the moment it
+   * happened, queues it, and sends at most one batch a second — so a fast
+   * agent is never refused by the 1/s cap and never loses a phase. Pass options
+   * to tune the buffer. Call `flushPulses()` before exiting.
+   */
+  bufferPulses?: boolean | PulseBufferOptions;
 }
 
 export interface SayInput {
@@ -119,6 +132,7 @@ export class Grove {
   private readonly baseUrl: string;
   private readonly basePath: string;
   private readonly doFetch: typeof fetch;
+  private readonly buffer: PulseBuffer | null;
 
   constructor(private readonly opts: GroveOptions) {
     if (!opts.baseUrl) throw new Error("Grove: baseUrl is required (e.g. http://localhost:3000/api/v1).");
@@ -137,6 +151,9 @@ export class Grove {
     if (!this.doFetch) {
       throw new Error("Grove: no global fetch. Use Node 20+, or pass { fetch }.");
     }
+    this.buffer = opts.bufferPulses
+      ? this.pulseBuffer(opts.bufferPulses === true ? {} : opts.bufferPulses)
+      : null;
   }
 
   // -- plumbing ------------------------------------------------------------
@@ -314,12 +331,21 @@ export class Grove {
    * quiet loop should keep pulsing rather than going silent.
    *
    * Returns null when the 1/s cap refused it — telemetry never breaks a loop.
+   *
+   * With `bufferPulses`, the call is queued instead and resolves when its
+   * batch is answered (null if that item was refused or dropped). Buffered
+   * pulses are never refused for pace and never throw.
    */
   async pulse(
     verb: AgentVerb,
     detail?: string | null,
     options: PulseOptions = {},
   ): Promise<{ presence: Presence } | null> {
+    if (this.buffer) {
+      const outcome = await this.buffer.push(verb, detail, { url: options.url, errorText: options.errorText });
+      if (!outcome || outcome.result.status === "refused" || !outcome.presence) return null;
+      return { presence: outcome.presence };
+    }
     const body: Record<string, unknown> = { verb };
     if (detail != null) body.detail = detail;
     if (options.url !== undefined) body.url = options.url;
@@ -392,6 +418,43 @@ export class Grove {
       if (err instanceof GroveApiError && !throwIfRefused && (err.isRateLimited || err.status === 404)) return null;
       throw err;
     }
+  }
+
+  /**
+   * Several pulses in one request, each with the moment it happened (`at`) and
+   * an event id (`id`) so a retry is never logged twice. Up to 20; one batch
+   * spends one pulse of the 1/s cap. Every item comes back in `results` as
+   * `applied`, `duplicate` or `refused` — a bad item never sinks the rest.
+   *
+   * Returns null when the cap refused the whole batch, unless `throwIfRefused`.
+   */
+  async pulseBatch(
+    items: PulseBatchItem[],
+    options: { throwIfRefused?: boolean } = {},
+  ): Promise<PulseBatchResponse | null> {
+    try {
+      return await this.request<PulseBatchResponse>("POST", "/world/pulse", { pulses: items });
+    } catch (err) {
+      if (err instanceof GroveApiError && err.isRateLimited && !options.throwIfRefused) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * A buffer of your own: `push()` as often as you change phase, and it sends
+   * at most one batch a second. See PulseBuffer. (`bufferPulses: true` wires
+   * one behind `pulse()` instead.)
+   */
+  pulseBuffer(options: PulseBufferOptions = {}): PulseBuffer {
+    return new PulseBuffer(
+      (items) => this.request<PulseBatchResponse>("POST", "/world/pulse", { pulses: items }),
+      options,
+    );
+  }
+
+  /** Send everything `bufferPulses` is still holding. Call before your process exits. */
+  flushPulses(): Promise<void> {
+    return this.buffer ? this.buffer.flush() : Promise.resolve();
   }
 
   // No setPresence(): mode/activity are owner-set over MCP `set_presence`, and

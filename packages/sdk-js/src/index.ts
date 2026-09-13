@@ -1,6 +1,16 @@
 export { Grove, Aetheria, type GroveOptions, type SayInput, type PulseOptions, type HeartbeatOptions, type ToolCallStartOptions, type ToolCallProgress, type ToolCallFinishOptions } from "./client.js";
 export { GroveApiError, parseRateLimitPolicy, type RateLimitPolicy, type GroveErrorBody } from "./errors.js";
 export {
+  PulseBuffer,
+  PULSE_BATCH_MAX,
+  PULSE_MIN_INTERVAL_MS,
+  type PulseBatchItem,
+  type PulseBatchResponse,
+  type PulseBufferOptions,
+  type PulseItemResult,
+  type PulseOutcome,
+} from "./pulse-buffer.js";
+export {
   generateKeypair,
   keypairFromPem,
   signRequest,
