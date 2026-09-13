@@ -27,10 +27,112 @@ function expiresSql(ex?: number, px?: number): string | null {
   return null;
 }
 
+/**
+ * One LISTEN connection per process and database, shared by every subscriber.
+ *
+ * Each SSE viewer used to open its own `pg.Client`, and on Supabase's session
+ * pooler (pool_size 15) a handful of viewers exhausted the pool for every
+ * query — "EMAXCONNSESSION max clients reached". Channels are ref-counted: the
+ * first subscriber LISTENs, the last UNLISTENs, and the connection closes
+ * when nobody is listening. Operations run one at a time so a close can never
+ * race a new LISTEN.
+ */
+class ListenHub {
+  private client: pg.Client | null = null;
+  private refs = new Map<string, number>();
+  private members = new Set<PgRedis>();
+  private chain: Promise<unknown> = Promise.resolve();
+
+  constructor(private readonly connectionString: string) {}
+
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.chain.then(fn, fn);
+    this.chain = next.catch(() => {});
+    return next;
+  }
+
+  private async connect(): Promise<pg.Client> {
+    if (this.client) return this.client;
+    const cloud =
+      this.connectionString.includes("supabase.co") || this.connectionString.includes("pooler.supabase.com");
+    const url = this.connectionString.replace(/[?&]sslmode=[^&]*/g, "").replace(/\?$/, "");
+    const client = new pg.Client({ connectionString: url, ssl: cloud ? { rejectUnauthorized: false } : undefined });
+    const drop = () => {
+      // A dead LISTEN connection must not crash the process; the next
+      // subscribe reconnects, and polling heals whatever was missed.
+      if (this.client === client) this.client = null;
+    };
+    client.on("error", drop);
+    client.on("end", drop);
+    await client.connect();
+    // After a dropped connection, re-LISTEN what subscribers still hold.
+    for (const pgc of this.refs.keys()) await client.query(`LISTEN ${pgc}`);
+    client.on("notification", (msg) => {
+      for (const m of this.members) m.deliver(msg.channel, msg.payload ?? "");
+    });
+    this.client = client;
+    return client;
+  }
+
+  join(member: PgRedis, channel: string): Promise<void> {
+    return this.serial(async () => {
+      this.members.add(member);
+      const pgc = pgChannel(channel);
+      const n = this.refs.get(pgc) ?? 0;
+      const client = await this.connect();
+      if (n === 0) await client.query(`LISTEN ${pgc}`);
+      this.refs.set(pgc, n + 1);
+    });
+  }
+
+  leave(channel: string): Promise<void> {
+    return this.serial(async () => {
+      const pgc = pgChannel(channel);
+      const n = this.refs.get(pgc) ?? 0;
+      if (n <= 1) {
+        this.refs.delete(pgc);
+        if (n === 1 && this.client) await this.client.query(`UNLISTEN ${pgc}`).catch(() => {});
+      } else {
+        this.refs.set(pgc, n - 1);
+      }
+    });
+  }
+
+  forget(member: PgRedis): Promise<void> {
+    return this.serial(async () => {
+      this.members.delete(member);
+      if (this.members.size === 0 && this.client) {
+        const client = this.client;
+        this.client = null;
+        this.refs.clear();
+        await client.end().catch(() => {});
+      }
+    });
+  }
+
+  /** How many LISTEN connections this hub holds (0 or 1). */
+  get connections(): number {
+    return this.client ? 1 : 0;
+  }
+}
+
+/** Test hook: LISTEN connections open for a database, across all subscribers. */
+export function listenConnections(connectionString: string): number {
+  return hubs.get(connectionString)?.connections ?? 0;
+}
+
+const hubs = new Map<string, ListenHub>();
+function hubFor(connectionString: string): ListenHub {
+  let hub = hubs.get(connectionString);
+  if (!hub) {
+    hub = new ListenHub(connectionString);
+    hubs.set(connectionString, hub);
+  }
+  return hub;
+}
+
 /** ioredis-shaped bus backed by Postgres so Grove can run without Redis. */
 export class PgRedis extends EventEmitter {
-  private listenClient: pg.Client | null = null;
-  private listenReady: Promise<void> | null = null;
   private subscribed = new Set<string>();
 
   constructor(
@@ -190,46 +292,41 @@ export class PgRedis extends EventEmitter {
   }
 
   async subscribe(...channels: string[]): Promise<number> {
-    await this.ensureListen();
+    const hub = hubFor(this.connectionString);
     for (const ch of channels) {
+      if (this.subscribed.has(ch)) continue;
       this.subscribed.add(ch);
-      await this.listenClient!.query(`LISTEN ${pgChannel(ch)}`);
+      await hub.join(this, ch);
     }
-    return channels.length;
+    return this.subscribed.size;
   }
 
-  private async ensureListen(): Promise<void> {
-    if (this.listenReady) return this.listenReady;
-    this.listenReady = (async () => {
-      const cloud =
-        this.connectionString.includes("supabase.co") ||
-        this.connectionString.includes("pooler.supabase.com");
-      const url = this.connectionString.replace(/[?&]sslmode=[^&]*/g, "").replace(/\?$/, "");
-      const client = new pg.Client({
-        connectionString: url,
-        ssl: cloud ? { rejectUnauthorized: false } : undefined,
-      });
-      await client.connect();
-      client.on("notification", async (msg) => {
-        const mapped = [...this.subscribed].find((c) => pgChannel(c) === msg.channel);
-        if (!mapped) return;
-        let payload = msg.payload ?? "";
-        if (payload.startsWith("__kv:")) {
-          payload = (await this.get(payload.slice(5))) ?? payload;
-        }
-        this.emit("message", mapped, payload);
-      });
-      this.listenClient = client;
-    })();
-    return this.listenReady;
+  async unsubscribe(...channels: string[]): Promise<number> {
+    const hub = hubFor(this.connectionString);
+    const drop = channels.length ? channels : [...this.subscribed];
+    for (const ch of drop) {
+      if (!this.subscribed.delete(ch)) continue;
+      await hub.leave(ch);
+    }
+    return this.subscribed.size;
+  }
+
+  /** Called by the shared hub for every notification on the connection. */
+  deliver(pgc: string, raw: string): void {
+    const mapped = [...this.subscribed].find((c) => pgChannel(c) === pgc);
+    if (!mapped) return;
+    if (raw.startsWith("__kv:")) {
+      void this.get(raw.slice(5))
+        .then((v) => this.emit("message", mapped, v ?? raw))
+        .catch(() => this.emit("message", mapped, raw));
+      return;
+    }
+    this.emit("message", mapped, raw);
   }
 
   async quit(): Promise<string> {
-    if (this.listenClient) {
-      await this.listenClient.end().catch(() => {});
-      this.listenClient = null;
-      this.listenReady = null;
-    }
+    await this.unsubscribe();
+    await hubFor(this.connectionString).forget(this);
     return "OK";
   }
 
