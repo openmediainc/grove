@@ -52,7 +52,17 @@ export {
 } from "./services/moderation.js";
 export { MailboxService } from "./services/mailbox.js";
 export { NoticeService } from "./services/notices.js";
-export { ReactionService, reactionCountsFrame } from "./services/reactions.js";
+export { ReactionService, reactionCountsFrame, type Reactor } from "./services/reactions.js";
+export {
+  GuestService,
+  GUEST_TTL_DAYS,
+  GUEST_FOLLOWS_MAX,
+  guestIdForToken,
+  guestIpBucket,
+  isGuestToken,
+  type Guest,
+  type MergeResult,
+} from "./services/guests.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
 export { FollowService, type Follower, type FollowState, type FollowHooks } from "./services/follows.js";
 export {
@@ -217,6 +227,7 @@ import { QuotaService, RedisRateLimiter } from "./services/quota.js";
 import { CampusService } from "./services/campus.js";
 import { ChronicleService } from "./services/chronicle.js";
 import { ReactionService } from "./services/reactions.js";
+import { GuestService } from "./services/guests.js";
 import { CardService } from "./services/cards.js";
 import { FollowService } from "./services/follows.js";
 import { SearchService } from "./services/search.js";
@@ -250,6 +261,8 @@ export class GroveApp {
   campus: CampusService;
   chronicle: ChronicleService;
   reactions: ReactionService;
+  /** Guest passes: signed-out browsers that react and follow, merged on sign-in, pruned after 30 idle days (034). */
+  guests: GuestService;
   /** Working on / looking for / latest / links, for spaces and bodies (027). */
   cards: CardService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
@@ -303,6 +316,7 @@ export class GroveApp {
     this.toolCalls.follows = this.follows;
     this.campus.follows = this.follows;
     this.messages = new MessageService(this.store, this.identity, this.speech, this.mailbox, this.quota, this.flags);
+    this.guests = new GuestService(this.store);
     this.reactions = new ReactionService(
       this.store,
       this.chronicle,

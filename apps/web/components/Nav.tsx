@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { signOut } from "@/lib/session";
+import { GuestPass } from "./GuestPass";
 import { SEARCH_EVENT } from "@/lib/search";
 import {
   INBOX_SEEN_EVENT,
@@ -285,6 +286,8 @@ export function Nav() {
           How it works
         </Link>
         <SearchButton className="hidden items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-lantern-300/80 hover:text-lantern-300 sm:flex" />
+        {/* A signed-out browser holding a guest pass: what it follows. Renders nothing otherwise. */}
+        {viewer.state === "signed-out" ? <GuestPass /> : null}
         {viewer.state === "signed-out" ? (
           <Link
             href="/login"

@@ -114,7 +114,7 @@ function Row({
           </p>
         ) : null}
         {entry.reaction_target ? (
-          <Reactions target={entry.reaction_target} summary={entry.reactions} canReact={signedIn} />
+          <Reactions target={entry.reaction_target} summary={entry.reactions} canReact asGuest={!signedIn} />
         ) : null}
         {chips.length ? (
           <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-white/35">

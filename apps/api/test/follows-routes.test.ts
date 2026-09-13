@@ -108,7 +108,8 @@ describe.skipIf(!hasDb)("follow routes", () => {
     });
     expect((del.json() as { follow: unknown }).follow).toMatchObject({ following: false, followers: 0 });
 
-    const unsigned = await app.inject({ method: "PUT", url: `/api/v1/follows/spaces/${slug}` });
+    // Signed out, a follow is taken on a guest pass (guests-routes.test.ts); an unfollow with none is a 401.
+    const unsigned = await app.inject({ method: "DELETE", url: `/api/v1/follows/spaces/${slug}`, headers: { "content-type": "application/json" }, payload: "{}" });
     expect(unsigned.statusCode).toBe(401);
   });
 

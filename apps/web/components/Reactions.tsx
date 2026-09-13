@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { REACTION_GLYPH, REACTION_KEYS, REACTION_LABEL, type ReactionKey } from "@grove/protocol";
 import { api } from "@/lib/api";
+import { GUEST_EVENT } from "@/lib/guest";
 import {
   applyReaction,
   reactionChips,
@@ -17,17 +18,21 @@ import {
  * /api/v1/reactions, where the permission kernel judges it like speech; the
  * click is optimistic and is put back if the server refuses.
  *
- * `canReact` false (signed out) shows the counts and no controls.
+ * `canReact` false shows the counts and no controls. `asGuest` (signed out)
+ * still reacts — the server gives this browser a guest pass on the first one —
+ * and says so, quietly, beside the palette.
  */
 export function Reactions({
   target,
   summary,
   canReact,
+  asGuest = false,
   onChange,
 }: {
   target: ReactionTargetWire;
   summary: ReactionSummaryWire | null | undefined;
   canReact: boolean;
+  asGuest?: boolean;
   onChange?: (next: ReactionSummaryWire) => void;
 }) {
   const [state, setState] = useState<ReactionSummaryWire | null | undefined>(summary);
@@ -54,6 +59,7 @@ export function Reactions({
       });
       setState(r.reaction.summary);
       onChange?.(r.reaction.summary);
+      if (asGuest) window.dispatchEvent(new Event(GUEST_EVENT));
     } catch (e) {
       setState(before);
       setNote(reactionRefusalText((e as { code?: string }).code));
@@ -111,6 +117,11 @@ export function Reactions({
               ))}
             </span>
           ) : null}
+        </span>
+      ) : null}
+      {canReact && asGuest && (open || (state?.mine.length ?? 0) > 0) ? (
+        <span className="text-white/30" title="Signed out: kept in this browser. Sign in and it moves to your account.">
+          as a guest
         </span>
       ) : null}
       {note ? <span className="text-white/40">{note}</span> : null}

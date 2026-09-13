@@ -25,8 +25,14 @@ import type { MailboxService } from "./mailbox.js";
 import type { PresenceService } from "./presence.js";
 import type { SpeechService } from "./speech.js";
 import { isFirst24h, type QuotaService } from "./quota.js";
+import { GUEST_FOLLOWS_MAX, type Guest } from "./guests.js";
 
-export type Follower = { kind: "human"; human: Human } | { kind: "agent"; agent: Agent };
+/**
+ * Who follows. A guest (queue #32) follows through the signed-out door (public
+ * spaces and claimed agents only) and is never told anything: it has no inbox.
+ * Its follows move onto the person when that browser signs in.
+ */
+export type Follower = { kind: "human"; human: Human } | { kind: "agent"; agent: Agent } | { kind: "guest"; guest: Guest };
 
 export interface FollowState {
   subject: FollowSubject;
@@ -135,8 +141,14 @@ export class FollowService implements FollowHooks {
       `SELECT count(*)::int AS n FROM follows WHERE follower_id = $1`,
       [followerId],
     );
-    if ((rows[0]?.n ?? 0) >= FOLLOWS_MAX) {
-      throw new GroveError("INVALID", `You already follow ${FOLLOWS_MAX} things. Unfollow some first.`);
+    const cap = follower.kind === "guest" ? GUEST_FOLLOWS_MAX : FOLLOWS_MAX;
+    if ((rows[0]?.n ?? 0) >= cap) {
+      throw new GroveError(
+        "INVALID",
+        follower.kind === "guest"
+          ? `A guest can follow ${cap} things. Sign in to follow more.`
+          : `You already follow ${cap} things. Unfollow some first.`,
+      );
     }
     const { rowCount } = await this.store.pg.query(
       `INSERT INTO follows (follower_id, follower_kind, subject_kind, subject_id)
@@ -146,7 +158,10 @@ export class FollowService implements FollowHooks {
     // Charged only when something was written, like a reaction: re-following
     // is idempotent and free.
     if ((rowCount ?? 0) > 0) {
-      await this.quota.consumeWrite(followerId, follower.kind === "agent" && isFirst24h(follower.agent.claimedAt));
+      await this.quota.consumeWrite(
+        followerId,
+        follower.kind === "guest" || (follower.kind === "agent" && isFirst24h(follower.agent.claimedAt)),
+      );
       await hooks.onNew?.().catch(() => {});
     }
     return this.stateOf(followerId, subject);
@@ -298,7 +313,9 @@ export class FollowService implements FollowHooks {
     opts: { cooldown?: boolean } = {},
   ): Promise<number> {
     const { rows: followers } = await this.store.pg.query<{ follower_id: string }>(
-      `SELECT follower_id FROM follows WHERE subject_kind = $1 AND subject_id = $2 ORDER BY created_at LIMIT $3`,
+      // Guests have no inbox, and must never crowd real followers out of the fan-out cap.
+      `SELECT follower_id FROM follows WHERE subject_kind = $1 AND subject_id = $2 AND follower_kind <> 'guest'
+        ORDER BY created_at LIMIT $3`,
       [subject.kind, subject.id, FOLLOW_FANOUT_MAX],
     );
     if (!followers.length) return 0;
@@ -399,7 +416,7 @@ export class FollowService implements FollowHooks {
     if (!agentId.startsWith("agt_")) return null;
     // Cheap exit before loading anything: nobody follows most agents.
     const { rowCount } = await this.store.pg.query(
-      `SELECT 1 FROM follows WHERE subject_kind = 'agent' AND subject_id = $1 LIMIT 1`,
+      `SELECT 1 FROM follows WHERE subject_kind = 'agent' AND subject_id = $1 AND follower_kind <> 'guest' LIMIT 1`,
       [agentId],
     );
     if (!rowCount) return null;
@@ -468,11 +485,12 @@ export class FollowService implements FollowHooks {
 }
 
 function actorIdOf(f: Follower): string {
-  return f.kind === "human" ? f.human.id : f.agent.id;
+  return f.kind === "human" ? f.human.id : f.kind === "agent" ? f.agent.id : f.guest.id;
 }
 
+/** The door's viewer: the human, an agent's owner, or nobody (signed out, or a guest). */
 function viewerOf(f: Follower | null): string | null {
-  if (!f) return null;
+  if (!f || f.kind === "guest") return null;
   return f.kind === "human" ? f.human.id : (f.agent.ownerHumanId ?? null);
 }
 

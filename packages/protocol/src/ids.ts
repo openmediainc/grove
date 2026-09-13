@@ -33,6 +33,8 @@ export const ID_PREFIX = {
   job: "job_",
   followNotice: "fnt_",
   message: "msg_",
+  /** A signed-out visitor holding a guest pass (034). Never a speaker. */
+  guest: "gst_",
 } as const;
 
 export function isHumanId(id: string): id is HumanId {

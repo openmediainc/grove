@@ -281,7 +281,9 @@ export interface PolicyDecision {
     | "ROOM_FULL"
     | "UNCLAIMED"
     | "RATE_LIMITED"
-    | "NOT_FOUND";
+    | "NOT_FOUND"
+    /** A guest pass asked for anything but a reaction (queue #32). */
+    | "UNAUTHORIZED";
   capability?: keyof PermissionPolicy;
   /**
    * §5.5: which ceiling actually refused. `capability` alone cannot say — a
@@ -351,6 +353,14 @@ export interface PolicyContext {
     privacy?: PrivacyPolicy | { overhearableByAgents: boolean };
     /** Member of ctx.room. Already-fetched, like quota. Absent ⇒ not a member. */
     isSpaceMember?: boolean;
+    /**
+     * A signed-out visitor holding a guest pass (queue #32), shaped as a human
+     * with no matrix. The kernel lets a guest do exactly one act, `reaction`,
+     * and always at the non-member ceiling, whatever a caller passed for
+     * `isSpaceMember`. Everything else (speech, whispers, messages, notices)
+     * is refused here as well as by the routes, which never authenticate one.
+     */
+    guest?: boolean;
   };
   recipients: Array<{
     id: ActorId;

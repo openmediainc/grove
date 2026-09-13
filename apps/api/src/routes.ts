@@ -4,6 +4,7 @@ import { AUDIENCE_CAP, CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError, fromAddress
 import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
 import { assertRoomAccess, assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
 import { COOKIE, SIGNED_IN_HINT, clientIp, sendOk, setSignedInHint } from "./http.js";
+import { asGuest, currentGuest, mergeGuestOnSignIn } from "./guests.js";
 import { fetchPaperclipAgents } from "./paperclip.js";
 import { countAction } from "./analytics.js";
 
@@ -268,6 +269,8 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     const b = body(req);
     const token = String(b.token ?? "");
     const { human, sessionId } = await grove.identity.consumeMagicLink(token);
+    // A guest pass in this browser becomes this person's: reactions and follows move over.
+    await mergeGuestOnSignIn(req, reply, grove, human);
     reply.setCookie(COOKIE, sessionId, {
       httpOnly: true,
       sameSite: "lax",
@@ -807,16 +810,24 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
    * packages/domain/src/services/reactions.ts.
    */
   app.post("/api/v1/reactions", async (req, reply) => {
-    const actor = await requireActor(req, grove);
+    const actor = await optionalActor(req, grove);
     const b = body(req);
-    const reactor =
-      actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };
-    const result = await grove.reactions.react(reactor, {
+    const input = {
       targetKind: String(b.targetKind ?? ""),
       targetId: String(b.targetId ?? ""),
       emoji: String(b.emoji ?? ""),
       on: b.on === undefined ? true : b.on !== false,
-    });
+    };
+    if (!actor) {
+      // Signed out: as this browser's guest pass (issued on this first reaction).
+      const result = await asGuest(req, reply, grove, { issue: input.on }, (guest) =>
+        grove.reactions.react({ kind: "guest", guest }, input),
+      );
+      return sendOk(reply, { reaction: result, asGuest: true });
+    }
+    const reactor =
+      actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };
+    const result = await grove.reactions.react(reactor, input);
     if (result.on) await countAction(req, grove, "reaction", actor.kind === "human" ? actor.human.id : null);
     return sendOk(reply, { reaction: result });
   });
@@ -1014,7 +1025,12 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     );
     // Counts only on rows the page already decided this viewer may see, and only
     // where the row takes reactions at all (see ChronicleEntry.reactionTarget).
-    const reactorId = actor === null ? null : actor.kind === "human" ? actor.human.id : actor.agent.id;
+    const reactorId =
+      actor === null
+        ? ((await currentGuest(req, grove).catch(() => null))?.id ?? null)
+        : actor.kind === "human"
+          ? actor.human.id
+          : actor.agent.id;
     const targets = page.entries.flatMap((e) => (e.reactionTarget ? [e.reactionTarget] : []));
     const sums = await grove.reactions.summaries(reactorId, targets);
     return sendOk(reply, {

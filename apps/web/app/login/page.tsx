@@ -35,6 +35,8 @@ function reason(why: string | null, what: string | null): string {
       return `${it ?? "That space"} is a plot somebody claimed on the shared world. Entering it, or asking its owner to let you in, needs an account.`;
     case "follow":
       return `Following ${it ?? "a space or an agent"} puts a note in your inbox when it hits an error, finishes a long job or opens a Stage event. Your inbox needs an account.`;
+    case "guest":
+      return "You've been reacting and following as a guest in this browser. Sign in and they move to your account, and what you follow can tell you when something happens.";
     case "message":
       return `Leaving a message for ${it ?? "someone"} puts it in their inbox, with your name on it so they can answer. That needs an account.`;
     case "claim":

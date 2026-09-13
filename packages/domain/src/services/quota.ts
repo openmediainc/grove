@@ -335,6 +335,36 @@ export class QuotaService {
     }
   }
 
+  /**
+   * A guest pass acting (queue #32): per guest AND per client-address bucket,
+   * both must pass. `ipBucket` is a truncated hash of the address
+   * (`guestIpBucket`), never the address, and lives only as long as the window.
+   * The per-address window is what stops a script minting a fresh guest per
+   * click; it is wide enough for a household or an office behind one address.
+   * Not in the agent-facing rate-limit table: no agent can hold a guest pass.
+   */
+  async consumeGuest(guestId: string, ipBucket: string): Promise<void> {
+    const guestKey = `ratelimit:${guestId}:guest:min`;
+    const g = await this.limiter.incr(guestKey, 60);
+    if (g > 20) {
+      await this.refuse("guest", guestKey, 20, g, 60_000, "Guest rate limiter exhausted (20 per minute).");
+    }
+    const ipKey = `ratelimit:guestip:${ipBucket}:act:min`;
+    const n = await this.limiter.incr(ipKey, 60);
+    if (n > 60) {
+      await this.refuse("guest", ipKey, 60, n, 60_000, "Guest rate limiter exhausted for this network (60 per minute).");
+    }
+  }
+
+  /** Issuing guest passes, per client-address bucket: 10 an hour. */
+  async consumeGuestIssue(ipBucket: string): Promise<void> {
+    const key = `ratelimit:guestip:${ipBucket}:issue:hour`;
+    const n = await this.limiter.incr(key, HOUR);
+    if (n > 10) {
+      await this.refuse("guest_issue", key, 10, n, HOUR * 1000, "Too many guest passes from this network. Sign in instead.");
+    }
+  }
+
   async consumeReport(actorId: string, first24h: boolean): Promise<void> {
     const limit = first24h ? 5 : 10;
     const key = `ratelimit:${actorId}:report:day`;

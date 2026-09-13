@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { gp } from "@/lib/base";
 import { followApiPath, followTargetKey, heartLabel, type FollowTarget, type WireFollow } from "@/lib/follow";
+import { GUEST_EVENT } from "@/lib/guest";
 import type { ThemeLexicon } from "@/lib/themes/types";
 
 type CardLex = ThemeLexicon["card"];
@@ -14,7 +15,9 @@ type CardLex = ThemeLexicon["card"];
  *
  * A 404 (a private space you are not in, a pending agent) renders nothing at
  * all: the heart must not tell a reader what the map already withheld. Signed
- * out, it is a sign-in link that says what signing in is for.
+ * out, it still works: the server keeps the follow on this browser's guest pass
+ * (no notices until the visitor signs in, when it moves to their account), and
+ * the button says "as a guest".
  */
 export function FollowButton({
   target,
@@ -60,14 +63,7 @@ export function FollowButton({
     return gp(`/login?${q.toString()}`);
   };
 
-  if (signedIn === false) {
-    return (
-      <a href={loginPath()} className={base} title="Sign in to follow and hear when something happens">
-        <Heart on={false} />
-        {heartLabel(state, lex)}
-      </a>
-    );
-  }
+  const asGuest = signedIn === false;
 
   const toggle = async () => {
     if (!state || busy) return;
@@ -82,6 +78,7 @@ export function FollowButton({
         body: "{}",
       });
       setState(r.follow);
+      if (asGuest) window.dispatchEvent(new Event(GUEST_EVENT));
     } catch (e) {
       const status = (e as { status?: number }).status;
       if (status === 404) setHidden(true);
@@ -101,11 +98,21 @@ export function FollowButton({
       onClick={() => void toggle()}
       disabled={!state || busy}
       aria-pressed={state?.following ?? false}
-      title={err ?? (state?.following ? "Stop following" : "Follow: hear when it errors, finishes a long job or opens a Stage event")}
+      title={
+        err ??
+        (asGuest
+          ? state?.following
+            ? "Following as a guest in this browser. Sign in to get notified."
+            : "Follow as a guest. Sign in later to get notified."
+          : state?.following
+            ? "Stop following"
+            : "Follow: hear when it errors, finishes a long job or opens a Stage event")
+      }
       className={`${base} disabled:opacity-60 ${state?.following ? "border-lantern-400/40 text-lantern-300" : ""}`}
     >
       <Heart on={state?.following ?? false} />
       <span aria-live="polite">{heartLabel(state, lex)}</span>
+      {asGuest && state?.following ? <span className="text-[10px] text-white/35">as a guest</span> : null}
     </button>
   );
 }

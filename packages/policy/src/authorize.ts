@@ -170,7 +170,9 @@ export function authorize(input: PolicyContext): AuthorizeResult {
   // A message has no room, whatever a caller passed: it lands in an inbox, and
   // judging it against the room the recipient stands in would let a refusal
   // say which (private) space they are inside.
-  const ctx: PolicyContext = input.channel === "message" ? { ...input, room: undefined } : input;
+  let ctx: PolicyContext = input.channel === "message" ? { ...input, room: undefined } : input;
+  // A guest is never a member of anything: the most restrictive ceiling, always.
+  if (ctx.sender.guest) ctx = { ...ctx, sender: { ...ctx.sender, isSpaceMember: false, policy: undefined } };
   const emit = emitDecision(ctx);
   if (!emit.allow) return { emit, deliveries: [] };
 
@@ -181,7 +183,15 @@ export function authorize(input: PolicyContext): AuthorizeResult {
   return { emit, deliveries };
 }
 
+/** The only acts a guest pass can perform through the kernel. Following is a door check, not an act. */
+const GUEST_CHANNELS: readonly PolicyChannel[] = ["reaction"];
+
 function emitDecision(ctx: PolicyContext): PolicyDecision {
+  // A guest reacts and nothing else. Checked before every other rule, the owner
+  // channel included: a guest owns no agent and has no mouth.
+  if (ctx.sender.guest && !GUEST_CHANNELS.includes(ctx.channel)) {
+    return { allow: false, code: "UNAUTHORIZED", reason: "Guests can react and follow. Sign in to do more." };
+  }
   // Owner channel is always open and bypasses space policy entirely.
   if (OWNER_CHANNELS.includes(ctx.channel)) {
     if (ctx.recipients.length !== 1) {

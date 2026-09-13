@@ -78,3 +78,25 @@ of person ids could recompute that week's marks. Once the week ends, they can't.
 
 Daily counts and cohort cells are deleted after **90 days**. The periodic tick
 prunes them, together with any salt or bucket whose day or week has ended.
+
+## Guest passes (signed-out reactions and follows)
+
+A signed-out visitor can react and follow without an account. This is not
+analytics, but it is a cookie, so it is described here. The code is
+`packages/domain/src/services/guests.ts` and migration `034_guests.sql`.
+
+- **Issued only when you act.** The `grove_guest` cookie (httpOnly) is set the
+  first time you react or follow, never on a page view. A visitor who only
+  watches gets no cookie and no row.
+- **What is stored:** one row with an id, when it was created and when it was
+  last used. No IP address, user agent or email. The id is a hash of the cookie,
+  so the database cannot be turned back into a working cookie.
+- **What it holds:** your reactions and follows, keyed to that id. Reactions are
+  counted like anyone's; nobody sees who reacted or followed.
+- **Rate limits** use a truncated hash of your address inside a limiter key that
+  expires with its one-minute (or one-hour) window. The address itself is never
+  written anywhere.
+- **Signing in** from the same browser moves the reactions and follows to your
+  account and deletes the guest row and cookie.
+- **Forget this browser** (in the nav menu) deletes the row, the reactions and
+  the follows at once. Otherwise they are deleted after **30 days** without use.

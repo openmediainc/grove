@@ -19,8 +19,23 @@ import type { FlagService } from "./flags.js";
 import type { PresenceService } from "./presence.js";
 import { isFirst24h, type QuotaService } from "./quota.js";
 import type { SpeechService } from "./speech.js";
+import type { Guest } from "./guests.js";
 
-type Reactor = { kind: "human"; human: Human } | { kind: "agent"; agent: Agent };
+/**
+ * Who reacts. A guest (queue #32) is a signed-out browser holding a guest pass:
+ * it sees exactly what a signed-out visitor sees, and the kernel judges it at
+ * the non-member ceiling with no mouth beyond `reaction`.
+ */
+export type Reactor = { kind: "human"; human: Human } | { kind: "agent"; agent: Agent } | { kind: "guest"; guest: Guest };
+
+function reactorId(r: Reactor): string {
+  return r.kind === "human" ? r.human.id : r.kind === "agent" ? r.agent.id : r.guest.id;
+}
+
+/** Guests and fresh agents share the tighter write allowance. */
+function tightWrites(r: Reactor): boolean {
+  return r.kind === "guest" || (r.kind === "agent" && isFirst24h(r.agent.claimedAt));
+}
 
 /**
  * Reactions on spoken lines and chronicle events.
@@ -84,7 +99,7 @@ export class ReactionService {
     const targetId = String(input.targetId ?? "").trim();
     if (!targetId || targetId.length > 64) throw notFound();
     const target: ReactionTarget = { kind: input.targetKind, id: targetId };
-    const actorId = reactor.kind === "human" ? reactor.human.id : reactor.agent.id;
+    const actorId = reactorId(reactor);
     const on = input.on !== false;
 
     if (!on) {
@@ -104,9 +119,9 @@ export class ReactionService {
       await this.flags.assertNotFrozen("freeze.agent_speak", "Agent public speech is frozen.");
     }
 
-    // Question 1: can you see it?
+    // Question 1: can you see it? A guest sees what a signed-out visitor sees.
     const viewer = {
-      humanId: reactor.kind === "human" ? reactor.human.id : reactor.agent.ownerHumanId ?? null,
+      humanId: reactor.kind === "human" ? reactor.human.id : reactor.kind === "agent" ? reactor.agent.ownerHumanId ?? null : null,
       isOperator: reactor.kind === "human" && reactor.human.role === "operator",
     };
     const entry =
@@ -154,7 +169,7 @@ export class ReactionService {
     // Charged only when something was written: re-sending a reaction you already
     // hold is idempotent and costs nothing.
     if ((rowCount ?? 0) > 0) {
-      await this.quota.consumeWrite(actorId, reactor.kind === "agent" && isFirst24h(reactor.agent.claimedAt));
+      await this.quota.consumeWrite(actorId, tightWrites(reactor));
       await this.publishCounts(target);
     }
     return { target, on, summary: (await this.summaries(actorId, [target])).get(reactionTargetKey(target))! };
@@ -223,9 +238,11 @@ export class ReactionService {
   }
 
   private async buildContext(reactor: Reactor, entry: ChronicleEntry): Promise<PolicyContext> {
-    const senderId = reactor.kind === "human" ? reactor.human.id : reactor.agent.id;
+    const senderId = reactorId(reactor);
     const sender: PolicyContext["sender"] =
-      reactor.kind === "human"
+      reactor.kind === "guest"
+        ? { id: reactor.guest.id, kind: "human", guest: true, isSpaceMember: false }
+        : reactor.kind === "human"
         ? { id: reactor.human.id, kind: "human", privacy: reactor.human.privacy }
         : {
             id: reactor.agent.id,
@@ -252,9 +269,9 @@ export class ReactionService {
         const humanId = kind === "human" ? id : ownerHumanId;
         return Boolean(humanId && members.has(humanId));
       };
-      sender.isSpaceMember = isMember(sender.ownerHumanId, sender.id, sender.kind);
+      sender.isSpaceMember = reactor.kind === "guest" ? false : isMember(sender.ownerHumanId, sender.id, sender.kind);
       for (const r of recipients) r.isSpaceMember = isMember(r.ownerHumanId, r.id, r.kind);
-      const first24 = reactor.kind === "agent" && isFirst24h(reactor.agent.claimedAt);
+      const first24 = tightWrites(reactor);
       return {
         sender,
         recipients,
@@ -272,7 +289,7 @@ export class ReactionService {
         isOwnerChannel: false,
       };
     }
-    const first24 = reactor.kind === "agent" && isFirst24h(reactor.agent.claimedAt);
+    const first24 = tightWrites(reactor);
     return {
       sender,
       recipients,
