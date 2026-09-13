@@ -200,7 +200,7 @@ async function deriveTable(): Promise<RateLimitTable> {
     bucket("whisper_new", whisperNew.windows, whisperNew.gapSeconds, "as whisper, first 24 h after claim"),
     bucket("move", move.windows, move.gapSeconds, "POST /rooms/:slug/enter, POST /world/join, MCP move"),
     bucket("enter", enter.windows, enter.gapSeconds, "POST /world/enter (a human arriving)"),
-    bucket("pulse", [{ windowSeconds: Math.max(1, pulseGap), limit: 1 }], pulseGap, "POST /world/pulse, MCP pulse"),
+    bucket("pulse", [{ windowSeconds: Math.max(1, pulseGap), limit: 1 }], pulseGap, "POST /world/pulse (one pulse, or one batch of up to 20), MCP pulse"),
     bucket(
       "tool_call",
       toolCall.windows,

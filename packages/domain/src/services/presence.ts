@@ -4,10 +4,19 @@ import { badges } from "@grove/policy";
 import type { GroveStore } from "../store.js";
 import { GroveError } from "../errors.js";
 import { mapPresence, mapRoom } from "../mappers.js";
-import { withTx } from "../db.js";
+import { withTx, type PoolClient } from "../db.js";
 import type { FlagService } from "./flags.js";
 import type { QuotaService } from "./quota.js";
 import type { IdentityService } from "./identity.js";
+import {
+  assertBatchSize,
+  normalisePulseEventId,
+  PULSE_DEDUPE_TTL_SECONDS,
+  pulseSeenKey,
+  resolvePulseAt,
+  type PulseInput,
+  type PulseItemResult,
+} from "./pulse-batch.js";
 
 /**
  * How long a body may claim an active verb without pulsing before we call it
@@ -67,6 +76,41 @@ export function normalisePulseError(raw: unknown): string | null {
   const value = String(raw).trim();
   if (!value) return null;
   return value.slice(0, PULSE_ERROR_MAX);
+}
+
+/** A pulse after validation: exactly what gets written. Single pulses and batch items share it. */
+interface NormalisedPulse {
+  verb: AgentVerb;
+  note: string | null;
+  url: string | null;
+  errorText: string | null;
+}
+
+/**
+ * Every rule a pulse is checked against before it may spend quota or touch a
+ * row. One function, so a batch item can never be judged by different rules
+ * than the single pulse it stands in for.
+ */
+function normalisePulse(verb: string, detail: string | null | undefined, context?: PulseContext): NormalisedPulse {
+  if (!(verb in VERB_LABEL)) {
+    throw new GroveError("INVALID", `verb must be one of ${Object.keys(VERB_LABEL).join("|")}.`);
+  }
+  return {
+    verb: verb as AgentVerb,
+    note: detail ? String(detail).slice(0, 80) : null,
+    url: normalisePulseUrl(context?.url),
+    errorText: normalisePulseError(context?.errorText),
+  };
+}
+
+/** What a batch did, item by item, plus where the body ended up. */
+export interface PulseBatchResult {
+  /** The body after the batch: the latest applied item wins. Null if it has no presence row. */
+  presence: Presence | null;
+  results: PulseItemResult[];
+  applied: number;
+  duplicates: number;
+  refused: number;
 }
 
 /** Seconds since the last pulse, or null if this body has never pulsed. */
@@ -388,26 +432,16 @@ export class PresenceService {
     detail?: string | null,
     context?: PulseContext,
   ): Promise<Presence> {
-    if (!(verb in VERB_LABEL)) {
-      throw new GroveError("INVALID", `verb must be one of ${Object.keys(VERB_LABEL).join("|")}.`);
-    }
     // Validate BEFORE spending quota: a malformed url should not cost the agent
     // its one pulse for this second.
-    const url = normalisePulseUrl(context?.url);
-    const errorText = normalisePulseError(context?.errorText);
+    const n = normalisePulse(verb, detail, context);
     await this.quota.consumePulse(actorId);
-    const note = detail ? String(detail).slice(0, 80) : null;
-    // Only a pulse that says "offline" may downgrade the connection; a live
-    // socket must not be demoted just because the agent also HTTP-pulsed.
-    const connection = verb === "offline" ? "offline" : null;
-    // A fault caption belongs to the fault: carried on error/blocked, wiped by
-    // the next healthy pulse so the map never shows a stale reason.
-    const fault = verb === "error" || verb === "blocked";
-    const storedError = fault ? errorText : null;
-    // The url is sticky — an agent names its PR once and keeps pulsing phases
-    // against it — but a body going offline is no longer working on anything.
-    const clearUrl = verb === "offline";
-    return this.writePulse(actorId, verb, note, { connection, url, clearUrl, errorText: storedError });
+    const row = await this.writePulse(this.store.pg, actorId, n, null);
+    if (!row) throw new GroveError("NOT_FOUND", "Join a room first (POST /world/join).", { httpStatus: 404 });
+    await this.store.pg.query("UPDATE agents SET last_seen_at = now() WHERE id = $1", [actorId]);
+    const presence = mapPresence(row);
+    await this.publishPulse(actorId, presence, n);
+    return presence;
   }
 
   /**
@@ -421,42 +455,203 @@ export class PresenceService {
    * definition, so any fault caption is cleared like any other healthy pulse.
    */
   async pulseFromSpan(actorId: string, verb: AgentVerb, detail: string | null): Promise<Presence> {
-    const note = detail ? String(detail).slice(0, 80) : null;
-    return this.writePulse(actorId, verb, note, { connection: null, url: null, clearUrl: false, errorText: null });
+    const n: NormalisedPulse = { verb, note: detail ? String(detail).slice(0, 80) : null, url: null, errorText: null };
+    const row = await this.writePulse(this.store.pg, actorId, n, null);
+    if (!row) throw new GroveError("NOT_FOUND", "Join a room first (POST /world/join).", { httpStatus: 404 });
+    await this.store.pg.query("UPDATE agents SET last_seen_at = now() WHERE id = $1", [actorId]);
+    const presence = mapPresence(row);
+    await this.publishPulse(actorId, presence, n);
+    return presence;
   }
 
+  /**
+   * Several pulses in one request (AGT-10), each at the moment it really
+   * happened. The rules and their numbers are documented in pulse-batch.ts and
+   * docs/PULSE.md; in short:
+   *
+   *   - one batch spends ONE pulse of the 1/s cap, and carries ≤ PULSE_BATCH_MAX items;
+   *   - items apply in array order, on a strictly increasing clock;
+   *   - a bad item is refused on its own line, never the whole batch;
+   *   - an `id` already seen is `duplicate`, and a batch of only duplicates is free;
+   *   - every applied item is its own presence UPDATE, so the phase-history
+   *     trigger (migration 017) sees each one at its own time — the ledger
+   *     keeps what a fast agent did, while the body shows only the last item.
+   */
+  async pulseBatch(actorId: string, inputs: PulseInput[], receivedAt: number = Date.now()): Promise<PulseBatchResult> {
+    assertBatchSize(inputs.length);
+    const results: PulseItemResult[] = new Array(inputs.length);
+    const toWrite: Array<{ index: number; id: string | null; n: NormalisedPulse; at: number; clamped: boolean }> = [];
+    const idsInBatch = new Set<string>();
+    let prevAt = Number.NEGATIVE_INFINITY;
+
+    inputs.forEach((input, index) => {
+      const sentId = input.id == null ? null : String(input.id);
+      const refuse = (code: PulseItemResult["code"], reason: string) => {
+        results[index] = { index, id: sentId, status: "refused", verb: input.verb || null, pulsedAt: null, clamped: false, code, reason };
+      };
+      let id: string | null;
+      let n: NormalisedPulse;
+      try {
+        id = normalisePulseEventId(input.id);
+        n = normalisePulse(input.verb, input.detail, { url: input.url, errorText: input.errorText });
+      } catch (err) {
+        if (err instanceof GroveError) return refuse("INVALID", err.message);
+        throw err;
+      }
+      const when = resolvePulseAt(input.at, receivedAt);
+      if (!when.ok) return refuse(when.code, when.reason);
+      if (id && idsInBatch.has(id)) {
+        results[index] = { index, id, status: "duplicate", verb: n.verb, pulsedAt: null, clamped: false };
+        return;
+      }
+      if (id) idsInBatch.add(id);
+      // Array order is the truth. A clock that runs backwards is moved forward
+      // by the smallest step that keeps the timeline strictly increasing; the
+      // trigger ignores an UPDATE that does not move pulsed_at, so equal
+      // timestamps would silently lose an item.
+      let at = when.at;
+      let clamped = when.clamped;
+      if (at <= prevAt) {
+        at = prevAt + 1;
+        clamped = true;
+      }
+      prevAt = at;
+      toWrite.push({ index, id, n, at, clamped });
+    });
+
+    // A retry of something that already landed must not spend quota — or a
+    // client whose response was lost would be refused by its own cooldown.
+    const redis = this.store.redis;
+    const withIds = toWrite.filter((w) => w.id);
+    if (withIds.length) {
+      const seen = await redis.mget(...withIds.map((w) => pulseSeenKey(actorId, w.id!)));
+      withIds.forEach((w, i) => {
+        if (seen[i] == null) return;
+        results[w.index] = duplicateResult(w, seen[i]);
+      });
+    }
+    let pending = toWrite.filter((w) => !results[w.index]);
+
+    if (pending.length) {
+      await this.quota.consumePulse(actorId);
+      // Claim ids atomically: two racing retries cannot both write the same item.
+      const claimed: string[] = [];
+      for (const w of pending) {
+        if (!w.id) continue;
+        const key = pulseSeenKey(actorId, w.id);
+        const ok = await redis.set(key, "pending", "EX", PULSE_DEDUPE_TTL_SECONDS, "NX");
+        if (ok) claimed.push(key);
+        else results[w.index] = duplicateResult(w, await redis.get(key));
+      }
+      pending = pending.filter((w) => !results[w.index]);
+      let rows: Record<string, unknown>[] = [];
+      try {
+        if (pending.length) {
+          rows = await withTx(this.store.pg, async (c) => {
+            const out: Record<string, unknown>[] = [];
+            for (const w of pending) {
+              const row = await this.writePulse(c, actorId, w.n, new Date(w.at).toISOString());
+              if (!row) throw new GroveError("NOT_FOUND", "Join a room first (POST /world/join).", { httpStatus: 404 });
+              out.push(row);
+            }
+            await c.query("UPDATE agents SET last_seen_at = now() WHERE id = $1", [actorId]);
+            return out;
+          });
+        }
+      } catch (err) {
+        // Nothing was written, so nothing may be remembered as written.
+        if (claimed.length) await redis.del(...claimed);
+        throw err;
+      }
+      let last: { presence: Presence; n: NormalisedPulse } | null = null;
+      const firstAt = rows.length ? mapPresence(rows[0]!).pulsedAt ?? null : null;
+      for (let i = 0; i < pending.length; i += 1) {
+        const w = pending[i]!;
+        const presence = mapPresence(rows[i]!);
+        const pulsedAt = presence.pulsedAt ?? new Date(w.at).toISOString();
+        if (w.id) await redis.set(pulseSeenKey(actorId, w.id), pulsedAt, "EX", PULSE_DEDUPE_TTL_SECONDS);
+        results[w.index] = {
+          index: w.index,
+          id: w.id,
+          status: "applied",
+          verb: w.n.verb,
+          pulsedAt,
+          clamped: w.clamped || Date.parse(pulsedAt) !== w.at,
+        };
+        last = { presence, n: w.n };
+      }
+      if (last) {
+        // ONE realtime event per batch, carrying the final state: a watcher's
+        // body jumps to where the agent is now instead of strobing through a
+        // second of history. The history itself is in the chronicle.
+        await this.publishPulse(actorId, last.presence, last.n, {
+          count: rows.length,
+          firstPulsedAt: firstAt,
+          lastPulsedAt: last.presence.pulsedAt ?? null,
+        });
+        return summarise(last.presence, results);
+      }
+    }
+    return summarise(await this.getPresence(actorId), results);
+  }
+
+  /**
+   * The one UPDATE a pulse makes. `at` null means now(). pulsed_at never moves
+   * backwards: a pulse stamped at or before the stored one lands 1 ms after it,
+   * so the phase-history trigger always sees time go forward.
+   */
   private async writePulse(
+    q: Pick<PoolClient, "query">,
     actorId: string,
-    verb: AgentVerb,
-    note: string | null,
-    opts: { connection: string | null; url: string | null; clearUrl: boolean; errorText: string | null },
-  ): Promise<Presence> {
-    const { rows } = await this.store.pg.query(
+    n: NormalisedPulse,
+    at: string | null,
+  ): Promise<Record<string, unknown> | null> {
+    // Only a pulse that says "offline" may downgrade the connection; a live
+    // socket must not be demoted just because the agent also HTTP-pulsed.
+    const connection = n.verb === "offline" ? "offline" : null;
+    // A fault caption belongs to the fault: carried on error/blocked, wiped by
+    // the next healthy pulse so the map never shows a stale reason.
+    const fault = n.verb === "error" || n.verb === "blocked";
+    const storedError = fault ? n.errorText : null;
+    // The url is sticky — an agent names its PR once and keeps pulsing phases
+    // against it — but a body going offline is no longer working on anything.
+    const clearUrl = n.verb === "offline";
+    const { rows } = await q.query(
       `UPDATE presence SET
-         verb = $2, detail = $3, pulsed_at = now(), last_seen_at = now(),
+         verb = $2, detail = $3,
+         pulsed_at = GREATEST(COALESCE($9::timestamptz, now()), pulsed_at + interval '1 millisecond'),
+         last_seen_at = now(),
          activity = $4,
          connection = COALESCE($5, connection),
          url = CASE WHEN $7::boolean THEN NULL ELSE COALESCE($6, url) END,
          error_text = $8
        WHERE actor_id = $1 RETURNING *`,
-      [actorId, verb, note, ACTIVITY_FOR_VERB[verb], opts.connection, opts.url, opts.clearUrl, opts.errorText],
+      [actorId, n.verb, n.note, ACTIVITY_FOR_VERB[n.verb], connection, n.url, clearUrl, storedError, at],
     );
-    if (!rows[0]) throw new GroveError("NOT_FOUND", "Join a room first (POST /world/join).", { httpStatus: 404 });
-    await this.store.pg.query("UPDATE agents SET last_seen_at = now() WHERE id = $1", [actorId]);
-    const presence = mapPresence(rows[0] as Record<string, unknown>);
+    return (rows[0] as Record<string, unknown> | undefined) ?? null;
+  }
+
+  private async publishPulse(
+    actorId: string,
+    presence: Presence,
+    n: NormalisedPulse,
+    batch?: { count: number; firstPulsedAt: string | null; lastPulsedAt: string | null },
+  ): Promise<void> {
     const payload = JSON.stringify({
       type: "pulse",
       actor_id: actorId,
       room_id: presence.roomId,
-      verb,
-      detail: note,
+      verb: n.verb,
+      detail: n.note,
       url: presence.url ?? null,
       error_text: presence.errorText ?? null,
       presence,
+      ...(batch
+        ? { batch: { count: batch.count, first_pulsed_at: batch.firstPulsedAt, last_pulsed_at: batch.lastPulsedAt } }
+        : {}),
     });
     await this.store.redis.publish(`pubsub:room:${presence.roomId}`, payload);
     if (presence.roomId === "plaza") await this.store.redis.publish("sse:plaza", payload);
-    return presence;
   }
 
   async evictStale(): Promise<number> {
@@ -609,5 +804,24 @@ function toPolicy(raw: unknown): Agent["policy"] | null {
     speakToHumans: Boolean(o.speak_to_humans ?? o.speakToHumans),
     listenToAgents: Boolean(o.listen_to_agents ?? o.listenToAgents),
     listenToHumans: Boolean(o.listen_to_humans ?? o.listenToHumans),
+  };
+}
+
+function duplicateResult(
+  w: { index: number; id: string | null; n: NormalisedPulse },
+  remembered: string | null,
+): PulseItemResult {
+  // "pending" means a racing request holds the claim and has not landed yet.
+  const pulsedAt = remembered && remembered !== "pending" ? remembered : null;
+  return { index: w.index, id: w.id, status: "duplicate", verb: w.n.verb, pulsedAt, clamped: false };
+}
+
+function summarise(presence: Presence | null, results: PulseItemResult[]): PulseBatchResult {
+  return {
+    presence,
+    results,
+    applied: results.filter((r) => r.status === "applied").length,
+    duplicates: results.filter((r) => r.status === "duplicate").length,
+    refused: results.filter((r) => r.status === "refused").length,
   };
 }

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { GroveApp } from "@grove/domain";
-import { GroveError, randomToken } from "@grove/domain";
+import { GroveError, PULSE_BATCH_MAX, pulseBatchFromWire, randomToken } from "@grove/domain";
 import {
   type AgentVerb,
   capabilityWire,
@@ -87,6 +87,7 @@ export const TOOLS = [
       "Call this when you ENTER A NEW PHASE of work - `think` when you start reasoning, `tool` when you run something (put what in `detail`), `read` when you open files or docs, " +
       "`say` when you speak, `wait` when you are waiting on something slow, `blocked` when you need a human, `error` on a fault, `idle` when you finish a turn, `offline` when you shut down. " +
       "Do NOT call it every token, every line of output, or after every thought: there is a hard cap of one pulse per second and the extra call is refused (RATE_LIMITED), not queued. " +
+      `If you genuinely went through several phases inside one second, send them together instead of dropping them: \`pulses\` is an array of up to ${PULSE_BATCH_MAX} pulses (same fields, plus \`at\` - when it happened, ISO 8601, at most 5 minutes ago - and \`id\` - your own event id, so a retry is never logged twice). A batch is one call against the cap; the body shows the last item and the chronicle keeps them all; each item comes back in \`results\` as applied, duplicate or refused. ` +
       "`detail` should read as a short human-legible task - \"fixing the room scope\", \"reading migrations\" - about 60 characters, never an opaque id or a hash; it is truncated at 80. " +
       "`url` links your body to the thing you are working on - a PR, ticket or CI run - so a watcher can get from the map to the work; http:// or https:// only, and it sticks to you across pulses until you replace it or go `offline`. " +
       "`error_text` is what actually went wrong: send it with `error` or `blocked` so the fault is readable instead of just a red glyph. It is cleared by your next healthy pulse.",
@@ -97,8 +98,25 @@ export const TOOLS = [
         detail: { type: "string", maxLength: 80 },
         url: { type: "string", maxLength: 512 },
         error_text: { type: "string", maxLength: 500 },
+        pulses: {
+          type: "array",
+          minItems: 1,
+          maxItems: PULSE_BATCH_MAX,
+          items: {
+            type: "object",
+            properties: {
+              verb: { enum: PULSE_VERBS },
+              detail: { type: "string", maxLength: 80 },
+              url: { type: "string", maxLength: 512 },
+              error_text: { type: "string", maxLength: 500 },
+              at: { type: "string", description: "When it happened: ISO 8601, no more than 5 minutes ago." },
+              id: { type: "string", maxLength: 64, description: "Your event id; a repeat is reported duplicate, not logged twice." },
+            },
+            required: ["verb"],
+          },
+        },
       },
-      required: ["verb"],
+      // `verb` for one pulse, or `pulses` for a batch. Checked in callTool.
     },
   },
   {
@@ -350,6 +368,35 @@ export async function callTool(grove: GroveApp, agentId: string, name: string, a
   if (name === "pulse") {
     if (agent.claimState !== "claimed") {
       throw new GroveError("UNCLAIMED", "Unclaimed agents cannot pulse.");
+    }
+    const batch = pulseBatchFromWire(args);
+    if (batch) {
+      const result = await grove.presence.pulseBatch(agent.id, batch);
+      const presence = result.presence;
+      const last = presence?.verb && presence.verb in VERB_LABEL ? (presence.verb as AgentVerb) : null;
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              toSnake({
+                ok: true,
+                verb: last,
+                label: last ? VERB_LABEL[last] : null,
+                detail: presence?.detail ?? null,
+                url: presence?.url ?? null,
+                errorText: presence?.errorText ?? null,
+                roomId: presence?.roomId ?? null,
+                pulsedAt: presence?.pulsedAt ?? null,
+                applied: result.applied,
+                duplicates: result.duplicates,
+                refused: result.refused,
+                results: result.results,
+              }),
+            ),
+          },
+        ],
+      };
     }
     const verb = String(args.verb ?? "");
     if (!(verb in VERB_LABEL)) {

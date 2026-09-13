@@ -5,7 +5,20 @@ export { GroveError } from "./errors.js";
 export { newId } from "./ids.js";
 export type { GroveStore } from "./store.js";
 export { IdentityService } from "./services/identity.js";
-export { PresenceService } from "./services/presence.js";
+export { PresenceService, type PulseBatchResult } from "./services/presence.js";
+export {
+  PULSE_BATCH_MAX,
+  PULSE_MAX_AGE_SECONDS,
+  PULSE_FUTURE_TOLERANCE_MS,
+  PULSE_DEDUPE_TTL_SECONDS,
+  PULSE_EVENT_ID_MAX,
+  pulseInputFromWire,
+  pulseBatchFromWire,
+  resolvePulseAt,
+  type PulseInput,
+  type PulseItemResult,
+  type PulseRefusalCode,
+} from "./services/pulse-batch.js";
 export { ToolCallService, TOOL_CALL_ABANDON_SECONDS, TOOL_CALL_RETENTION_DAYS, toToolCallView } from "./services/tool-calls.js";
 export { SpeechService, spectatorMayHear, SPECTATOR_RECIPIENT, assertValidOwnerChannelFlag } from "./services/speech.js";
 export type { SayQuota, SayAckWithQuota } from "./services/speech.js";

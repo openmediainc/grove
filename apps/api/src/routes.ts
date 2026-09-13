@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { GroveApp } from "@grove/domain";
-import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError } from "@grove/domain";
+import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError, pulseBatchFromWire, pulseInputFromWire } from "@grove/domain";
 import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
 import { assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
 import { COOKIE, clientIp, sendOk } from "./http.js";
@@ -508,15 +508,20 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       throw new GroveError("UNCLAIMED", "Unclaimed agents cannot pulse.");
     }
     const b = body(req);
-    const verb = String(b.verb ?? "");
-    const detail = b.detail == null ? null : String(b.detail);
-    // Accept snake_case off the wire (the rest of the REST surface does) and
-    // camelCase from JS clients. Validation lives in presence.pulse so the MCP
-    // tool and this route cannot drift.
-    const url = b.url == null ? null : String(b.url);
-    const rawErr = b.error_text ?? b.errorText;
-    const errorText = rawErr == null ? null : String(rawErr);
-    const presence = await grove.presence.pulse(agent.id, verb as never, detail, { url, errorText });
+    // `{ pulses: [...] }` is a batch (AGT-10): one request, one pulse of the
+    // cap, every item reported on its own line. Anything else is one pulse.
+    // Both shapes are read by the same wire parser, and validated by the same
+    // domain code, so the MCP tool and this route cannot drift.
+    const batch = pulseBatchFromWire(b);
+    if (batch) {
+      const result = await grove.presence.pulseBatch(agent.id, batch);
+      return sendOk(reply, { ...result });
+    }
+    const p = pulseInputFromWire(b);
+    const presence = await grove.presence.pulse(agent.id, p.verb as never, p.detail, {
+      url: p.url,
+      errorText: p.errorText,
+    });
     return sendOk(reply, { presence });
   });
 

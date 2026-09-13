@@ -99,7 +99,10 @@ export function mapPresence(row: Record<string, unknown>): Presence {
     lastSeenAt: new Date(String(c("last_seen_at", "lastSeenAt"))).toISOString(),
     verb: (c("verb", "verb") as Presence["verb"]) ?? null,
     detail: c("detail", "detail") ? String(c("detail", "detail")) : null,
-    pulsedAt: c("pulsed_at", "pulsedAt") ? new Date(String(c("pulsed_at", "pulsedAt"))).toISOString() : null,
+    // Millisecond-exact. String(Date) drops the milliseconds, which was harmless
+    // at one pulse a second and is not once a batch reports several phases
+    // inside one (AGT-10): three items would read back as the same instant.
+    pulsedAt: isoMs(c("pulsed_at", "pulsedAt")),
     url: c("url", "url") ? String(c("url", "url")) : null,
     errorText: c("error_text", "errorText") ? String(c("error_text", "errorText")) : null,
   };
@@ -127,4 +130,10 @@ export function privacyToJson(p: Agent["privacy"] | Human["privacy"]): Record<st
 /** Read a column by either spelling without walking the whole row. */
 function presenceField(row: Record<string, unknown>) {
   return (snake: string, camel: string): unknown => row[snake] ?? row[camel];
+}
+
+/** A timestamp column as ISO 8601 with its milliseconds intact, or null. */
+function isoMs(v: unknown): string | null {
+  if (!v) return null;
+  return (v instanceof Date ? v : new Date(String(v))).toISOString();
 }
