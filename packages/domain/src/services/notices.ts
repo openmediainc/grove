@@ -207,8 +207,7 @@ export class NoticeService {
 
     const id = newId("notice");
     const wantsPin = input.pinned !== false;
-    const day = utcDay();
-    const row = await this.insertNotice({ id, senderId, kind: sender.kind, title, body, wantsPin, day });
+    const row = await this.insertNotice({ id, senderId, kind: sender.kind, title, body, wantsPin });
 
     await this.store.pg.query(`INSERT INTO world_events (type, actor_id, payload) VALUES ('notice', $1, $2)`, [
       senderId,
@@ -237,6 +236,18 @@ export class NoticeService {
    * writes the same notice unpinned. Nothing between them can produce a
    * half-written notice, because the first either wrote the whole row or wrote
    * nothing at all.
+   *
+   * THE DAY IS THE DATABASE'S, AND THE SAME INSTANT AS `created_at`.
+   * This used to take `utcDay()` from the app's clock at the top of `post()`,
+   * then await flags, presence, the policy context and a recipient per board
+   * member before the INSERT stamped `created_at` from Postgres's `now()`. Two
+   * clocks, read at two instants: a notice posted across midnight UTC (or on a
+   * host whose clock has drifted from the database's — Postgres runs in a VM
+   * here) claimed YESTERDAY's slot with today's `created_at`, left today's pin
+   * open, and made migration 016 unreplayable (its collapse step keys the day
+   * off `created_at`, and trips the `notices_pin_day` CHECK on such a row).
+   * `now()` is fixed for the statement, so the pin day and the timestamp are
+   * now one reading of one clock.
    */
   private async insertNotice(n: {
     id: string;
@@ -245,15 +256,14 @@ export class NoticeService {
     title: string;
     body: string;
     wantsPin: boolean;
-    day: string;
   }): Promise<NoticeRow> {
     if (n.wantsPin) {
       const { rows } = await this.store.pg.query(
-        `INSERT INTO notices (id, author_id, author_kind, title, body, pinned, pinned_on)
-         VALUES ($1,$2,$3,$4,$5,TRUE,$6::date)
+        `INSERT INTO notices (id, author_id, author_kind, title, body, pinned, pinned_on, created_at)
+         VALUES ($1,$2,$3,$4,$5,TRUE,(now() AT TIME ZONE 'UTC')::date, now())
          ON CONFLICT (pinned_on) WHERE pinned_on IS NOT NULL DO NOTHING
          RETURNING ${NOTICE_COLUMNS}`,
-        [n.id, n.senderId, n.kind, n.title, n.body, n.day],
+        [n.id, n.senderId, n.kind, n.title, n.body],
       );
       if (rows[0]) return mapNotice(rows[0] as Record<string, unknown>, null);
     }
@@ -275,14 +285,16 @@ export class NoticeService {
    * read more off the board than they can already overhear in the Plaza.
    */
   async board(viewer: NoticeViewer = null, limit = DEFAULT_BOARD_LIMIT): Promise<BoardView> {
-    const now = new Date();
-    const day = utcDay(now);
     // TWO reads, not one ordered `pinned DESC`. Every day's pin stays pinned
     // forever, so a single ordered page would fill with the last fifty DAYS and
     // push this morning's conversation off the board entirely. The pin is looked
     // up by its date (one row, straight off the unique index) and the rest of the
     // board is simply the most recent notices.
-    const [pinRows, recentRows] = await Promise.all([this.readPinRow(day), this.readRows(limit)]);
+    //
+    // "Today" comes back from the same query as the pin, off the database clock
+    // `post()` writes with. Asking the app clock would let the board and the
+    // writer disagree about which day it is.
+    const [{ day, pinRows }, recentRows] = await Promise.all([this.readPinRow(), this.readRows(limit)]);
     const pinId = pinRows[0] ? String(pinRows[0].id) : null;
     const rows = [...pinRows, ...recentRows.filter((r) => String(r.id) !== pinId)];
     const authorIds = [...new Set(rows.map((r) => String(r.author_id)))];
@@ -311,7 +323,7 @@ export class NoticeService {
       else posts.push(notice);
     }
 
-    return { day, pin, posts, withheld, pinOpensAt: nextUtcMidnight(now) };
+    return { day, pin, posts, withheld, pinOpensAt: nextUtcMidnight(new Date(`${day}T00:00:00Z`)) };
   }
 
   /**
@@ -365,13 +377,22 @@ export class NoticeService {
     return rows as Array<Record<string, unknown>>;
   }
 
-  /** The day's pin, by date. At most one row: the unique index guarantees it. */
-  private async readPinRow(day: string): Promise<Array<Record<string, unknown>>> {
+  /**
+   * Today's UTC day on the database clock, and its pin. At most one pin row:
+   * the unique index guarantees it. The LEFT JOIN keeps the day when nobody
+   * holds it yet.
+   */
+  private async readPinRow(): Promise<{ day: string; pinRows: Array<Record<string, unknown>> }> {
+    const cols = NOTICE_COLUMNS.split(", ")
+      .map((c) => `n.${c}`)
+      .join(", ");
     const { rows } = await this.store.pg.query(
-      `SELECT ${NOTICE_COLUMNS} FROM notices WHERE pinned_on = $1::date`,
-      [day],
+      `SELECT t.day::text AS today, ${cols}
+         FROM (SELECT (now() AT TIME ZONE 'UTC')::date AS day) AS t
+         LEFT JOIN notices n ON n.pinned_on = t.day`,
     );
-    return rows as Array<Record<string, unknown>>;
+    const day = String((rows[0] as { today: string }).today);
+    return { day, pinRows: (rows as Array<Record<string, unknown>>).filter((r) => r.id != null) };
   }
 
   /**
