@@ -273,7 +273,14 @@ describe.skipIf(!hasDb)("reactions go through the kernel like speech", () => {
       for (const f of frames) {
         expect(f).not.toHaveProperty("sender_id");
         expect(f).not.toHaveProperty("mine");
-        expect(new Set(f.delivered_to as string[])).toEqual(new Set(live?.audience));
+        // Bodies other suites left in the library may walk out (their fixtures
+        // clean up in parallel) between the two reads, so the push may reach
+        // fewer of them — never anyone outside the line's audience.
+        const delivered = f.delivered_to as string[];
+        expect(delivered).toEqual(expect.arrayContaining([speaker.id, listener.id]));
+        expect(delivered).not.toContain(later.id);
+        expect(delivered).not.toContain(outside.id);
+        for (const id of delivered) expect(live?.audience).toContain(id);
       }
     } finally {
       await sub.quit();
