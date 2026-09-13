@@ -85,3 +85,4 @@ export {
   type SpeechMetrics,
   type SpeechTier,
 } from "./speech-layout";
+export { SPEECH_KEEP_CHARS, SpeechBook, type Line as SpeechLine } from "./speech-book";

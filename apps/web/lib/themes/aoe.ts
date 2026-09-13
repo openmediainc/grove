@@ -40,8 +40,18 @@ import {
   type ScaffoldStage,
   type ScatterKey,
 } from "@/lib/art";
-import { drawBubble, drawHazardTriangle, drawPennantFlag, drawVerbGlyph } from "./kit";
+import { drawHazardTriangle, drawPennantFlag, drawSpeechBubble, drawSpeechPip, drawVerbGlyph } from "./kit";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
+
+/** Lantern text on night stone; a whisper in the violet the whisper UI rings bodies with. */
+const AOE_SPEECH = {
+  bg: "rgba(7,8,20,0.9)",
+  fg: "#f4d19a",
+  border: "rgba(232,184,109,0.35)",
+  whisperBg: "rgba(24,16,48,0.92)",
+  whisperFg: "#ddd6fe",
+  whisperBorder: "rgba(196,181,253,0.9)",
+} as const;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -192,8 +202,11 @@ const art: ThemeArt = {
   pennant: drawPennantFlag,
   hazard: drawHazardTriangle,
 
-  speech(ctx, x, y, text) {
-    drawBubble(ctx, x, y, text, { bg: "rgba(7,8,20,0.9)", fg: "#f4d19a" });
+  speech(ctx, bubble) {
+    drawSpeechBubble(ctx, bubble, AOE_SPEECH);
+  },
+  speechPip(ctx, sx, sy, whisper) {
+    drawSpeechPip(ctx, sx, sy, whisper, { fg: "rgba(244,209,154,0.78)", whisperFg: AOE_SPEECH.whisperFg });
   },
 };
 

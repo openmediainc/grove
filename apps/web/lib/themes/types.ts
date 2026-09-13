@@ -139,9 +139,47 @@ export interface ThemeArt {
    * with a dark backing — a theme may frame it, never soften it.
    */
   hazard(ctx: Ctx, sx: number, sy: number, tone: HazardTone, t: number): void;
-  /** A line somebody just said, above the body at (x, y). Drawn after the sky. */
-  speech(ctx: Ctx, x: number, y: number, text: string): void;
+  /**
+   * SCREEN space. A line somebody just said, already laid out: the box, the
+   * wrapped lines, whether it needs a leader line back to the head and how many
+   * lines were squeezed out around it ("+N"). Placement is NOT the theme's to
+   * change — @grove/ui speech-layout decided it so that bubbles never cover a
+   * hazard or each other — only how the box looks. A whisper must still read as
+   * a whisper (kit.drawSpeechBubble keeps the dashed edge). Drawn after the sky.
+   */
+  speech(ctx: Ctx, bubble: SpeechBubble, t: number): void;
+  /**
+   * CSS font-family for speech text. The layout measures with it, so the text
+   * a theme draws is the text that was fitted to the box. Default: system sans.
+   */
+  speechFont?: string;
+  /**
+   * SCREEN space, fixed size. "This body said something": the far-zoom stand-in
+   * for a bubble, and the mark on a speaker the crowd squeezed out. Must stay
+   * smaller and quieter than hazard() — speech never outranks a fault.
+   */
+  speechPip(ctx: Ctx, sx: number, sy: number, whisper: boolean, t: number): void;
 }
+
+/** A laid-out bubble as the renderer hands it to a theme. SCREEN px. */
+export type SpeechBubble = {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** The speaker's head: where the tail or leader line points. */
+  ax: number;
+  ay: number;
+  lines: readonly string[];
+  fontPx: number;
+  lineH: number;
+  padX: number;
+  padY: number;
+  whisper: boolean;
+  leader: boolean;
+  /** Lines nearby that did not fit, shown as "+N". */
+  overflow: number;
+};
 
 /* ------------------------------------------------------------------ *
  * Palette: the non-semantic colours, for the canvas and for the chrome.

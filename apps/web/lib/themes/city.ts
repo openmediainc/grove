@@ -19,7 +19,8 @@ import {
   bakery,
   cylinder,
   door,
-  drawBubble,
+  drawSpeechBubble,
+  drawSpeechPip,
   drawHazardTriangle,
   drawVerbGlyph,
   faces,
@@ -513,6 +514,9 @@ function stampOr(ctx: Ctx, b: Baked | null, x: number, y: number): boolean {
   return true;
 }
 
+/** Speech: the look is the theme's; a whisper keeps violet and a dashed edge in every theme. */
+const SPEECH_STYLE = { bg: "rgba(250,250,249,0.95)", fg: "#1c1917", border: "rgba(28,25,23,0.7)", radius: 7, whisperBg: "rgba(237,233,254,0.96)", whisperFg: "#4c1d95", whisperBorder: "rgba(91,33,182,0.85)" } as const;
+
 const art: ThemeArt = {
   async prepare() {
     /* Procedural: everything bakes on first use. */
@@ -574,9 +578,11 @@ const art: ThemeArt = {
     ctx.restore();
   },
   hazard: drawHazardTriangle,
-  speech(ctx, x, y, text) {
-    // Comic-strip white: dark text on a light bubble.
-    drawBubble(ctx, x, y, text, { bg: "rgba(250,250,249,0.95)", fg: "#1c1917", border: "rgba(28,25,23,0.7)", radius: 7 });
+  speech(ctx, bubble) {
+    drawSpeechBubble(ctx, bubble, SPEECH_STYLE);
+  },
+  speechPip(ctx, sx, sy, whisper) {
+    drawSpeechPip(ctx, sx, sy, whisper, { fg: "rgba(250,250,249,0.9)", whisperFg: SPEECH_STYLE.whisperFg });
   },
 };
 

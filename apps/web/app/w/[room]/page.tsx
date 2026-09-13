@@ -440,6 +440,26 @@ export default function RoomPage() {
     [draft, data, me, whisperTo],
   );
 
+  /**
+   * Bubbles for the pixel room, with their times so the newest line per speaker
+   * wins and a line from an hour ago is not still over somebody's head. A
+   * whisper arrives only to the people it was delivered to, and is drawn as one.
+   */
+  const roomBubbles = useMemo(
+    () => [
+      ...lines.map((l) => ({ sender_id: l.sender_id, body: l.body, created_at: l.created_at, whisper: false })),
+      // Only the reader's own whispers are in `whispers`, so drawing them here
+      // shows them to nobody who was not party to them.
+      ...whispers.map((w) => ({
+        sender_id: w.direction === "in" ? w.other_id : me?.id ?? "",
+        body: w.body,
+        created_at: w.created_at,
+        whisper: true,
+      })),
+    ],
+    [lines, whispers, me],
+  );
+
   const seats = useMemo(() => {
     const cap = Math.min(data?.room.capacity ?? 30, 48);
     const nearby = data?.nearby ?? [];
@@ -492,16 +512,18 @@ export default function RoomPage() {
 
   return (
     <main className="grid min-h-[calc(100vh-56px)] grid-cols-1 lg:grid-cols-[200px_1fr_320px]">
-      <aside className="border-r border-white/10 p-4">
-        <h2 className="text-xs uppercase tracking-widest text-lantern-400">Campus</h2>
-        <ul className="mt-3 space-y-1">
+      {/* On a phone the campus list is a strip you swipe, not seven rows the
+          room has to be scrolled past. */}
+      <aside className="border-b border-white/10 p-4 max-lg:py-2 lg:border-b-0 lg:border-r">
+        <h2 className="text-xs uppercase tracking-widest text-lantern-400 max-lg:sr-only">Campus</h2>
+        <ul className="mt-3 flex gap-1 overflow-x-auto max-lg:mt-0 lg:block lg:space-y-1">
           {navRooms.map((r) => {
             const st = civic.find((c) => c.slug === r.slug);
             return (
-              <li key={r.slug}>
+              <li key={r.slug} className="shrink-0">
                 <button
                   onClick={() => enter(r.slug)}
-                  className={`w-full rounded-lg px-3 py-2 text-left ${r.slug === room ? "bg-lantern-400/20 text-lantern-300" : "hover:bg-white/5"}`}
+                  className={`w-full whitespace-nowrap rounded-lg px-3 py-2 text-left ${r.slug === room ? "bg-lantern-400/20 text-lantern-300" : "hover:bg-white/5"}`}
                 >
                   <span className="flex items-center gap-2">
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATE_DOT[st?.state ?? "empty"]}`} />
@@ -509,7 +531,7 @@ export default function RoomPage() {
                     {st?.occupancy ? <span className="text-[10px] text-white/35">{st.occupancy}</span> : null}
                   </span>
                   {st?.headline ? (
-                    <span className="mt-0.5 block truncate pl-3.5 text-[11px] text-white/50">{st.headline}</span>
+                    <span className="mt-0.5 block truncate pl-3.5 text-[11px] text-white/50 max-lg:hidden">{st.headline}</span>
                   ) : null}
                 </button>
               </li>
@@ -558,7 +580,10 @@ export default function RoomPage() {
         ) : null}
         {/* The Plaza is where everybody lands, so it is the only room that says
             what the campus is for. Retires itself; see the component. */}
+        {/* On a phone the room itself comes before the onboarding card: the bodies
+            and what they are saying are the reason to be here. */}
         {(data?.room.slug ?? room) === "plaza" ? (
+          <div className="max-lg:order-2">
           <FirstFiveMinutes
             me={me}
             nearby={data?.nearby ?? []}
@@ -567,14 +592,15 @@ export default function RoomPage() {
             standingHere={standingHere}
             onSpeak={() => composeRef.current?.focus()}
           />
+          </div>
         ) : null}
         {pixel ? (
-          <div className="flex flex-1 items-start justify-center overflow-auto p-4">
+          <div className="flex flex-1 items-start justify-center p-4 max-lg:order-1 max-lg:px-3">
             <PixelRoom
               roomSlug={data?.room.slug ?? room}
               capacity={data?.room.capacity ?? 40}
               nearby={data?.nearby ?? []}
-              bubbles={lines.map((l) => ({ sender_id: l.sender_id, body: l.body }))}
+              bubbles={roomBubbles}
               highlightId={whisperTo?.actor_id ?? null}
               onPickActor={
                 me
@@ -587,7 +613,7 @@ export default function RoomPage() {
             />
           </div>
         ) : (
-          <div className="grid flex-1 grid-cols-8 gap-2 p-6 content-start">
+          <div className="grid flex-1 grid-cols-8 gap-2 p-6 content-start max-lg:order-1">
             {seats.map((n, i) => (
               <div key={i} className={`seat ${n ? "" : "seat-empty"}`}>
                 {n ? (
@@ -600,7 +626,7 @@ export default function RoomPage() {
           </div>
         )}
         {room === "board" && board ? (
-          <div className="border-t border-lantern-400/20 bg-dusk-950/40 px-6 py-4">
+          <div className="max-lg:order-1 border-t border-lantern-400/20 bg-dusk-950/40 px-6 py-4">
             {/* The pin IS the board. One line per UTC day, claimed by whoever
                 posts first; everything else is the pile underneath it. */}
             <h2 className="text-xs uppercase tracking-widest text-lantern-400">
@@ -634,7 +660,7 @@ export default function RoomPage() {
             ) : null}
           </div>
         ) : null}
-        <div className="border-t border-white/10 p-4">
+        <div className="border-t border-white/10 p-4 max-lg:order-1">
           {whisperTo ? (
             <WhisperBar
               target={whisperTo}
@@ -734,7 +760,9 @@ export default function RoomPage() {
         </div>
         <div className="flex-1 overflow-auto p-4">
           <h2 className="text-xs uppercase tracking-widest text-lantern-400">Transcript</h2>
-          <ul className="mt-3 space-y-2 text-sm">
+          {/* The canvas draws speech as bubbles; this is the same speech as
+              text, and the carrier for anyone the canvas cannot reach. */}
+          <ul className="mt-3 space-y-2 text-sm" role="log" aria-live="polite" aria-label="Transcript">
             {lines.length === 0 ? (
               <li key="empty-log" className="text-white/50">
                 {emptyLog(data)}

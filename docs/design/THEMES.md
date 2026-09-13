@@ -30,7 +30,9 @@ declared `satisfies Theme`, so leaving one out fails `pnpm -r typecheck`
 | `glyph(verb)` | abstract verb mark | shared `drawVerbGlyph` | ← | ← | ← |
 | `pennant(colour)` | org identity | pennant | mission patch | banner | holo tag |
 | `hazard(tone)` | flag / fault / stall | shared triangle | ← | ← | ← |
-| `speech(text)` | speech bubble | dark pill | cyan terminal | comic white | mono teal |
+| `speech(bubble)` | a laid-out bubble (box, wrapped lines, tail/leader, "+N", whisper) — placement is decided by `@grove/ui` speech-layout, never the theme | dark pill | cyan terminal | comic white | mono teal |
+| `speechPip(whisper)` | far-zoom "said something" mark; quieter than a hazard | lantern pip | cyan pip | white pip | teal pip |
+| `speechFont?` | font family the layout measures speech with | sans | sans | sans | mono |
 
 Plus `ThemePalette` (plot tints, fog, edges, nameplates, lamp glow, daylight
 colour, hover card, chrome tokens, display font) and `ThemeLexicon` (every UI word:

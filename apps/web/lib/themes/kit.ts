@@ -18,7 +18,7 @@
  */
 
 import { VERB_RING, type AgentVerb } from "@/lib/agent-verbs";
-import { HAZARD_COLOUR, type Ctx, type HazardTone } from "./types";
+import { HAZARD_COLOUR, type Ctx, type HazardTone, type SpeechBubble } from "./types";
 
 export type { Ctx } from "./types";
 
@@ -102,28 +102,124 @@ export function drawVerbGlyph(ctx: Ctx, verb: AgentVerb, x: number, y: number, t
   ctx.restore();
 }
 
-/** A speech bubble: dark pill, theme-coloured text, optional border. */
-export function drawBubble(
+/**
+ * A laid-out speech bubble, SCREEN space. The shape rules every theme keeps:
+ * a tail to the head when the bubble sits over it and a leader line when it
+ * does not, "+N" on the corner when lines nearby were squeezed out, and a
+ * whisper drawn with a dashed edge and italic text so it never reads as
+ * something said to the room.
+ */
+export function drawSpeechBubble(
   ctx: Ctx,
-  x: number,
-  y: number,
-  text: string,
-  style: { bg: string; fg: string; border?: string; radius?: number; font?: string },
+  b: SpeechBubble,
+  style: {
+    bg: string;
+    fg: string;
+    border?: string;
+    whisperBg: string;
+    whisperFg: string;
+    whisperBorder: string;
+    /** CSS font-family; must match the theme's `speechFont`. */
+    font?: string;
+    radius?: number;
+  },
 ): void {
-  ctx.font = style.font ?? "10px ui-sans-serif, system-ui, sans-serif";
-  ctx.textAlign = "center";
-  const w = Math.min(160, ctx.measureText(text).width + 12);
-  ctx.fillStyle = style.bg;
-  ctx.beginPath();
-  ctx.roundRect(x - w / 2, y - 36, w, 16, style.radius ?? 4);
-  ctx.fill();
-  if (style.border) {
-    ctx.strokeStyle = style.border;
+  const family = style.font ?? "ui-sans-serif, system-ui, sans-serif";
+  const bg = b.whisper ? style.whisperBg : style.bg;
+  const border = b.whisper ? style.whisperBorder : style.border;
+  const x0 = Math.round(b.x0);
+  const y0 = Math.round(b.y0);
+  const w = Math.round(b.x1 - b.x0);
+  const h = Math.round(b.y1 - b.y0);
+  const radius = style.radius ?? 4;
+  ctx.save();
+  if (b.leader) {
+    const lx = Math.min(Math.max(b.ax, b.x0 + 4), b.x1 - 4);
+    const ly = b.ay < b.y0 ? b.y0 : b.y1;
+    ctx.strokeStyle = border ?? bg;
+    ctx.globalAlpha = 0.8;
     ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(b.ax, b.ay);
     ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = border ?? bg;
+    ctx.beginPath();
+    ctx.arc(b.ax, b.ay, 1.5, 0, Math.PI * 2);
+    ctx.fill();
   }
-  ctx.fillStyle = style.fg;
-  ctx.fillText(text, x, y - 24, w - 8);
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.roundRect(x0, y0, w, h, radius);
+  if (!b.leader) {
+    // The tail: a notch from the bottom edge toward the head.
+    const tx = Math.min(Math.max(b.ax, x0 + 6), x0 + w - 6);
+    ctx.moveTo(tx - 4, y0 + h);
+    ctx.lineTo(tx, Math.min(b.ay, y0 + h + 6));
+    ctx.lineTo(tx + 4, y0 + h);
+  }
+  ctx.fill();
+  if (border) {
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1;
+    if (b.whisper) ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.roundRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1, radius);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.fillStyle = b.whisper ? style.whisperFg : style.fg;
+  ctx.font = `${b.whisper ? "italic " : ""}${b.fontPx}px ${family}`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  b.lines.forEach((line, i) => {
+    ctx.fillText(line, x0 + b.padX, y0 + b.padY + b.lineH * (i + 0.5), w - b.padX * 2 + 1);
+  });
+  if (b.overflow > 0) {
+    const label = `+${b.overflow}`;
+    ctx.font = `600 9px ${family}`;
+    const lw = ctx.measureText(label).width + 6;
+    ctx.fillStyle = border ?? style.fg;
+    ctx.beginPath();
+    ctx.roundRect(x0 + w - lw / 2 - 2, y0 - 6, lw, 11, 5);
+    ctx.fill();
+    ctx.fillStyle = bg;
+    ctx.textAlign = "center";
+    ctx.fillText(label, x0 + w - 2, y0 - 0.5);
+  }
+  ctx.restore();
+}
+
+/**
+ * The far-zoom speech mark: a 9px speech glyph with a dark backing, drawn in
+ * SCREEN space. Deliberately smaller, lower and steadier than the hazard
+ * triangle (18px, pulsing) so that from across the world a fault still reads
+ * first.
+ */
+export function drawSpeechPip(
+  ctx: Ctx,
+  sx: number,
+  sy: number,
+  whisper: boolean,
+  style: { fg: string; whisperFg: string },
+): void {
+  ctx.save();
+  ctx.translate(Math.round(sx), Math.round(sy));
+  ctx.fillStyle = "rgba(7,8,20,0.82)";
+  ctx.beginPath();
+  ctx.roundRect(-6, -5, 12, 9, 3);
+  ctx.fill();
+  ctx.fillStyle = whisper ? style.whisperFg : style.fg;
+  ctx.beginPath();
+  ctx.roundRect(-4.5, -3.5, 9, 6, 2);
+  ctx.moveTo(-2, 2.5);
+  ctx.lineTo(-3.5, 5.5);
+  ctx.lineTo(0.5, 2.5);
+  ctx.fill();
+  ctx.fillStyle = "rgba(7,8,20,0.9)";
+  for (const dx of [-2.5, 0, 2.5]) ctx.fillRect(dx - 0.5, -1, 1, 1);
+  ctx.restore();
 }
 
 /** A pennant on a pole to the body's left: the AoE shape, reused by default. */

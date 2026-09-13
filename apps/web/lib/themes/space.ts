@@ -20,7 +20,8 @@ import {
   cylinder,
   dome,
   door,
-  drawBubble,
+  drawSpeechBubble,
+  drawSpeechPip,
   drawHazardTriangle,
   drawVerbGlyph,
   faces,
@@ -526,6 +527,9 @@ function stampOr(ctx: Ctx, b: Baked | null, x: number, y: number): boolean {
   return true;
 }
 
+/** Speech: the look is the theme's; a whisper keeps violet and a dashed edge in every theme. */
+const SPEECH_STYLE = { bg: "rgba(2,6,23,0.92)", fg: "#a5f3fc", border: "rgba(103,232,249,0.55)", radius: 2, whisperBg: "rgba(30,16,56,0.94)", whisperFg: "#e9d5ff", whisperBorder: "rgba(216,180,254,0.9)" } as const;
+
 const art: ThemeArt = {
   async prepare() {
     /* Procedural: everything bakes on first use. */
@@ -589,8 +593,11 @@ const art: ThemeArt = {
     ctx.restore();
   },
   hazard: drawHazardTriangle,
-  speech(ctx, x, y, text) {
-    drawBubble(ctx, x, y, text, { bg: "rgba(2,6,23,0.92)", fg: "#a5f3fc", border: "rgba(103,232,249,0.55)", radius: 2 });
+  speech(ctx, bubble) {
+    drawSpeechBubble(ctx, bubble, SPEECH_STYLE);
+  },
+  speechPip(ctx, sx, sy, whisper) {
+    drawSpeechPip(ctx, sx, sy, whisper, { fg: "rgba(165,243,252,0.8)", whisperFg: SPEECH_STYLE.whisperFg });
   },
 };
 

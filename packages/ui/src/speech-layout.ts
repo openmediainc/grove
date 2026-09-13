@@ -293,8 +293,9 @@ export function layoutSpeech(input: LayoutInput): SpeechLayout {
       unplaced.push(s);
       continue;
     }
-    // Off-screen anchors get nothing: there is no body there to hover.
-    if (s.ax < -m.maxW.near || s.ax > vw + m.maxW.near || s.ay < -40 || s.ay > vh + 200) continue;
+    // Off-screen anchors get nothing: there is no body there to hover, and a
+    // bubble clamped onto the screen edge would belong to nobody you can see.
+    if (s.ax < 0 || s.ax > vw || s.ay < 0 || s.ay > vh + 40) continue;
 
     const font: SpeechFont = s.expanded || input.tier === "near" ? "near" : "mid";
     const lines = fitLines(s.text, m.maxW[font], m.maxLines[font], (t) => input.measure(t, font));

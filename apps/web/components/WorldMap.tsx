@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { asPermissionBadges, consequenceOf, STANCES } from "@grove/ui";
+import { asPermissionBadges, consequenceOf, STANCES, type Rect, type Speaker } from "@grove/ui";
 import { describeToolCall, type ToolCallView } from "@grove/protocol";
 import { api } from "@/lib/api";
 import {
@@ -30,6 +30,7 @@ import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
 import { MotionDirector, mergeSpan, spanFromWire, OUTCOME_MARK_MS } from "@/lib/motion/director";
 import { drawOutcomeMark, drawStanceMark, drawWorkBar, scaffoldStageFor } from "@/lib/motion/marks";
+import { SpeechBook, markRect, paintSpeech, speechPainter } from "@/lib/speech-render";
 import {
   groveVerb,
   isActiveVerb,
@@ -174,6 +175,12 @@ const KIOSK_STOP_MS = 26_000;
 const KIOSK_YIELD_MS = 60_000;
 /** A glide that cannot reach its mark (clamped at the world edge) gives up here. */
 const GLIDE_GIVE_UP_MS = 4_000;
+/** A live line is forgotten this long after it was said, unless the poll re-seeds it. */
+const SPEECH_MAX_AGE_MS = 5 * 60_000;
+/** A tapped body's line stays open in full for this long. */
+const SPEECH_EXPAND_MS = 8_000;
+/** Lines kept in the screen-reader log. */
+const HEARD_KEEP = 8;
 /** If the minimap does not say, assume the documented 180s stall threshold. */
 const DEFAULT_STALL_SECONDS = 180;
 
@@ -310,7 +317,6 @@ type Actor = {
   activity: string;
   verb: AgentVerb;
   source: "grove" | "paperclip";
-  bubble?: string;
   detail?: string;
   stalled?: boolean;
   errorText?: string | null;
@@ -686,6 +692,19 @@ export function WorldMap() {
   /** Where every body is going and why: docs/design/MOTION.md. */
   const motionRef = useRef<MotionDirector | null>(null);
   if (!motionRef.current) motionRef.current = new MotionDirector();
+  /** Who said what, newest per body. Painted through lib/speech-render. */
+  const speechRef = useRef(new SpeechBook());
+  /** Slot memory and tier between frames, so bubbles hold still. */
+  const speechPaintRef = useRef(speechPainter());
+  /** A body whose line is shown in full at any zoom: tapped, for a few seconds. */
+  const expandRef = useRef<{ id: string; until: number } | null>(null);
+  /** Screen rects of the HTML laid over the canvas, refreshed a few times a second. */
+  const overlayRectsRef = useRef<{ at: number; rects: Rect[] }>({ at: 0, rects: [] });
+  /**
+   * The same speech as text, for a screen reader: the canvas must not be the
+   * only thing carrying what people say. Newest last, a handful kept.
+   */
+  const [heard, setHeard] = useState<Array<{ key: string; who: string; body: string }>>([]);
   const hoverRef = useRef<Actor | null>(null);
   /** The last few public lines, for the spectator panel. */
   const recentRef = useRef<Array<{ who: string; body: string }>>([]);
@@ -1215,10 +1234,24 @@ export function WorldMap() {
         // happens while you watch. Seed the last few lines a spectator is allowed
         // to hear so arriving at a still world still shows it talking.
         const recent = data.recent_speech ?? data.recentSpeech ?? [];
-        for (const line of recent) {
-          const sid = line.sender_id ?? line.senderId;
-          const target = actors.find((a) => a.id === sid);
-          if (target && !target.bubble) target.bubble = line.body.slice(0, 48);
+        {
+          const book = speechRef.current;
+          book.prune(new Set(actors.map((a) => a.id)), SPEECH_MAX_AGE_MS);
+          book.seed(
+            recent.flatMap((line) => {
+              const sid = line.sender_id ?? line.senderId;
+              return sid ? [{ actorId: sid, text: line.body }] : [];
+            }),
+          );
+          if (pullNoRef.current <= 1) {
+            setHeard(
+              recent.slice(-HEARD_KEEP).map((line, i) => ({
+                key: line.speech_id ?? line.speechId ?? `seed-${i}`,
+                who: line.sender_name ?? line.senderName ?? "someone",
+                body: line.body,
+              })),
+            );
+          }
         }
         recentRef.current = recent.slice(-3).map((line) => ({
           who: line.sender_name ?? line.senderName ?? "someone",
@@ -1309,14 +1342,21 @@ export function WorldMap() {
     });
     es.addEventListener("speech", (ev) => {
       if (replay.view.active) return;
-      const data = JSON.parse((ev as MessageEvent).data) as { sender_id?: string; body?: string };
+      const data = JSON.parse((ev as MessageEvent).data) as {
+        sender_id?: string;
+        sender_name?: string;
+        body?: string;
+        speech_id?: string;
+      };
       if (!data.sender_id || !data.body) return;
-      actorsRef.current = actorsRef.current.map((a) =>
-        a.id === data.sender_id ? { ...a, bubble: data.body!.slice(0, 48), verb: "say" } : a,
+      speechRef.current.hear(data.sender_id, data.body);
+      const speaker = actorsRef.current.find((a) => a.id === data.sender_id);
+      actorsRef.current = actorsRef.current.map((a) => (a.id === data.sender_id ? { ...a, verb: "say" } : a));
+      const who = data.sender_name ?? speaker?.name ?? "someone";
+      const body = data.body;
+      setHeard((cur) =>
+        [...cur, { key: data.speech_id ?? `${data.sender_id}-${Date.now()}`, who, body }].slice(-HEARD_KEEP),
       );
-      window.setTimeout(() => {
-        actorsRef.current = actorsRef.current.map((a) => (a.id === data.sender_id ? { ...a, bubble: undefined } : a));
-      }, 8000);
     });
     return () => {
       cancelled = true;
@@ -1563,6 +1603,10 @@ export function WorldMap() {
       const body = actorsRef.current.find((a) => standsOn(a, tx, ty));
       if (body) {
         const facts: string[] = [];
+        // What it just said, in full. At far zoom the map shows only a pip, and
+        // a phone has no hover: the card is where the line can be read.
+        const said = speechRef.current.get(body.id);
+        if (said) facts.push(`${said.whisper ? "Whispered" : "Just said"}: “${said.text}”`);
         if (body.flagged) facts.push("Flagged for prompt injection — the chronicle holds the record.");
         if (body.stalled) facts.push("Stopped reporting — it says it is working, but has gone quiet.");
         if (body.errorText) facts.push(`Fault: ${body.errorText.slice(0, 120)}`);
@@ -1635,6 +1679,14 @@ export function WorldMap() {
       if (target?.kind === "region" && signedInRef.current !== false) {
         router.push(`/w/${target.region}`);
         return;
+      }
+      if (target?.kind === "body") {
+        const { tx: bx, ty: by } = tileFromClient(ev.clientX, ev.clientY);
+        const tapped = actorsRef.current.find((a) => {
+          const seat = seatsRef.current.get(a.id) ?? seatInRegion(a.id, a.region);
+          return seat.x === bx && seat.y === by;
+        });
+        if (tapped) expandRef.current = { id: tapped.id, until: Date.now() + SPEECH_EXPAND_MS };
       }
       setPeek(target);
     };
@@ -2037,7 +2089,7 @@ export function WorldMap() {
         /** Where the lamps are this frame; lit after the hour's wash goes down. */
         const lamps: Array<{ x: number; y: number; r: number }> = [];
         /** Speech, lifted out of the depth list so the night can never dim it. */
-        const bubbles: Array<{ x: number; y: number; text: string }> = [];
+        const speakers: Array<{ id: string; x: number; y: number; text: string; at: number; whisper: boolean }> = [];
         // `t` is a rAF timestamp; the work clock, the fade clock and the
         // campus clock are all WALL time, because that is what the poll
         // recorded and what the hour means. Read once per frame, not per body.
@@ -2228,7 +2280,8 @@ export function WorldMap() {
           // someone had just said — and, since this pass, that the hour's wash
           // would have gone down on top of it. It is information, so it is
           // painted after the light, with the nameplates.
-          if (a.bubble) bubbles.push({ x, y, text: a.bubble });
+          const said = speechRef.current.get(a.id);
+          if (said) speakers.push({ id: a.id, x, y, text: said.text, at: said.at, whisper: said.whisper });
 
           if (z >= LOD_LABELS) {
             labels.push({
@@ -2349,11 +2402,6 @@ export function WorldMap() {
           ctx.imageSmoothingEnabled = false;
         }
 
-        // Speech, above the light. Painted before the nameplates so that when
-        // the two would collide it is the caption that loses, not the line
-        // somebody just said.
-        for (const b of bubbles) art.speech(ctx, b.x, b.y, b.text);
-
         // Captions last, front-most first, skipping any that would collide:
         // a smeared pile of half-readable task titles is worse than a gap.
         const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
@@ -2386,6 +2434,66 @@ export function WorldMap() {
 
         // Screen-space overlay: never pans or zooms.
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        // Speech, above the light and the nameplates, laid out in screen space
+        // so it is the same readable size at every zoom (lib/speech-render).
+        // Hazard marks, heartbeat rings and nameplates are obstacles it moves
+        // around, and the hazards are painted after it: speech never outranks
+        // a fault. Far out, a line is a pip; hover or tap to read it.
+        {
+          const toScreen = (lx: number, ly: number) => ({ x: lx * z + v.px, y: ly * z + v.py });
+          const obstacles: Rect[] = [];
+          for (const h of hazards) {
+            const p = toScreen(h.x, h.y);
+            obstacles.push(markRect(p.x, p.y - 22 - 5, 12));
+          }
+          for (const m of meters) {
+            const p = toScreen(m.x, m.y);
+            obstacles.push(markRect(p.x + 16, p.y - 24, 10));
+          }
+          for (const r of placed) {
+            const a0 = toScreen(r.x0, r.y0);
+            const a1 = toScreen(r.x1, r.y1);
+            obstacles.push({ x0: a0.x, y0: a0.y, x1: a1.x, y1: a1.y });
+          }
+          // The HUD, the headline and the controls are HTML over the canvas; a
+          // bubble under them would be painted and then hidden. Read their boxes
+          // a few times a second rather than every frame.
+          const overlay = overlayRectsRef.current;
+          if (nowMs - overlay.at > 400) {
+            const cr = el.getBoundingClientRect();
+            const host = el.parentElement;
+            overlay.at = nowMs;
+            overlay.rects = host
+              ? Array.from(host.querySelectorAll("h1, p, button, a, select, [data-speech-avoid]"))
+                  .map((node) => node.getBoundingClientRect())
+                  .filter((b) => b.width > 0 && b.height > 0)
+                  .map((b) => ({ x0: b.left - cr.left, y0: b.top - cr.top, x1: b.right - cr.left, y1: b.bottom - cr.top }))
+              : [];
+          }
+          obstacles.push(...overlay.rects);
+          const exp = expandRef.current;
+          if (exp && exp.until < nowMs) expandRef.current = null;
+          const expandId = hoverRef.current?.id ?? expandRef.current?.id ?? null;
+          const list: Speaker[] = speakers.map((sp) => {
+            const head = toScreen(sp.x, sp.y - 20);
+            return {
+              id: sp.id,
+              ax: head.x,
+              ay: head.y,
+              text: sp.text,
+              at: sp.at,
+              whisper: sp.whisper,
+              expanded: sp.id === expandId,
+            };
+          });
+          paintSpeech(ctx, speechPaintRef.current, theme, {
+            speakers: list,
+            viewport: { w: cssW, h: cssH },
+            obstacles,
+            zoom: z,
+            t,
+          });
+        }
         // Hazard marks, at a fixed size. Everything else on this map shrinks
         // with the zoom; an alarm must not. A stalled body is the same 14px
         // triangle whether you are looking at one room or the whole campus,
@@ -2550,6 +2658,18 @@ export function WorldMap() {
         <div aria-hidden className="pointer-events-none absolute inset-0 z-10 border-4 border-amber-400/70" />
       ) : null}
       <ReplayBadge controller={replay} />
+      {/* Everything said on the map, as text. Visually hidden: the canvas
+          shows it as bubbles, and this is the carrier for everyone the canvas
+          cannot reach. Polite, so a busy Plaza does not talk over the reader. */}
+      <div className="sr-only" role="log" aria-live="polite" aria-label="Heard on the map">
+        <ol>
+          {heard.map((h) => (
+            <li key={h.key}>
+              {h.who}: {h.body}
+            </li>
+          ))}
+        </ol>
+      </div>
       {/* Top overlay. On a phone the display heading and the HUD together used
           to eat the screen the world is supposed to fill, so at small widths the
           title drops to a readable 24px, the decorative line stands down, and
@@ -2580,7 +2700,7 @@ export function WorldMap() {
             </p>
           ) : null}
         </div>
-        <div className="pointer-events-auto w-full shrink-0 rounded-2xl border border-lantern-400/20 bg-dusk-950/80 px-3 py-2 text-[11px] uppercase tracking-widest text-lantern-300/80 sm:w-auto sm:px-4 sm:py-3 sm:text-xs">
+        <div data-speech-avoid className="pointer-events-auto w-full shrink-0 rounded-2xl border border-lantern-400/20 bg-dusk-950/80 px-3 py-2 text-[11px] uppercase tracking-widest text-lantern-300/80 sm:w-auto sm:px-4 sm:py-3 sm:text-xs">
           <ResourceBar signedIn={signedIn} />
           <div className="flex items-baseline justify-between gap-3">
             <span>{status}</span>

@@ -184,7 +184,7 @@ function LobbyDoors({ space }: { space: Space }) {
     setErr(null);
     try {
       await api(`/api/v1/worlds/${space.id}/enter`, { method: "POST", body: JSON.stringify({ room: slug }) });
-      window.location.href = `/grove/w/${slug}`;
+      window.location.href = gp(`/w/${slug}`);
     } catch (e) {
       setErr((e as Error).message);
     }

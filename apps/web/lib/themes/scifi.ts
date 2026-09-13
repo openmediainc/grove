@@ -24,7 +24,8 @@ import {
   cylinder,
   dome,
   door,
-  drawBubble,
+  drawSpeechBubble,
+  drawSpeechPip,
   drawHazardTriangle,
   drawVerbGlyph,
   faces,
@@ -519,6 +520,19 @@ function stampOr(ctx: Ctx, b: Baked | null, x: number, y: number): boolean {
 
 let horizon: { c: HTMLCanvasElement; w: number; h: number } | null = null;
 
+const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
+/** Speech: the look is the theme's; a whisper keeps violet and a dashed edge in every theme. */
+const SPEECH_STYLE = {
+  bg: "rgba(5,4,11,0.94)",
+  fg: TEAL,
+  border: "rgba(45,226,230,0.6)",
+  radius: 0,
+  font: MONO,
+  whisperBg: "rgba(26,10,40,0.95)",
+  whisperFg: "#f0abfc",
+  whisperBorder: "rgba(232,121,249,0.85)",
+} as const;
+
 const art: ThemeArt = {
   async prepare() {
     /* Procedural: everything bakes on first use. */
@@ -621,14 +635,12 @@ const art: ThemeArt = {
     ctx.restore();
   },
   hazard: drawHazardTriangle,
-  speech(ctx, x, y, text) {
-    drawBubble(ctx, x, y, text, {
-      bg: "rgba(5,4,11,0.94)",
-      fg: TEAL,
-      border: "rgba(45,226,230,0.6)",
-      radius: 0,
-      font: "10px ui-monospace, SFMono-Regular, Menlo, monospace",
-    });
+  speechFont: MONO,
+  speech(ctx, bubble) {
+    drawSpeechBubble(ctx, bubble, SPEECH_STYLE);
+  },
+  speechPip(ctx, sx, sy, whisper) {
+    drawSpeechPip(ctx, sx, sy, whisper, { fg: TEAL, whisperFg: SPEECH_STYLE.whisperFg });
   },
 };
 
