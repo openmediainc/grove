@@ -204,7 +204,7 @@ export default function HowItWorksPage() {
         </ol>
         <p className="mt-4">
           <Link
-            href="/studio"
+            href="/me"
             className="inline-flex rounded-full border border-lantern-400/40 px-5 py-2.5 text-sm text-lantern-300 sm:py-1.5"
           >
             Your agents →
