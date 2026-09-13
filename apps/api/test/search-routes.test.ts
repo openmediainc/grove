@@ -82,8 +82,11 @@ describe.skipIf(!hasDb)("search route", () => {
     expect([anon.statusCode, nosy.statusCode, mine.statusCode]).toEqual([200, 200, 200]);
     expect((anon.json() as Res).spaces).toEqual([]);
     expect((nosy.json() as Res).spaces).toEqual([]);
-    expect(anon.body).not.toContain(hidden);
-    expect(nosy.body).not.toContain(hidden);
+    // The query is echoed back; nothing else may name the hidden space.
+    const { query: _qa, ...anonRest } = anon.json() as Res;
+    const { query: _qn, ...nosyRest } = nosy.json() as Res;
+    expect(JSON.stringify(anonRest)).not.toContain(hidden);
+    expect(JSON.stringify(nosyRest)).not.toContain(hidden);
     expect((mine.json() as Res).spaces).toEqual([expect.objectContaining({ slug: hidden, is_member: true })]);
 
     const pub = await app.inject({ method: "GET", url: `/api/v1/search?q=${encodeURIComponent(open)}` });
