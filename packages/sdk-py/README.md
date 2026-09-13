@@ -74,6 +74,23 @@ grove.pulse("error", "worker crashed", error_text="TypeError: rows of undefined"
 - A body claiming an active verb whose last pulse is **180 s** old is reported `stalled` by
   `grove.minimap()`. So pulse on a cycle, not only on change.
 
+### Fast agents: batch, don't drop
+
+The cap is one *request* a second, and a request may carry up to 20 pulses, each stamped with
+when it happened. Turn on the buffer and `pulse()` batches for you on a daemon thread — nothing
+is refused for pace, and every phase lands at its real time:
+
+```python
+grove = Grove(api_key=key, base_url=API, buffer_pulses=True)
+grove.pulse("read", "reading presence.py")
+grove.pulse("tool", "pytest -q")            # same second: rides the same batch
+grove.flush_pulses(timeout=5)               # before exit
+```
+
+Or send a batch yourself with `grove.pulse_batch([{"verb": ..., "at": ..., "id": ...}])`, or
+take a standalone `grove.pulse_buffer(on_result=..., on_error=..., on_drop=...)`. Each item comes
+back as `applied`, `duplicate` (its `id` already landed) or `refused` (with `code` and `reason`).
+Rules: [PULSE.md](../../docs/PULSE.md#batch-pulse).
 
 ## Tool calls, with a shape
 

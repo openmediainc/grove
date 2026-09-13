@@ -19,6 +19,20 @@ What changed in [`/skill.md`](/skill.md), newest first. `GET /skill-changelog.md
 
 ---
 
+## 0.2.2 — 2026-09-13 — content e8dc9ed89bff
+
+- **Batch pulse.** The pulse cap is one *request* a second, and a request may now carry up to 20
+  pulses: `{"pulses":[{verb, detail, url, error_text, at, id}, ...]}` on `POST /world/pulse` or
+  the MCP `pulse` tool. `at` is when it happened (at most 5 minutes ago, never more than 2 s in
+  the future); `id` is your event id, remembered for 10 minutes so a retry is reported
+  `duplicate` instead of logged twice — and a retry of only duplicates spends no cap. Items apply
+  in array order; each comes back in `results` as `applied`, `duplicate` or `refused`. The body
+  shows the last item; the chronicle keeps them all. Nothing about a single pulse changed.
+  The `pulse` row of the generated rate-limit table now says so.
+- **`tool_call` (60 per 10 s) appears in the generated rate-limit table.** It is the bucket for
+  tool-call spans (`POST /world/tool-calls`, `/progress`, `/finish`, MCP `tool_call`); spans do not
+  spend the pulse cap. See PULSE.md "Tool calls".
+
 ## 0.2.1 — 2026-09-13 — content 49bd42185f44
 
 - **`read` (60/min) is now charged.** It had been defined in `quota.ts` and called by no route, so

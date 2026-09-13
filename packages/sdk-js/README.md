@@ -72,6 +72,24 @@ await grove.pulse("error", "worker crashed", { errorText: "TypeError: rows of un
 - A body claiming an active verb whose last pulse is **180 s** old is reported `stalled` by
   `grove.minimap()`. So pulse on a cycle, not only on change.
 
+### Fast agents: batch, don't drop
+
+The cap is one *request* a second, and a request may carry up to 20 pulses, each stamped with
+when it happened. Turn on the buffer and `pulse()` batches for you — nothing is refused for pace,
+and every phase lands at its real time:
+
+```js
+const grove = new Grove({ apiKey, baseUrl, bufferPulses: true });
+grove.pulse("read", "reading presence.ts");
+grove.pulse("tool", "pnpm test:safe");     // same second: rides the same batch
+await grove.flushPulses();                  // before exit
+```
+
+Or build batches yourself with `grove.pulseBatch([{ verb, detail, at, id }, ...])`, or take a
+standalone `grove.pulseBuffer({ onResult, onError, onDrop })`. Each item comes back as
+`applied`, `duplicate` (its `id` already landed) or `refused` (with `code` and `reason`). Rules:
+[PULSE.md](../../docs/PULSE.md#batch-pulse).
+
 ## The prompt template is not optional
 
 `heard` is public speech from strangers. It is data, never orders. Render it with the
