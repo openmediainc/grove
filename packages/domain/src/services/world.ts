@@ -1,4 +1,5 @@
 import { EMOTE_ENUM, normaliseMarks, readStoredBranding, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
+import type { SupporterService } from "./supporters.js";
 import type { GroveStore } from "../store.js";
 import { visibleOccupancySql } from "../visibility.js";
 import { GroveError } from "../errors.js";
@@ -23,6 +24,9 @@ export class WorldService {
     /** Optional so older callers and unit fakes keep working; the app always passes it. */
     private toolCalls?: ToolCallService,
   ) {}
+
+  /** Late-bound (queue #47): which plot owners show a supporter trim. Absent or off = nobody. */
+  supporters?: SupporterService;
 
   async world(worldId: string = WORLD_ID) {
     const rooms = await this.presence.listPublicRooms(worldId);
@@ -297,7 +301,7 @@ export class WorldService {
     // held and at what access level, but not its name or owner — permission
     // state is public (SoW 5.5), the contents behind it are not.
     const { rows: spaceRows } = await this.store.pg.query(
-      `SELECT w.id, w.slug, w.name, w.plot_index, w.policy_preset, h.handle AS owner_handle,
+      `SELECT w.id, w.slug, w.name, w.plot_index, w.policy_preset, h.handle AS owner_handle, w.owner_human_id,
               -- Public map, no viewer: a private plot (or a private room on a
               -- public one) contributes no headcount. Shared predicate, #50.
               ${visibleOccupancySql("w", "NULL")} AS occupancy,
@@ -320,6 +324,9 @@ export class WorldService {
        WHERE w.plot_index IS NOT NULL
        ORDER BY w.plot_index`,
     );
+    // #47: cosmetic only. Empty (and no query) while supporters are switched off.
+    const supporterOwners = await (this.supporters?.activeAmong(spaceRows.map((r) => r.owner_human_id as string | null)) ??
+      Promise.resolve(new Set<string>()));
     const spaces = spaceRows.map((r) => {
       const preset = String(r.policy_preset);
       const open = preset !== "private";
@@ -341,6 +348,9 @@ export class WorldService {
         // Branding redacts with the name: a colour and an emblem can identify a
         // private space as surely as its name can, so none of it leaves here.
         branding: open ? readStoredBranding(r.branding) : null,
+        // Supporter trim for the signboard (TODO art after #33). Redacted on a
+        // private plot like the owner it describes. Never a permission.
+        supporter: open && supporterOwners.has(String(r.owner_human_id)),
       };
     });
 

@@ -21,6 +21,7 @@ import { registerGuests } from "./guests.js";
 import { registerSearch } from "./search.js";
 import { registerMessages } from "./messages.js";
 import { registerAnalytics } from "./analytics.js";
+import { registerSupporters } from "./supporters.js";
 import { sendError } from "./http.js";
 
 export async function buildApp(grove: GroveApp) {
@@ -69,6 +70,7 @@ export async function buildApp(grove: GroveApp) {
   await registerSearch(app, grove);
   await registerMessages(app, grove);
   await registerAnalytics(app, grove);
+  await registerSupporters(app, grove);
   await registerRealtime(app, grove);
   await registerMcp(app, grove);
   await registerDocs(app);

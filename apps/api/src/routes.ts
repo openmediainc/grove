@@ -1154,7 +1154,15 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     if (!human) throw new GroveError("NOT_FOUND", "Not found.", { httpStatus: 404 });
     const agents = await grove.identity.listOwnedAgents(human.id);
     return sendOk(reply, {
-      human: { id: human.id, handle: human.handle, displayName: human.displayName, avatarId: human.avatarId, role: human.role },
+      human: {
+        id: human.id,
+        handle: human.handle,
+        displayName: human.displayName,
+        avatarId: human.avatarId,
+        role: human.role,
+        // #47: cosmetic flag only (false while supporters are off). Never a permission.
+        supporter: await grove.supporters.isActive(human.id),
+      },
       agents: agents.map((a) => ({ id: a.id, slug: a.slug, displayName: a.displayName, claimState: a.claimState, policy: a.policy })),
     });
   });

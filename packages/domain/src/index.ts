@@ -66,6 +66,24 @@ export {
 } from "./services/guests.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
 export { BrandingService } from "./services/branding.js";
+// Supporter plumbing (036): cosmetic, env-gated, off until the owner adds Stripe keys.
+export {
+  SupporterService,
+  supporterSettings,
+  supporterPerks,
+  verifyStripeSignature,
+  signStripePayload,
+  mapSubscriptionStatus,
+  formatPrice,
+  SUPPORTER_STATUSES,
+  STRIPE_SIGNATURE_TOLERANCE_SECONDS,
+  type SupporterSettings,
+  type SupporterStatus,
+  type SupporterPerks,
+  type SupporterView,
+  type SignatureResult,
+  type WebhookOutcome,
+} from "./services/supporters.js";
 export { FollowService, type Follower, type FollowState, type FollowHooks } from "./services/follows.js";
 export {
   SearchService,
@@ -232,6 +250,7 @@ import { ReactionService } from "./services/reactions.js";
 import { GuestService } from "./services/guests.js";
 import { CardService } from "./services/cards.js";
 import { BrandingService } from "./services/branding.js";
+import { SupporterService } from "./services/supporters.js";
 import { FollowService } from "./services/follows.js";
 import { SearchService } from "./services/search.js";
 import { MessageService } from "./services/messages.js";
@@ -269,6 +288,8 @@ export class GroveApp {
   /** Working on / looking for / latest / links, for spaces and bodies (027). */
   cards: CardService;
   branding: BrandingService;
+  /** Cosmetic supporter tier via Stripe Checkout; inert unless all four env vars are set (036). */
+  supporters: SupporterService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
   follows: FollowService;
   /** `/` search across bodies, spaces and rooms, plus who is online (no private results). */
@@ -322,6 +343,7 @@ export class GroveApp {
     this.campus.follows = this.follows;
     this.messages = new MessageService(this.store, this.identity, this.speech, this.mailbox, this.quota, this.flags);
     this.guests = new GuestService(this.store);
+    this.supporters = new SupporterService(this.store);
     this.reactions = new ReactionService(
       this.store,
       this.chronicle,
@@ -341,6 +363,7 @@ export class GroveApp {
       this.notices,
     );
     this.world = new WorldService(this.store, this.presence, this.identity, this.flags, this.mailbox, this.toolCalls);
+    this.world.supporters = this.supporters;
     this.moderation = new ModerationService(
       this.store,
       this.quota,

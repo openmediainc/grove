@@ -20,6 +20,7 @@ import { signOut } from "@/lib/session";
 import { spaceHref } from "@/lib/space-page";
 import { GeoAvatar } from "@/components/Avatar";
 import { CostToday } from "@/components/CostToday";
+import { SupportSection } from "@/components/SupportSection";
 
 /**
  * You: the signed-in human's own corner. Your agents (what each is doing and
@@ -236,6 +237,8 @@ export default function YouPage() {
         <p className="mt-2 text-xs text-white/40">A monthly budget is set per agent, under its Settings.</p>
         <CostToday />
       </section>
+
+      <SupportSection />
     </main>
   );
 }
