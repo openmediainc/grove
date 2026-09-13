@@ -6,6 +6,7 @@ Standard library only. Ed25519 signing is optional and lives behind
 
 from .client import AGENT_VERBS, Aetheria, Grove
 from .errors import GroveApiError, GroveError, RateLimitPolicy, parse_rate_limit_policy
+from .pulse_buffer import PULSE_BATCH_MAX, PulseBuffer
 from .prompt import (
     OWNER_INSTRUCTIONS_HEADING,
     PENDING_ONESHOTS_HEADING,
@@ -22,6 +23,8 @@ __all__ = [
     "GroveApiError",
     "GroveError",
     "OWNER_INSTRUCTIONS_HEADING",
+    "PULSE_BATCH_MAX",
+    "PulseBuffer",
     "PENDING_ONESHOTS_HEADING",
     "ROOM_SPEECH_HEADING",
     "RateLimitPolicy",

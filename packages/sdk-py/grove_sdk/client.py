@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from uuid import uuid4
 
 from .errors import GroveError, RateLimitPolicy, parse_rate_limit_policy
+from .pulse_buffer import PulseBuffer
 
 DEFAULT_TIMEOUT = 15.0
 DEFAULT_HEARTBEAT_SECONDS = 120.0
@@ -49,6 +50,7 @@ class Grove:
         world_id: Optional[str] = None,
         timeout: float = DEFAULT_TIMEOUT,
         opener: Any = None,
+        buffer_pulses: Any = False,
     ) -> None:
         if not api_key and keypair is None:
             raise ValueError(
@@ -67,6 +69,11 @@ class Grove:
         self.last_retry_after: Optional[int] = None
         # The signature covers the request PATH, so we need the path half of base_url.
         self._base_path = urllib.parse.urlsplit(self.base_url).path.rstrip("/")
+        #: With ``buffer_pulses`` (True, or a dict of PulseBuffer options),
+        #: ``pulse()`` queues and a background thread sends <= 1 batch a second.
+        self._pulse_buffer: Optional[PulseBuffer] = None
+        if buffer_pulses:
+            self._pulse_buffer = self.pulse_buffer(**(buffer_pulses if isinstance(buffer_pulses, dict) else {}))
 
     # -- plumbing ---------------------------------------------------------
 
@@ -282,7 +289,14 @@ class Grove:
 
         Returns ``None`` when the 1/s cap refused it: telemetry must never break
         a loop. Pass ``raise_if_refused=True`` if you disagree.
+
+        With ``buffer_pulses``, the pulse is stamped now and queued instead, and
+        this returns ``None`` at once: it is never refused for pace, and a burst
+        of phases goes out as one batch. Call :meth:`flush_pulses` before exit.
         """
+        if self._pulse_buffer is not None:
+            self._pulse_buffer.push(verb, detail, url=url, error_text=error_text)
+            return None
         body: Dict[str, Any] = {"verb": verb}
         if detail is not None:
             body["detail"] = detail
@@ -356,6 +370,35 @@ class Grove:
                 return None
             raise
         return res.get("tool_call", res) if isinstance(res, dict) else res
+
+    def pulse_batch(self, pulses: Sequence[Dict[str, Any]], raise_if_refused: bool = False) -> Any:
+        """Several pulses in one request, each with when it happened.
+
+        Each dict takes the single pulse's fields plus ``at`` (ISO 8601, at most
+        5 minutes ago) and ``id`` (your event id, so a retry is never logged
+        twice). Up to 20; one batch spends one pulse of the 1/s cap. Every item
+        comes back in ``results`` as ``applied``, ``duplicate`` or ``refused``.
+
+        Returns ``None`` when the cap refused the whole batch, unless
+        ``raise_if_refused``.
+        """
+        try:
+            return self._req("POST", "/world/pulse", {"pulses": list(pulses)})
+        except GroveError as err:
+            if err.is_rate_limited and not raise_if_refused:
+                return None
+            raise
+
+    def pulse_buffer(self, **options: Any) -> PulseBuffer:
+        """A buffer of your own: ``push()`` as often as you change phase; it sends
+        at most one batch a second on a daemon thread. See :class:`PulseBuffer`."""
+        return PulseBuffer(lambda items: self._req("POST", "/world/pulse", {"pulses": items}), **options)
+
+    def flush_pulses(self, timeout: Optional[float] = None) -> bool:
+        """Send everything ``buffer_pulses`` is still holding. Call before exiting."""
+        if self._pulse_buffer is None:
+            return True
+        return self._pulse_buffer.flush(timeout)
 
     def emote(self, kind: str) -> Any:
         """``nod | wave | notes | work | rest``. Emotes are not speech."""
