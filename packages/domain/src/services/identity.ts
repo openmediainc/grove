@@ -200,7 +200,10 @@ export class IdentityService {
 
     let human = await this.findHumanByEmail(payload.email);
     if (!human) {
-      human = await this.createHuman(payload.email, payload.inviteCode);
+      // null: someone else created this email between our read and our write
+      // (two magic links for one address, consumed at once). Same person.
+      human = (await this.createHuman(payload.email, payload.inviteCode)) ?? (await this.findHumanByEmail(payload.email));
+      if (!human) throw new GroveError("INTERNAL", "Signup raced and lost its row.");
     }
     const sessionId = randomToken();
     await this.store.redis.set(`session:${sessionId}`, human.id, "EX", SESSION_TTL);
@@ -242,38 +245,65 @@ export class IdentityService {
     return rows[0] ? mapHuman(rows[0] as Record<string, unknown>) : null;
   }
 
-  private async createHuman(email: string, inviteCode: string): Promise<Human> {
+  /**
+   * Create a human, or return null if this EMAIL already has one (a concurrent
+   * signup won the race; the caller re-reads it).
+   *
+   * The handle is CLAIMED, not checked: the old loop SELECTed each candidate
+   * and then INSERTed the first free one, so every signup racing for the same
+   * handle saw it free and all but one died on humans_handle_key. The INSERT is
+   * now the question — a lost handle is a 23505 on that constraint, and the
+   * loop moves on to the next candidate. The SELECT stays only as a cheap skip
+   * past handles that were taken long ago.
+   */
+  private async createHuman(email: string, inviteCode: string): Promise<Human | null> {
     const id = newId("human");
     const local = email.split("@")[0] ?? "human";
-    let handle = sanitizeHandle(local);
-    // DBT-01: the suffix has to survive the 20-character clip, or every retry
-    // re-derives the same handle and the INSERT below dies on 23505. The ninth
-    // attempt is random so a busy prefix can never exhaust the numbered ones.
-    for (let i = 0; i < 9; i++) {
-      const clash = await this.store.pg.query("SELECT 1 FROM humans WHERE handle = $1", [handle]);
-      if (clash.rowCount === 0) break;
-      const suffix =
-        i < 8 ? `_${i + 2}` : `_${randomToken(4).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 4) || "x"}`;
-      handle = sanitizeHandleWithSuffix(local, suffix);
-    }
     const role =
       this.store.config.operatorEmail && email.toLowerCase() === this.store.config.operatorEmail
         ? "operator"
         : "inhabitant";
-    const { rows } = await this.store.pg.query(
-      `INSERT INTO humans (id, handle, display_name, email, email_verified_at, lurk, privacy, avatar_id, role, age_attested_at)
-       VALUES ($1,$2,$3,$4, now(), false, $5, $6, $7, now())
-       RETURNING *`,
-      [
-        id,
-        handle,
-        handle,
-        email.toLowerCase(),
-        JSON.stringify({ overhearable_by_agents: DEFAULT_HUMAN_PRIVACY.overhearableByAgents }),
-        avatarFor(id, "human"),
-        role,
-      ],
-    );
+    // DBT-01: the suffix has to survive the 20-character clip, or every retry
+    // re-derives the same handle. The numbered candidates run out after _9;
+    // after that each attempt is random, so a busy prefix cannot exhaust them.
+    const candidate = (i: number) =>
+      i === 0
+        ? sanitizeHandle(local)
+        : sanitizeHandleWithSuffix(
+            local,
+            i < 9 ? `_${i + 1}` : `_${randomToken(4).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 4) || "x"}`,
+          );
+    let rows: Array<Record<string, unknown>> = [];
+    let handle = "";
+    for (let i = 0; ; i++) {
+      if (i >= 24) throw new GroveError("INTERNAL", "Could not find a free handle.");
+      handle = candidate(i);
+      const clash = await this.store.pg.query("SELECT 1 FROM humans WHERE handle = $1", [handle]);
+      if (clash.rowCount) continue;
+      try {
+        ({ rows } = await this.store.pg.query(
+          `INSERT INTO humans (id, handle, display_name, email, email_verified_at, lurk, privacy, avatar_id, role, age_attested_at)
+           VALUES ($1,$2,$3,$4, now(), false, $5, $6, $7, now())
+           RETURNING *`,
+          [
+            id,
+            handle,
+            handle,
+            email.toLowerCase(),
+            JSON.stringify({ overhearable_by_agents: DEFAULT_HUMAN_PRIVACY.overhearableByAgents }),
+            avatarFor(id, "human"),
+            role,
+          ],
+        ));
+        break;
+      } catch (err) {
+        const e = err as { code?: string; constraint?: string };
+        if (e.code !== "23505") throw err;
+        if (e.constraint === "humans_email_key") return null;
+        if (e.constraint !== "humans_handle_key") throw err;
+        // Lost this handle to a concurrent signup: try the next one.
+      }
+    }
     await this.store.pg.query(
       `UPDATE invite_codes SET redeemed_by = $1, redeemed_at = now()
        WHERE lower(code) = lower($2) AND redeemed_by IS NULL`,
