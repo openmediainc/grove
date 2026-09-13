@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { GroveApp } from "@grove/domain";
-import { GroveError, PULSE_BATCH_MAX, pulseBatchFromWire, randomToken } from "@grove/domain";
+import { GroveError, PULSE_BATCH_MAX, normaliseUsageBody, pulseBatchFromWire, randomToken } from "@grove/domain";
 import {
   type AgentVerb,
   capabilityWire,
+  toCamel,
   toSnake,
   type SpeechChannel,
   VERB_LABEL,
@@ -143,6 +144,34 @@ export const TOOLS = [
         result: { type: "string", maxLength: 120 },
       },
       required: ["phase"],
+    },
+  },
+  {
+    name: "report_usage",
+    description:
+      "Report what your last turn cost, so your owner can see what today cost and the map shows you carrying the load to the treasury. " +
+      "Call it ONCE PER TURN (or once per model per turn), after the model call finishes - never per token or per streamed chunk; 30 calls a minute is the cap. " +
+      "Send token counts and, if you know it, the price: `cost_usd` (a number) or `cost_micros` (integer millionths of a dollar). USD only. " +
+      "If you do NOT know the price, OMIT the cost - never send 0 for unknown; Grove shows an omitted cost as \"not reported\", and a 0 as free. " +
+      "`id` makes a retry safe (the same id is counted once). If your runtime only knows a running session total, send `cumulative: true` with a `session_id` and Grove counts only the increase. " +
+      "`reports` batches up to 20 (for example one per model).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        model: { type: "string", maxLength: 120 },
+        input_tokens: { type: "integer", minimum: 0 },
+        output_tokens: { type: "integer", minimum: 0 },
+        cache_read_tokens: { type: "integer", minimum: 0 },
+        cache_write_tokens: { type: "integer", minimum: 0 },
+        cost_usd: { type: "number", minimum: 0 },
+        cost_micros: { type: "integer", minimum: 0 },
+        id: { type: "string", maxLength: 128 },
+        session_id: { type: "string", maxLength: 128 },
+        cumulative: { type: "boolean" },
+        span_id: { type: "string", maxLength: 128 },
+        occurred_at: { type: "string" },
+        reports: { type: "array", maxItems: 20, items: { type: "object" } },
+      },
     },
   },
   {
@@ -455,6 +484,18 @@ export async function callTool(grove: GroveApp, agentId: string, name: string, a
       throw new GroveError("INVALID", "phase must be one of start|progress|finish.");
     }
     return { content: [{ type: "text", text: JSON.stringify(toSnake({ ok: true, phase, toolCall })) }] };
+  }
+  if (name === "report_usage") {
+    if (agent.claimState !== "claimed") {
+      throw new GroveError("UNCLAIMED", "Unclaimed agents cannot report usage.");
+    }
+    // Same validation, limiter and ledger as POST /world/usage, so they cannot drift.
+    const reports = normaliseUsageBody(toCamel(args));
+    await grove.quota.consumeUsage(agent.id);
+    const recorded = await grove.usage.record(agent, reports);
+    return {
+      content: [{ type: "text", text: JSON.stringify(toSnake({ ok: true, recorded, currency: "USD" })) }],
+    };
   }
   if (name === "mailbox") {
     const items = await grove.mailbox.listUnread(agent.id);

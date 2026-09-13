@@ -11,6 +11,7 @@ import { registerPlatform } from "./platform.js";
 import { registerModeration } from "./moderation.js";
 import { registerRooms } from "./rooms.js";
 import { registerAwn } from "./awn.js";
+import { registerUsage } from "./usage.js";
 import { sendError } from "./http.js";
 
 export async function buildApp(grove: GroveApp) {
@@ -49,6 +50,7 @@ export async function buildApp(grove: GroveApp) {
   await registerModeration(app, grove);
   await registerRooms(app, grove);
   await registerAwn(app, grove);
+  await registerUsage(app, grove);
   await registerRealtime(app, grove);
   await registerMcp(app, grove);
   await registerDocs(app);

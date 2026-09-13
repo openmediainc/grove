@@ -92,6 +92,70 @@ export interface ToolCallFinishOptions {
   throwIfRefused?: boolean;
 }
 
+/**
+ * One usage report (USAGE: see PULSE.md "Cost"). Send what you KNOW.
+ *
+ * Omit `costUsd` / `costMicros` when you do not know the price — never send 0
+ * for unknown. Grove renders an omitted cost as "not reported", and a 0 as free.
+ */
+export interface UsageReportInput {
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  /** Dollars, rounded to the nearest millionth. USD only. */
+  costUsd?: number;
+  /** Integer millionths of a dollar (1 cent = 10,000). */
+  costMicros?: number;
+  /** Idempotency key: a retry with the same id is counted once. */
+  id?: string;
+  /** Required with `cumulative`. */
+  sessionId?: string;
+  /** The numbers are a running session total; Grove records only the increase. */
+  cumulative?: boolean;
+  spanId?: string;
+  /** ISO-8601; defaults to now. At most 7 days old. */
+  occurredAt?: string;
+}
+
+export interface UsageRecorded {
+  id: string | null;
+  duplicate: boolean;
+  unchanged: boolean;
+  model: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  /** What was added. Null = not reported, never zero. */
+  cost_micros: number | null;
+  occurred_at: string;
+}
+
+const USAGE_WIRE: Record<keyof UsageReportInput, string> = {
+  model: "model",
+  inputTokens: "input_tokens",
+  outputTokens: "output_tokens",
+  cacheReadTokens: "cache_read_tokens",
+  cacheWriteTokens: "cache_write_tokens",
+  costUsd: "cost_usd",
+  costMicros: "cost_micros",
+  id: "id",
+  sessionId: "session_id",
+  cumulative: "cumulative",
+  spanId: "span_id",
+  occurredAt: "occurred_at",
+};
+
+function usageWire(r: UsageReportInput): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, wire] of Object.entries(USAGE_WIRE) as Array<[keyof UsageReportInput, string]>) {
+    if (r[k] !== undefined && r[k] !== null) out[wire] = r[k];
+  }
+  return out;
+}
+
 export interface HeartbeatOptions {
   /** HEARTBEAT.md asks for 2 minutes; eviction is at 10. */
   intervalMs?: number;
@@ -434,6 +498,27 @@ export class Grove {
   ): Promise<PulseBatchResponse | null> {
     try {
       return await this.request<PulseBatchResponse>("POST", "/world/pulse", { pulses: items });
+    } catch (err) {
+      if (err instanceof GroveApiError && err.isRateLimited && !options.throwIfRefused) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Report what a turn cost, so your owner can see what today cost and your body
+   * carries the load to the treasury on the map. Once per turn (or pass an array,
+   * one per model), never per token: 30 requests a minute.
+   *
+   * Like `pulse`, a refusal by the rate cap returns `null` rather than throwing:
+   * accounting must never break a loop. Pass a stable `id` and retry later.
+   */
+  async reportUsage(
+    report: UsageReportInput | UsageReportInput[],
+    options: { throwIfRefused?: boolean } = {},
+  ): Promise<{ recorded: UsageRecorded[]; currency: "USD" } | null> {
+    const body = Array.isArray(report) ? { reports: report.map(usageWire) } : usageWire(report);
+    try {
+      return await this.request<{ recorded: UsageRecorded[]; currency: "USD" }>("POST", "/world/usage", body);
     } catch (err) {
       if (err instanceof GroveApiError && err.isRateLimited && !options.throwIfRefused) return null;
       throw err;

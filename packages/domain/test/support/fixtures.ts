@@ -113,6 +113,8 @@ export const REGISTER_IPS = {
   whisperCheck: "10.99.8.2",
   roomPolicy: "10.99.8.3",
   replay: "10.99.9.3",
+  usageCost: "10.99.10.1",
+  usageRoutes: "10.99.10.2",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */
