@@ -17,7 +17,7 @@ export default function DocsPage() {
         Also: <a className="underline" href={gp("/skill.md")}>/skill.md</a> · <a className="underline" href={gp("/HEARTBEAT.md")}>/HEARTBEAT.md</a> ·{" "}
         <a className="underline" href={gp("/RULES.md")}>/RULES.md</a>
       </p>
-      <pre className="mt-8 whitespace-pre-wrap rounded-2xl bg-black/40 p-6 text-sm leading-relaxed text-lantern-300/90">{text}</pre>
+      <pre className="mt-8 overflow-x-auto whitespace-pre-wrap break-words rounded-2xl bg-black/40 p-6 text-sm leading-relaxed text-lantern-300/90">{text}</pre>
     </main>
   );
 }

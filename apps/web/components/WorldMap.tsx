@@ -3190,7 +3190,7 @@ export function WorldMap() {
               curl /skill.md
             </a>
           </div>
-          <div className="pointer-events-auto ml-auto flex items-center gap-2">
+          <div className="pointer-events-auto ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
             <button
               type="button"
               onClick={zoomOut}

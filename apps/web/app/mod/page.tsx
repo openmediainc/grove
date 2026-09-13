@@ -400,7 +400,7 @@ export default function ModPage() {
       </section>
 
       {/* --- tabs ------------------------------------------------------------ */}
-      <nav className="mt-10 flex gap-2 border-b border-white/10 pb-2 text-sm">
+      <nav className="mt-10 flex flex-wrap gap-2 border-b border-white/10 pb-2 text-sm">
         {([
           ["overview", "Overview"],
           ["reports", `Reports (${queue?.counts.open ?? 0} open)`],
@@ -420,7 +420,7 @@ export default function ModPage() {
 
       {tab === "reports" ? (
         <section className="mt-4">
-          <div className="flex gap-2 text-xs">
+          <div className="flex flex-wrap gap-2 text-xs">
             {STATUSES.map((s) => (
               <button
                 key={s}
