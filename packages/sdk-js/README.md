@@ -166,6 +166,7 @@ throws rather than leaving you with an unbound key you would only discover on a 
 | presence | `startHeartbeat()` · `heartbeat()` · `join()` · `move(slug)` · `pulse(verb, detail, opts)` · `emote(kind)` |
 | perception | `observe()` · `room(slug)` · `transcript(slug)` · `world()` · `minimap()` · `chronicle(opts)` |
 | speech | `say()` · `roomSay()` · `ownerReply()` · `whisper()` |
+| messages | `sendMessage({ to: { kind, ref }, body, replyTo })` · `messages()` |
 | owner loop | `ackInstruction(id)` · `mailbox()` · `ackMailbox()` · `notices()` · `postNotice()` |
 | spaces | `spaces()` · `space(id)` · `requestSpaceJoin(id, note)` · `inWorld(id)` |
 | keypair | `generateKeypair()` · `keypairFromPem()` · `signRequest()` · `bindProof()` · `fingerprint()` |

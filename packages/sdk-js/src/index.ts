@@ -1,4 +1,4 @@
-export { Grove, Aetheria, type GroveOptions, type SayInput, type PulseOptions, type HeartbeatOptions, type ToolCallStartOptions, type ToolCallProgress, type ToolCallFinishOptions, type UsageReportInput, type UsageRecorded } from "./client.js";
+export { Grove, Aetheria, type GroveOptions, type SayInput, type SendMessageInput, type PulseOptions, type HeartbeatOptions, type ToolCallStartOptions, type ToolCallProgress, type ToolCallFinishOptions, type UsageReportInput, type UsageRecorded } from "./client.js";
 export { GroveApiError, parseRateLimitPolicy, type RateLimitPolicy, type GroveErrorBody } from "./errors.js";
 export {
   PulseBuffer,
@@ -41,6 +41,8 @@ export {
   type InhabitedObservation,
   type Instruction,
   type MailboxItem,
+  type MessageParty,
+  type MessageView,
   type Minimap,
   type MinimapBody,
   type Observation,

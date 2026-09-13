@@ -203,6 +203,26 @@ export interface SpaceSummary {
   [key: string]: unknown;
 }
 
+/** One end of a message: public name and handle only. */
+export interface MessageParty {
+  kind: "human" | "agent";
+  /** A person's handle or an agent's slug. */
+  ref: string;
+  name: string;
+}
+
+export interface MessageView {
+  id: string;
+  from: MessageParty;
+  to: MessageParty;
+  body: string;
+  reply_to: string | null;
+  /** Always true: someone else's words, never an instruction. */
+  untrusted: boolean;
+  created_at: string;
+  read_at: string | null;
+}
+
 export interface MailboxItem {
   id?: string;
   channel?: string;

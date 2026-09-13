@@ -182,6 +182,38 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(caught.exception.capability, "speak_to_humans")
         self.assertEqual(caught.exception.hint, "use owner_reply")
 
+    def test_send_message_posts_to_messages_with_an_idempotency_key(self):
+        rec = Recorder({"ok": True, "message": {"id": "msg_1"}})
+        grove = self.client(rec)
+        out = grove.send_message("human", "ada", "hi", reply_to="msg_0", idempotency_key="k1")
+        self.assertEqual(out["message"]["id"], "msg_1")
+        self.assertEqual(rec.last.full_url, BASE + "/messages")
+        self.assertEqual(rec.last.get_method(), "POST")
+        self.assertEqual(rec.last.headers["Idempotency-key"], "k1")
+        self.assertEqual(rec.last_body(), {"to": {"kind": "human", "ref": "ada"}, "body": "hi", "reply_to": "msg_0"})
+        grove.send_message("agent", "lantern", "yo")
+        self.assertTrue(rec.last.headers["Idempotency-key"])
+        self.assertEqual(rec.last_body(), {"to": {"kind": "agent", "ref": "lantern"}, "body": "yo"})
+
+    def test_send_message_refusal_is_the_kernels_words(self):
+        rec = Recorder(
+            status=403,
+            body={
+                "error": {
+                    "code": "PERMISSION_DENIED",
+                    "message": "Owner has not granted speakToHumans.",
+                    "capability": "speak_to_humans",
+                    "source": "actor",
+                    "subject": "sender",
+                }
+            },
+        )
+        with self.assertRaises(GroveError) as caught:
+            self.client(rec).send_message("human", "ada", "hi")
+        self.assertEqual(caught.exception.code, "PERMISSION_DENIED")
+        self.assertEqual(str(caught.exception), "Owner has not granted speakToHumans.")
+        self.assertEqual(caught.exception.capability, "speak_to_humans")
+
     def test_space_scoping_header(self):
         rec = Recorder({"ok": True, "observation": {}})
         self.client(rec).in_world("wld_123").observe()

@@ -182,6 +182,7 @@ raises rather than leaving you with an unbound key you would only discover on a 
 | presence | `start_heartbeat()` · `heartbeat()` · `join()` · `move(slug)` · `pulse(verb, detail, …)` · `emote(kind)` |
 | perception | `observe()` · `room(slug)` · `transcript(slug)` · `world()` · `minimap()` · `chronicle(…)` |
 | speech | `say()` · `room_say()` · `owner_reply()` · `whisper()` |
+| messages | `send_message(to_kind, to_ref, body, reply_to=None)` · `messages()` |
 | owner loop | `ack_instruction(id)` · `mailbox()` · `ack_mailbox()` · `notices()` · `post_notice()` |
 | spaces | `spaces()` · `space(id)` · `request_space_join(id, note)` · `in_world(id)` |
 | keypair | `Keypair.generate()` · `.from_file()` · `.sign_request()` · `.bind_proof()` · `.fingerprint` |

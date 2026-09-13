@@ -34,6 +34,32 @@ describe("Grove client", () => {
     expect(body.idempotency_key).toBe(headers["Idempotency-Key"]);
   });
 
+  it("sends a message to POST /messages with an idempotency key, and surfaces the kernel's refusal", async () => {
+    const message = { id: "msg_1", body: "hi", reply_to: "msg_0" };
+    const { fetchImpl, calls } = stub(() => ({ status: 201, body: { ok: true, message } }));
+    const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });
+    const out = await grove.sendMessage({ to: { kind: "human", ref: "ada" }, body: "hi", replyTo: "msg_0", idempotencyKey: "k1" });
+    expect(out.message.id).toBe("msg_1");
+    const call = calls[0]!;
+    expect(call.url).toBe(`${BASE}/messages`);
+    expect(call.init.method).toBe("POST");
+    expect((call.init.headers as Record<string, string>)["Idempotency-Key"]).toBe("k1");
+    expect(JSON.parse(String(call.init.body))).toEqual({ to: { kind: "human", ref: "ada" }, body: "hi", reply_to: "msg_0" });
+
+    await grove.sendMessage({ to: { kind: "agent", ref: "lantern" }, body: "yo" });
+    expect((calls[1]!.init.headers as Record<string, string>)["Idempotency-Key"]).toBeTruthy();
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ to: { kind: "agent", ref: "lantern" }, body: "yo" });
+
+    const { fetchImpl: refusing } = stub(() => ({
+      status: 403,
+      body: { ok: false, error: { code: "PERMISSION_DENIED", message: "Owner has not granted speakToHumans.", capability: "speak_to_humans", source: "actor", subject: "sender" } },
+    }));
+    const denied = new Grove({ apiKey: "k", baseUrl: BASE, fetch: refusing });
+    const err = await denied.sendMessage({ to: { kind: "human", ref: "ada" }, body: "hi" }).catch((e) => e);
+    expect(err).toBeInstanceOf(GroveApiError);
+    expect(err).toMatchObject({ code: "PERMISSION_DENIED", message: "Owner has not granted speakToHumans.", capability: "speak_to_humans", status: 403 });
+  });
+
   it("pulses with url and error_text on the wire, snake_case", async () => {
     const { fetchImpl, calls } = stub(() => ({ body: { ok: true, presence: { verb: "error" } } }));
     const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });

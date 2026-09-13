@@ -122,6 +122,7 @@ export const REGISTER_IPS = {
   search: "10.99.14.1",
   messages: "10.99.15.1",
   messagesRoutes: "10.99.15.2",
+  mcpMessages: "10.99.15.3",
   resting: "10.99.16.1",
   marks: "10.99.17.1",
 } as const;
