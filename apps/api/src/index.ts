@@ -74,6 +74,13 @@ async function main() {
     void grove.jobs.processDue();
   }, 15_000);
 
+  // ONB-07: ask the mail provider what became of accepted magic links. Outbound
+  // only (Grove is tailnet-only, so provider webhooks cannot reach it). A no-op
+  // for transports without an events API.
+  setInterval(() => {
+    void grove.emailDeliveries.pollDue().catch((err) => console.warn("[grove] email poll failed:", (err as Error).message));
+  }, 30_000);
+
   // Hosted xAI ticks stay off unless XAI_API_KEY is set. Mini-alpha inhabitants
   // are local HTTP bots (infra/inhabitants) so Grok tokens are not burned on empty rooms.
   setInterval(() => {

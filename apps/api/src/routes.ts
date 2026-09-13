@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { GroveApp } from "@grove/domain";
-import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError } from "@grove/domain";
+import { CHRONICLE_KINDS, CHRONICLE_TYPES, GroveError, fromAddress } from "@grove/domain";
 import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChannel } from "@grove/protocol";
 import { assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
 import { COOKIE, clientIp, sendOk } from "./http.js";
@@ -209,7 +209,27 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       inviteCode: String(b.inviteCode ?? ""),
       ageAttested: Boolean(b.ageAttested),
     });
-    const payload: Record<string, unknown> = { sent: true };
+    // ONB-07: say honestly what happened to the link, identically for every
+    // address (the account lookup happens at redemption, never here, so none of
+    // this can tell a caller whether an address already has an account).
+    //   email  — the provider accepted it (accepted, not yet delivered)
+    //   screen — no mail transport; the dev URL is in this response
+    //   failed — the provider refused or could not be reached
+    //   none   — nothing was sent and there is no dev URL: an unconfigured server
+    const delivery =
+      result.sendStatus === "accepted"
+        ? "email"
+        : result.sendStatus === "rejected" || result.sendStatus === "error"
+          ? "failed"
+          : result.devLoginUrl
+            ? "screen"
+            : "none";
+    const payload: Record<string, unknown> = {
+      sent: delivery === "email" || delivery === "screen",
+      delivery,
+      linkTtlSeconds: 15 * 60,
+    };
+    if (delivery === "email" || delivery === "failed") payload.mailFrom = fromAddress(grove.emailDeliveries.from);
     if (result.devLoginUrl) payload.devLoginUrl = result.devLoginUrl;
     return sendOk(reply, payload);
   });
