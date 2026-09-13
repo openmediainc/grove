@@ -10,6 +10,7 @@ import { registerDocs } from "./docs.js";
 import { registerPlatform } from "./platform.js";
 import { registerModeration } from "./moderation.js";
 import { registerEmailHealth } from "./email-health.js";
+import { registerOps } from "./ops.js";
 import { registerRooms } from "./rooms.js";
 import { registerAwn } from "./awn.js";
 import { registerUsage } from "./usage.js";
@@ -54,6 +55,7 @@ export async function buildApp(grove: GroveApp) {
   await registerPlatform(app, grove);
   await registerModeration(app, grove);
   await registerEmailHealth(app, grove);
+  await registerOps(app, grove);
   await registerRooms(app, grove);
   await registerAwn(app, grove);
   await registerUsage(app, grove);

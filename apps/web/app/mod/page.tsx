@@ -22,6 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { gp } from "@/lib/base";
 import { EmailHealthPanel } from "@/components/mod/EmailHealth";
+import { OverviewPanel } from "@/components/mod/Overview";
 
 type Actor = {
   id: string;
@@ -106,7 +107,7 @@ type Queue = {
   counts: { open: number; open_injection: number; frozen: string[] };
 };
 
-type Tab = "reports" | "injection" | "log" | "email";
+type Tab = "overview" | "reports" | "injection" | "log" | "email";
 
 const STATUSES = ["open", "resolved", "rejected", "all"] as const;
 
@@ -165,7 +166,7 @@ function Transcript({ title, lines, highlight }: { title: string; lines: Line[];
 export default function ModPage() {
   const [queue, setQueue] = useState<Queue | null>(null);
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("open");
-  const [tab, setTab] = useState<Tab>("reports");
+  const [tab, setTab] = useState<Tab>("overview");
   const [detail, setDetail] = useState<Record<string, ReportDetail>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -308,7 +309,7 @@ export default function ModPage() {
     <main className="mx-auto max-w-5xl px-6 py-12">
       <h1 className="font-display text-4xl text-lantern-300">Operator queue</h1>
       <p className="mt-2 text-white/60">
-        Reports, prompt-injection flags and the kill switch. Every action here is written to the world
+        Health and anomalies, reports, prompt-injection flags and the kill switch. Every action here is written to the world
         ledger with your handle and your reason.
       </p>
 
@@ -401,6 +402,7 @@ export default function ModPage() {
       {/* --- tabs ------------------------------------------------------------ */}
       <nav className="mt-10 flex gap-2 border-b border-white/10 pb-2 text-sm">
         {([
+          ["overview", "Overview"],
           ["reports", `Reports (${queue?.counts.open ?? 0} open)`],
           ["injection", `Injection flags (${injection.length})`],
           ["log", "Moderator log"],
@@ -621,6 +623,8 @@ export default function ModPage() {
           {log.length === 0 ? <p className="mt-4 text-white/40">No moderator actions recorded yet.</p> : null}
         </section>
       ) : null}
+
+      {tab === "overview" ? <OverviewPanel /> : null}
 
       {tab === "email" ? <EmailHealthPanel /> : null}
 
