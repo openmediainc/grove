@@ -243,7 +243,11 @@ describe.skipIf(!hasDb)("reactions go through the kernel like speech", () => {
     await grove.moderation.block(later, speaker.id);
     const live = await grove.speech.liveAudience(speechId);
     expect(live?.roomId).toBe(roomId);
-    expect(new Set(live?.audience)).toEqual(new Set([speaker.id, listener.id]));
+    // Other bodies left in the library by earlier tests heard it too; what
+    // matters is who is in and who is not.
+    expect(live?.audience).toEqual(expect.arrayContaining([speaker.id, listener.id]));
+    expect(live?.audience).not.toContain(later.id);
+    expect(live?.audience).not.toContain(outside.id);
 
     const sub = redis.duplicate();
     const frames: Array<Record<string, unknown>> = [];
@@ -269,7 +273,7 @@ describe.skipIf(!hasDb)("reactions go through the kernel like speech", () => {
       for (const f of frames) {
         expect(f).not.toHaveProperty("sender_id");
         expect(f).not.toHaveProperty("mine");
-        expect(new Set(f.delivered_to as string[])).toEqual(new Set([speaker.id, listener.id]));
+        expect(new Set(f.delivered_to as string[])).toEqual(new Set(live?.audience));
       }
     } finally {
       await sub.quit();
