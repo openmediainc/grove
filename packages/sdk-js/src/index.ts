@@ -1,4 +1,4 @@
-export { Grove, Aetheria, type GroveOptions, type SayInput, type PulseOptions, type HeartbeatOptions } from "./client.js";
+export { Grove, Aetheria, type GroveOptions, type SayInput, type PulseOptions, type HeartbeatOptions, type ToolCallStartOptions, type ToolCallProgress, type ToolCallFinishOptions } from "./client.js";
 export { GroveApiError, parseRateLimitPolicy, type RateLimitPolicy, type GroveErrorBody } from "./errors.js";
 export {
   generateKeypair,
@@ -41,4 +41,6 @@ export {
   type Room,
   type SpaceSummary,
   type SpeechChannel,
+  type ToolCall,
+  type ToolCallOutcome,
 } from "./types.js";

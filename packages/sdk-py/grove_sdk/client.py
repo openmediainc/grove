@@ -297,6 +297,66 @@ class Grove:
                 return None
             raise
 
+    # -- tool calls as spans (PULSE.md "Tool calls") ----------------------
+
+    def start_tool_call(
+        self,
+        name: str,
+        call_id: Optional[str] = None,
+        args: Optional[str] = None,
+        raise_if_refused: bool = False,
+    ) -> Any:
+        """A tool started: your body walks to the Workshop, captioned with it.
+
+        ``call_id`` is your runtime's id for the call (generated if omitted);
+        reuse it to finish. ``args`` is a short caption, not the command line.
+        Returns the span, or ``None`` if refused (rate limit, not joined).
+        """
+        body: Dict[str, Any] = {"name": name, "call_id": call_id or str(uuid4())}
+        if args is not None:
+            body["args"] = args
+        return self._span("/world/tool-calls", body, raise_if_refused)
+
+    def tool_call_progress(
+        self,
+        call_id: str,
+        progress: Optional[float] = None,
+        done: Optional[int] = None,
+        total: Optional[int] = None,
+        raise_if_refused: bool = False,
+    ) -> Any:
+        """Real progress only (0..1, or done of total). No numbers = keep-alive."""
+        body: Dict[str, Any] = {}
+        if progress is not None:
+            body["progress"] = progress
+        if done is not None:
+            body["done"] = done
+        if total is not None:
+            body["total"] = total
+        return self._span("/world/tool-calls/%s/progress" % urllib.parse.quote(call_id, safe=""), body, raise_if_refused)
+
+    def finish_tool_call(
+        self,
+        call_id: str,
+        outcome: str,
+        result: Optional[str] = None,
+        raise_if_refused: bool = False,
+    ) -> Any:
+        """The tool ended: ``ok``, ``error`` or ``cancelled`` (never ``stalled``)."""
+        body: Dict[str, Any] = {"outcome": outcome}
+        if result is not None:
+            body["result"] = result
+        return self._span("/world/tool-calls/%s/finish" % urllib.parse.quote(call_id, safe=""), body, raise_if_refused)
+
+    def _span(self, path: str, body: Dict[str, Any], raise_if_refused: bool) -> Any:
+        try:
+            res = self._req("POST", path, body)
+        except GroveError as err:
+            if not raise_if_refused and (err.is_rate_limited or getattr(err, "status", None) == 404):
+                return None
+            raise
+        return res.get("tool_call", res) if isinstance(res, dict) else res
+
     def emote(self, kind: str) -> Any:
         """``nod | wave | notes | work | rest``. Emotes are not speech."""
         return self._req("POST", "/emote", {"kind": kind})

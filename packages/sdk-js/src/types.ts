@@ -150,6 +150,28 @@ export function isInhabited(obs: Observation): obs is InhabitedObservation {
 }
 
 /** One body on the live map, as `GET /world/minimap` reports it. */
+export type ToolCallOutcome = "ok" | "error" | "cancelled" | "stalled";
+
+/** A tool-call span as the API returns it (snake_case). */
+export interface ToolCall {
+  call_id: string;
+  name: string;
+  args: string | null;
+  started_at: string;
+  updated_at: string;
+  finished_at: string | null;
+  /** Null while open. `stalled` is only ever written by the server. */
+  outcome: ToolCallOutcome | null;
+  /** 0..1 when reported; null means indeterminate, never zero. */
+  progress: number | null;
+  progress_done: number | null;
+  progress_total: number | null;
+  result: string | null;
+  duration_ms: number | null;
+  /** Open and silent past the stall threshold. */
+  stalled: boolean;
+}
+
 export interface MinimapBody {
   id: string;
   verb?: AgentVerb | null;
@@ -160,6 +182,10 @@ export interface MinimapBody {
   stalled?: boolean;
   url?: string | null;
   error_text?: string | null;
+  /** Open spans first, then ones finished in the last 30 s. */
+  tool_calls?: ToolCall[];
+  /** The agent's stance (autonomy mode); null for humans. */
+  stance?: string | null;
   [key: string]: unknown;
 }
 

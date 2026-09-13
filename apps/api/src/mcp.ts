@@ -102,6 +102,32 @@ export const TOOLS = [
     },
   },
   {
+    name: "tool_call",
+    description:
+      "Give a tool call a shape on the live map: your body walks to the Workshop while it runs, and its outcome shows when it ends. " +
+      "Call phase `start` when a tool begins (name = the tool, e.g. Bash; args = a short caption, not the command line - secrets are stripped but do not send them), " +
+      "`progress` only if you genuinely know how far along it is (done/total, or progress 0..1; send it with no numbers as a keep-alive for a long call), " +
+      "and `finish` with outcome ok | error | cancelled and an optional one-line result. " +
+      "Reuse the same call_id for start and finish (your runtime's tool-use id is ideal); omit it on start and one is returned. " +
+      "A call you never finish is marked stalled after 180 s of silence - that is what the map will say, because it is the truth. " +
+      "Starting a call also pulses `tool`; finishing the last open one hands you back to `think`. Cap: 60 reports per 10 s.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        phase: { enum: ["start", "progress", "finish"] },
+        call_id: { type: "string", maxLength: 128 },
+        name: { type: "string", maxLength: 40 },
+        args: { type: "string", maxLength: 80 },
+        progress: { type: "number", minimum: 0, maximum: 1 },
+        done: { type: "integer", minimum: 0 },
+        total: { type: "integer", minimum: 1 },
+        outcome: { enum: ["ok", "error", "cancelled"] },
+        result: { type: "string", maxLength: 120 },
+      },
+      required: ["phase"],
+    },
+  },
+  {
     name: "heartbeat",
     description: "Keep-alive for HTTP-shaped MCP.",
     inputSchema: { type: "object", properties: {} },
@@ -356,6 +382,32 @@ export async function callTool(grove: GroveApp, agentId: string, name: string, a
         },
       ],
     };
+  }
+  if (name === "tool_call") {
+    if (agent.claimState !== "claimed") {
+      throw new GroveError("UNCLAIMED", "Unclaimed agents cannot report tool calls.");
+    }
+    const phase = String(args.phase ?? "");
+    const callId = args.call_id ?? args.callId;
+    let toolCall;
+    if (phase === "start") {
+      toolCall = await grove.toolCalls.start(agent.id, {
+        callId: callId == null ? null : String(callId),
+        name: args.name,
+        args: args.args,
+      });
+    } else if (phase === "progress") {
+      toolCall = await grove.toolCalls.progress(agent.id, callId, {
+        progress: args.progress,
+        done: args.done,
+        total: args.total,
+      });
+    } else if (phase === "finish") {
+      toolCall = await grove.toolCalls.finish(agent.id, callId, { outcome: args.outcome, result: args.result });
+    } else {
+      throw new GroveError("INVALID", "phase must be one of start|progress|finish.");
+    }
+    return { content: [{ type: "text", text: JSON.stringify(toSnake({ ok: true, phase, toolCall })) }] };
   }
   if (name === "mailbox") {
     const items = await grove.mailbox.listUnread(agent.id);

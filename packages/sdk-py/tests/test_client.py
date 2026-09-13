@@ -111,6 +111,31 @@ class ClientTest(unittest.TestCase):
         with self.assertRaises(GroveError):
             grove.pulse("tool", "again", raise_if_refused=True)
 
+    def test_tool_call_span_routes_and_bodies(self):
+        rec = Recorder({"ok": True, "tool_call": {"call_id": "toolu_1", "outcome": None}})
+        grove = self.client(rec)
+        span = grove.start_tool_call("Bash", call_id="toolu_1", args="pnpm test")
+        self.assertEqual(span["call_id"], "toolu_1")
+        self.assertEqual(rec.last.full_url, BASE + "/world/tool-calls")
+        self.assertEqual(rec.last_body(), {"name": "Bash", "call_id": "toolu_1", "args": "pnpm test"})
+        grove.tool_call_progress("toolu_1", done=3, total=12)
+        self.assertEqual(rec.last.full_url, BASE + "/world/tool-calls/toolu_1/progress")
+        self.assertEqual(rec.last_body(), {"done": 3, "total": 12})
+        grove.finish_tool_call("toolu_1", "ok", result="42 passed")
+        self.assertEqual(rec.last.full_url, BASE + "/world/tool-calls/toolu_1/finish")
+        self.assertEqual(rec.last_body(), {"outcome": "ok", "result": "42 passed"})
+
+    def test_refused_span_report_returns_none(self):
+        rec = Recorder(
+            status=429,
+            headers={"Retry-After": "1"},
+            body={"error": {"code": "RATE_LIMITED", "message": "Tool-call report limiter exhausted."}},
+        )
+        grove = self.client(rec)
+        self.assertIsNone(grove.start_tool_call("Bash"))
+        with self.assertRaises(GroveError):
+            grove.finish_tool_call("x", "ok", raise_if_refused=True)
+
     def test_refusal_carries_retry_after_and_policy(self):
         rec = Recorder(
             status=429,

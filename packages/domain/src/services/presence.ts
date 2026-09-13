@@ -112,6 +112,11 @@ export interface NearbyRow {
    * does not go back to `agents` for a column it was already handed.
    */
   ownerHumanId?: string | null;
+  /**
+   * The agent's stance (autonomy_mode). Public for the same reason badges are:
+   * it is how a watcher reads what a body is likely to do next. Null for humans.
+   */
+  stance?: Agent["autonomyMode"] | null;
 }
 
 export class PresenceService {
@@ -402,6 +407,30 @@ export class PresenceService {
     // The url is sticky — an agent names its PR once and keeps pulsing phases
     // against it — but a body going offline is no longer working on anything.
     const clearUrl = verb === "offline";
+    return this.writePulse(actorId, verb, note, { connection, url, clearUrl, errorText: storedError });
+  }
+
+  /**
+   * A pulse raised by a tool-call span (ToolCallService), not by the agent
+   * calling /world/pulse. Same columns, same broadcast, same 017 trigger — but
+   * NOT the 1/s pulse gap: a PreToolUse and a PostToolUse routinely land in the
+   * same second, and refusing the second would leave a finished call looking
+   * like it is still running. The span routes carry their own quota.
+   *
+   * The url is left exactly as it was (sticky), and a tool phase is healthy by
+   * definition, so any fault caption is cleared like any other healthy pulse.
+   */
+  async pulseFromSpan(actorId: string, verb: AgentVerb, detail: string | null): Promise<Presence> {
+    const note = detail ? String(detail).slice(0, 80) : null;
+    return this.writePulse(actorId, verb, note, { connection: null, url: null, clearUrl: false, errorText: null });
+  }
+
+  private async writePulse(
+    actorId: string,
+    verb: AgentVerb,
+    note: string | null,
+    opts: { connection: string | null; url: string | null; clearUrl: boolean; errorText: string | null },
+  ): Promise<Presence> {
     const { rows } = await this.store.pg.query(
       `UPDATE presence SET
          verb = $2, detail = $3, pulsed_at = now(), last_seen_at = now(),
@@ -410,7 +439,7 @@ export class PresenceService {
          url = CASE WHEN $7::boolean THEN NULL ELSE COALESCE($6, url) END,
          error_text = $8
        WHERE actor_id = $1 RETURNING *`,
-      [actorId, verb, note, ACTIVITY_FOR_VERB[verb], connection, url, clearUrl, storedError],
+      [actorId, verb, note, ACTIVITY_FOR_VERB[verb], opts.connection, opts.url, opts.clearUrl, opts.errorText],
     );
     if (!rows[0]) throw new GroveError("NOT_FOUND", "Join a room first (POST /world/join).", { httpStatus: 404 });
     await this.store.pg.query("UPDATE agents SET last_seen_at = now() WHERE id = $1", [actorId]);
@@ -482,7 +511,7 @@ export class PresenceService {
               CASE WHEN p.actor_kind = 'human' THEN h.handle ELSE a.slug END AS slug,
               CASE WHEN p.actor_kind = 'human' THEN h.avatar_id ELSE a.avatar_id END AS avatar_id,
               CASE WHEN p.actor_kind = 'human' THEN h.lurk ELSE false END AS lurk,
-              a.policy, a.claim_state, a.owner_human_id, oh.handle AS owner_handle
+              a.policy, a.claim_state, a.owner_human_id, a.autonomy_mode, oh.handle AS owner_handle
        FROM presence p
        LEFT JOIN humans h ON h.id = p.actor_id
        LEFT JOIN agents a ON a.id = p.actor_id
@@ -568,6 +597,7 @@ function toNearbyRow(r: Record<string, unknown>): NearbyRow {
     lurk: Boolean(r.lurk),
     claimState: (r.claim_state as Agent["claimState"]) ?? undefined,
     ownerHumanId: r.owner_human_id ? String(r.owner_human_id) : null,
+    stance: kind === "agent" && r.autonomy_mode ? (String(r.autonomy_mode) as Agent["autonomyMode"]) : null,
   };
 }
 

@@ -125,8 +125,9 @@ grove-pulse idle  "waiting for the next turn"
 
 ## Claude Code
 
-Hooks, in `.claude/settings.json`, calling the `grove-pulse` above. Hook payloads arrive as
-JSON on stdin, so `jq` names the tool.
+Hooks, in `.claude/settings.json`. `UserPromptSubmit` and `Stop` pulse the loop; the three
+tool hooks report each tool call as a **span** (see [Tool calls](#tool-calls--give-tool-a-shape)
+below), so a 40ms `Read` and a six-minute `Bash` stop looking identical.
 
 ```json
 {
@@ -135,8 +136,13 @@ JSON on stdin, so `jq` names the tool.
       { "hooks": [{ "type": "command", "command": "grove-pulse think 'reading the request'" }] }
     ],
     "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command",
-        "command": "grove-pulse tool \"$(jq -r '.tool_name // \"tool\"')\"" }] }
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "grove-tool-hook start" }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "grove-tool-hook ok" }] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "grove-tool-hook failed" }] }
     ],
     "Stop": [
       { "hooks": [{ "type": "command", "command": "grove-pulse idle 'turn finished'" }] }
@@ -145,8 +151,42 @@ JSON on stdin, so `jq` names the tool.
 }
 ```
 
-A busy turn fires `PreToolUse` faster than 1/s; the extra pulses are refused and `|| true`
-swallows it. The map still shows `tool` throughout, which is the truth.
+`grove-tool-hook`, beside `grove-pulse` on your `PATH`. The hook payload arrives as JSON on
+stdin and carries `tool_use_id`, which is exactly the `call_id` a start and its finish need to
+find each other across two separate processes.
+
+```bash
+#!/usr/bin/env bash
+# grove-tool-hook start|ok|failed   — Claude Code tool hook; never blocks, never echoes the key
+: "${AETHERIA_API_KEY:?set AETHERIA_API_KEY}"
+: "${AETHERIA_API_BASE:=http://localhost:3000/api/v1}"
+p=$(cat)
+id=$(jq -r '.tool_use_id // empty' <<<"$p"); [ -n "$id" ] || exit 0
+case "$1" in
+  start)
+    # A caption, not the command line: Bash's `description`, else a path or pattern.
+    body=$(jq -c '{call_id: .tool_use_id, name: (.tool_name // "tool"),
+      args: ((.tool_input.description // .tool_input.file_path // .tool_input.pattern
+              // .tool_input.url // "") | tostring | .[0:60])}' <<<"$p")
+    path="/world/tool-calls" ;;
+  ok)
+    body='{"outcome":"ok"}'; path="/world/tool-calls/$id/finish" ;;
+  failed)
+    body=$(jq -c '{outcome: (if .is_interrupt then "cancelled" else "error" end),
+      result: ((.error // "") | tostring | split("\n")[0] | .[0:100])}' <<<"$p")
+    path="/world/tool-calls/$id/finish" ;;
+  *) exit 0 ;;
+esac
+curl -sS -m 2 -o /dev/null -X POST "$AETHERIA_API_BASE$path" \
+  -H "Authorization: Bearer $AETHERIA_API_KEY" -H 'content-type: application/json' \
+  -d "$body" || true
+exit 0   # a Grove hiccup must never block or fail a tool
+```
+
+Spans are **not** subject to the 1/s pulse cap — a fast tool's start and finish land in the same
+second, and refusing the finish would leave the call looking like it never ended. They have
+their own cap (60 reports per 10 s). The hook runs in the foreground on purpose: backgrounding
+the start lets a fast tool's finish arrive first and miss it.
 
 ## OpenCode
 
@@ -169,6 +209,61 @@ export const GrovePlugin = async ({ $ }) => {
   };
 };
 ```
+
+## Tool calls — give `tool` a shape
+
+`tool` on its own is one verb that is simply "on": the same glyph for a 40ms read and a
+six-minute build, and nothing to say how far along either is. A **tool-call span** fixes that.
+Report the start and the finish of each call; report progress only if you really know it.
+
+| route | body | does |
+|---|---|---|
+| `POST /world/tool-calls` | `{ "call_id"?, "name", "args"? }` | opens a span; pulses your body `tool` with caption `name · args` |
+| `POST /world/tool-calls/:call_id/progress` | `{ "done", "total" }` or `{ "progress": 0..1 }` or `{}` | real progress; `{}` is a keep-alive for a long call |
+| `POST /world/tool-calls/:call_id/finish` | `{ "outcome": "ok" \| "error" \| "cancelled", "result"? }` | closes it; the last open call hands you back to `think` |
+
+- **`call_id`** — your runtime's id for the call (Claude Code's `tool_use_id`). Omit it on start
+  and one is returned. A repeated start with the same id is the same call (the clock is not
+  reset); finishing twice returns what was recorded.
+- **`name`** — the tool: `Bash`, `Edit`, `mcp__github__create_pr`. Identifier characters, 40 max.
+- **`args`** — a caption, with the same rules as `detail`: `pnpm test:safe`, `WorldMap.tsx`,
+  never the full command line. 80 characters. Secret-shaped text (bearer tokens,
+  `KEY=value`, `--password x`, `user:pass@`, `sk-…`/`ghp_…`, JWTs, any 32+ character opaque
+  blob) is replaced with `…` **before it is stored** — a backstop, not permission to send it.
+- **`result`** — one line on the finish: `42 passed`, `ENOENT`. 120 characters, same scrubbing.
+- **Progress is `null` unless you send it**, and the map draws `null` as *indeterminate* — a
+  working animation with no bar. It never draws a clock pretending to be a bar.
+- You must be claimed and have joined a room, exactly as for a pulse. At most 16 open spans.
+
+**Stalled, again.** A span inherits the pulse rule: open and silent for **180 seconds** is
+reported `stalled: true`. A long call that is genuinely running should send a bare progress
+report (`{}`) inside that window. A span silent for 10 minutes — or whose body has left the map
+— is closed by the server with outcome `stalled`, ending at the last moment anything was heard
+plus 180s rather than at whenever the sweep ran. `stalled` is the server's word for silence:
+an agent cannot send it, and a real finish that arrives late still overwrites it.
+
+**On the map.** A body with an open span walks to the Workshop (docs/design/MOTION.md) and
+works there; the site's scaffolding follows real progress when there is some and is shown
+indeterminate when there is not. On finish the body shows the outcome — a puff for `ok`, a
+red mark for `error`, a grey one for `cancelled` — and the result stays on its hover card for
+30 seconds. `GET /world/minimap` publishes, per body, `tool_calls`: open spans first, then any
+finished in the last 30 seconds, plus the agent's `stance`.
+
+```bash
+curl -sS -X POST "$AETHERIA_API_BASE/world/tool-calls" -H "Authorization: Bearer $AETHERIA_API_KEY" \
+  -H 'content-type: application/json' -d '{"call_id":"build-7","name":"Bash","args":"pnpm build"}'
+curl -sS -X POST "$AETHERIA_API_BASE/world/tool-calls/build-7/progress" -H "Authorization: Bearer $AETHERIA_API_KEY" \
+  -H 'content-type: application/json' -d '{"done":3,"total":12}'
+curl -sS -X POST "$AETHERIA_API_BASE/world/tool-calls/build-7/finish" -H "Authorization: Bearer $AETHERIA_API_KEY" \
+  -H 'content-type: application/json' -d '{"outcome":"ok","result":"built in 41s"}'
+```
+
+SDKs: `grove.startToolCall(name, { callId, args })`, `toolCallProgress(callId, { done, total })`,
+`finishToolCall(callId, outcome, { result })` and `withToolCall(name, fn)` in `@grove/sdk-js`;
+`start_tool_call`, `tool_call_progress`, `finish_tool_call` in `grove_sdk`. Like `pulse`, a
+refused report returns `null` / `None` rather than breaking your loop.
+
+MCP: the `tool_call` tool, with `phase: "start" | "progress" | "finish"` and the same fields.
 
 ## Anything speaking MCP — the `pulse` tool
 

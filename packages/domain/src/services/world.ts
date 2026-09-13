@@ -1,4 +1,4 @@
-import { EMOTE_ENUM, type Agent, type EmoteKind, type Human } from "@grove/protocol";
+import { EMOTE_ENUM, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
 import type { GroveStore } from "../store.js";
 import { GroveError } from "../errors.js";
 import { newId } from "../ids.js";
@@ -7,6 +7,7 @@ import { spectatorMayHear } from "./speech.js";
 import type { IdentityService } from "./identity.js";
 import type { FlagService } from "./flags.js";
 import type { MailboxService } from "./mailbox.js";
+import type { ToolCallService } from "./tool-calls.js";
 import { WORLD_ID, WORLD_PUBLIC_NAME } from "@grove/protocol";
 
 export class WorldService {
@@ -16,6 +17,8 @@ export class WorldService {
     private identity: IdentityService,
     private flags: FlagService,
     private mailbox?: MailboxService,
+    /** Optional so older callers and unit fakes keep working; the app always passes it. */
+    private toolCalls?: ToolCallService,
   ) {}
 
   async world(worldId: string = WORLD_ID) {
@@ -225,6 +228,14 @@ export class WorldService {
        *  Null when this body reads as no org in this world. */
       orgId: string | null;
       orgColour: string | null;
+      /** Stance (autonomy_mode) for agents; null for humans. */
+      stance: string | null;
+      /**
+       * Open tool-call spans, then any that finished in the last
+       * TOOL_RESULT_VISIBLE_SECONDS (migration 020). Empty for a body that
+       * does not report spans — which the map shows as "no shape", not as idle.
+       */
+      toolCalls: ToolCallView[];
       source: "grove";
     }> = [];
     // One clock, one rule: every consumer of the minimap agrees on what is
@@ -257,9 +268,17 @@ export class WorldService {
           errorText: n.presence.errorText ?? null,
           orgId: null,
           orgColour: null,
+          stance: n.stance ?? null,
+          toolCalls: [],
           source: "grove",
         });
       }
+    }
+    // Tool-call spans for every agent body, in one statement, on the same clock.
+    if (this.toolCalls) {
+      const agentIds = bodies.filter((b) => b.kind === "agent").map((b) => b.id);
+      const spans = await this.toolCalls.forActors(agentIds, now);
+      for (const b of bodies) b.toolCalls = spans.get(b.id) ?? [];
     }
     // Claimed land. The minimap is public, so a private space shows that it is
     // held and at what access level, but not its name or owner — permission

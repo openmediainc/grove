@@ -66,6 +66,7 @@ async function main() {
 
   setInterval(() => {
     void grove.presence.evictStale();
+    void grove.toolCalls.sweep().catch(() => {});
     void grove.identity.purgeExpiredUnclaimed();
   }, 60_000);
 

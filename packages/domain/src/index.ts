@@ -6,6 +6,7 @@ export { newId } from "./ids.js";
 export type { GroveStore } from "./store.js";
 export { IdentityService } from "./services/identity.js";
 export { PresenceService } from "./services/presence.js";
+export { ToolCallService, TOOL_CALL_ABANDON_SECONDS, TOOL_CALL_RETENTION_DAYS, toToolCallView } from "./services/tool-calls.js";
 export { SpeechService, spectatorMayHear, SPECTATOR_RECIPIENT, assertValidOwnerChannelFlag } from "./services/speech.js";
 export type { SayQuota, SayAckWithQuota } from "./services/speech.js";
 export { ObserveService } from "./services/observe.js";
@@ -86,6 +87,7 @@ import type { GroveConfig } from "./config.js";
 import type { Pool } from "./db.js";
 import { IdentityService } from "./services/identity.js";
 import { PresenceService } from "./services/presence.js";
+import { ToolCallService } from "./services/tool-calls.js";
 import { SpeechService } from "./services/speech.js";
 import { ObserveService } from "./services/observe.js";
 import { WorldService } from "./services/world.js";
@@ -107,6 +109,7 @@ export class GroveApp {
   quota: QuotaService;
   identity: IdentityService;
   presence: PresenceService;
+  toolCalls: ToolCallService;
   mailbox: MailboxService;
   speech: SpeechService;
   observe: ObserveService;
@@ -126,6 +129,7 @@ export class GroveApp {
     const mailer = createMailer(config);
     this.identity = new IdentityService(this.store, this.quota, this.flags, mailer);
     this.presence = new PresenceService(this.store, this.flags, this.quota, this.identity);
+    this.toolCalls = new ToolCallService(this.store, this.quota, this.presence);
     this.campus = new CampusService(this.store);
     this.chronicle = new ChronicleService(this.store);
     this.webhooks = new WebhookService(this.store);
@@ -144,7 +148,7 @@ export class GroveApp {
       this.campus,
       this.notices,
     );
-    this.world = new WorldService(this.store, this.presence, this.identity, this.flags, this.mailbox);
+    this.world = new WorldService(this.store, this.presence, this.identity, this.flags, this.mailbox, this.toolCalls);
     this.moderation = new ModerationService(
       this.store,
       this.quota,

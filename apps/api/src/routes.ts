@@ -520,6 +520,49 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     return sendOk(reply, { presence });
   });
 
+  // Tool calls as spans (migration 020, PULSE.md "Tool calls"). Three routes
+  // rather than one with a `phase` field so a shell hook can hit each with a
+  // fixed URL, and so the rate-limit table names them. Validation lives in
+  // ToolCallService so the MCP `tool_call` tool and these cannot drift.
+  const requireClaimedAgent = async (req: Parameters<typeof requireAgent>[0]) => {
+    const agent = await requireAgent(req, grove);
+    if (agent.claimState !== "claimed") {
+      throw new GroveError("UNCLAIMED", "Unclaimed agents cannot report tool calls.");
+    }
+    return agent;
+  };
+
+  app.post("/api/v1/world/tool-calls", async (req, reply) => {
+    const agent = await requireClaimedAgent(req);
+    const b = body(req);
+    const toolCall = await grove.toolCalls.start(agent.id, {
+      callId: (b.call_id ?? b.callId) == null ? null : String(b.call_id ?? b.callId),
+      name: b.name,
+      args: b.args,
+    });
+    return sendOk(reply, { toolCall });
+  });
+
+  app.post("/api/v1/world/tool-calls/:callId/progress", async (req, reply) => {
+    const agent = await requireClaimedAgent(req);
+    const b = body(req);
+    const { callId } = req.params as { callId: string };
+    const toolCall = await grove.toolCalls.progress(agent.id, callId, {
+      progress: b.progress,
+      done: b.done,
+      total: b.total,
+    });
+    return sendOk(reply, { toolCall });
+  });
+
+  app.post("/api/v1/world/tool-calls/:callId/finish", async (req, reply) => {
+    const agent = await requireClaimedAgent(req);
+    const b = body(req);
+    const { callId } = req.params as { callId: string };
+    const toolCall = await grove.toolCalls.finish(agent.id, callId, { outcome: b.outcome, result: b.result });
+    return sendOk(reply, { toolCall });
+  });
+
   app.post("/api/v1/world/enter", async (req, reply) => {
     const human = await requireHuman(req, grove);
     const result = await grove.presence.enter(

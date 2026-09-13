@@ -272,6 +272,22 @@ export class QuotaService {
   }
 
   /**
+   * Tool-call span reports (start / progress / finish). Deliberately NOT the
+   * 1/s pulse gap: a fast tool's start and finish land in the same second, and
+   * refusing the finish would leave the call looking like it never ended.
+   * 60 per 10 seconds covers a busy Claude Code turn (two reports per call,
+   * parallel calls included) and still stops a runaway loop.
+   */
+  async consumeToolCall(actorId: string): Promise<void> {
+    const limit = 60;
+    const key = `ratelimit:${actorId}:tool_call:10s`;
+    const n = await this.limiter.incr(key, 10);
+    if (n > limit) {
+      await this.refuse("tool_call", key, limit, n, 10_000, "Tool-call report limiter exhausted (60 per 10 seconds).");
+    }
+  }
+
+  /**
    * Asking to join a space. Cheap to send, expensive to read: an owner should
    * never be able to be buried. Two windows, same shape as consumeRegister —
    * a burst cap and a daily cap — and the daily one is tighter in the first 24h

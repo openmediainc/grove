@@ -61,6 +61,38 @@ describe("Grove client", () => {
     await expect(grove.pulse("tool", "again", { throwIfRefused: true })).rejects.toThrow(GroveApiError);
   });
 
+  it("reports a tool call as a span: start, progress, finish, on their own routes", async () => {
+    const { fetchImpl, calls } = stub((url) => ({
+      body: { ok: true, tool_call: { call_id: url.includes("/finish") ? "toolu_1" : "toolu_1", outcome: null } },
+    }));
+    const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });
+    const span = await grove.startToolCall("Bash", { callId: "toolu_1", args: "pnpm test" });
+    expect(span?.call_id).toBe("toolu_1");
+    await grove.toolCallProgress("toolu_1", { done: 3, total: 12 });
+    await grove.finishToolCall("toolu_1", "ok", { result: "42 passed" });
+    expect(calls.map((c) => c.url)).toEqual([
+      `${BASE}/world/tool-calls`,
+      `${BASE}/world/tool-calls/toolu_1/progress`,
+      `${BASE}/world/tool-calls/toolu_1/finish`,
+    ]);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ name: "Bash", call_id: "toolu_1", args: "pnpm test" });
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ done: 3, total: 12 });
+    expect(JSON.parse(String(calls[2]!.init.body))).toEqual({ outcome: "ok", result: "42 passed" });
+  });
+
+  it("wraps work in a span and never lets Grove change the result", async () => {
+    const { fetchImpl, calls } = stub((url) =>
+      url.endsWith("/tool-calls")
+        ? { status: 429, body: { ok: false, error: { code: "RATE_LIMITED", message: "no" } } }
+        : { body: { ok: true } },
+    );
+    const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });
+    await expect(grove.withToolCall("Build", async () => 7)).resolves.toBe(7);
+    // Start refused → no finish is sent for a span that does not exist.
+    expect(calls).toHaveLength(1);
+    await expect(grove.withToolCall("Build", async () => { throw new Error("boom"); })).rejects.toThrow("boom");
+  });
+
   it("surfaces Retry-After and the policy on a refusal", async () => {
     const { fetchImpl } = stub(() => ({
       status: 429,

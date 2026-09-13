@@ -13,6 +13,8 @@ import type {
   Room,
   SpaceSummary,
   SpeechChannel,
+  ToolCall,
+  ToolCallOutcome,
 } from "./types.js";
 
 export interface GroveOptions {
@@ -50,6 +52,30 @@ export interface PulseOptions {
    * telemetry, and PULSE.md is explicit that a refused one must never break
    * your loop. You get `null` back instead.
    */
+  throwIfRefused?: boolean;
+}
+
+export interface ToolCallStartOptions {
+  /** Your runtime's id for the call (e.g. Claude Code's tool_use_id). Generated when omitted. */
+  callId?: string;
+  /** A short caption, not the command line. Secret-shaped text is stripped server-side; do not rely on it. */
+  args?: string | null;
+  /** Throw when refused (rate limit, not joined). Default false: you get `null`. */
+  throwIfRefused?: boolean;
+}
+
+export interface ToolCallProgress {
+  /** 0..1. Only send what you actually know. */
+  progress?: number;
+  /** n of m, e.g. 3 of 12 files. */
+  done?: number;
+  total?: number;
+  throwIfRefused?: boolean;
+}
+
+export interface ToolCallFinishOptions {
+  /** One line: "42 passed", "ENOENT". A caption, not the output. */
+  result?: string | null;
   throwIfRefused?: boolean;
 }
 
@@ -302,6 +328,68 @@ export class Grove {
       return await this.request<{ presence: Presence }>("POST", "/world/pulse", body);
     } catch (err) {
       if (err instanceof GroveApiError && err.isRateLimited && !options.throwIfRefused) return null;
+      throw err;
+    }
+  }
+
+  // -- tool calls as spans (PULSE.md "Tool calls") ------------------------
+
+  /**
+   * A tool started. Your body walks to the Workshop and its caption names the
+   * tool. Returns the span (with its `call_id`) or `null` if refused: like a
+   * pulse, a span report is telemetry and must never break your loop.
+   */
+  async startToolCall(name: string, options: ToolCallStartOptions = {}): Promise<ToolCall | null> {
+    const body: Record<string, unknown> = { name, call_id: options.callId ?? uuid() };
+    if (options.args != null) body.args = options.args;
+    return this.spanRequest("/world/tool-calls", body, options.throwIfRefused);
+  }
+
+  /** Real progress only — or no numbers at all, as a keep-alive for a long call. */
+  async toolCallProgress(callId: string, progress: ToolCallProgress = {}): Promise<ToolCall | null> {
+    const body: Record<string, unknown> = {};
+    if (progress.progress != null) body.progress = progress.progress;
+    if (progress.done != null) body.done = progress.done;
+    if (progress.total != null) body.total = progress.total;
+    return this.spanRequest(`/world/tool-calls/${encodeURIComponent(callId)}/progress`, body, progress.throwIfRefused);
+  }
+
+  /** The tool ended: `ok`, `error` or `cancelled`. Never `stalled` — that is the server's word for silence. */
+  async finishToolCall(
+    callId: string,
+    outcome: Exclude<ToolCallOutcome, "stalled">,
+    options: ToolCallFinishOptions = {},
+  ): Promise<ToolCall | null> {
+    const body: Record<string, unknown> = { outcome };
+    if (options.result != null) body.result = options.result;
+    return this.spanRequest(`/world/tool-calls/${encodeURIComponent(callId)}/finish`, body, options.throwIfRefused);
+  }
+
+  /**
+   * Run `fn` as a tool call: start, then finish `ok` on return or `error` on
+   * throw (the error is re-thrown untouched). Grove being unreachable never
+   * changes what `fn` returns.
+   */
+  async withToolCall<T>(name: string, fn: () => Promise<T> | T, options: { args?: string | null } = {}): Promise<T> {
+    const span = await this.startToolCall(name, { args: options.args }).catch(() => null);
+    const finish = (outcome: "ok" | "error", result?: string) =>
+      span ? this.finishToolCall(span.call_id, outcome, { result }).catch(() => null) : Promise.resolve(null);
+    try {
+      const out = await fn();
+      await finish("ok");
+      return out;
+    } catch (err) {
+      await finish("error", err instanceof Error ? err.message.slice(0, 120) : undefined);
+      throw err;
+    }
+  }
+
+  private async spanRequest(path: string, body: Record<string, unknown>, throwIfRefused?: boolean): Promise<ToolCall | null> {
+    try {
+      const res = await this.request<{ tool_call: ToolCall }>("POST", path, body);
+      return res.tool_call;
+    } catch (err) {
+      if (err instanceof GroveApiError && !throwIfRefused && (err.isRateLimited || err.status === 404)) return null;
       throw err;
     }
   }

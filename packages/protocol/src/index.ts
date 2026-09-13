@@ -9,3 +9,5 @@ export * from "./codec.js";
 export * from "./graphemes.js";
 export * from "./map-layout.js";
 export * from "./agent-verbs.js";
+export * from "./motion.js";
+export * from "./tool-calls.js";
