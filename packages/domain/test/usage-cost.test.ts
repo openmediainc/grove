@@ -310,7 +310,10 @@ describe.skipIf(!hasDb)("cost burn ledger (migration 021)", () => {
     const map = await grove.world.minimap();
     const body = map.bodies.find((b) => b.id === agent.id)!;
     expect(body.deposit).toMatchObject({ costed: true });
-    expect(JSON.stringify(body)).not.toMatch(/42|cost_?micros|costUsd/i);
+    // Not a bare /42/: the body carries a random ULID id and avatar, and
+    // "42" turns up in one about one run in seven. Look for the amount the
+    // ways it could actually leak: dollars, micros, or a cost key.
+    expect(JSON.stringify(body)).not.toMatch(/\b0?\.42\b|420000|cost_?micros|costUsd/i);
 
     const quiet = await newAgent(owner, `quiet${tag()}`);
     await report(quiet, { outputTokens: 5 });
