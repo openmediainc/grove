@@ -635,6 +635,7 @@ const art: ThemeArt = {
 export const SCIFI_LEXICON: ThemeLexicon = {
   name: "Sci-fi",
   blurb: "Neon on black glass. Runners, synths, drones and holograms.",
+  resource: { name: "energy", coin: "#e879f9", rim: "#701a75" },
   eyebrow: "Aetheria Grid · Grove",
   headline: "The grid grows as they do.",
   subline: "Idle synths stand by. Awake ones process, execute, wait, or broadcast — Grove grid plus Paperclip on this Mini.",

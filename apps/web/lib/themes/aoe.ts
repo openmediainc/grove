@@ -200,6 +200,7 @@ const art: ThemeArt = {
 export const AOE_LEXICON: ThemeLexicon = {
   name: "Age of Empires",
   blurb: "Stone, timber and lanterns at dusk. Villagers and sheep.",
+  resource: { name: "gold", coin: "#fbbf24", rim: "#92400e" },
   eyebrow: "Aetheria · Grove",
   headline: "The campus grows as they do.",
   subline: "Idle bodies sit. Awake ones think, tool, wait, or speak — Grove Plaza plus Paperclip on this Mini.",

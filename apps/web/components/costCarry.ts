@@ -72,6 +72,8 @@ export class CostCarry {
     toScreen: (x: number, y: number) => { x: number; y: number },
     treasury: { x: number; y: number },
     reduceMotion: boolean,
+    /** The theme's resource colours; unpriced stays grey in every theme. */
+    coin: { coin: string; rim: string } = { coin: GOLD, rim: GOLD_RIM },
     now: number = Date.now(),
   ): void {
     if (this.trips.length === 0) {
@@ -93,10 +95,10 @@ export class CostCarry {
         continue;
       }
       live.push(trip);
-      const fill = trip.costed ? GOLD : UNPRICED;
-      const rim = trip.costed ? GOLD_RIM : UNPRICED_RIM;
+      const fill = trip.costed ? coin.coin : UNPRICED;
+      const rim = trip.costed ? coin.rim : UNPRICED_RIM;
       if (reduceMotion) {
-        if (age > LIFT_MS) this.pop(ctx, bank.x, bank.y - 18, Math.min(1, (age - LIFT_MS) / (CARRY_MS + POP_MS)), trip.costed);
+        if (age > LIFT_MS) this.pop(ctx, bank.x, bank.y - 18, Math.min(1, (age - LIFT_MS) / (CARRY_MS + POP_MS)), trip.costed ? coin.coin : null);
         else sack(ctx, trip.from.x + 12, trip.from.y - 4, fill, rim, trip.costed, 1);
         continue;
       }
@@ -114,24 +116,25 @@ export class CostCarry {
         const y = sy + (ey - sy) * p - Math.sin(Math.PI * p) * arc;
         sack(ctx, x, y, fill, rim, trip.costed, 1 - 0.25 * p);
       } else {
-        this.pop(ctx, bank.x, bank.y - 18, (age - LIFT_MS - CARRY_MS) / POP_MS, trip.costed);
+        this.pop(ctx, bank.x, bank.y - 18, (age - LIFT_MS - CARRY_MS) / POP_MS, trip.costed ? coin.coin : null);
       }
     }
     this.trips = live;
     this.at.clear();
   }
 
-  private pop(ctx: CanvasRenderingContext2D, x: number, y: number, p: number, costed: boolean): void {
+  private pop(ctx: CanvasRenderingContext2D, x: number, y: number, p: number, coin: string | null): void {
+    const costed = coin !== null;
     ctx.save();
     ctx.globalAlpha = 1 - p;
-    ctx.strokeStyle = costed ? GOLD : UNPRICED;
+    ctx.strokeStyle = coin ?? UNPRICED;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(x, y, 6 + 14 * p, 0, Math.PI * 2);
     ctx.stroke();
     ctx.font = "bold 11px ui-sans-serif, system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillStyle = costed ? GOLD : UNPRICED;
+    ctx.fillStyle = coin ?? UNPRICED;
     ctx.fillText(costed ? "+" : "?", x, y - 10 - 8 * p);
     ctx.restore();
   }

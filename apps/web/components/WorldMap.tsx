@@ -59,6 +59,7 @@ import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
 import { ResourceBar } from "./ResourceBar";
 import { CostCarry } from "./costCarry";
+import { resourceTerms } from "@/lib/cost";
 import { skyAt, type Sky } from "./skyClock";
 import {
   DEPART_MS,
@@ -2299,6 +2300,7 @@ export function WorldMap() {
             (lx, ly) => ({ x: lx * z + v.px, y: ly * z + v.py }),
             { x: ox + bank.x, y: oy + bank.y },
             reduceMotion.matches,
+            resourceTerms(theme),
           );
         }
         // The heartbeat rings, at the same fixed size and for the same reason.

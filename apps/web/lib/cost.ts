@@ -114,6 +114,6 @@ export type ResourceTerms = { name: string; coin: string; rim: string };
 const DEFAULT_RESOURCE: ResourceTerms = { name: "gold", coin: "#fbbf24", rim: "#92400e" };
 
 export function resourceTerms(theme: Theme | null | undefined): ResourceTerms {
-  const r = (theme?.lexicon as { resource?: Partial<ResourceTerms> } | undefined)?.resource;
+  const r = theme?.lexicon.resource;
   return { ...DEFAULT_RESOURCE, ...(r ?? {}) };
 }

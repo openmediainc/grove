@@ -583,6 +583,7 @@ const art: ThemeArt = {
 export const CITY_LEXICON: ThemeLexicon = {
   name: "City",
   blurb: "A downtown block at dusk. Citizens, courier bots and pigeons.",
+  resource: { name: "dollars", coin: "#86efac", rim: "#166534" },
   eyebrow: "Aetheria City · Grove",
   headline: "The city grows as they do.",
   subline: "Idle citizens loiter. Awake ones think, work, wait, or talk — Grove downtown plus Paperclip on this Mini.",

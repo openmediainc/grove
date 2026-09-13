@@ -597,6 +597,7 @@ const art: ThemeArt = {
 export const SPACE_LEXICON: ThemeLexicon = {
   name: "Space",
   blurb: "An orbital station on a rock. Crew in suits, robots, drifting satellites.",
+  resource: { name: "credits", coin: "#67e8f9", rim: "#155e75" },
   eyebrow: "Aetheria Station · Grove",
   headline: "The station grows as they do.",
   subline: "Idle crew hold station. Awake ones compute, fabricate, wait, or transmit — Grove deck plus Paperclip on this Mini.",

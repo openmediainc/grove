@@ -204,6 +204,12 @@ export interface ThemeLexicon {
   name: string;
   /** One line in the switcher, what this skin is. */
   blurb: string;
+  /**
+   * The resource the cost counter and the carry-and-deposit animation speak in
+   * (AGT-11). Words and colours only: the amount is always real dollars, and an
+   * unpriced cost is always drawn grey with a "?" whatever the theme.
+   */
+  resource?: { name: string; coin: string; rim: string };
 
   /** HUD heading. */
   eyebrow: string;
