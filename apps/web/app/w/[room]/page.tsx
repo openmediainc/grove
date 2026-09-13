@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, WS_ORIGIN, type RoomPayload } from "@/lib/api";
+import { api, WS_ORIGIN, type Nearby, type RoomPayload } from "@/lib/api";
 import type { RefusalInput } from "@grove/ui";
 import { GeoAvatar } from "@/components/Avatar";
 import { FirstFiveMinutes, noteSpoke, type TranscriptLine } from "@/components/FirstFiveMinutes";
@@ -17,6 +17,17 @@ import {
   type SpaceSilenceSource,
 } from "@/components/RoomPresence";
 import { readPixelFlag, writePixelFlag } from "@/lib/pixel";
+import { WhisperBar, type WhisperCheckState } from "@/components/WhisperBar";
+import {
+  emitWhisperEvent,
+  leadingMention,
+  nameFor,
+  parseWhisperCommand,
+  refusalFromWire,
+  type SayAckWire,
+  type WhisperCheckWire,
+  type WhisperLine,
+} from "@/lib/whisper";
 
 /**
  * Only a fallback now. The campus list is built from `GET /api/v1/civic`, which
@@ -109,6 +120,19 @@ export default function RoomPage() {
   const [arrived, setArrived] = useState(false);
   const [stepping, setStepping] = useState(false);
   const composeRef = useRef<HTMLInputElement>(null);
+  /**
+   * Who the compose box is whispering to, or null for the room. Kept as the
+   * roster row it was picked from, so a body that walks out is still named.
+   */
+  const [whisperTo, setWhisperTo] = useState<Nearby | null>(null);
+  const [whisperCheck, setWhisperCheck] = useState<WhisperCheckState>({ status: "checking" });
+  /**
+   * Private lines, the reader's own. Separate from `lines` on purpose: the
+   * transcript endpoint is room_say only and `load()` replaces `lines`
+   * wholesale, which would silently erase every whisper on the next refresh.
+   */
+  const [whispers, setWhispers] = useState<WhisperLine[]>([]);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     setPixel(readPixelFlag());
@@ -166,7 +190,28 @@ export default function RoomPage() {
           try {
             const msg = JSON.parse(String(ev.data)) as { type?: string; body?: string; sender_id?: string; sender_kind?: string; speech_id?: string; room_id?: string };
             if (msg.type === "speech" && msg.body) {
-              setLines((cur) => [
+              const channel = (msg as { channel?: string }).channel ?? "room_say";
+              if (channel === "whisper") {
+                const targetId = (msg as { target_id?: string }).target_id;
+                // Our own whisper echoes back on the room channel; the ack has
+                // already put it in the log. Anything not addressed to us is
+                // not ours to show (the server drops those; this is the belt).
+                if (msg.sender_id === me.id || targetId !== me.id) return;
+                const line: WhisperLine = {
+                  id: msg.speech_id ?? String(Date.now()),
+                  body: msg.body,
+                  direction: "in",
+                  other_id: msg.sender_id ?? "",
+                  other_kind: msg.sender_kind === "agent" ? "agent" : "human",
+                  created_at: new Date().toISOString(),
+                };
+                setWhispers((cur) => (cur.some((w) => w.id === line.id) ? cur : [...cur, line]));
+                return;
+              }
+              // Owner-channel frames are private too, and have their own thread;
+              // printing them here would put them in the ROOM's log.
+              if (channel !== "room_say") return;
+              setLines((cur) => cur.some((l) => l.id === msg.speech_id) ? cur : [
                 ...cur,
                 {
                   id: msg.speech_id ?? String(Date.now()),
@@ -197,6 +242,7 @@ export default function RoomPage() {
   }
 
   async function say() {
+    if (whisperTo) return whisper(whisperTo);
     setErr(null);
     setRefusal(null);
     try {
@@ -214,6 +260,85 @@ export default function RoomPage() {
       setRefusal(toRefusalInput(e, "human"));
     }
   }
+
+  /**
+   * A whisper stays in whisper mode after it is sent: you are talking to
+   * someone. The way back is the "Back to the room" button or Esc.
+   */
+  async function whisper(target: Nearby) {
+    const body = draft;
+    if (!body.trim() || sending) return;
+    if (whisperCheck.status === "refused" || whisperCheck.status === "checking") return;
+    setErr(null);
+    setRefusal(null);
+    setSending(true);
+    try {
+      const r = await api<{ speech: SayAckWire }>("/api/v1/say", {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ channel: "whisper", target_id: target.actor_id, body }),
+      });
+      const missed = r.speech.undelivered.find((u) => u.actor_id === target.actor_id) ?? r.speech.undelivered[0];
+      const line: WhisperLine = {
+        id: r.speech.id,
+        body,
+        direction: "out",
+        other_id: target.actor_id,
+        other_kind: target.kind,
+        created_at: new Date().toISOString(),
+        undelivered: missed ? refusalFromWire(missed, target.kind) : null,
+      };
+      setWhispers((cur) => (cur.some((w) => w.id === line.id) ? cur : [...cur, line]));
+      setDraft("");
+      emitWhisperEvent({ phase: "sent", speakerId: me?.id ?? null, targetId: target.actor_id, roomSlug: data?.room.slug ?? room });
+      // It went nowhere: the check was stale (a setting changed, a block landed).
+      // Show the up-to-date refusal in the bar, not only on the line.
+      if (missed) setWhisperCheck({ status: "refused", refusal: refusalFromWire(missed, target.kind) });
+    } catch (e) {
+      setRefusal(toRefusalInput(e, "human", { channel: "whisper", recipientKind: target.kind }));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function startWhisper(target: Nearby, rest?: string) {
+    if (target.actor_id === me?.id) return;
+    setRefusal(null);
+    setWhisperTo(target);
+    if (rest !== undefined) setDraft(rest);
+    emitWhisperEvent({ phase: "target", speakerId: me?.id ?? null, targetId: target.actor_id, roomSlug: data?.room.slug ?? room });
+    composeRef.current?.focus();
+  }
+
+  function stopWhisper() {
+    if (!whisperTo) return;
+    setWhisperTo(null);
+    setRefusal(null);
+    emitWhisperEvent({ phase: "cleared", speakerId: me?.id ?? null, targetId: null, roomSlug: data?.room.slug ?? room });
+    composeRef.current?.focus();
+  }
+
+  /** Ask the kernel, not the badges: privacy, blocks and the space all count. */
+  useEffect(() => {
+    if (!whisperTo) return;
+    let live = true;
+    setWhisperCheck({ status: "checking" });
+    void api<{ check: WhisperCheckWire }>(`/api/v1/whisper/check?target_id=${encodeURIComponent(whisperTo.actor_id)}`)
+      .then((r) => {
+        if (!live) return;
+        setWhisperCheck(
+          r.check.allowed || !r.check.refusal
+            ? { status: "allowed" }
+            : { status: "refused", refusal: refusalFromWire(r.check.refusal, whisperTo.kind) },
+        );
+      })
+      .catch(() => {
+        if (live) setWhisperCheck({ status: "unknown" });
+      });
+    return () => {
+      live = false;
+    };
+  }, [whisperTo?.actor_id]);
 
   async function pinNotice() {
     setErr(null);
@@ -287,9 +412,32 @@ export default function RoomPage() {
   /** Who said it. The transcript used to print only HUMAN / AGENT and the body. */
   const nameOf = useMemo(() => {
     const m = new Map<string, string>();
+    if (whisperTo) m.set(whisperTo.actor_id, nameFor(whisperTo));
     for (const n of data?.nearby ?? []) m.set(n.actor_id, n.display_name || n.slug);
     return m;
-  }, [data]);
+  }, [data, whisperTo]);
+
+  /** The room's lines and the reader's private ones, in the order they happened. */
+  const log = useMemo(() => {
+    type Entry = { at: number; order: number } & (
+      | { kind: "say"; line: TranscriptLine }
+      | { kind: "whisper"; line: WhisperLine }
+    );
+    const at = (s?: string) => {
+      const t = s ? Date.parse(s) : NaN;
+      return Number.isNaN(t) ? 0 : t;
+    };
+    const out: Entry[] = [
+      ...lines.map((line, i) => ({ kind: "say" as const, line, at: at(line.created_at), order: i })),
+      ...whispers.map((line, i) => ({ kind: "whisper" as const, line, at: at(line.created_at), order: lines.length + i })),
+    ];
+    return out.sort((a, b) => a.at - b.at || a.order - b.order);
+  }, [lines, whispers]);
+
+  const mention = useMemo(
+    () => (whisperTo ? null : leadingMention(draft, data?.nearby ?? [], me?.id)),
+    [draft, data, me, whisperTo],
+  );
 
   const seats = useMemo(() => {
     const cap = Math.min(data?.room.capacity ?? 30, 48);
@@ -425,6 +573,15 @@ export default function RoomPage() {
               capacity={data?.room.capacity ?? 40}
               nearby={data?.nearby ?? []}
               bubbles={lines.map((l) => ({ sender_id: l.sender_id, body: l.body }))}
+              highlightId={whisperTo?.actor_id ?? null}
+              onPickActor={
+                me
+                  ? (id) => {
+                      const n = data?.nearby.find((x) => x.actor_id === id);
+                      if (n && n.actor_id !== me.id) startWhisper(n);
+                    }
+                  : undefined
+              }
             />
           </div>
         ) : (
@@ -476,7 +633,15 @@ export default function RoomPage() {
           </div>
         ) : null}
         <div className="border-t border-white/10 p-4">
-          {room === "board" ? (
+          {whisperTo ? (
+            <WhisperBar
+              target={whisperTo}
+              check={whisperCheck}
+              inRoom={(data?.nearby ?? []).some((n) => n.actor_id === whisperTo.actor_id)}
+              onCancel={stopWhisper}
+            />
+          ) : null}
+          {room === "board" && !whisperTo ? (
             <input
               className="mb-2 w-full rounded-lg bg-dusk-800 px-3 py-2 ring-1 ring-white/10"
               value={noticeTitle}
@@ -487,18 +652,44 @@ export default function RoomPage() {
           <div className="flex gap-2">
             <input
               ref={composeRef}
-              className="flex-1 rounded-lg bg-dusk-800 px-3 py-2 ring-1 ring-white/10"
+              className={`min-w-0 flex-1 rounded-lg bg-dusk-800 px-3 py-2 ring-1 ${whisperTo ? "ring-violet-300/60" : "ring-white/10"}`}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={room === "board" ? "Notice body or room say…" : "Speak in this room…"}
+              aria-label={whisperTo ? `Whisper to ${nameFor(whisperTo)}` : "Speak in this room"}
+              onChange={(e) => {
+                const next = e.target.value;
+                // "/w lantern " switches the box to a whisper as soon as the name is finished.
+                const cmd = whisperTo ? null : parseWhisperCommand(next, data?.nearby ?? [], me?.id);
+                if (cmd) startWhisper(cmd.target, cmd.rest);
+                else setDraft(next);
+              }}
+              placeholder={
+                whisperTo
+                  ? `Whisper to ${nameFor(whisperTo)}…`
+                  : room === "board"
+                    ? "Notice body or room say…"
+                    : "Speak in this room… (/w name to whisper)"
+              }
               onKeyDown={(e) => {
                 if (e.key === "Enter") void say();
+                else if (e.key === "Escape" && whisperTo) {
+                  e.preventDefault();
+                  stopWhisper();
+                } else if (e.key === "Backspace" && whisperTo && draft === "") {
+                  stopWhisper();
+                }
               }}
             />
-            <button onClick={say} className="rounded-full bg-lantern-400 px-4 font-semibold text-dusk-950">
-              Say
+            <button
+              onClick={say}
+              disabled={
+                Boolean(whisperTo) &&
+                (sending || whisperCheck.status === "refused" || whisperCheck.status === "checking")
+              }
+              className={`shrink-0 rounded-full px-4 font-semibold text-dusk-950 disabled:cursor-not-allowed disabled:opacity-50 ${whisperTo ? "bg-violet-300" : "bg-lantern-400"}`}
+            >
+              {whisperTo ? "Whisper" : "Say"}
             </button>
-            {room === "board" ? (
+            {room === "board" && !whisperTo ? (
               <button
                 onClick={pinNotice}
                 title={
@@ -512,6 +703,18 @@ export default function RoomPage() {
               </button>
             ) : null}
           </div>
+          {mention ? (
+            <p className="mt-2 text-xs text-white/50">
+              That opens with @{mention.target.slug}, so the whole room hears it.{" "}
+              <button
+                type="button"
+                onClick={() => startWhisper(mention.target, mention.rest)}
+                className="rounded text-violet-200 underline decoration-violet-300/50 underline-offset-2 hover:text-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              >
+                Whisper it to {nameFor(mention.target)} instead
+              </button>
+            </p>
+          ) : null}
           {refusal ? <RefusalNotice input={refusal} /> : null}
           {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
         </div>
@@ -523,6 +726,8 @@ export default function RoomPage() {
             nearby={data?.nearby ?? []}
             silencedActorIds={silencedActorIds}
             meId={me?.id}
+            onWhisper={me ? (n) => (whisperTo?.actor_id === n.actor_id ? stopWhisper() : startWhisper(n)) : undefined}
+            whisperTargetId={whisperTo?.actor_id ?? null}
           />
         </div>
         <div className="flex-1 overflow-auto p-4">
@@ -533,7 +738,41 @@ export default function RoomPage() {
                 {emptyLog(data)}
               </li>
             ) : null}
-            {lines.map((l) => (
+            {log.map((entry) => {
+              if (entry.kind === "whisper") {
+                const w = entry.line;
+                const other = nameOf.get(w.other_id) ?? (w.other_kind === "agent" ? "an agent, since gone" : "someone, since gone");
+                const partner = (data?.nearby ?? []).find((n) => n.actor_id === w.other_id);
+                return (
+                  <li
+                    key={`w-${w.id}`}
+                    className="rounded-lg border border-violet-300/30 bg-violet-400/5 px-2 py-1.5"
+                  >
+                    <span className="mr-1.5 rounded bg-violet-300/20 px-1 py-px text-[9px] font-bold uppercase tracking-widest text-violet-200">
+                      {w.direction === "out" ? "whisper" : "whispered"}
+                    </span>
+                    <span className="mr-1.5 font-semibold text-violet-200">
+                      {w.direction === "out" ? `you → ${other}` : `${other} → you`}
+                    </span>
+                    <span className="italic text-white/85">{w.body}</span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-white/40">
+                      <span>only you two</span>
+                      {w.direction === "in" && partner && whisperTo?.actor_id !== partner.actor_id ? (
+                        <button
+                          type="button"
+                          onClick={() => startWhisper(partner)}
+                          className="rounded text-violet-200 underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+                        >
+                          whisper back
+                        </button>
+                      ) : null}
+                    </span>
+                    {w.undelivered ? <RefusalNotice input={w.undelivered} /> : null}
+                  </li>
+                );
+              }
+              const l = entry.line;
+              return (
               <li key={l.id}>
                 <span className="grove-kind">{l.sender_kind === "agent" ? "AGENT" : "HUMAN"}</span>
                 {/* A line with no name attached is not a conversation. The roster
@@ -547,7 +786,8 @@ export default function RoomPage() {
                 </span>
                 {l.body}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       </aside>

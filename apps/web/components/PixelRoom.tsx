@@ -35,18 +35,41 @@ export function PixelRoom({
   nearby,
   bubbles,
   className,
+  onPickActor,
+  highlightId,
 }: {
   roomSlug: string;
   capacity: number;
   nearby: Nearby[];
   bubbles?: Array<{ sender_id: string; body: string }>;
   className?: string;
+  /** Clicking a body. The roster offers the same thing by keyboard. */
+  onPickActor?: (actorId: string) => void;
+  /** A body to ring (who you are whispering to). */
+  highlightId?: string | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nearbyRef = useRef(nearby);
   const bubblesRef = useRef(bubbles);
+  const highlightRef = useRef(highlightId);
   nearbyRef.current = nearby;
   bubblesRef.current = bubbles;
+  highlightRef.current = highlightId;
+
+  /** Same grid the draw loop lays seats on, read back from a click. */
+  function actorAt(clientX: number, clientY: number): string | null {
+    const el = canvasRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const cap = Math.max(1, capacity || 30);
+    const cols = Math.ceil(Math.sqrt(cap));
+    const rows = Math.ceil(cap / cols);
+    if (rect.width === 0 || rect.height === 0) return null;
+    const x = ((clientX - rect.left) / rect.width) * cols * SPRITE;
+    const y = ((clientY - rect.top) / rect.height) * rows * SPRITE;
+    const seat = Math.floor(y / SPRITE) * cols + Math.floor(x / SPRITE);
+    return nearbyRef.current.find((n) => (n.presence?.seat_index ?? 0) === seat)?.actor_id ?? null;
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -115,6 +138,16 @@ export function PixelRoom({
           const idleBob = activity === "idle" || activity === "chatting" || activity === "performing";
           const bob = idleBob ? Math.sin(t / 220 + seat * 0.85) * 3 : activity === "working" ? Math.sin(t / 160 + seat) * 1.5 : 0;
           const faceLeft = col >= cols / 2 && (activity === "listening" || activity === "reading");
+          if (highlightRef.current === n.actor_id) {
+            ctx.save();
+            ctx.strokeStyle = "rgba(196,181,253,0.95)";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + SPRITE / 2 - 8, SPRITE / 2 - 10, 7, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          }
           if (img) {
             ctx.save();
             ctx.translate(cx, cy + bob);
@@ -161,8 +194,16 @@ export function PixelRoom({
     <canvas
       ref={canvasRef}
       className={className ?? "mx-auto max-w-full rounded-xl border border-lantern-400/20 bg-dusk-950"}
-      style={{ imageRendering: "pixelated" }}
+      style={{ imageRendering: "pixelated", cursor: onPickActor ? "pointer" : undefined }}
       aria-label={`${roomSlug} pixel room`}
+      onClick={
+        onPickActor
+          ? (e) => {
+              const id = actorAt(e.clientX, e.clientY);
+              if (id) onPickActor(id);
+            }
+          : undefined
+      }
     />
   );
 }

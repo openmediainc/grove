@@ -76,10 +76,15 @@ export function RoomPresence({
   nearby,
   silencedActorIds,
   meId,
+  onWhisper,
+  whisperTargetId,
 }: {
   nearby: Nearby[];
   silencedActorIds: Set<string>;
   meId?: string;
+  /** Offered on every row but your own. Whether it can land is asked, not guessed. */
+  onWhisper?: (n: Nearby) => void;
+  whisperTargetId?: string | null;
 }) {
   if (nearby.length === 0) {
     return <p className="mt-3 text-sm text-white/40">Nobody is here.</p>;
@@ -105,6 +110,21 @@ export function RoomPresence({
                   you={you}
                 />
               </Link>
+              {onWhisper && !you ? (
+                <button
+                  type="button"
+                  onClick={() => onWhisper(n)}
+                  aria-pressed={whisperTargetId === n.actor_id}
+                  aria-label={`Whisper to ${n.display_name || n.slug}`}
+                  className={`mt-1 rounded-full px-2.5 py-0.5 text-[11px] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${
+                    whisperTargetId === n.actor_id
+                      ? "bg-violet-300 text-dusk-950"
+                      : "border border-violet-300/40 text-violet-200 hover:bg-violet-300/10"
+                  }`}
+                >
+                  whisper
+                </button>
+              ) : null}
             </div>
           </li>
         );

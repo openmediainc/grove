@@ -35,6 +35,14 @@ export interface RefusalInput {
   hint?: string;
   /** The kind of actor that tried to speak. Only used for the §5.1 inference. */
   senderKind?: "human" | "agent";
+  /**
+   * What was being said. A whisper refused by the room is refused as a
+   * WHISPER — "you are not allowed to speak in this room" is false of someone
+   * whose room line would have gone through.
+   */
+  channel?: "room_say" | "whisper";
+  /** Who it was addressed to, when it was addressed to one body. */
+  recipientKind?: "human" | "agent";
 }
 
 export interface Refusal {
@@ -92,6 +100,35 @@ const NON_PERMISSION: Record<string, { headline: string; recourse: string | null
   },
 };
 
+/**
+ * The same codes, said about a whisper. Only the ones whose room sentence would
+ * be untrue of a whisper; everything else falls through to `NON_PERMISSION`.
+ */
+function whisperNonPermission(
+  code: string,
+  recipientKind: RefusalInput["recipientKind"],
+): { headline: string; recourse: string | null } | null {
+  switch (code) {
+    case "ROOM_FORBIDDEN":
+      return { headline: "This room does not allow whispers.", recourse: SPEECH_RECOURSE.silenced_by_space };
+    case "NOT_FOUND":
+      return { headline: "They are not here to whisper to any more.", recourse: null };
+    case "RATE_LIMITED":
+      return {
+        headline: "You have whispered too much too quickly, so this one was dropped.",
+        recourse: "Wait a moment and send it again.",
+      };
+    case "NOT_ADDRESSABLE":
+      // A person's door is their own (lurking, or not taking direct messages);
+      // there is no owner to send the reader to.
+      return recipientKind === "human"
+        ? { headline: "They are not taking whispers right now.", recourse: null }
+        : null;
+    default:
+      return null;
+  }
+}
+
 /** subject: "recipient" — their ear or their mouth is what closed. */
 const RECIPIENT_HEADLINE: Record<CapabilityWire, string> = {
   listen_to_humans: "They do not listen to people, so this did not reach them.",
@@ -129,7 +166,8 @@ export function describeRefusal(input: RefusalInput): Refusal {
   const code = input.code ?? "PERMISSION_DENIED";
 
   if (code !== "PERMISSION_DENIED") {
-    const known = NON_PERMISSION[code];
+    const known =
+      (input.channel === "whisper" ? whisperNonPermission(code, input.recipientKind) : null) ?? NON_PERMISSION[code];
     // An unrecognised code still has to say something true. The server's own
     // message is the only honest fallback; inventing recourse would be worse
     // than offering none.
