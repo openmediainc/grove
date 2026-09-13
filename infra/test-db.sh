@@ -26,12 +26,24 @@ case "$TEST_URL" in
   *) echo "refusing: derived URL does not name $TEST_DB" >&2; exit 1 ;;
 esac
 
-docker exec -i infra-postgres-1 psql -U grove -d postgres \
-  -c "SELECT 1 FROM pg_database WHERE datname='${TEST_DB}'" </dev/null | grep -q '1 row' \
-  || docker exec -i infra-postgres-1 psql -U grove -d postgres \
-       -c "CREATE DATABASE ${TEST_DB} OWNER grove;" </dev/null
+db_exists() {
+  docker exec -i infra-postgres-1 psql -U grove -d postgres -Atc \
+    "SELECT 1 FROM pg_database WHERE datname='${TEST_DB}'" </dev/null | grep -qx 1
+}
+# Two runs racing to create the same database: the loser's CREATE fails with
+# "already exists", which is success for our purposes — so re-check, don't die.
+db_exists || docker exec -i infra-postgres-1 psql -U grove -d postgres \
+  -c "CREATE DATABASE ${TEST_DB} OWNER grove;" </dev/null >/dev/null 2>&1 || db_exists \
+  || { echo "could not create ${TEST_DB}" >&2; exit 1; }
 
 export DATABASE_URL="$TEST_URL"
 export REDIS_URL="${GROVE_TEST_REDIS_URL:-redis://localhost:6379/1}"
 pnpm migrate >/dev/null
-exec pnpm -r --filter './packages/**' --filter @grove/api test "$@"
+# Extra args are vitest's (a file filter, --passWithNoTests). The two packages
+# whose `test` is not vitest (sdk-py: python unittest; ui: a node no-op) reject
+# them, so they sit out a filtered run.
+if [ $# -gt 0 ]; then
+  exec pnpm -r --filter './packages/**' --filter @grove/api \
+    --filter '!@grove/sdk-py' --filter '!@grove/ui' test "$@"
+fi
+exec pnpm -r --filter './packages/**' --filter @grove/api test

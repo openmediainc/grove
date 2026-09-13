@@ -14,6 +14,7 @@
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
     "test:safe": "bash infra/test-db.sh",
+    "test:soak": "bash infra/soak.sh",
     "test:units": "pnpm -r --filter './packages/**' test"
   }
 }
