@@ -45,7 +45,7 @@ export {
 } from "./services/moderation.js";
 export { MailboxService } from "./services/mailbox.js";
 export { NoticeService } from "./services/notices.js";
-export { ReactionService } from "./services/reactions.js";
+export { ReactionService, reactionCountsFrame } from "./services/reactions.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
 export { FollowService, type Follower, type FollowState, type FollowHooks } from "./services/follows.js";
 export {

@@ -44,3 +44,27 @@ describe("room frame filter", () => {
     expect(roomFrameFor("hum_x", "not json")).toBe("not json");
   });
 });
+
+describe("live reaction counts on the room channel", () => {
+  const frame = JSON.stringify({
+    type: "reaction_counts",
+    target_kind: "speech",
+    target_id: "sp_9",
+    room_id: "library",
+    counts: { heart: 2 },
+    delivered_to: ["hum_author", "hum_heard"],
+  });
+
+  it("reaches the line's audience as counts, without the audience list", () => {
+    for (const viewer of ["hum_author", "hum_heard"]) {
+      const out = JSON.parse(roomFrameFor(viewer, frame)!);
+      expect(out.counts).toEqual({ heart: 2 });
+      expect(out).not.toHaveProperty("delivered_to");
+      expect(out).not.toHaveProperty("sender_id");
+    }
+  });
+
+  it("gives a reader the line never reached nothing", () => {
+    expect(roomFrameFor("hum_elsewhere", frame)).toBeNull();
+  });
+});

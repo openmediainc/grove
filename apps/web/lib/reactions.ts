@@ -52,3 +52,58 @@ export function reactionRefusalText(code: string | undefined): string {
       return "This space does not let you react here.";
   }
 }
+
+/**
+ * Live counts from a room-stream `reaction_counts` frame onto a line's summary.
+ * The frame carries counts only; which ones are the reader's own stays as the
+ * reader last knew it, minus any the counts say no longer exist.
+ */
+export function withLiveCounts(summary: ReactionSummaryWire | null | undefined, counts: unknown): ReactionSummaryWire {
+  const raw = counts && typeof counts === "object" ? (counts as Record<string, unknown>) : {};
+  const next: Partial<Record<ReactionKey, number>> = {};
+  for (const key of REACTION_KEYS) {
+    const n = Number(raw[key]);
+    if (Number.isFinite(n) && n > 0) next[key] = Math.trunc(n);
+  }
+  const mine = (summary?.mine ?? []).filter((k) => (next[k] ?? 0) > 0);
+  return { counts: next, mine };
+}
+
+/**
+ * Put polled or pushed summaries onto the lines that have them. Lines the update
+ * does not name are left alone, and so is the array when nothing changed, so a
+ * quiet poll does not re-render the transcript.
+ */
+export function mergeLineReactions<L extends { id: string; reactions?: ReactionSummaryWire | null }>(
+  lines: L[],
+  updates: Map<string, ReactionSummaryWire>,
+): L[] {
+  let changed = false;
+  const out = lines.map((l) => {
+    const u = updates.get(l.id);
+    if (!u || sameSummary(l.reactions, u)) return l;
+    changed = true;
+    return { ...l, reactions: u };
+  });
+  return changed ? out : lines;
+}
+
+function sameSummary(a: ReactionSummaryWire | null | undefined, b: ReactionSummaryWire): boolean {
+  const x = a ?? EMPTY_REACTIONS;
+  return (
+    REACTION_KEYS.every((k) => (x.counts[k] ?? 0) === (b.counts[k] ?? 0)) &&
+    x.mine.length === b.mine.length &&
+    x.mine.every((k) => b.mine.includes(k))
+  );
+}
+
+/**
+ * How long until the room page next polls counts, or null for not at all. A
+ * hidden tab never polls. With the room socket open, pushes carry the news and
+ * the poll only catches lines the push could not (a reader who was not there
+ * when the line was said); without it (Vercel), the poll is the live path.
+ */
+export function reactionPollDelay(socketLive: boolean, tabVisible: boolean): number | null {
+  if (!tabVisible) return null;
+  return socketLive ? 60_000 : 15_000;
+}

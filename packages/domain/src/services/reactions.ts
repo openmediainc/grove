@@ -88,10 +88,11 @@ export class ReactionService {
     const on = input.on !== false;
 
     if (!on) {
-      await this.store.pg.query(
+      const del = await this.store.pg.query(
         `DELETE FROM reactions WHERE target_kind = $1 AND target_id = $2 AND actor_id = $3 AND emoji = $4`,
         [target.kind, target.id, actorId, input.emoji],
       );
+      if ((del.rowCount ?? 0) > 0) await this.publishCounts(target);
       return { target, on, summary: (await this.summaries(actorId, [target])).get(reactionTargetKey(target))! };
     }
 
@@ -154,6 +155,7 @@ export class ReactionService {
     // hold is idempotent and costs nothing.
     if ((rowCount ?? 0) > 0) {
       await this.quota.consumeWrite(actorId, reactor.kind === "agent" && isFirst24h(reactor.agent.claimedAt));
+      await this.publishCounts(target);
     }
     return { target, on, summary: (await this.summaries(actorId, [target])).get(reactionTargetKey(target))! };
   }
@@ -187,6 +189,37 @@ export class ReactionService {
       slot.mine.sort((a, b) => REACTION_KEYS.indexOf(a) - REACTION_KEYS.indexOf(b));
     }
     return out;
+  }
+
+  /**
+   * Live counts for a room line, to the people who can already see it.
+   *
+   * Published on `pubsub:room:<id>` with `delivered_to`, so `roomFrameFor` does
+   * exactly what it does for the line itself: a socket not on the list gets
+   * nothing, one on it gets the frame with the list stripped. The audience is
+   * `SpeechService.liveAudience` — the author and the line's delivered
+   * recipients who still hear it today — so a push never reaches anyone the
+   * transcript would not show the line to.
+   *
+   * Counts only. No `sender_id` (that would name the reactor, and would also
+   * bypass the audience check for them) and no `mine` (that is per reader; the
+   * reactor has theirs from the POST). Chronicle events have no live room
+   * stream, so only speech targets publish. A failed publish never fails the
+   * reaction: the counts are in the database and the next read has them.
+   */
+  private async publishCounts(target: ReactionTarget): Promise<void> {
+    if (target.kind !== "speech") return;
+    try {
+      const live = await this.speech.liveAudience(target.id);
+      if (!live) return;
+      const summary = (await this.summaries(null, [target])).get(reactionTargetKey(target))!;
+      await this.store.redis.publish(
+        `pubsub:room:${live.roomId}`,
+        JSON.stringify(reactionCountsFrame(target, live.roomId, summary.counts, live.audience)),
+      );
+    } catch {
+      /* best effort; see above */
+    }
   }
 
   private async buildContext(reactor: Reactor, entry: ChronicleEntry): Promise<PolicyContext> {
@@ -248,6 +281,23 @@ export class ReactionService {
       isOwnerChannel: false,
     };
   }
+}
+
+/** The room-channel frame for live reaction counts. Exported for the frame-filter tests. */
+export function reactionCountsFrame(
+  target: ReactionTarget,
+  roomId: string,
+  counts: ReactionSummary["counts"],
+  audience: string[],
+) {
+  return {
+    type: "reaction_counts",
+    target_kind: target.kind,
+    target_id: target.id,
+    room_id: roomId,
+    counts,
+    delivered_to: audience,
+  };
 }
 
 function notFound(): GroveError {

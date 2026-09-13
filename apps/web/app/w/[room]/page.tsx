@@ -10,6 +10,12 @@ import { GeoAvatar } from "@/components/Avatar";
 import { FirstFiveMinutes, noteSpoke, type TranscriptLine } from "@/components/FirstFiveMinutes";
 import { PixelRoom } from "@/components/PixelRoom";
 import { Reactions } from "@/components/Reactions";
+import {
+  mergeLineReactions,
+  reactionPollDelay,
+  withLiveCounts,
+  type ReactionSummaryWire,
+} from "@/lib/reactions";
 import { RefusalNotice, toRefusalInput } from "@/components/RefusalNotice";
 import { RoomSignpost, type SignpostRoom } from "@/components/RoomSignpost";
 import {
@@ -135,6 +141,8 @@ export default function RoomPage() {
    */
   const [whispers, setWhispers] = useState<WhisperLine[]>([]);
   const [sending, setSending] = useState(false);
+  /** The room socket is open, so reaction counts arrive as pushes rather than by poll. */
+  const [socketLive, setSocketLive] = useState(false);
 
   useEffect(() => {
     setPixel(readPixelFlag());
@@ -188,9 +196,23 @@ export default function RoomPage() {
         const t = await api<{ ticket: string }>("/api/v1/humans/ws-ticket", { method: "POST", body: "{}" });
         const origin = WS_ORIGIN.replace(/^http/, "ws");
         ws = new WebSocket(`${origin}/api/v1/ws/human?ticket=${t.ticket}`);
+        ws.onopen = () => setSocketLive(true);
+        ws.onclose = () => setSocketLive(false);
         ws.onmessage = (ev) => {
           try {
             const msg = JSON.parse(String(ev.data)) as { type?: string; body?: string; sender_id?: string; sender_kind?: string; speech_id?: string; room_id?: string };
+            // Counts only, and the server sends them only to readers the line
+            // reached (roomFrameFor), so there is nothing to filter here.
+            if (msg.type === "reaction_counts") {
+              const f = msg as { target_kind?: string; target_id?: string; counts?: unknown };
+              if (f.target_kind !== "speech" || !f.target_id) return;
+              const id = f.target_id;
+              setLines((cur) => {
+                const line = cur.find((l) => l.id === id);
+                return line ? mergeLineReactions(cur, new Map([[id, withLiveCounts(line.reactions, f.counts)]])) : cur;
+              });
+              return;
+            }
             if (msg.type === "speech" && msg.body) {
               const channel = (msg as { channel?: string }).channel ?? "room_say";
               if (channel === "whisper") {
@@ -234,8 +256,55 @@ export default function RoomPage() {
         /* ticket optional */
       }
     })();
-    return () => ws?.close();
+    return () => {
+      ws?.close();
+      setSocketLive(false);
+    };
   }, [me, room]);
+
+  /**
+   * The light poll behind live reaction counts: counts only, for the lines the
+   * transcript shows this reader, and only while the tab is visible. It is the
+   * live path where the socket does not hold (Vercel is serverless) and a slow
+   * catch-up where it does. Coming back to the tab refreshes at once.
+   */
+  useEffect(() => {
+    if (!me || !data) return;
+    const slug = data.room.slug;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      const delay = reactionPollDelay(socketLive, visible());
+      if (delay !== null && !stopped) timer = setTimeout(() => void tick(), delay);
+    };
+    const tick = async () => {
+      try {
+        const r = await api<{ reactions: Array<{ speech_id: string; summary?: ReactionSummaryWire }> }>(
+          `/api/v1/rooms/${slug}/reactions`,
+        );
+        const updates = new Map<string, ReactionSummaryWire>();
+        for (const x of r.reactions ?? []) if (x.summary) updates.set(x.speech_id, x.summary);
+        if (!stopped) setLines((cur) => mergeLineReactions(cur, updates));
+      } catch {
+        /* a missed poll is only a stale count */
+      }
+      schedule();
+    };
+    const onVisibility = () => {
+      if (visible()) void tick();
+      else schedule();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    schedule();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [me, data?.room.slug, socketLive]);
 
   async function enter(slug: string) {
     await api(`/api/v1/rooms/${slug}/enter`, { method: "POST", body: "{}" });

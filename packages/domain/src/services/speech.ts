@@ -720,40 +720,21 @@ export class SpeechService {
     return (rowCount ?? 0) > 0;
   }
 
-  async transcript(
-    roomId: string,
-    viewer: SenderActor,
-    cursor?: string,
-    limit = 50,
-    opts: { deliveredOnly?: boolean } = {},
-  ) {
-    const viewerId = viewer.kind === "human" ? viewer.human.id : viewer.agent.id;
-    const params: unknown[] = [roomId, Math.min(limit, 100)];
-    let sql = `SELECT s.* FROM speech s
-      WHERE s.room_id = $1 AND s.channel = 'room_say'`;
-    // SPC-07: a visitor let in through an opened room reads only what actually
-    // reached them. Re-evaluating old lines against TODAY's ceiling would hand a
-    // stranger everything said while the room was still private.
-    if (opts.deliveredOnly) {
-      params.push(viewerId);
-      sql += ` AND EXISTS (SELECT 1 FROM speech_deliveries d
-                 WHERE d.speech_id = s.id AND d.recipient_id = $${params.length} AND d.status = 'delivered')`;
-    }
-    // Ceilings and membership, read once for the page rather than per line.
+  /**
+   * The transcript's per-reader decision for a room_say line in `roomId`, with
+   * the room's ceilings and membership read once. TODAY's permissions: a block,
+   * a mute, a ceiling or a membership change since the line was said all hide it.
+   * Shared by `transcript()` and `liveAudience()` so the two can never disagree.
+   */
+  private async roomLineGate(roomId: string) {
     const layers = this.campus ? await this.campus.ceilingLayersForRoom(roomId) : undefined;
     const members = layers && this.campus ? await this.campus.memberIdsOf(await this.campus.worldIdForRoom(roomId)) : null;
     const memberOf = (humanId: string | null | undefined) => members === null || Boolean(humanId && members.has(humanId));
-    if (cursor) {
-      params.push(cursor);
-      sql += ` AND s.id < $${params.length}`;
-    }
-    sql += ` ORDER BY s.created_at DESC, s.id DESC LIMIT $2`;
-    const { rows } = await this.store.pg.query(sql, params);
-    const items = [];
-    for (const row of rows.reverse()) {
+    const room = await this.presence.getRoomById(roomId);
+    return async (row: { sender_id: string; sender_kind: string }, viewerId: string): Promise<boolean> => {
       const senderKind = row.sender_kind as ActorKind;
       const sender = {
-        id: row.sender_id as string,
+        id: row.sender_id,
         kind: senderKind,
         policy: undefined as PermissionPolicy | undefined,
         privacy: undefined as PolicyContext["sender"]["privacy"],
@@ -774,9 +755,8 @@ export class SpeechService {
         if (hu.rows[0]) sender.privacy = mapHuman(hu.rows[0] as Record<string, unknown>).privacy;
       }
       const rec = await this.loadRecipient(viewerId, sender.id);
-      if (!rec) continue;
+      if (!rec) return false;
       rec.isSpaceMember = memberOf(rec.kind === "human" ? rec.id : rec.ownerHumanId);
-      const room = await this.presence.getRoomById(roomId);
       const decision = authorize({
         sender: { ...sender, isSpaceMember: memberOf(sender.kind === "human" ? sender.id : sender.ownerHumanId) },
         recipients: [rec],
@@ -795,8 +775,73 @@ export class SpeechService {
         quota: { roomSayRemaining: 8, roomSayGapOk: true, writeRemaining: 30, roomWindowCount: 0 },
         isOwnerChannel: false,
       });
-      if (!decision.emit.allow || !decision.deliveries[0]?.decision.allow) continue;
-      if (decision.deliveries[0]?.decision.code === "MUTED") continue;
+      if (!decision.emit.allow || !decision.deliveries[0]?.decision.allow) return false;
+      if (decision.deliveries[0]?.decision.code === "MUTED") return false;
+      return true;
+    };
+  }
+
+  /**
+   * Who may be PUSHED news about a room line (reaction counts), or null when the
+   * line is not a room_say line in a room.
+   *
+   * Narrower than who can read it, never wider: the author, plus the recipients
+   * the kernel actually delivered the line to when it was said, each of whom
+   * must still hear it by today's transcript decision. The synthetic spectator
+   * is never in it (the public feed carries speech, not reactions). A reader who
+   * can see the line but was not in the room gets the counts on their next read.
+   */
+  async liveAudience(speechId: string): Promise<{ roomId: string; audience: string[] } | null> {
+    const { rows } = await this.store.pg.query(
+      `SELECT sender_id, sender_kind, room_id FROM speech WHERE id = $1 AND channel = 'room_say' AND room_id IS NOT NULL`,
+      [speechId],
+    );
+    const row = rows[0] as { sender_id: string; sender_kind: string; room_id: string } | undefined;
+    if (!row) return null;
+    const { rows: del } = await this.store.pg.query(
+      `SELECT recipient_id FROM speech_deliveries WHERE speech_id = $1 AND status = 'delivered' AND recipient_id <> $2`,
+      [speechId, SPECTATOR_RECIPIENT.id],
+    );
+    const hears = await this.roomLineGate(row.room_id);
+    const audience = [row.sender_id];
+    for (const d of del) {
+      const id = String(d.recipient_id);
+      if (id === row.sender_id || audience.includes(id)) continue;
+      if (await hears(row, id)) audience.push(id);
+    }
+    return { roomId: row.room_id, audience };
+  }
+
+  async transcript(
+    roomId: string,
+    viewer: SenderActor,
+    cursor?: string,
+    limit = 50,
+    opts: { deliveredOnly?: boolean } = {},
+  ) {
+    const viewerId = viewer.kind === "human" ? viewer.human.id : viewer.agent.id;
+    const params: unknown[] = [roomId, Math.min(limit, 100)];
+    let sql = `SELECT s.* FROM speech s
+      WHERE s.room_id = $1 AND s.channel = 'room_say'`;
+    // SPC-07: a visitor let in through an opened room reads only what actually
+    // reached them. Re-evaluating old lines against TODAY's ceiling would hand a
+    // stranger everything said while the room was still private.
+    if (opts.deliveredOnly) {
+      params.push(viewerId);
+      sql += ` AND EXISTS (SELECT 1 FROM speech_deliveries d
+                 WHERE d.speech_id = s.id AND d.recipient_id = $${params.length} AND d.status = 'delivered')`;
+    }
+    // Ceilings and membership, read once for the page rather than per line.
+    const hears = await this.roomLineGate(roomId);
+    if (cursor) {
+      params.push(cursor);
+      sql += ` AND s.id < $${params.length}`;
+    }
+    sql += ` ORDER BY s.created_at DESC, s.id DESC LIMIT $2`;
+    const { rows } = await this.store.pg.query(sql, params);
+    const items = [];
+    for (const row of rows.reverse()) {
+      if (!(await hears(row as { sender_id: string; sender_kind: string }, viewerId))) continue;
       items.push({
         id: row.id,
         channel: row.channel,

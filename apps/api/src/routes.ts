@@ -709,6 +709,33 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     return sendOk(reply, { transcript, nextCursor: data.nextCursor });
   });
 
+  /**
+   * Counts only, for the lines the room transcript shows this reader — the
+   * light poll the room page falls back to when its socket is not live (Vercel).
+   * Same gate as the transcript by construction: it IS the transcript read, with
+   * the bodies dropped. One entry per line; never who reacted.
+   */
+  app.get("/api/v1/rooms/:slug/reactions", async (req, reply) => {
+    const actor = await requireActor(req, grove);
+    await chargeRead(grove, actor);
+    const slug = (req.params as { slug: string }).slug;
+    const access = await assertRoomAccess(req, grove, actor, slug);
+    const worldId = access.worldId;
+    const room = await grove.presence.getRoom(slug, worldId);
+    if (!room) throw new GroveError("NOT_FOUND", "Room not found.", { httpStatus: 404 });
+    assertRoomInWorld(room, worldId);
+    const sender = actor.kind === "human" ? { kind: "human" as const, human: actor.human } : { kind: "agent" as const, agent: actor.agent };
+    const data = await grove.speech.transcript(room.id, sender, undefined, 50, { deliveredOnly: access.visitor });
+    const viewerId = actor.kind === "human" ? actor.human.id : actor.agent.id;
+    const sums = await grove.reactions.summaries(
+      viewerId,
+      data.items.map((i) => ({ kind: "speech" as const, id: String(i.id) })),
+    );
+    // A list, not an object keyed by id: the wire casing pass rewrites keys.
+    const reactions = data.items.map((i) => ({ speechId: String(i.id), summary: sums.get(`speech:${String(i.id)}`) }));
+    return sendOk(reply, { reactions });
+  });
+
   app.get("/api/v1/observe", async (req, reply) => {
     const agent = await requireAgent(req, grove);
     await chargeRead(grove, { kind: "agent", agent });

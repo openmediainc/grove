@@ -226,4 +226,60 @@ describe.skipIf(!hasDb)("reactions go through the kernel like speech", () => {
     );
     expect(e2.code).toBe("INVALID");
   });
+  it("pushes live counts to the line's audience only, never who, and drops a reader who blocked since", async () => {
+    const speaker = await newHuman("rx-live-speaker");
+    const listener = await newHuman("rx-live-listener");
+    const later = await newHuman("rx-live-blocker");
+    const outside = await newHuman("rx-live-outside");
+    await enter({ id: speaker.id, kind: "human" }, "library");
+    await enter({ id: listener.id, kind: "human" }, "library");
+    await enter({ id: later.id, kind: "human" }, "library");
+    const speechId = await humanSays(speaker, `live counts ${tag()}`);
+    const { rows } = await pg.query(`SELECT room_id FROM speech WHERE id = $1`, [speechId]);
+    const roomId = String((rows[0] as { room_id: string }).room_id);
+
+    // `later` heard the line, then blocked the speaker: today's transcript hides
+    // the line from them, so the push must too.
+    await grove.moderation.block(later, speaker.id);
+    const live = await grove.speech.liveAudience(speechId);
+    expect(live?.roomId).toBe(roomId);
+    expect(new Set(live?.audience)).toEqual(new Set([speaker.id, listener.id]));
+
+    const sub = redis.duplicate();
+    const frames: Array<Record<string, unknown>> = [];
+    await sub.subscribe(`pubsub:room:${roomId}`);
+    sub.on("message", (_ch, m) => {
+      const f = JSON.parse(m) as Record<string, unknown>;
+      if (f.type === "reaction_counts" && f.target_id === speechId) frames.push(f);
+    });
+    try {
+      await grove.reactions.react({ kind: "human", human: listener }, { targetKind: "speech", targetId: speechId, emoji: "heart" });
+      // Re-sending changes nothing and publishes nothing.
+      await grove.reactions.react({ kind: "human", human: listener }, { targetKind: "speech", targetId: speechId, emoji: "heart" });
+      await grove.reactions.react(
+        { kind: "human", human: listener },
+        { targetKind: "speech", targetId: speechId, emoji: "heart", on: false },
+      );
+      // An outsider's refused reaction publishes nothing either.
+      await refusal(
+        grove.reactions.react({ kind: "human", human: outside }, { targetKind: "speech", targetId: speechId, emoji: "up" }),
+      );
+      for (let i = 0; i < 40 && frames.length < 2; i++) await new Promise((r) => setTimeout(r, 25));
+      expect(frames.map((f) => f.counts)).toEqual([{ heart: 1 }, {}]);
+      for (const f of frames) {
+        expect(f).not.toHaveProperty("sender_id");
+        expect(f).not.toHaveProperty("mine");
+        expect(new Set(f.delivered_to as string[])).toEqual(new Set([speaker.id, listener.id]));
+      }
+    } finally {
+      await sub.quit();
+    }
+    // A whisper is not a room line: no live audience.
+    await clearActorLimiters(redis, speaker.id);
+    const w = await grove.speech.say(
+      { kind: "human", human: speaker },
+      { channel: "whisper", targetId: listener.id, body: `psst ${tag()}`, idempotencyKey: `k-${tag()}` },
+    );
+    expect(await grove.speech.liveAudience(w.id)).toBeNull();
+  });
 });

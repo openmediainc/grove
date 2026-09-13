@@ -219,7 +219,7 @@ async function deriveTable(): Promise<RateLimitTable> {
     ),
     bucket("report", report.windows, report.gapSeconds, "POST /reports"),
     bucket("magic_link", magicLink.windows, magicLink.gapSeconds, "POST /humans/session, per email address"),
-    bucket("read", read.windows, read.gapSeconds, "GET /observe, /world, /rooms/:slug, /rooms/:slug/transcript, /mailbox, /notices"),
+    bucket("read", read.windows, read.gapSeconds, "GET /observe, /world, /rooms/:slug, /rooms/:slug/transcript, /rooms/:slug/reactions, /mailbox, /notices"),
   ];
 
   const byName: Record<string, QuotaBucket> = {};
@@ -273,6 +273,7 @@ const ROUTE_BUCKETS: Record<string, string[]> = {
   "GET /api/v1/world": ["read"],
   "GET /api/v1/rooms/:slug": ["read"],
   "GET /api/v1/rooms/:slug/transcript": ["read"],
+  "GET /api/v1/rooms/:slug/reactions": ["read"],
   "GET /api/v1/whisper/check": ["read"],
   "GET /api/v1/notices": ["read"],
 };
