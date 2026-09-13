@@ -6,6 +6,7 @@ import type { AutonomyMode, ClaimState, PermissionPolicy, SpacePolicyPreset } fr
 import { api } from "@/lib/api";
 import { GeoAvatar } from "@/components/Avatar";
 import { PermissionTree, type TreeSpace } from "@/components/PermissionTree";
+import { AgentBudget } from "@/components/AgentBudget";
 
 /** Wire JSON is snake_case (see @grove/protocol codec); the tree speaks the type. */
 type WirePolicy = {
@@ -238,6 +239,8 @@ export default function StudioAgent() {
           </button>
         </div>
       </section>
+
+      <AgentBudget agentId={agent.id} />
 
       <section className="mt-8">
         <h2 className="font-display text-2xl text-lantern-300">Hosted brain</h2>

@@ -57,6 +57,8 @@ import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { AttentionBell } from "./AttentionBell";
 import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
+import { ResourceBar } from "./ResourceBar";
+import { CostCarry } from "./costCarry";
 import { skyAt, type Sky } from "./skyClock";
 import {
   DEPART_MS,
@@ -200,6 +202,8 @@ type GroveBody = {
   orgId?: string | null;
   org_colour?: string | null;
   orgColour?: string | null;
+  /** A usage report just landed: time and priced-or-not, never an amount. See costCarry.ts. */
+  deposit?: { at: string; costed: boolean } | null;
   source: "grove";
 };
 
@@ -652,6 +656,7 @@ export function WorldMap() {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const actorsRef = useRef<Actor[]>([]);
+  const costCarryRef = useRef(new CostCarry());
   const radiusRef = useRef(4);
   const plotsRef = useRef(0);
   const plotRef = useRef<Plot[]>([]);
@@ -1051,6 +1056,7 @@ export function WorldMap() {
           };
         });
         const actors: Actor[] = [...grove, ...paperclip];
+        costCarryRef.current.sync(data.bodies ?? []);
         stallSecondsRef.current =
           data.stall_after_seconds ?? data.stallAfterSeconds ?? DEFAULT_STALL_SECONDS;
         /* --- the fade, and the leaving ------------------------------ *
@@ -2034,6 +2040,7 @@ export function WorldMap() {
             a.verb === "offline" ? sleepingAlpha(health.drift) : a.verb === "idle" ? 0.72 : 1;
           const tone = hazardOf(a);
           if (tone) hazards.push({ x, y, tone });
+          costCarryRef.current.note(a.id, x, y);
           if (healthVisible(health)) meters.push({ x, y, drift: health.drift });
           // Remember where this body stood, so that if it is gone by the next
           // poll its departure can start from the seat and not from nowhere.
@@ -2283,6 +2290,17 @@ export function WorldMap() {
           if (sx < -20 || sx > cssW + 20 || sy < -20 || sy > cssH + 20) continue;
           art.hazard(ctx, sx, sy, h.tone, t);
         }
+        // Carry and deposit (costCarry.ts): a turn that reported usage sends its
+        // load to the treasury at the Plaza's centre. Screen space, fixed size.
+        {
+          const bank = iso(PLAZA_CENTER.x, PLAZA_CENTER.y);
+          costCarryRef.current.draw(
+            ctx,
+            (lx, ly) => ({ x: lx * z + v.px, y: ly * z + v.py }),
+            { x: ox + bank.x, y: oy + bank.y },
+            reduceMotion.matches,
+          );
+        }
         // The heartbeat rings, at the same fixed size and for the same reason.
         // Offset to the right of the hazard slot so a body that is both faulted
         // and drifting shows both marks rather than one on top of the other.
@@ -2449,6 +2467,7 @@ export function WorldMap() {
           ) : null}
         </div>
         <div className="pointer-events-auto w-full shrink-0 rounded-2xl border border-lantern-400/20 bg-dusk-950/80 px-3 py-2 text-[11px] uppercase tracking-widest text-lantern-300/80 sm:w-auto sm:px-4 sm:py-3 sm:text-xs">
+          <ResourceBar signedIn={signedIn} />
           <div className="flex items-baseline justify-between gap-3">
             <span>{status}</span>
             {/* The campus clock. UTC and said so: the world is one place, and

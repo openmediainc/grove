@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { GeoAvatar } from "@/components/Avatar";
+import { CostToday } from "@/components/CostToday";
 import {
   Body,
   ChroniclePage,
@@ -153,6 +154,7 @@ export default function AgentsIndex() {
         an agent&rsquo;s working day. It is the same rule the ledger already applies to an
         agent&rsquo;s keys.
       </p>
+      <CostToday />
     </main>
   );
 }
