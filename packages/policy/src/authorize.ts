@@ -1,10 +1,11 @@
 import {
   intersectSpacePolicy,
+  resolveCeiling,
   type AuthorizeResult,
   type PermissionPolicy,
   type PolicyContext,
   type PolicyDecision,
-  type SpacePolicy,
+  type ResolvedCeiling,
   type SpeechChannel,
 } from "@grove/protocol";
 
@@ -23,25 +24,23 @@ const ALL_CAPABILITIES: PermissionPolicy = {
 };
 
 /**
- * The space's ceiling for one actor. Members sit at the full ceiling; the
- * space's own policy applies to everyone else. No room, or no room policy,
- * narrows nothing — so every pre-space context behaves exactly as before.
+ * The ceiling one actor faces in this room: room override ?? space, member vs
+ * non-member, resolved by the ONE precedence rule in @grove/protocol
+ * (`resolveCeiling`). No room, or no layers, narrows nothing — so every
+ * pre-space context behaves exactly as before. Membership must be pre-fetched:
+ * absent reads as not-a-member.
  */
-function spaceCeilingFor(
-  room: PolicyContext["room"],
-  actor: { isSpaceMember?: boolean },
-): SpacePolicy {
-  if (!room?.policy) return ALL_CAPABILITIES;
-  return actor.isSpaceMember === true ? ALL_CAPABILITIES : room.policy;
+function ceilingFor(room: PolicyContext["room"], actor: { isSpaceMember?: boolean }): ResolvedCeiling {
+  return resolveCeiling(room, actor.isSpaceMember === true);
 }
 
-/** effective = actor_policy AND space_policy. Never widens: see intersectSpacePolicy. */
+/** effective = actor_policy AND ceiling. Never widens: see intersectSpacePolicy. */
 function effectiveCaps(
   actorPolicy: PermissionPolicy | undefined,
   room: PolicyContext["room"],
   actor: { isSpaceMember?: boolean },
 ): PermissionPolicy {
-  return intersectSpacePolicy(actorPolicy ?? ALL_CAPABILITIES, spaceCeilingFor(room, actor));
+  return intersectSpacePolicy(actorPolicy ?? ALL_CAPABILITIES, ceilingFor(room, actor).ceiling);
 }
 
 /**
@@ -55,6 +54,7 @@ function denied(
   reason: string,
   source: NonNullable<PolicyDecision["source"]>,
   subject: NonNullable<PolicyDecision["subject"]>,
+  membership?: PolicyDecision["membership"],
 ): PolicyDecision {
   const decision: PolicyDecision = {
     allow: false,
@@ -64,6 +64,7 @@ function denied(
     source,
   };
   if (source === "actor") decision.subject = subject;
+  else if (membership) decision.membership = membership;
   return decision;
 }
 
@@ -79,8 +80,29 @@ function denied(
 function narrowedSource(
   actorPolicy: PermissionPolicy | undefined,
   capability: keyof PermissionPolicy,
+  ceiling: ResolvedCeiling,
 ): NonNullable<PolicyDecision["source"]> {
-  return (actorPolicy ?? ALL_CAPABILITIES)[capability] ? "space" : "actor";
+  if (!(actorPolicy ?? ALL_CAPABILITIES)[capability]) return "actor";
+  // SPC-07: a room override that set the ceiling is named as the room. A
+  // null scope cannot remove anything (it is the open ceiling), so the only
+  // way to arrive here with one is a caller bug; "space" is the old answer.
+  return ceiling.scope === "room" ? "room" : "space";
+}
+
+/** The kernel's sentence for a ceiling denial. Space/non-member keeps its original wording. */
+function ceilingReason(
+  capability: keyof PermissionPolicy,
+  source: "space" | "room",
+  membership: ResolvedCeiling["membership"],
+): string {
+  if (source === "room") {
+    return membership === "member"
+      ? `This room does not grant members ${capability}.`
+      : `This room does not grant non-members ${capability}.`;
+  }
+  return membership === "member"
+    ? `This space does not grant members ${capability}.`
+    : `This space does not grant ${capability}.`;
 }
 
 /**
@@ -95,15 +117,17 @@ function spaceDenied(
   actorPolicy: PermissionPolicy | undefined,
   capability: keyof PermissionPolicy,
   subject: NonNullable<PolicyDecision["subject"]>,
+  room: PolicyContext["room"],
+  actor: { isSpaceMember?: boolean },
 ): PolicyDecision {
-  const source = narrowedSource(actorPolicy, capability);
-  const reason =
-    source === "space"
-      ? `This space does not grant ${capability}.`
-      : subject === "sender"
-        ? `Sender does not have ${capability}.`
-        : `Recipient does not have ${capability}.`;
-  return denied(capability, reason, source, subject);
+  const ceiling = ceilingFor(room, actor);
+  const source = narrowedSource(actorPolicy, capability, ceiling);
+  if (source === "actor") {
+    const reason =
+      subject === "sender" ? `Sender does not have ${capability}.` : `Recipient does not have ${capability}.`;
+    return denied(capability, reason, source, subject);
+  }
+  return denied(capability, ceilingReason(capability, source, ceiling.membership), source, subject, ceiling.membership);
 }
 
 /**
@@ -197,7 +221,7 @@ function emitDecision(ctx: PolicyContext): PolicyDecision {
     }
     // Space narrowing: applies to human senders too, who have no matrix of their own.
     if (!effectiveCaps(ctx.sender.policy, ctx.room, ctx.sender)[cap]) {
-      return spaceDenied(ctx.sender.policy, cap, "sender");
+      return spaceDenied(ctx.sender.policy, cap, "sender", ctx.room, ctx.sender);
     }
     return { allow: true, code: "ALLOW", reason: "Sender may whisper." };
   }
@@ -214,7 +238,7 @@ function emitDecision(ctx: PolicyContext): PolicyDecision {
   if (ctx.channel === "room_say" || ctx.channel === "notice") {
     const effective = effectiveCaps(ctx.sender.policy, ctx.room, ctx.sender);
     if (!effective.speakToAgents && !effective.speakToHumans) {
-      return spaceDenied(ctx.sender.policy, mouthThatClosed(ctx.sender.policy), "sender");
+      return spaceDenied(ctx.sender.policy, mouthThatClosed(ctx.sender.policy), "sender", ctx.room, ctx.sender);
     }
   }
 
@@ -277,7 +301,7 @@ function deliveryDecision(
   // Space narrowing of the recipient's ear. Applies to humans and spectators too:
   // a spectator is never a member, so a private space is not leaked to the SSE feed.
   if (!effectiveCaps(r.policy, ctx.room, r)[listenCap]) {
-    return spaceDenied(r.policy, listenCap, "recipient");
+    return spaceDenied(r.policy, listenCap, "recipient", ctx.room, r);
   }
 
   // Mixed-audience: agent room_say without speakToHumans is not delivered to humans or spectators
@@ -306,7 +330,7 @@ function deliveryDecision(
   const speakCap: keyof PermissionPolicy =
     r.kind === "human" || r.synthetic === "spectator" ? "speakToHumans" : "speakToAgents";
   if (!effectiveCaps(ctx.sender.policy, ctx.room, ctx.sender)[speakCap]) {
-    return spaceDenied(ctx.sender.policy, speakCap, "sender");
+    return spaceDenied(ctx.sender.policy, speakCap, "sender", ctx.room, ctx.sender);
   }
 
   return { allow: true, code: "ALLOW", reason: "Recipient may receive this speech act." };

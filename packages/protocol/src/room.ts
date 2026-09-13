@@ -17,6 +17,13 @@ export interface Room {
   policyPreset?: SpacePolicyPreset;
   /** Resolved form of `policyPreset`. Absent ⇒ the space narrows nothing. */
   policy?: SpacePolicy;
+  /**
+   * SPC-07: this room's own non-member access level, overriding the space's.
+   * `null` ⇒ inherit the space. Never set on a civic-core room.
+   */
+  roomPreset?: SpacePolicyPreset | null;
+  /** SPC-10: this room's own member ceiling. `null` ⇒ inherit the space's. */
+  memberPolicy?: SpacePolicy | null;
 }
 
 export const PUBLIC_ROOMS: Array<Pick<Room, "id" | "slug" | "name" | "kind" | "capacity" | "spectatorVisible" | "sayLimitPerMin">> = [
