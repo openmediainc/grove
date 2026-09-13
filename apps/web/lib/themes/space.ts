@@ -638,6 +638,8 @@ export const SPACE_LEXICON: ThemeLexicon = {
     mySpace: "My module",
     mySpaceTitle: "My module — the one I hold",
     kiosk: "Kiosk",
+    tv: "Broadcast",
+    onAir: "Transmitting",
     following: "Tracking",
     release: "Release",
     resetView: "Reset view",

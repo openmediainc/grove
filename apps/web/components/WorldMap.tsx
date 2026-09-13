@@ -60,6 +60,7 @@ import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { AttentionBell } from "./AttentionBell";
 import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
+import { TvDirector, type TvActor, type TvShotKind, type TvStage } from "@/lib/tv/director";
 import { ReplayBadge, ReplayBar, ReplayEntry } from "./ReplayBar";
 import { ReplayController, startVisitClock, type LiveContext } from "@/lib/replay/controller";
 import { ReplayMotion } from "@/lib/replay/motion";
@@ -173,6 +174,12 @@ const KIOSK_WIDE_ZOOM = 0.45;
 const KIOSK_STOP_MS = 26_000;
 /** A person who touches the map gets it to themselves for this long. */
 const KIOSK_YIELD_MS = 60_000;
+/** Grove TV's close-up when it follows a body. */
+const TV_ZOOM = 1.35;
+/** How often the TV director reconsiders the shot. Cuts are held for seconds; this is only the sampling rate. */
+const TV_STEP_MS = 500;
+/** The Stage's schedule changes on the scale of minutes. */
+const TV_STAGE_POLL_MS = 30_000;
 /** A glide that cannot reach its mark (clamped at the world edge) gives up here. */
 const GLIDE_GIVE_UP_MS = 4_000;
 /** A live line is forgotten this long after it was said, unless the poll re-seeds it. */
@@ -772,6 +779,21 @@ export function WorldMap() {
   /** Kiosk yields to a person who touches the map, rather than fighting them. */
   const kioskYieldRef = useRef(0);
   const tourStopRef = useRef(-1);
+  /* Grove TV: kiosk mode with a director (lib/tv/director). */
+  const [tv, setTv] = useState(false);
+  const tvRef = useRef(false);
+  const tvDirectorRef = useRef<TvDirector | null>(null);
+  if (!tvDirectorRef.current) tvDirectorRef.current = new TvDirector();
+  /** The live Stage event, if any, polled only while TV is on. */
+  const tvStageRef = useRef<TvStage | null>(null);
+  /** The shot the camera was last pointed at; null = point it again (after a person let go). */
+  const tvAppliedRef = useRef<string | null>(null);
+  const tvLastStepRef = useRef(0);
+  const tvCaptionKeyRef = useRef("");
+  const [tvCaption, setTvCaption] = useState<{ kind: TvShotKind; caption: string; paused: boolean } | null>(null);
+  /** Public lines already handed to the director, so a poll never re-tells one. Null until the first poll. */
+  const tvSpeechSeenRef = useRef<Set<string> | null>(null);
+  const tvModeRef = useRef<(on: boolean) => void>(() => {});
   /** Null until the clock effect runs: the server has no hour to render. */
   const [sky, setSky] = useState<Sky | null>(null);
   const [hud, setHud] = useState({
@@ -887,6 +909,8 @@ export function WorldMap() {
     const i = attnIdxRef.current % list.length;
     attnIdxRef.current = (i + 1) % list.length;
     const target = list[i]!;
+    // Somebody pressed it: the TV director and the kiosk tour stand down for a while.
+    kioskYieldRef.current = Date.now() + KIOSK_YIELD_MS;
     followRef.current = target.id;
     setFollowing(target.name);
     setAttnPos(`${i + 1}/${list.length}`);
@@ -924,31 +948,72 @@ export function WorldMap() {
     kioskRef.current = on;
     tourStopRef.current = -1;
     setKiosk(on);
+    // Leaving kiosk mode leaves TV with it, and lets go of the body TV was on.
+    if (!on && tvRef.current) {
+      tvRef.current = false;
+      setTv(false);
+      setTvCaption(null);
+      tvCaptionKeyRef.current = "";
+      followRef.current = null;
+      setFollowing(null);
+      setAttnPos(null);
+      glideRef.current = null;
+    }
     try {
       if (on) document.documentElement.setAttribute(KIOSK_ATTR, "1");
       else document.documentElement.removeAttribute(KIOSK_ATTR);
       const url = new URL(window.location.href);
-      if (on) url.searchParams.set("kiosk", "1");
+      if (on && !tvRef.current) url.searchParams.set("kiosk", "1");
       else url.searchParams.delete("kiosk");
+      if (on && tvRef.current) url.searchParams.set("tv", "1");
+      else url.searchParams.delete("tv");
       window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
     } catch {
       /* A browser that refuses either of those still gets the mode itself. */
     }
   }, []);
 
+  /**
+   * Grove TV. Kiosk mode, plus a director that points the camera at what is
+   * happening — hazards, tool-call bursts, conversations, arrivals, the Stage —
+   * and captions it. Entered by ?tv=1, the TV button or V; left exactly the way
+   * kiosk mode is (Escape, the pill, K), because it IS kiosk mode.
+   */
+  const setTvMode = useCallback(
+    (on: boolean) => {
+      if (!on) {
+        setKioskMode(false);
+        return;
+      }
+      tvRef.current = true;
+      tvDirectorRef.current = new TvDirector();
+      tvAppliedRef.current = null;
+      tvLastStepRef.current = 0;
+      kioskYieldRef.current = 0;
+      setTv(true);
+      setKioskMode(true);
+    },
+    [setKioskMode],
+  );
+
   useEffect(() => {
     kioskModeRef.current = setKioskMode;
-  }, [setKioskMode]);
+    tvModeRef.current = setTvMode;
+  }, [setKioskMode, setTvMode]);
 
   useEffect(() => {
     let wanted = false;
+    let wantTv = false;
+    const on = (q: string | null) => q !== null && q !== "0" && q !== "false";
     try {
-      const q = new URLSearchParams(window.location.search).get("kiosk");
-      wanted = q !== null && q !== "0" && q !== "false";
+      const params = new URLSearchParams(window.location.search);
+      wanted = on(params.get("kiosk"));
+      wantTv = on(params.get("tv"));
     } catch {
       wanted = false;
     }
-    if (wanted) setKioskMode(true);
+    if (wantTv) setTvMode(true);
+    else if (wanted) setKioskMode(true);
     return () => {
       // The attribute lives on <html>, outside React's tree, so it has to be
       // taken off by hand or navigating away leaves the nav hidden.
@@ -958,7 +1023,38 @@ export function WorldMap() {
         /* ignore */
       }
     };
-  }, [setKioskMode]);
+  }, [setKioskMode, setTvMode]);
+
+  /* The Stage, for TV only: a live event is a shot. Public, like the Stage signpost. */
+  useEffect(() => {
+    if (!tv) {
+      tvStageRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await api<{
+          stage?: { room_id?: string; live?: { title?: string; starts_at?: string } | null };
+        }>("/api/v1/civic/stage");
+        if (cancelled) return;
+        const live = res.stage?.live;
+        // Only the civic core's Stage is a landmark on this map.
+        tvStageRef.current =
+          live?.title && live.starts_at && res.stage?.room_id === "stage"
+            ? { title: live.title, startsAt: live.starts_at, region: "stage" }
+            : null;
+      } catch {
+        /* No schedule this time; the other shots still run. */
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), TV_STAGE_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [tv]);
 
   /* --- camera bookmarks --------------------------------------------- *
    * Keys, resolved against what the map already holds. Nothing here consults
@@ -1253,6 +1349,20 @@ export function WorldMap() {
             );
           }
         }
+        // New public lines since the last poll, for the TV director. The SSE
+        // feed is the Plaza only (and absent on some hosts); the poll is every room.
+        if (!replaying) {
+          const seen = tvSpeechSeenRef.current;
+          const next = new Set<string>();
+          for (const line of recent) {
+            const sid = line.sender_id ?? line.senderId;
+            const key = line.speech_id ?? line.speechId ?? `${sid}|${line.body}`;
+            next.add(key);
+            if (seen && sid && !seen.has(key)) tvDirectorRef.current?.heard(sid, line.body, Date.now());
+          }
+          if (seen) for (const key of seen) if (next.size < 200) next.add(key);
+          tvSpeechSeenRef.current = next;
+        }
         recentRef.current = recent.slice(-3).map((line) => ({
           who: line.sender_name ?? line.senderName ?? "someone",
           body: line.body.slice(0, 80),
@@ -1350,6 +1460,12 @@ export function WorldMap() {
       };
       if (!data.sender_id || !data.body) return;
       speechRef.current.hear(data.sender_id, data.body);
+      {
+        const key = data.speech_id ?? `${data.sender_id}|${data.body}`;
+        const seen = tvSpeechSeenRef.current;
+        if (!seen?.has(key)) tvDirectorRef.current?.heard(data.sender_id, data.body, Date.now());
+        seen?.add(key);
+      }
       const speaker = actorsRef.current.find((a) => a.id === data.sender_id);
       actorsRef.current = actorsRef.current.map((a) => (a.id === data.sender_id ? { ...a, verb: "say" } : a));
       const who = data.sender_name ?? speaker?.name ?? "someone";
@@ -1724,6 +1840,12 @@ export function WorldMap() {
       // first: release a follow before you leave kiosk mode, so one key does
       // not throw away two states at once.
       if (ev.key === "Escape") {
+        // In TV the follow is the director's, not the viewer's: Escape leaves TV.
+        if (tvRef.current) {
+          kioskModeRef.current(false);
+          ev.preventDefault();
+          return;
+        }
         if (followRef.current) {
           followRef.current = null;
           setFollowing(null);
@@ -1742,6 +1864,7 @@ export function WorldMap() {
       else if (ev.key === "-" || ev.key === "_") controlsRef.current?.zoomBy(1 / 1.25);
       else if (ev.key === "0") reset();
       else if (ev.key === "k" || ev.key === "K") kioskModeRef.current(!kioskRef.current);
+      else if ((ev.key === "v" || ev.key === "V") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) tvModeRef.current(!tvRef.current);
       // T walks the themes. Works in kiosk mode too, where there is no switcher.
       else if ((ev.key === "t" || ev.key === "T") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) themeKeyRef.current();
       // The bookmarks. A modified key is somebody else's shortcut — cmd-1 is a
@@ -2538,9 +2661,13 @@ export function WorldMap() {
             const at = bodyAt(target.id, seat);
             const q = iso(at.x, at.y);
             const v = viewRef.current;
+            const followEase = reduceMotion.matches ? 1 : 0.12;
+            // TV follows in close-up; a viewer's own follow keeps their zoom.
+            if (tvRef.current && tvAppliedRef.current) {
+              v.zoom = clamp(v.zoom + (TV_ZOOM - v.zoom) * followEase * 0.5, minZoom(), MAX_ZOOM);
+            }
             const wantX = cssW / 2 - (ox + q.x) * v.zoom;
             const wantY = cssH / 2 - (oy + q.y) * v.zoom;
-            const followEase = reduceMotion.matches ? 1 : 0.12;
             v.px += (wantX - v.px) * followEase;
             v.py += (wantY - v.py) * followEase;
             clampPan();
@@ -2557,7 +2684,62 @@ export function WorldMap() {
          * asking us not to do, and a screen that jump-cut every 26 seconds
          * instead would be worse than one that sits still.
          * ---------------------------------------------------------------- */
-        if (kioskRef.current && !reduceMotion.matches && nowMs > kioskYieldRef.current) {
+        /* ---- Grove TV: the director ------------------------------------
+         * Sampled twice a second; the director itself holds each shot for
+         * ten seconds or more (lib/tv/director). It keeps watching while a
+         * person has the map, and only stops pointing the camera: when they
+         * let go, the current shot is re-applied rather than a fresh cut.
+         * Under reduced motion it still directs — TV was asked for by name —
+         * but every cut is instant and the holds are twice as long.
+         * ---------------------------------------------------------------- */
+        if (tvRef.current && !replay.view.active && nowMs - tvLastStepRef.current >= TV_STEP_MS) {
+          tvLastStepRef.current = nowMs;
+          const director = tvDirectorRef.current!;
+          const tvActors: TvActor[] = actors.map((a) => ({
+            id: a.id,
+            name: a.name,
+            kind: a.kind,
+            region: a.region,
+            verb: a.verb,
+            // The verb's own label is not a detail; only a reported one is.
+            detail: a.detail && a.detail !== VERB_LABEL[a.verb] ? a.detail : undefined,
+            hazard: hazardOf(a),
+            errorText: a.errorText ?? null,
+            fading: a.fading,
+            toolCalls: a.toolCalls,
+          }));
+          director.observe(tvActors, nowMs);
+          const shot = director.step({
+            now: nowMs,
+            actors: tvActors,
+            stage: tvStageRef.current,
+            words: { regionTitle: (r) => regionTitle(chosenRef.current, r) },
+            holdScale: reduceMotion.matches ? 2 : 1,
+          });
+          const paused = nowMs <= kioskYieldRef.current;
+          if (paused) {
+            tvAppliedRef.current = null;
+          } else if (shot.key !== tvAppliedRef.current) {
+            tvAppliedRef.current = shot.key;
+            if (shot.actorId) {
+              glideRef.current = null;
+              followRef.current = shot.actorId;
+            } else {
+              followRef.current = null;
+              const rect = shot.region ? REGION_RECTS[shot.region as RoomRegion] : undefined;
+              glideRef.current = rect
+                ? { tx: (rect.x0 + rect.x1) / 2, ty: (rect.y0 + rect.y1) / 2, zoom: BOOKMARK_ZOOM, start: t }
+                : { tx: PLAZA_CENTER.x, ty: PLAZA_CENTER.y, zoom: KIOSK_WIDE_ZOOM, start: t };
+            }
+          }
+          const captionKey = `${shot.kind}|${shot.caption}|${paused}`;
+          if (captionKey !== tvCaptionKeyRef.current) {
+            tvCaptionKeyRef.current = captionKey;
+            setTvCaption({ kind: shot.kind, caption: shot.caption, paused });
+          }
+        }
+
+        if (kioskRef.current && !tvRef.current && !reduceMotion.matches && nowMs > kioskYieldRef.current) {
           const stop = Math.floor(nowMs / KIOSK_STOP_MS) % KIOSK_STOPS.length;
           if (stop !== tourStopRef.current) {
             tourStopRef.current = stop;
@@ -2646,7 +2828,31 @@ export function WorldMap() {
         kiosk ? "min-h-[100svh]" : "min-h-[calc(100svh-56px)]"
       }`}
     >
-      <KioskChrome active={kiosk} onLeave={() => setKioskMode(false)} />
+      <KioskChrome
+        active={kiosk}
+        onLeave={() => setKioskMode(false)}
+        label={tv ? `Leave ${lex.controls.tv}` : "Leave kiosk"}
+      />
+      {/* Grove TV's caption: what the body on screen is doing, in one line.
+          Top-centre, where kiosk mode has already cleared the heading away, so
+          it never lands on the bell or the way out at the bottom. */}
+      {tv && tvCaption ? (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center px-4 pt-4 sm:pt-6">
+          <div
+            role="status"
+            aria-live="polite"
+            className={`flex max-w-3xl items-start gap-3 rounded-2xl border bg-dusk-950/85 px-4 py-2.5 text-sm transition-opacity duration-500 sm:text-base ${
+              tvCaption.kind === "hazard" ? "border-red-400/50 text-red-100" : "border-lantern-400/25 text-white/85"
+            } ${tvCaption.paused ? "opacity-50" : "opacity-100"}`}
+          >
+            <span className="mt-0.5 shrink-0 rounded-full border border-lantern-400/40 px-2 py-0.5 text-[10px] uppercase tracking-widest text-lantern-300">
+              {tvCaption.kind === "hazard" ? <span aria-hidden className="mr-1 text-red-300">▲</span> : null}
+              {tvCaption.paused ? "paused" : lex.controls.onAir}
+            </span>
+            <span className="min-w-0 break-words">{tvCaption.caption}</span>
+          </div>
+        </div>
+      ) : null}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 h-full w-full"
@@ -2759,7 +2965,7 @@ export function WorldMap() {
         {kiosk ? null : <CameraBookmarks items={bookmarks} onGo={jumpTo} goToLabel={lex.controls.goTo} />}
         <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} />
         <ReplayBar controller={replay} />
-        {following ? (
+        {following && !tv ? (
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-lantern-400/40 bg-dusk-950/90 py-1.5 pl-4 pr-1.5 text-xs text-lantern-300">
             <span className="truncate">
               {lex.controls.following} {following}
@@ -2818,6 +3024,14 @@ export function WorldMap() {
               className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
             >
               {lex.controls.kiosk}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTvMode(true)}
+              title="Grove TV: kiosk mode with a director. The camera goes to faults, tool-call bursts, conversations, arrivals and the Stage, with a caption (V). Escape leaves."
+              className="rounded-full border border-white/15 bg-dusk-950/80 px-4 py-3 text-xs uppercase tracking-widest text-white/80 sm:py-2"
+            >
+              {lex.controls.tv}
             </button>
             <ReplayEntry controller={replay} />
             <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />

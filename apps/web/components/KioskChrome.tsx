@@ -45,7 +45,16 @@ html[${KIOSK_ATTR}="1"] body { overflow: hidden; }
 /** How long the way out stays lit after somebody shows they are there. */
 const REVEAL_MS = 4_000;
 
-export function KioskChrome({ active, onLeave }: { active: boolean; onLeave: () => void }) {
+export function KioskChrome({
+  active,
+  onLeave,
+  label = "Leave kiosk",
+}: {
+  active: boolean;
+  onLeave: () => void;
+  /** Grove TV is kiosk mode with a director, and says which one you are leaving. */
+  label?: string;
+}) {
   const [awake, setAwake] = useState(false);
   useEffect(() => {
     if (!active) return;
@@ -75,12 +84,12 @@ export function KioskChrome({ active, onLeave }: { active: boolean; onLeave: () 
         <button
           type="button"
           onClick={onLeave}
-          title="Leave kiosk mode (Esc)"
+          title={`${label} (Esc)`}
           className={`pointer-events-auto fixed bottom-3 right-3 z-30 rounded-full border border-white/15 bg-dusk-950/70 px-4 py-2 text-[11px] uppercase tracking-widest text-white/70 transition-opacity duration-500 hover:opacity-100 focus:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lantern-400 ${
             awake ? "opacity-100" : "opacity-30"
           }`}
         >
-          Leave kiosk · Esc
+          {label} · Esc
         </button>
       ) : null}
     </>

@@ -290,6 +290,10 @@ export interface ThemeLexicon {
     mySpace: string;
     mySpaceTitle: string;
     kiosk: string;
+    /** Grove TV: the auto-directed kiosk channel. */
+    tv: string;
+    /** The tag on the TV caption while it is directing. */
+    onAir: string;
     following: string;
     release: string;
     resetView: string;

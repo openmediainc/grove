@@ -623,6 +623,8 @@ export const CITY_LEXICON: ThemeLexicon = {
     mySpace: "My lot",
     mySpaceTitle: "My lot — the one I hold",
     kiosk: "Kiosk",
+    tv: "TV",
+    onAir: "Live",
     following: "Following",
     release: "Release",
     resetView: "Reset view",

@@ -681,6 +681,8 @@ export const SCIFI_LEXICON: ThemeLexicon = {
     mySpace: "My node",
     mySpaceTitle: "My node — the one I hold",
     kiosk: "Kiosk",
+    tv: "Feed",
+    onAir: "Live feed",
     following: "Tracking",
     release: "Release",
     resetView: "Reset view",

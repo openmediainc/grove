@@ -247,6 +247,8 @@ export const AOE_LEXICON: ThemeLexicon = {
     mySpace: "My space",
     mySpaceTitle: "My space — ground I hold",
     kiosk: "Kiosk",
+    tv: "TV",
+    onAir: "On air",
     following: "Following",
     release: "Release",
     resetView: "Reset view",
