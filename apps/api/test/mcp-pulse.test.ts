@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GroveApp } from "@grove/domain";
-import { GroveError } from "@grove/domain";
+import { GroveError, PULSE_BATCH_MAX } from "@grove/domain";
 import { VERB_LABEL } from "@grove/protocol";
 import { callTool, TOOLS, toolError } from "../src/mcp.js";
 
@@ -10,6 +10,7 @@ const AGENT = { id: "agt_pulse", claimState: "claimed" };
 function fakeGrove(opts: {
   agent?: Record<string, unknown>;
   pulse?: (actorId: string, verb: string, detail: string | null) => unknown;
+  pulseBatch?: (actorId: string, items: unknown[]) => unknown;
   calls?: unknown[][];
 } = {}) {
   const calls = opts.calls ?? [];
@@ -34,6 +35,20 @@ function fakeGrove(opts: {
             pulsedAt: "2026-09-12T00:00:00.000Z",
           };
         },
+        pulseBatch: async (actorId: string, items: unknown[]) => {
+          calls.push(["batch", actorId, items]);
+          if (opts.pulseBatch) return opts.pulseBatch(actorId, items);
+          return {
+            presence: { actorId, roomId: "plaza", verb: "tool", detail: "pnpm test:safe", pulsedAt: "2026-09-12T00:00:01.000Z" },
+            results: [
+              { index: 0, id: "e1", status: "applied", verb: "think", pulsedAt: "2026-09-12T00:00:00.500Z", clamped: false },
+              { index: 1, id: "e2", status: "refused", verb: "vibing", pulsedAt: null, clamped: false, code: "INVALID", reason: "verb must be one of" },
+            ],
+            applied: 1,
+            duplicates: 0,
+            refused: 1,
+          };
+        },
       },
     } as unknown as GroveApp,
   };
@@ -50,19 +65,33 @@ describe("pulse tool declaration", () => {
     expect(tool).toBeTruthy();
   });
 
-  it("offers exactly the nine campus verbs and requires one", () => {
+  it("offers exactly the nine campus verbs, for one pulse and for every batch item", () => {
     const schema = tool!.inputSchema as {
-      properties: { verb: { enum: string[] }; detail: { maxLength: number } };
+      properties: {
+        verb: { enum: string[] };
+        detail: { maxLength: number };
+        pulses: { maxItems: number; items: { properties: Record<string, { enum?: string[] }>; required: string[] } };
+      };
       required?: string[];
     };
     expect([...schema.properties.verb.enum].sort()).toEqual(Object.keys(VERB_LABEL).sort());
     expect(schema.properties.detail.maxLength).toBe(80);
-    expect(schema.required).toEqual(["verb"]);
+    // `verb` OR `pulses`: JSON Schema cannot say "one of" portably across MCP
+    // clients, so neither is required at the top and callTool checks instead.
+    expect(schema.required).toBeUndefined();
+    expect(schema.properties.pulses.maxItems).toBe(PULSE_BATCH_MAX);
+    expect(schema.properties.pulses.items.required).toEqual(["verb"]);
+    expect([...schema.properties.pulses.items.properties.verb!.enum!].sort()).toEqual(Object.keys(VERB_LABEL).sort());
+    expect(Object.keys(schema.properties.pulses.items.properties)).toEqual(
+      expect.arrayContaining(["verb", "detail", "url", "error_text", "at", "id"]),
+    );
   });
 
   it("tells an LLM when to call it and when not to", () => {
     expect(tool!.description).toMatch(/one pulse per second/i);
     expect(tool!.description).toMatch(/NEW PHASE/i);
+    // ...and that a burst is batched, not dropped.
+    expect(tool!.description).toMatch(/`pulses`/);
   });
 });
 
@@ -151,5 +180,62 @@ describe("pulse tool rate limit", () => {
     expect(payload(await callTool(grove, AGENT.id, "pulse", { verb: "think" })).ok).toBe(true);
     const err = await callTool(grove, AGENT.id, "pulse", { verb: "tool" }).catch((e) => e);
     expect((err as GroveError).code).toBe("RATE_LIMITED");
+  });
+});
+
+describe("pulse tool batch", () => {
+  it("routes `pulses` to the batch path with every item intact, snake or camel", async () => {
+    const { grove, calls } = fakeGrove();
+    const out = payload(
+      await callTool(grove, AGENT.id, "pulse", {
+        pulses: [
+          { verb: "think", at: "2026-09-12T00:00:00.500Z", id: "e1" },
+          { verb: "vibing", error_text: "x", id: "e2" },
+        ],
+      }),
+    );
+    expect(calls).toHaveLength(1);
+    const [kind, actor, items] = calls[0] as [string, string, Array<Record<string, unknown>>];
+    expect(kind).toBe("batch");
+    expect(actor).toBe(AGENT.id);
+    expect(items[0]).toMatchObject({ verb: "think", at: "2026-09-12T00:00:00.500Z", id: "e1" });
+    expect(items[1]).toMatchObject({ verb: "vibing", errorText: "x", id: "e2" });
+    // The body is where the batch ended; the per-item lines come back snake_case.
+    expect(out).toMatchObject({ ok: true, verb: "tool", label: VERB_LABEL.tool, room_id: "plaza", applied: 1, refused: 1 });
+    const results = out.results as Array<Record<string, unknown>>;
+    expect(results[0]).toMatchObject({ index: 0, id: "e1", status: "applied", pulsed_at: "2026-09-12T00:00:00.500Z" });
+    expect(results[1]).toMatchObject({ index: 1, status: "refused", code: "INVALID" });
+  });
+
+  it("refuses an oversized batch before touching presence", async () => {
+    const { grove, calls } = fakeGrove();
+    const pulses = Array.from({ length: PULSE_BATCH_MAX + 1 }, () => ({ verb: "tool" }));
+    const err = await callTool(grove, AGENT.id, "pulse", { pulses }).catch((e) => e);
+    expect((err as GroveError).code).toBe("INVALID");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses a call that is both a pulse and a batch", async () => {
+    const { grove, calls } = fakeGrove();
+    const err = await callTool(grove, AGENT.id, "pulse", { verb: "tool", pulses: [{ verb: "read" }] }).catch((e) => e);
+    expect((err as GroveError).code).toBe("INVALID");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses an unclaimed agent's batch too", async () => {
+    const { grove, calls } = fakeGrove({ agent: { id: "agt_x", claimState: "pending" } });
+    const err = await callTool(grove, "agt_x", "pulse", { pulses: [{ verb: "think" }] }).catch((e) => e);
+    expect((err as GroveError).code).toBe("UNCLAIMED");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("surfaces a refused batch (the 1/s cap) as a clean tool error", async () => {
+    const { grove } = fakeGrove({
+      pulseBatch: () => {
+        throw new GroveError("RATE_LIMITED", "Pulse cooldown (1 per second).");
+      },
+    });
+    const err = await callTool(grove, AGENT.id, "pulse", { pulses: [{ verb: "think" }] }).catch((e) => e);
+    expect(toolError(err as GroveError).isError).toBe(true);
   });
 });
