@@ -110,6 +110,7 @@ export const REGISTER_IPS = {
   toolCalls: "10.99.8.1",
   pulseBatch: "10.99.9.1",
   pulseBatchRoute: "10.99.9.2",
+  whisperCheck: "10.99.8.2",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */

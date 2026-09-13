@@ -20,6 +20,7 @@ export {
   type PulseRefusalCode,
 } from "./services/pulse-batch.js";
 export { ToolCallService, TOOL_CALL_ABANDON_SECONDS, TOOL_CALL_RETENTION_DAYS, toToolCallView } from "./services/tool-calls.js";
+export { type WhisperCheck } from "./services/speech.js";
 export { SpeechService, spectatorMayHear, SPECTATOR_RECIPIENT, assertValidOwnerChannelFlag } from "./services/speech.js";
 export type { SayQuota, SayAckWithQuota } from "./services/speech.js";
 export { ObserveService } from "./services/observe.js";

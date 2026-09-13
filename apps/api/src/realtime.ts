@@ -18,6 +18,41 @@ const allowedOrigins = (origin: string | undefined, webOrigin: string) => {
   return allow.has(origin);
 };
 
+/**
+ * What one socket may see of a frame published on a ROOM channel.
+ *
+ * `speech.say()` publishes every act with a room to `pubsub:room:<id>` carrying
+ * `delivered_to`, and both sockets used to forward it verbatim to everyone
+ * subscribed — so a whisper, or a room line the kernel filtered for this
+ * reader, arrived in full at every body in the room. The kernel's decision is
+ * the list; this enforces it at the last hop:
+ *
+ *  - the sender sees their own frame, as published;
+ *  - a recipient the kernel delivered to sees it, without the audience lists
+ *    (who else heard it, and who muted, are not theirs to know);
+ *  - anyone else gets nothing.
+ *
+ * Frames without `delivered_to` (actor-channel frames, moves, emotes) pass
+ * untouched. Returns the string to send, or null to drop.
+ */
+export function roomFrameFor(viewerId: string, message: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(message);
+  } catch {
+    return message;
+  }
+  if (!parsed || typeof parsed !== "object") return message;
+  const frame = parsed as Record<string, unknown>;
+  if (!Array.isArray(frame.delivered_to)) return message;
+  if (frame.sender_id === viewerId) return message;
+  if (!(frame.delivered_to as unknown[]).includes(viewerId)) return null;
+  const { delivered_to: _audience, muted_hidden: _muted, ...rest } = frame;
+  void _audience;
+  void _muted;
+  return JSON.stringify(rest);
+}
+
 function subscriber(redis: GroveApp["store"]["redis"]) {
   return redis.duplicate({ enableReadyCheck: false, maxRetriesPerRequest: null });
 }
@@ -106,7 +141,8 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
       if (p) channels.push(`pubsub:room:${p.roomId}`);
       await sub.subscribe(...channels);
       sub.on("message", (_ch, message) => {
-        socket.send(message);
+        const out = roomFrameFor(human.id, message);
+        if (out !== null) socket.send(out);
       });
 
       const ping = setInterval(() => {
@@ -201,7 +237,10 @@ export async function registerRealtime(app: FastifyInstance, grove: GroveApp) {
       const channels = [`pubsub:actor:${auth.agent.id}`];
       if (p) channels.push(`pubsub:room:${p.roomId}`);
       await sub.subscribe(...channels);
-      sub.on("message", (_ch, message) => socket.send(message));
+      sub.on("message", (_ch, message) => {
+        const out = roomFrameFor(auth.agent.id, message);
+        if (out !== null) socket.send(out);
+      });
 
       const ping = setInterval(() => {
         socket.send(JSON.stringify({ type: "pong", server_time: new Date().toISOString() }));
