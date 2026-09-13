@@ -179,7 +179,8 @@ describe.skipIf(!hasDb)("ops overview against the database", () => {
     expect("error" in o.schema).toBe(false);
     if (!("error" in o.schema)) {
       expect(Array.isArray(o.schema.pending)).toBe(true);
-      expect(o.schema.onDisk).toBeGreaterThanOrEqual(30);
+      expect(o.schema.onDisk).toBeGreaterThan(0);
+      expect(o.schema.onDisk).toBe(o.schema.applied + o.schema.pending.length);
     }
     expect("error" in o.cost).toBe(false);
     if (!("error" in o.cost)) expect(o.cost.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
