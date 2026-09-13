@@ -1,5 +1,6 @@
 export { loadConfig, isProduction, type GroveConfig } from "./config.js";
 export { createPool, withTx, type Pool } from "./db.js";
+export { createBus, PgRedis } from "./pg-redis.js";
 export { migrate, pendingMigrations } from "./migrate.js";
 export { GroveError } from "./errors.js";
 export { newId } from "./ids.js";

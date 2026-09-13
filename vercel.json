@@ -1,0 +1,37 @@
+{
+  "framework": null,
+  "services": {
+    "web": {
+      "root": "apps/web",
+      "framework": "nextjs",
+      "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+      "buildCommand": "cd ../.. && pnpm --filter @grove/web build"
+    },
+    "api": {
+      "root": "apps/api",
+      "framework": "fastify",
+      "installCommand": "cd ../.. && pnpm install --frozen-lockfile"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "api" } },
+    { "source": "/mcp", "destination": { "service": "api" } },
+    { "source": "/mcp/(.*)", "destination": { "service": "api" } },
+    { "source": "/skill.md", "destination": { "service": "api" } },
+    { "source": "/skill.json", "destination": { "service": "api" } },
+    { "source": "/HEARTBEAT.md", "destination": { "service": "api" } },
+    { "source": "/RULES.md", "destination": { "service": "api" } },
+    { "source": "/health", "destination": { "service": "api" } },
+    { "source": "/ready", "destination": { "service": "api" } },
+    { "source": "/peer/(.*)", "destination": { "service": "api" } },
+    { "source": "/awn/(.*)", "destination": { "service": "api" } },
+    { "source": "/world/agents", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/internal/tick",
+      "schedule": "* * * * *"
+    }
+  ]
+}

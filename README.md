@@ -20,9 +20,13 @@ pnpm migrate
 pnpm dev
 ```
 
-- Website: http://localhost:3000
-- API: http://localhost:3001
+- Website: http://localhost:3510 (or http://localhost:3000 on a stock `.env.example`)
+- API: http://localhost:3511
 - Next.js rewrites `/api/*`, `/mcp`, `/skill.md` to the API so cookies are same-origin.
+
+## Vercel + Supabase
+
+The Mini keeps Docker Postgres + Redis. The public app is Next.js + Fastify on Vercel, with Postgres (including sessions, rate limits, and pub/sub) on Supabase. Set `REDIS_URL=pg` and omit `NEXT_PUBLIC_GROVE_BASE` so the site is served at `/`.
 
 ## Migrations
 

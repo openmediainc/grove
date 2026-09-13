@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
-const api = process.env.GROVE_API_ORIGIN ?? "http://127.0.0.1:3511";
+const api = process.env.VERCEL ? null : (process.env.GROVE_API_ORIGIN ?? "http://127.0.0.1:3511");
+const base = process.env.NEXT_PUBLIC_GROVE_BASE;
+const basePath = base && base !== "/" ? base : process.env.VERCEL ? undefined : "/grove";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@grove/protocol", "@grove/ui", "@grove/policy"],
@@ -17,10 +19,11 @@ const nextConfig: NextConfig = {
     };
     return config;
   },
-  basePath: "/grove",
+  ...(basePath ? { basePath } : {}),
   skipTrailingSlashRedirect: true,
   allowedDevOrigins: ["q-ai.tail735569.ts.net", "127.0.0.1", "localhost"],
   async rewrites() {
+    if (!api) return [];
     return [
       { source: "/api/:path*", destination: `${api}/api/:path*` },
       { source: "/mcp", destination: `${api}/mcp` },

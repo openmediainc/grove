@@ -5,6 +5,7 @@ dist
 .env
 .env.local
 .env.*.local
+.env.vercel
 *.log
 .DS_Store
 coverage
@@ -17,3 +18,4 @@ apps/web/out
 apps/api/data
 logs/*.pid
 infra/inhabitants/credentials.json
+.env.vercel

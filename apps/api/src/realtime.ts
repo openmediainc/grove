@@ -15,7 +15,8 @@ const allowedOrigins = (origin: string | undefined, webOrigin: string) => {
     "https://q-ai.tail735569.ts.net",
     "https://q-ai.tail735569.ts.net:3510",
   ]);
-  return allow.has(origin);
+  if (process.env.VERCEL_URL) allow.add(`https://${process.env.VERCEL_URL}`);
+  return allow.has(origin) || origin.endsWith(".vercel.app");
 };
 
 function subscriber(redis: GroveApp["store"]["redis"]) {

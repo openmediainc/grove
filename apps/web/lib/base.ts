@@ -1,5 +1,5 @@
-/** Public path on Tailscale Serve. Keep in sync with `tailscale serve --set-path /grove`. */
-export const GROVE_BASE = process.env.NEXT_PUBLIC_GROVE_BASE ?? "/grove";
+/** Public path. Mini Tailscale Serve uses `/grove`; Vercel serves at `/`. */
+export const GROVE_BASE = process.env.NEXT_PUBLIC_GROVE_BASE ?? (process.env.VERCEL ? "" : "/grove");
 
 export function gp(path: string): string {
   if (!path || path.startsWith("http")) return path;

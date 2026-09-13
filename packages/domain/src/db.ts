@@ -4,9 +4,11 @@ export type Pool = pg.Pool;
 export type PoolClient = pg.PoolClient;
 
 export function createPool(databaseUrl: string): pg.Pool {
+  const supabase = databaseUrl.includes("supabase.co") || databaseUrl.includes("pooler.supabase.com");
   return new pg.Pool({
     connectionString: databaseUrl,
-    max: 20,
+    max: Number(process.env.PG_POOL_MAX ?? (process.env.VERCEL ? 3 : 20)),
+    ssl: supabase ? { rejectUnauthorized: false } : undefined,
   });
 }
 

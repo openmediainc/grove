@@ -23,13 +23,19 @@ export async function buildApp(grove: GroveApp) {
 
   await app.register(cookie);
   await app.register(cors, {
-    origin: [
-      grove.store.config.webOrigin,
-      "http://127.0.0.1:3510",
-      "http://localhost:3510",
-      "https://q-ai.tail735569.ts.net",
-      "https://q-ai.tail735569.ts.net:3510",
-    ],
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      const allow = new Set([
+        grove.store.config.webOrigin,
+        "http://127.0.0.1:3510",
+        "http://localhost:3510",
+        "https://q-ai.tail735569.ts.net",
+        "https://q-ai.tail735569.ts.net:3510",
+      ]);
+      if (process.env.VERCEL_URL) allow.add(`https://${process.env.VERCEL_URL}`);
+      if (allow.has(origin) || origin.endsWith(".vercel.app")) return cb(null, true);
+      cb(null, false);
+    },
     credentials: true,
   });
   await app.register(websocket);

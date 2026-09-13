@@ -1,20 +1,7 @@
-import Redis from "ioredis";
-import { GroveApp, createPool, loadConfig, migrate, pendingMigrations } from "@grove/domain";
+import { GroveApp, createPool, createBus, loadConfig, migrate, pendingMigrations } from "@grove/domain";
 import { buildApp } from "./app.js";
+import { maybeTick, runTick } from "./tick.js";
 
-/**
- * Bring the schema into line with the code, or say plainly that it is not.
- *
- * Boot migrations are OFF unless GROVE_MIGRATE_ON_BOOT=1. A service that
- * migrates on every start applies whatever .sql happens to be sitting in
- * packages/domain/migrations the next time launchd or the watchdog bounces it —
- * including a migration somebody is halfway through writing.
- *
- * With the flag off we still LOOK, and name what we did not apply, so the gap
- * is discovered at startup rather than through a runtime error hours later.
- * With the flag on, a failure is fatal: serving on a schema that does not match
- * the code is worse than not serving at all.
- */
 async function prepareSchema(databaseUrl: string, migrateOnBoot: boolean): Promise<void> {
   if (migrateOnBoot) {
     try {
@@ -33,8 +20,6 @@ async function prepareSchema(databaseUrl: string, migrateOnBoot: boolean): Promi
   try {
     pending = await pendingMigrations(databaseUrl);
   } catch (err) {
-    // Could not even look. Not fatal on its own — the pool below will fail loudly
-    // if the database is genuinely unreachable — but never silent.
     console.warn(`[grove] could not check for pending migrations: ${(err as Error).message}`);
     return;
   }
@@ -57,36 +42,56 @@ async function prepareSchema(databaseUrl: string, migrateOnBoot: boolean): Promi
   );
 }
 
-async function main() {
+let appPromise: Promise<Awaited<ReturnType<typeof buildApp>>> | null = null;
+
+export async function getApp() {
+  if (appPromise) return appPromise;
+  appPromise = (async () => {
+    const config = loadConfig();
+    await prepareSchema(config.databaseUrl, config.migrateOnBoot || Boolean(process.env.VERCEL));
+    const pg = createPool(config.databaseUrl);
+    const redis = createBus(pg, config.redisUrl, config.databaseUrl);
+    const grove = new GroveApp(pg, redis, config);
+    const app = await buildApp(grove);
+
+    app.addHook("onRequest", async () => {
+      maybeTick(grove);
+    });
+
+    app.get("/api/v1/internal/tick", async (req, reply) => {
+      const secret = process.env.CRON_SECRET;
+      if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+        return reply.status(401).send({ ok: false });
+      }
+      await runTick(grove);
+      return { ok: true };
+    });
+
+    if (!process.env.VERCEL) {
+      setInterval(() => {
+        void grove.presence.evictStale();
+        void grove.toolCalls.sweep().catch(() => {});
+        void grove.identity.purgeExpiredUnclaimed();
+      }, 60_000);
+      setInterval(() => {
+        void grove.jobs.processDue();
+      }, 15_000);
+      setInterval(() => {
+        if (!config.xaiApiKey) return;
+        void grove.brains.tick();
+      }, 20_000);
+    }
+
+    return app;
+  })();
+  return appPromise;
+}
+
+const app = await getApp();
+export default app;
+
+if (!process.env.VERCEL) {
   const config = loadConfig();
-  await prepareSchema(config.databaseUrl, config.migrateOnBoot);
-  const pg = createPool(config.databaseUrl);
-  const redis = new Redis(config.redisUrl);
-  const grove = new GroveApp(pg, redis, config);
-
-  setInterval(() => {
-    void grove.presence.evictStale();
-    void grove.toolCalls.sweep().catch(() => {});
-    void grove.identity.purgeExpiredUnclaimed();
-  }, 60_000);
-
-  setInterval(() => {
-    void grove.jobs.processDue();
-  }, 15_000);
-
-  // Hosted xAI ticks stay off unless XAI_API_KEY is set. Mini-alpha inhabitants
-  // are local HTTP bots (infra/inhabitants) so Grok tokens are not burned on empty rooms.
-  setInterval(() => {
-    if (!config.xaiApiKey) return;
-    void grove.brains.tick();
-  }, 20_000);
-
-  const app = await buildApp(grove);
   await app.listen({ port: config.apiPort, host: config.listenHost });
   console.log(`[grove] api http://${config.listenHost}:${config.apiPort}`);
 }
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
