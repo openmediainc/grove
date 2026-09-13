@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PgRedis, listenConnections } from "../src/pg-redis.js";
+import { PgRedis, __setListenClientFactory, listenConnections } from "../src/pg-redis.js";
 import { createPool } from "../src/db.js";
 import { loadConfig } from "../src/config.js";
 import { migrate } from "../src/migrate.js";
@@ -27,9 +27,12 @@ describe.skipIf(!hasTestDatabase())("PgRedis shares one LISTEN connection (REDIS
     assertTestDatabase(config.databaseUrl, "run the pg-redis listen suite");
     await migrate(config.databaseUrl);
     pool = createPool(config.databaseUrl);
+    // Real pg clients, but a short idle-close window so the test need not wait 60s.
+    __setListenClientFactory(null, 100);
   });
 
   afterAll(async () => {
+    __setListenClientFactory(null);
     await pool.end();
   });
 
@@ -62,6 +65,9 @@ describe.skipIf(!hasTestDatabase())("PgRedis shares one LISTEN connection (REDIS
 
     await subs[1]!.quit();
     await subs[2]!.quit();
+    // Nobody listening: the shared connection is ended after the idle window.
+    expect(listenConnections(config.databaseUrl)).toBe(1);
+    await new Promise((r) => setTimeout(r, 400));
     expect(listenConnections(config.databaseUrl)).toBe(0);
   });
 });

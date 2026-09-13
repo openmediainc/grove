@@ -91,15 +91,20 @@ export async function migrate(databaseUrl: string): Promise<void> {
     for (const file of migrationFiles()) {
       if (done.has(file)) continue;
       const sql = fs.readFileSync(path.join(migrationsDir, file), "utf8");
-      await pool.query("BEGIN");
+      // One client for BEGIN..COMMIT: separate pool.query calls may land on
+      // different connections (and, behind a transaction pooler, always can).
+      const client = await pool.connect();
       try {
-        await pool.query(sql);
-        await pool.query("INSERT INTO schema_migrations (id) VALUES ($1)", [file]);
-        await pool.query("COMMIT");
+        await client.query("BEGIN");
+        await client.query(sql);
+        await client.query("INSERT INTO schema_migrations (id) VALUES ($1)", [file]);
+        await client.query("COMMIT");
         console.log(`applied ${file}`);
       } catch (err) {
-        await pool.query("ROLLBACK");
+        await client.query("ROLLBACK").catch(() => {});
         throw err;
+      } finally {
+        client.release();
       }
     }
   } finally {
