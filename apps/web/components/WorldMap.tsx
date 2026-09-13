@@ -60,7 +60,28 @@ import {
   type MapRegion,
 } from "@/lib/map-layout";
 import { SpectatorPeek, loginHref, type OrgBadge, type Peek } from "./SpectatorPeek";
-import { deepLinkApplies, parseDeepLink, type DeepLink } from "@/lib/deep-link";
+import { deepLinkApplies, parseDeepLink, resolveAt, type DeepLink } from "@/lib/deep-link";
+import {
+  centreOn,
+  clampPan as clampPanView,
+  clampTile,
+  fitZoom,
+  insetCollapsedDefault,
+  insetTransform,
+  viewportBox,
+  worldCentre,
+  zoomRange,
+} from "@/lib/camera";
+import {
+  districtLabelsVisible,
+  districtStops,
+  districtStopsKey,
+  inDistrict,
+  ringLabelAnchors,
+  ringNumberLabel,
+  type DistrictStop,
+} from "@/lib/districts";
+import { districtName, worldDistricts } from "@grove/protocol";
 import { estateSignContent, estateSignVisible, layoutEstateSign, layoutSignboard, plotBranding, plotEdgeColour, signContent, signboardVisible } from "@/lib/signboard";
 import { estatePerimeter, estateSignTile, readEstates, type MapEstate } from "@/lib/estates";
 import { WATCH_HEADER, formatHeadcount, makeWatchToken } from "@/lib/headcount";
@@ -202,6 +223,15 @@ const TV_ZOOM = 1.35;
 const TV_STEP_MS = 500;
 /** The Stage's schedule changes on the scale of minutes. */
 const TV_STAGE_POLL_MS = 30_000;
+/** Where Go to ▾ lands on a district: far enough out to see its neighbours. */
+const DISTRICT_ZOOM = 0.75;
+/** The minimap inset redraws at most this often; it is an overview, not a second map. */
+const INSET_REDRAW_MS = 200;
+/** Inset size in CSS px. */
+const INSET_W = 168;
+const INSET_H = 112;
+/** localStorage: "1" when the viewer folded the minimap away, "0" when they opened it. */
+const INSET_KEY = "grove-minimap-collapsed";
 /** A glide that cannot reach its mark (clamped at the world edge) gives up here. */
 const GLIDE_GIVE_UP_MS = 4_000;
 /** A live line is forgotten this long after it was said, unless the poll re-seeds it. */
@@ -646,6 +676,29 @@ function unIso(x: number, y: number): { tx: number; ty: number } {
   return { tx: (x / (TW / 2) + y / (TH / 2)) / 2, ty: (y / (TH / 2) - x / (TW / 2)) / 2 };
 }
 
+/** The same rgba colour at a chosen alpha: the map's plot tints are films, the minimap needs solid marks. */
+function withAlpha(colour: string, alpha: number): string {
+  const m = /^rgba?\(([^)]+)\)$/.exec(colour.trim());
+  if (!m) return colour;
+  const parts = m[1]!.split(",").map((p) => p.trim());
+  return parts.length >= 3 ? `rgba(${parts[0]},${parts[1]},${parts[2]},${alpha})` : colour;
+}
+
+/** A plot block key. Claimed land is never lost in the fog (#38): see `revealed`. */
+function blockKey(tx: number, ty: number): string {
+  return `${Math.floor(tx / PLOT_COLS)},${Math.floor(ty / PLOT_ROWS)}`;
+}
+
+/**
+ * Explored, or on a claimed plot. The fog is how far the world has been
+ * walked, and it used to swallow claimed plots in the outer rings whole: you
+ * could pan to one and find nothing there. Claimed land (held plots included,
+ * which the minimap already places) always shows through.
+ */
+function revealed(tx: number, ty: number, radius: number, claimed: ReadonlySet<string>): boolean {
+  return tileExplored(tx, ty, radius) || (claimed.size > 0 && claimed.has(blockKey(tx, ty)));
+}
+
 function clamp(n: number, lo: number, hi: number): number {
   return n < lo ? lo : n > hi ? hi : n;
 }
@@ -754,6 +807,17 @@ export function WorldMap() {
   const plotsRef = useRef(0);
   const plotRef = useRef<Plot[]>([]);
   const estateRef = useRef<MapEstate[]>([]);
+  /** Blocks holding a claimed plot, for `revealed`. Rebuilt on every poll. */
+  const claimedBlocksRef = useRef<ReadonlySet<string>>(new Set());
+  /** Go to ▾ districts (#38): only those holding a public plot. */
+  const [districts, setDistricts] = useState<Array<Omit<DistrictStop, "name">>>([]);
+  const districtsKeyRef = useRef("");
+  /** The minimap inset (#38). Null while folded away, so the draw loop skips it. */
+  const insetRef = useRef<HTMLCanvasElement>(null);
+  const insetDrawnRef = useRef(0);
+  /** The last inset transform, so a click on the inset maps back to the world. */
+  const insetXformRef = useRef<ReturnType<typeof insetTransform> | null>(null);
+  const [insetCollapsed, setInsetCollapsed] = useState(true);
   /** Resting at plot: drawn, never counted, followed, cut to or rung for. */
   const restingRef = useRef<RestingBody[]>([]);
   const seatsRef = useRef<Map<string, Seat>>(new Map());
@@ -817,6 +881,8 @@ export function WorldMap() {
     zoomBy: (f: number) => void;
     reset: () => void;
     goTo: (tx: number, ty: number, zoom: number) => void;
+    /** Centre the camera on a layout-space point at once (the minimap). */
+    centreLayout: (x: number, y: number) => void;
     /** The body drawn nearest the middle of the frame, if one is close. */
     centred: () => string | null;
   } | null>(null);
@@ -837,7 +903,7 @@ export function WorldMap() {
   const myHandleRef = useRef<string | null>(null);
   const [hasMySpace, setHasMySpace] = useState(false);
   /** An eased camera move to a bookmark. Cleared by any drag, wheel or follow. */
-  const glideRef = useRef<{ tx: number; ty: number; zoom: number; start: number } | null>(null);
+  const glideRef = useRef<{ tx: number; ty: number; zoom: number; start: number; fit?: boolean } | null>(null);
   const [kiosk, setKiosk] = useState(false);
   const kioskRef = useRef(false);
   /** Kiosk yields to a person who touches the map, rather than fighting them. */
@@ -1228,6 +1294,39 @@ export function WorldMap() {
     };
   }, [tv]);
 
+  /* --- the minimap inset (#38) -------------------------------------- *
+   * Folded away on phones unless the viewer opened it; the choice is kept in
+   * this browser. A press or drag on it moves the camera there at once.
+   * ------------------------------------------------------------------- */
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(INSET_KEY);
+    } catch {
+      /* private window: fall back to the default */
+    }
+    setInsetCollapsed(insetCollapsedDefault(stored, window.matchMedia("(max-width: 639px)").matches));
+  }, []);
+  const toggleInset = useCallback(() => {
+    setInsetCollapsed((was) => {
+      const next = !was;
+      try {
+        window.localStorage.setItem(INSET_KEY, next ? "1" : "0");
+      } catch {
+        /* not remembered; still toggles */
+      }
+      return next;
+    });
+  }, []);
+  const insetDragRef = useRef(false);
+  const insetMove = useCallback((ev: React.PointerEvent<HTMLCanvasElement>) => {
+    const xf = insetXformRef.current;
+    if (!xf) return;
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const p = xf.fromInset(ev.clientX - rect.left, ev.clientY - rect.top);
+    controlsRef.current?.centreLayout(p.x, p.y);
+  }, []);
+
   /* --- camera bookmarks --------------------------------------------- *
    * Keys, resolved against what the map already holds. Nothing here consults
    * the clock, Math.random or poll order: the busiest room is decided by a
@@ -1505,6 +1604,16 @@ export function WorldMap() {
         estateRef.current = estates;
         plotRef.current = plots;
         plotsRef.current = plots.length;
+        claimedBlocksRef.current = new Set(plots.map((p) => blockKey(p.rect.x0, p.rect.y0)));
+        {
+          // Go to ▾ districts: names are the theme's, applied at render.
+          const stops = districtStops([], plots);
+          const key = districtStopsKey(stops);
+          if (key !== districtsKeyRef.current) {
+            districtsKeyRef.current = key;
+            setDistricts(stops.map(({ name: _n, ...rest }) => rest));
+          }
+        }
         // Resting at plot is a live-map truth ("nobody runs it now"), so replay
         // shows none. Kept out of `actors` on purpose: see lib/resting.
         restingRef.current = replaying
@@ -1566,6 +1675,22 @@ export function WorldMap() {
         if (!replaying && myIdRef.current) {
           const mine = myIdRef.current;
           setMeInside(actors.some((a) => a.id === mine));
+        }
+        // ?at=<tx>,<ty>: centre on that tile, once this poll has said how big
+        // the world is, pulled onto the world if it points past the edge
+        // (lib/deep-link resolveAt). Skipped when a follow is also asked for,
+        // since the follow-cam would take the camera straight back.
+        {
+          const link = deepLinkRef.current;
+          const go = controlsRef.current?.goTo;
+          if (link?.at && go && !replaying && !tvRef.current) {
+            if (!link.follow) {
+              const at = resolveAt(link.at, worldBounds(plots.length));
+              go(at.tx, at.ty, BOOKMARK_ZOOM);
+            }
+            link.at = null;
+            if (!link.follow) deepLinkRef.current = null;
+          }
         }
         // ?follow=<slug>: hand the body to the follow-cam once it is on the map.
         // A slug the public map does not carry after a few polls is dropped
@@ -1737,25 +1862,19 @@ export function WorldMap() {
       };
     };
 
-    /** Zoomed all the way out, the entire world fits on screen. */
+    /** Zoomed all the way out, the entire world fits on screen, phone or desktop (lib/camera). */
     const minZoom = () => {
       const { w, h } = origin();
-      const box = worldBox();
-      const fit = Math.min(w / Math.max(1, box.maxX - box.minX), h / Math.max(1, box.maxY - box.minY));
-      return clamp(Math.min(NOMINAL_MIN_ZOOM, fit), 0.12, MAX_ZOOM);
+      return zoomRange(worldBox(), w, h, { nominalMin: NOMINAL_MIN_ZOOM, max: MAX_ZOOM }).min;
     };
 
-    /** The world may be dragged to the edge of the viewport, never past it. */
+    /** The world may be dragged to the edge of the viewport, never past it (lib/camera). */
     const clampPan = () => {
       const v = viewRef.current;
       const { w, h } = origin();
-      const box = worldBox();
-      const wx = (box.maxX - box.minX) * v.zoom;
-      const wy = (box.maxY - box.minY) * v.zoom;
-      if (wx <= w) v.px = (w - wx) / 2 - box.minX * v.zoom;
-      else v.px = clamp(v.px, w - PAN_MARGIN - box.maxX * v.zoom, PAN_MARGIN - box.minX * v.zoom);
-      if (wy <= h) v.py = (h - wy) / 2 - box.minY * v.zoom;
-      else v.py = clamp(v.py, h - PAN_MARGIN - box.maxY * v.zoom, PAN_MARGIN - box.minY * v.zoom);
+      const next = clampPanView(v, worldBox(), w, h, PAN_MARGIN);
+      v.px = next.px;
+      v.py = next.py;
     };
 
     /** Zoom about a point in CSS canvas coords, so what is under it stays put. */
@@ -1790,12 +1909,13 @@ export function WorldMap() {
       // body to start following one, so a follow-cam quietly surviving "back to
       // the core" was rare enough to go unnoticed; now one click starts one,
       // and a reset that snapped straight back to the body looked broken.
+      //
+      // Reset glides to the whole world, fitted (#38): as the world grows the
+      // old "zoom 1 on the core" left the outer rings off-screen with no hint
+      // they were there. `fit` makes the glide re-read the world every frame.
       takeCamera();
-      const v = viewRef.current;
-      v.zoom = clamp(1, minZoom(), MAX_ZOOM);
-      v.px = 0;
-      v.py = 0;
-      clampPan();
+      kioskYieldRef.current = Date.now() + KIOSK_YIELD_MS;
+      glideRef.current = { tx: 0, ty: 0, zoom: 1, start: performance.now(), fit: true };
     };
 
     /** Screen → tile. The exact inverse of how a tile is drawn. */
@@ -1829,6 +1949,16 @@ export function WorldMap() {
         kioskYieldRef.current = Date.now() + KIOSK_YIELD_MS;
         glideRef.current = { tx, ty, zoom, start: performance.now() };
       },
+      centreLayout: (x, y) => {
+        takeCamera();
+        kioskYieldRef.current = Date.now() + KIOSK_YIELD_MS;
+        const { w, h } = origin();
+        const v = viewRef.current;
+        const next = centreOn(x, y, v.zoom, w, h);
+        v.px = next.px;
+        v.py = next.py;
+        clampPan();
+      },
       centred: () => {
         const { ox, oy, w, h } = origin();
         const v = viewRef.current;
@@ -1842,16 +1972,6 @@ export function WorldMap() {
       },
     };
 
-    // ?at=<tx>,<ty>: centre on that tile. Skipped when a follow is also asked
-    // for, since the follow-cam would take the camera straight back.
-    {
-      const link = deepLinkRef.current;
-      if (link?.at && !tvRef.current) {
-        if (!link.follow) controlsRef.current.goTo(link.at.tx, link.at.ty, BOOKMARK_ZOOM);
-        link.at = null;
-        if (!link.follow) deepLinkRef.current = null;
-      }
-    }
 
     /**
      * How healthy this body's connection is, right now.
@@ -1951,7 +2071,7 @@ export function WorldMap() {
      * arrives with a null name and no orgs, and this renders that as it is.
      */
     const peekAt = (tx: number, ty: number): Peek | null => {
-      if (!tileExplored(tx, ty, radiusRef.current)) return null;
+      if (!revealed(tx, ty, radiusRef.current, claimedBlocksRef.current)) return null;
       const body = actorsRef.current.find((a) => standsOn(a, tx, ty));
       if (body) {
         const facts: string[] = [];
@@ -2020,6 +2140,7 @@ export function WorldMap() {
               ? []
               : plot.marks.map((m) => chosenRef.current.lexicon.marks[m]),
           marksHeading: chosenRef.current.lexicon.marks.heading,
+          district: inDistrict(chosenRef.current.lexicon.district.names, plot.plotIndex),
           share: { at: { tx: (plot.rect.x0 + plot.rect.x1) / 2, ty: (plot.rect.y0 + plot.rect.y1) / 2 } },
         };
       }
@@ -2261,18 +2382,19 @@ export function WorldMap() {
         // The horizon widens with the visible area rather than being switched
         // off when zoomed out, so distant land appears instead of a hard edge.
         const horizon = HORIZON + Math.ceil(Math.max(cssW / z / TW, cssH / z / TH));
+        const claimed = claimedBlocksRef.current;
 
         for (let ty = vy0; ty <= vy1; ty++) {
           for (let tx = vx0; tx <= vx1; tx++) {
             // Beyond the horizon there is nothing to see yet; skipping keeps the
             // frame cost flat however large the world gets.
-            if (Math.hypot(tx - PLAZA_CENTER.x, ty - PLAZA_CENTER.y) > radius + horizon) continue;
+            if (Math.hypot(tx - PLAZA_CENTER.x, ty - PLAZA_CENTER.y) > radius + horizon && !claimed.has(blockKey(tx, ty))) continue;
             const core = isCoreTile(tx, ty);
             const region = regionAt(tx, ty);
             const p = iso(tx, ty);
             const x = ox + p.x;
             const y = oy + p.y;
-            const explored = tileExplored(tx, ty, radius);
+            const explored = revealed(tx, ty, radius, claimed);
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(x, y);
@@ -2387,7 +2509,7 @@ export function WorldMap() {
           let anyExplored = false;
           for (let ty = rect.y0; ty <= rect.y1; ty++) {
             for (let tx = rect.x0; tx <= rect.x1; tx++) {
-              if (!tileExplored(tx, ty, radius)) continue;
+              if (!revealed(tx, ty, radius, claimed)) continue;
               anyExplored = true;
               const q = iso(tx, ty);
               const px = ox + q.x;
@@ -2428,7 +2550,7 @@ export function WorldMap() {
             };
             for (let ty = rect.y0; ty <= rect.y1; ty++) {
               for (let tx = rect.x0; tx <= rect.x1; tx++) {
-                if (!tileExplored(tx, ty, radius)) continue;
+                if (!revealed(tx, ty, radius, claimed)) continue;
                 // Only the outward faces, so the plot reads as one enclosure
                 // rather than a grid of outlined diamonds.
                 if (tx > rect.x0 && tx < rect.x1 && ty > rect.y0 && ty < rect.y1) continue;
@@ -2460,7 +2582,7 @@ export function WorldMap() {
           if (rects.every((r) => r.x1 < vx0 || r.x0 > vx1 || r.y1 < vy0 || r.y0 > vy1)) continue;
           const segs: Array<readonly [number, number, number, number]> = [];
           for (const { tx, ty, side } of estatePerimeter(rects)) {
-            if (!tileExplored(tx, ty, radius)) continue;
+            if (!revealed(tx, ty, radius, claimed)) continue;
             const q = iso(tx, ty);
             const px = ox + q.x;
             const py = oy + q.y;
@@ -2473,7 +2595,7 @@ export function WorldMap() {
           art.estateFence(ctx, segs, estate.accent, t);
           if (!estateSignVisible(z)) continue;
           const at = estateSignTile(estate.plotIndices, plotForIndex);
-          if (!tileExplored(at.x, at.y, radius)) continue;
+          if (!revealed(at.x, at.y, radius, claimed)) continue;
           const q = iso(at.x, at.y);
           estateSigns.push({ estate, x: ox + q.x, y: oy + q.y });
         }
@@ -2855,6 +2977,41 @@ export function WorldMap() {
           ctx.imageSmoothingEnabled = false;
         }
 
+        // District names (#38), zoomed out only: each ring's name hangs just
+        // inside its north and south corners, faint, in the theme's words, with
+        // the neutral "ring N" the search palette uses underneath. Screen space,
+        // so the words stay one size whatever the zoom.
+        if (districtLabelsVisible(z)) {
+          ctx.save();
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.textAlign = "center";
+          ctx.lineJoin = "round";
+          const family = pal.displayFont;
+          const names = theme.lexicon.district.names;
+          for (const d of worldDistricts(plotsRef.current)) {
+            const name = districtName(names, d);
+            const sub = ringNumberLabel(d);
+            for (const a of ringLabelAnchors(d.ring)) {
+              const q = iso(a.tx, a.ty);
+              const sx = (ox + q.x) * z + v.px;
+              const sy = (oy + q.y + TH / 2) * z + v.py;
+              if (sx < -120 || sx > cssW + 120 || sy < -30 || sy > cssH + 30) continue;
+              ctx.globalAlpha = revealed(Math.floor(a.tx), Math.floor(a.ty), radius, claimed) ? 0.62 : 0.4;
+              ctx.font = `600 12px ${family}`;
+              ctx.strokeStyle = "rgba(0,0,0,0.55)";
+              ctx.lineWidth = 3;
+              ctx.strokeText(name, sx, sy);
+              ctx.fillStyle = pal.plotName;
+              ctx.fillText(name, sx, sy);
+              ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+              ctx.globalAlpha *= 0.7;
+              ctx.strokeText(sub, sx, sy + 12);
+              ctx.fillText(sub, sx, sy + 12);
+            }
+          }
+          ctx.restore();
+        }
+
         // Plot signboards: fixed screen size so a name reads at every zoom
         // above the threshold, back-to-front so the nearer board wins. A
         // private plot's board says "held" and never its name (lib/signboard).
@@ -3105,7 +3262,7 @@ export function WorldMap() {
               const rect = shot.region ? REGION_RECTS[shot.region as RoomRegion] : undefined;
               glideRef.current = rect
                 ? { tx: (rect.x0 + rect.x1) / 2, ty: (rect.y0 + rect.y1) / 2, zoom: BOOKMARK_ZOOM, start: t }
-                : { tx: PLAZA_CENTER.x, ty: PLAZA_CENTER.y, zoom: KIOSK_WIDE_ZOOM, start: t };
+                : { tx: PLAZA_CENTER.x, ty: PLAZA_CENTER.y, zoom: KIOSK_WIDE_ZOOM, start: t, fit: true };
             }
           }
           const captionKey = `${shot.kind}|${shot.caption}|${paused}`;
@@ -3120,7 +3277,8 @@ export function WorldMap() {
           if (stop !== tourStopRef.current) {
             tourStopRef.current = stop;
             const s = KIOSK_STOPS[stop]!;
-            glideRef.current = { tx: s.tx, ty: s.ty, zoom: s.zoom, start: t };
+            // The wide shot is the whole world, fitted, however far it has grown.
+            glideRef.current = { tx: s.tx, ty: s.ty, zoom: s.zoom, start: t, fit: s.zoom === KIOSK_WIDE_ZOOM };
           }
         }
 
@@ -3136,6 +3294,20 @@ export function WorldMap() {
          * ---------------------------------------------------------------- */
         const glide = glideRef.current;
         if (glide && !followRef.current) {
+          // A fitted glide (Reset view, the wide shot) aims at the world as it
+          // is this frame; any other target is pulled onto the world first, so
+          // a stale link or bookmark cannot aim the camera past the edge.
+          const wb = worldBounds(plotsRef.current);
+          if (glide.fit) {
+            const c = worldCentre(wb);
+            glide.tx = c.tx;
+            glide.ty = c.ty;
+            glide.zoom = clamp(fitZoom(worldBox(), cssW, cssH), minZoom(), MAX_ZOOM);
+          } else {
+            const at = clampTile(glide, wb);
+            glide.tx = at.tx;
+            glide.ty = at.ty;
+          }
           const q = iso(glide.tx, glide.ty);
           const k = reduceMotion.matches ? 1 : 0.1;
           v.zoom = clamp(v.zoom + (glide.zoom - v.zoom) * k, minZoom(), MAX_ZOOM);
@@ -3175,7 +3347,87 @@ export function WorldMap() {
             ctx.fillText(ln, 20, cssH - boxH + 6 + i * 16);
           });
         }
+        // The minimap (#38), throttled: an overview a few times a second.
+        if (nowMs - insetDrawnRef.current >= INSET_REDRAW_MS) {
+          insetDrawnRef.current = nowMs;
+          drawInset(theme);
+        }
         raf = requestAnimationFrame(draw);
+      };
+
+      /**
+       * The minimap inset: the whole world, the core, every claimed plot
+       * (a private one only as held land, in its access tint, exactly as the
+       * main map shows it — the same public minimap payload, nothing more),
+       * estate outlines and the rectangle the camera is looking at.
+       */
+      const drawInset = (theme: Theme) => {
+        const el = insetRef.current;
+        if (!el) {
+          insetXformRef.current = null;
+          return;
+        }
+        const g = el.getContext("2d");
+        if (!g) return;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const w = INSET_W;
+        const h = INSET_H;
+        if (el.width !== Math.floor(w * dpr) || el.height !== Math.floor(h * dpr)) {
+          el.width = Math.floor(w * dpr);
+          el.height = Math.floor(h * dpr);
+        }
+        const pal = theme.palette;
+        const { ox, oy, w: cw, h: ch } = origin();
+        const box = worldBox();
+        const xf = insetTransform(box, w, h, 6);
+        insetXformRef.current = xf;
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        g.clearRect(0, 0, w, h);
+        /** A tile rect's diamond on the inset. */
+        const diamond = (r: { x0: number; y0: number; x1: number; y1: number }) => {
+          const pts = [iso(r.x0, r.y0), iso(r.x1 + 1, r.y0), iso(r.x1 + 1, r.y1 + 1), iso(r.x0, r.y1 + 1)].map((p) =>
+            xf.toInset(ox + p.x, oy + p.y),
+          );
+          g.beginPath();
+          g.moveTo(pts[0]!.x, pts[0]!.y);
+          for (const p of pts.slice(1)) g.lineTo(p.x, p.y);
+          g.closePath();
+        };
+        diamond(worldBounds(plotsRef.current));
+        g.fillStyle = `rgb(${pal.chrome.dusk800} / 0.95)`;
+        g.fill();
+        g.strokeStyle = `rgb(${pal.chrome.lantern400} / 0.25)`;
+        g.lineWidth = 1;
+        g.stroke();
+        diamond({ x0: 0, y0: 0, x1: MAP_COLS - 1, y1: MAP_ROWS - 1 });
+        g.fillStyle = `rgb(${pal.chrome.lantern500} / 0.45)`;
+        g.fill();
+        for (const plot of plotRef.current) {
+          const access = plot.preset === "private" || plot.preset === "public_view" ? plot.preset : "public_write";
+          diamond(plot.rect);
+          g.fillStyle = withAlpha(pal.plotTint[access as AccessLevel] ?? pal.plotTint.public_write, 0.9);
+          g.fill();
+        }
+        g.lineWidth = 1.25;
+        for (const estate of estateRef.current) {
+          g.strokeStyle = estate.accent ?? `rgb(${pal.chrome.lantern300})`;
+          for (const i of estate.plotIndices) {
+            diamond(plotForIndex(i));
+            g.stroke();
+          }
+        }
+        const vb = viewportBox(viewRef.current, cw, ch);
+        const a = xf.toInset(vb.minX, vb.minY);
+        const b = xf.toInset(vb.maxX, vb.maxY);
+        const x0 = Math.max(1, a.x);
+        const y0 = Math.max(1, a.y);
+        const x1 = Math.min(w - 1, b.x);
+        const y1 = Math.min(h - 1, b.y);
+        if (x1 > x0 && y1 > y0) {
+          g.strokeStyle = `rgb(${pal.chrome.lantern300})`;
+          g.lineWidth = 1.5;
+          g.strokeRect(x0, y0, x1 - x0, y1 - y0);
+        }
       };
       raf = requestAnimationFrame(draw);
     };
@@ -3316,6 +3568,66 @@ export function WorldMap() {
         </div>
         {firstVisit && !drawerOpen ? <FirstVisitCard onDismiss={dismissFirstVisit} howHref="/how-it-works" /> : null}
       </div>
+      {/* The minimap (#38): top right, clear of the HUD pill (top left) and the
+          controls (bottom). Never in kiosk or TV; out of the way of an open
+          drawer — beside it on a wide screen, gone under it on a phone. */}
+      {!kiosk ? (
+        <div
+          className={`pointer-events-none absolute right-0 top-0 z-10 p-3 sm:p-5 ${drawerOpen ? "max-sm:hidden sm:right-[var(--drawer-w)]" : ""}`}
+          style={{ "--drawer-w": drawerWidth } as React.CSSProperties}
+        >
+          {insetCollapsed ? (
+            <button
+              type="button"
+              onClick={toggleInset}
+              aria-expanded={false}
+              title="Show the minimap: the whole world and where you are looking"
+              className={`${CONTROL} w-11 justify-center px-0 sm:w-9`}
+            >
+              <span aria-hidden>▦</span>
+              <span className="sr-only">Show minimap</span>
+            </button>
+          ) : (
+            <div
+              data-speech-avoid
+              className="pointer-events-auto relative overflow-hidden rounded-xl border border-lantern-400/25 bg-dusk-950/85 shadow-xl"
+            >
+              <canvas
+                ref={insetRef}
+                width={INSET_W}
+                height={INSET_H}
+                style={{ width: INSET_W, height: INSET_H, touchAction: "none" }}
+                className="block cursor-crosshair"
+                aria-label="Minimap: press or drag to move the camera"
+                onPointerDown={(ev) => {
+                  ev.currentTarget.setPointerCapture?.(ev.pointerId);
+                  insetDragRef.current = true;
+                  insetMove(ev);
+                }}
+                onPointerMove={(ev) => {
+                  if (insetDragRef.current) insetMove(ev);
+                }}
+                onPointerUp={() => {
+                  insetDragRef.current = false;
+                }}
+                onPointerCancel={() => {
+                  insetDragRef.current = false;
+                }}
+              />
+              <button
+                type="button"
+                onClick={toggleInset}
+                aria-expanded
+                aria-label="Hide minimap"
+                title="Hide the minimap"
+                className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center text-sm text-white/50 hover:text-white/85"
+              >
+                ×
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
       {peek ? (
         <SpectatorPeek
           peek={peek}
@@ -3463,6 +3775,26 @@ export function WorldMap() {
                       {lex.regions[region].title}
                     </MenuItem>
                   ))}
+                  {districts.length ? (
+                    <>
+                      <MenuHeading>{lex.district.heading}</MenuHeading>
+                      {districts.map((d) => {
+                        const name = districtName(lex.district.names, { ring: d.ordinal + 1, ordinal: d.ordinal });
+                        return (
+                          <MenuItem
+                            key={`district-${d.ordinal}`}
+                            title={`${name} (ring ${d.ordinal}) — move the camera there`}
+                            onSelect={() => {
+                              close();
+                              controlsRef.current?.goTo(d.tx, d.ty, DISTRICT_ZOOM);
+                            }}
+                          >
+                            {name}
+                          </MenuItem>
+                        );
+                      })}
+                    </>
+                  ) : null}
                   <MenuHeading>Camera</MenuHeading>
                   {bookmarks
                     .filter((b) => b.key === "b" || b.key === "m")

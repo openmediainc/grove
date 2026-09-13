@@ -13,6 +13,8 @@
  * and the deep link is ignored rather than fought; see `deepLinkApplies`.
  */
 
+import { clampTile, type TileRect } from "./camera";
+
 export const FOLLOW_QUERY = "follow";
 export const AT_QUERY = "at";
 
@@ -79,4 +81,14 @@ export function buildDeepLink(
   // URLSearchParams encodes the comma; it is a legal query character and reads
   // better in a pasted link.
   return url.toString().replace(/([?&]at=-?\d+)%2C/, "$1,");
+}
+
+/**
+ * Where a `?at=` link lands on a world of these bounds: the tile, pulled onto
+ * the world if the link points past its edge (a link made before the world
+ * shrank a ring, or typed by hand). Resolved once the minimap has said how big
+ * the world is, never against the empty world of the first frame.
+ */
+export function resolveAt(at: { tx: number; ty: number }, bounds: TileRect): { tx: number; ty: number } {
+  return clampTile(at, bounds);
 }

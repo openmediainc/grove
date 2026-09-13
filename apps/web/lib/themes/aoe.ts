@@ -298,6 +298,7 @@ export const AOE_LEXICON: ThemeLexicon = {
   resting: "resting at home",
   estate: { label: "Estate", plots: "plots" },
   inTrial: "in a trial on the Stage",
+  district: { heading: "Districts", names: ["Hearth Ring", "Mill Ring", "Orchard Ring", "Market Ring", "Pasture Ring", "Watch Ring", "Far Fields"] },
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "all hands busy" },
   hud: { hereNow: "here now", watching: "watching", awake: "awake", asleep: "asleep", fog: "fog", world: "world", claimed: "claimed", quiet: "nobody has spoken here recently" },

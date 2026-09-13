@@ -672,6 +672,7 @@ export const CITY_LEXICON: ThemeLexicon = {
   resting: "home for the night",
   estate: { label: "Block", plots: "lots" },
   inTrial: "competing at the Theatre",
+  district: { heading: "Neighbourhoods", names: ["Old Town", "Midtown", "Riverside", "Uptown", "Garden Suburbs", "Mill District", "Outskirts"] },
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "everyone's at work" },
   hud: { hereNow: "in town", watching: "watching", awake: "at work", asleep: "off shift", fog: "limits", world: "city", claimed: "lots", quiet: "the street is quiet" },

@@ -1,4 +1,4 @@
-import { WORLD_ID } from "@grove/protocol";
+import { WORLD_ID, ringForPlotIndex } from "@grove/protocol";
 import type { GroveStore } from "../store.js";
 import { visibleOccupancySql } from "../visibility.js";
 import type { CampusService } from "./campus.js";
@@ -64,6 +64,11 @@ export interface SearchSpace {
   ownerHandle: string | null;
   occupancy: number;
   isMember: boolean;
+  /**
+   * The block ring of the space's plot (#38), for "in Ring N". Null for a space
+   * with no plot. Only on rows this viewer may already see, like the rest.
+   */
+  ring: number | null;
 }
 
 export interface SearchRoom {
@@ -178,7 +183,7 @@ export class SearchService {
         [like, prefix, SEARCH_LIMIT],
       ),
       this.store.pg.query(
-        `SELECT w.slug, w.name, w.policy_preset, h.handle AS owner_handle, ${MEMBER("w", "$4")} AS is_member,
+        `SELECT w.slug, w.name, w.policy_preset, w.plot_index, h.handle AS owner_handle, ${MEMBER("w", "$4")} AS is_member,
                 ${visibleOccupancySql("w", "$4")} AS occupancy
            FROM worlds w LEFT JOIN humans h ON h.id = w.owner_human_id
           WHERE w.id <> '${WORLD_ID}' AND w.archived_at IS NULL
@@ -242,6 +247,7 @@ export class SearchService {
         ownerHandle: s.owner_handle ? String(s.owner_handle) : null,
         occupancy: Number(s.occupancy),
         isMember: Boolean(s.is_member),
+        ring: s.plot_index == null ? null : ringForPlotIndex(Number(s.plot_index)),
       })),
       rooms: roomResults,
       online,

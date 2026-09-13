@@ -131,6 +131,8 @@ describe.skipIf(!hasDb)("search across bodies, spaces and rooms", () => {
     const found = await grove.search.search(stranger.id, `aardyard-${t}`);
     expect(found.spaces.map((s) => s.slug)).toEqual([space.slug]);
     expect(found.spaces[0]!.isMember).toBe(false);
+    // Its district (#38): the ring of the plot the space was given.
+    expect(found.spaces[0]!.ring).toBeGreaterThanOrEqual(2);
 
     const libraries = await grove.search.search(stranger.id, "library");
     expect(libraries.rooms.some((r) => r.spaceSlug === space.slug)).toBe(false);

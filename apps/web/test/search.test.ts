@@ -59,7 +59,7 @@ describe("search results", () => {
     const g = groupResults(
       wire({
         agents: [{ slug: "lantern", name: "Lantern", owner_handle: "ada", online: true, room_slug: "plaza", room_name: "Plaza" }],
-        spaces: [{ slug: "harbour", name: "Harbour", policy_preset: "public_view", owner_handle: "ada", occupancy: 2, is_member: false }],
+        spaces: [{ slug: "harbour", name: "Harbour", policy_preset: "public_view", owner_handle: "ada", occupancy: 2, is_member: false, ring: 3 }],
         rooms: [
           { slug: "plaza", name: "Plaza", kind: "public", occupancy: 3, space_slug: null, space_name: null },
           { slug: "plaza", name: "Plaza", kind: "public", occupancy: 0, space_slug: "harbour", space_name: "Harbour" },
@@ -70,6 +70,8 @@ describe("search results", () => {
     const items = flatItems(g);
     expect(items.map((i) => i.key)).toEqual(["agent:lantern", "space:harbour", "room::plaza", "room:harbour:plaza"]);
     expect(items[0]!.detail).toBe("@ada · here now · Plaza");
+    // A space says its district in neutral words (#38); the palette wears no theme.
+    expect(items[1]!.detail).toContain("in Ring 2");
     expect(items.map(resultPath)).toEqual(["/a/lantern", "/s/harbour", "/?room=plaza", "/s/harbour"]);
     expect(items.map((i) => cardTargetFor(i)?.subject ?? null)).toEqual(["agent", "space", null, null]);
   });

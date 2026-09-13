@@ -12,6 +12,7 @@
  */
 import type { CardTarget } from "./card";
 import { accessWord } from "./access";
+import { searchDistrict } from "./districts";
 import { buildDeepLink, parseFollow } from "./deep-link";
 import { spaceHref } from "./space-page";
 import { roomHref } from "./world-url";
@@ -31,7 +32,7 @@ export type WireSearch = {
   query: string;
   agents: Array<{ slug: string; name: string; owner_handle: string | null; online: boolean; room_slug: string | null; room_name: string | null }>;
   humans: Array<{ handle: string; name: string; online: boolean; room_slug: string | null; room_name: string | null }>;
-  spaces: Array<{ slug: string; name: string; policy_preset: string; owner_handle: string | null; occupancy: number; is_member: boolean }>;
+  spaces: Array<{ slug: string; name: string; policy_preset: string; owner_handle: string | null; occupancy: number; is_member: boolean; ring?: number | null }>;
   rooms: Array<{ slug: string; name: string; kind: string; occupancy: number; space_slug: string | null; space_name: string | null }>;
   online: WireOnline[];
 };
@@ -117,7 +118,7 @@ export function groupResults(r: WireSearch | null): SearchGroup[] {
         key: `space:${s.slug}`,
         slug: s.slug,
         name: s.name,
-        detail: [accessWord(s.policy_preset), s.is_member ? "member" : "", `${s.occupancy} here`]
+        detail: [accessWord(s.policy_preset), searchDistrict(s.ring), s.is_member ? "member" : "", `${s.occupancy} here`]
           .filter(Boolean)
           .join(" · "),
       })),

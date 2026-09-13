@@ -357,6 +357,12 @@ export interface ThemeLexicon {
    * hover card. The ring and progress ticks beside it are fixed, like a verb ring.
    */
   inTrial: string;
+  /**
+   * Districts (#38): the rings of the plot spiral, inside out. `names` has 6–8
+   * entries; beyond the end they cycle with a numeral ("Hearth Ring II", see
+   * `@grove/protocol` districts.ts). `heading` titles them in Go to ▾.
+   */
+  district: { heading: string; names: readonly string[] };
 
   /** What a work site is called: prefixes the url on the hover card. */
   construction: string;

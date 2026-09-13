@@ -61,6 +61,8 @@ export type Peek =
       name: string | null;
       slug: string | null;
       plotIndex: number;
+      /** "in Hearth Ring": the plot's district (#38) in the theme's words. Where land is, never who holds it. */
+      district: string;
       access: string;
       accessBlurb: string;
       ownerHandle: string | null;
@@ -320,7 +322,7 @@ function SpacePeek({
       <h2 className="font-display mt-1 text-2xl text-lantern-300">{redacted ? "Held plot" : peek.name}</h2>
       <p className="mt-1 text-white/70">{peek.accessBlurb}</p>
       <p className="mt-2 text-xs text-white/40">
-        plot {peek.plotIndex} · {peek.access} ·{" "}
+        plot {peek.plotIndex} · {peek.district} · {peek.access} ·{" "}
         {peek.occupancy === 1 ? "1 body inside" : `${peek.occupancy} bodies inside`}
       </p>
       {redacted ? (
