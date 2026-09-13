@@ -15,11 +15,20 @@ export {
   type SpeechState,
 } from "./consequences";
 export {
+  ceilingPhrase,
+  describeRoomAccess,
+  type AudienceView,
+  type RoomAccessInput,
+  type RoomAccessView,
+} from "./room-access";
+export {
+  CEILING_RECOURSE,
   UNATTRIBUTED_NOTE,
   describeRefusal,
   type CapabilityWire,
   type Refusal,
   type RefusalInput,
+  type RefusalMembership,
   type RefusalSource,
   type RefusalSubject,
 } from "./refusal";

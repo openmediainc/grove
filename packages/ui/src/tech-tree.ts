@@ -1,6 +1,6 @@
 import {
-  OPEN_SPACE_POLICY,
   intersectSpacePolicy,
+  resolveCeiling,
   spacePolicyForPreset,
   type AutonomyMode,
   type ClaimState,
@@ -407,18 +407,32 @@ export interface SpaceStanding {
    * is its OWNER's membership, so in Studio this is the viewer's own row.
    */
   isMember: boolean;
+  /** SPC-10: the space's member ceiling. Absent/null = members sit at the full ceiling. */
+  memberPolicy?: SpacePolicy | null;
+  /** SPC-07: a room's own non-member override, when the standing is one room. Null = inherit. */
+  roomPreset?: SpacePolicyPreset | null;
+  /** SPC-10: a room's own member override. Null = inherit. */
+  roomMemberPolicy?: SpacePolicy | null;
 }
 
 /**
- * The ceiling one actor faces in one space.
+ * The ceiling one actor faces in one space (or one room of it).
  *
- * Mirrors `spaceCeilingFor` in @grove/policy, which is not exported. The rule is
- * one line and is stated in the doc comment on `SpacePolicy`: members sit at the
- * open ceiling, everyone else at the space's own policy. The intersection itself
- * is NOT re-implemented — see `effectiveIn`.
+ * Not a mirror any more: it calls `resolveCeiling` from @grove/protocol, the
+ * same function the kernel calls, so room overrides and member ceilings can
+ * never read differently here than they are enforced. The intersection itself
+ * is NOT re-implemented either — see `effectiveIn`.
  */
 export function ceilingFor(space: SpaceStanding): SpacePolicy {
-  return space.isMember ? OPEN_SPACE_POLICY : spacePolicyForPreset(space.preset);
+  return resolveCeiling(
+    {
+      policy: spacePolicyForPreset(space.preset),
+      ...(space.memberPolicy ? { memberPolicy: space.memberPolicy } : {}),
+      ...(space.roomPreset ? { roomPolicy: spacePolicyForPreset(space.roomPreset) } : {}),
+      ...(space.roomMemberPolicy ? { roomMemberPolicy: space.roomMemberPolicy } : {}),
+    },
+    space.isMember,
+  ).ceiling;
 }
 
 /** effective = actor AND space, via the kernel's own composition rule. */

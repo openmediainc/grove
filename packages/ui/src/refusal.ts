@@ -14,7 +14,9 @@ import { SPEECH_RECOURSE } from "./consequences";
  * one whenever the space is what refused.
  */
 
-export type RefusalSource = "actor" | "space";
+export type RefusalSource = "actor" | "space" | "room";
+/** SPC-07/10: which ceiling refused, when a room or space did. */
+export type RefusalMembership = "member" | "non_member";
 export type RefusalSubject = "sender" | "recipient";
 
 /** Capability names as `capabilityWire()` spells them on the wire. */
@@ -30,6 +32,8 @@ export interface RefusalInput {
   capability?: string;
   source?: RefusalSource;
   subject?: RefusalSubject;
+  /** Set with `source: "space" | "room"`: the members' ceiling or the visitors'. */
+  membership?: RefusalMembership;
   /** The server's own prose. Used only as a last resort. */
   message?: string;
   hint?: string;
@@ -152,6 +156,36 @@ const SPACE_HEADLINE: Record<CapabilityWire, string> = {
   listen_to_agents: "This space does not let agents hear that here.",
 };
 
+/** SPC-07: a ROOM override refused a non-member. The door is the room's, and it can be opened. */
+const ROOM_VISITOR_HEADLINE: Record<CapabilityWire, string> = {
+  speak_to_humans: "This room is closed to non-members speaking to people.",
+  speak_to_agents: "This room is closed to non-members speaking to agents.",
+  listen_to_humans: "This room is closed to non-members hearing people.",
+  listen_to_agents: "This room is closed to non-members hearing agents.",
+};
+
+/** SPC-10: the MEMBER ceiling refused. Joining will not help; only the owner can lift it. */
+const MEMBER_HEADLINE: Record<"room" | "space", Record<CapabilityWire, string>> = {
+  room: {
+    speak_to_humans: "Members can listen but not speak to people in this room.",
+    speak_to_agents: "Members can listen but not speak to agents in this room.",
+    listen_to_humans: "Even members do not hear people in this room.",
+    listen_to_agents: "Even members do not hear agents in this room.",
+  },
+  space: {
+    speak_to_humans: "Members can listen but not speak to people in this space.",
+    speak_to_agents: "Members can listen but not speak to agents in this space.",
+    listen_to_humans: "Even members do not hear people in this space.",
+    listen_to_agents: "Even members do not hear agents in this space.",
+  },
+};
+
+/** Where a ceiling refusal sends the reader. Never their owner. */
+export const CEILING_RECOURSE = {
+  visitor: "Ask whoever runs this space to let you in, or to open this room.",
+  member: "Only whoever runs this space can change that.",
+} as const;
+
 function wire(capability: string | undefined): CapabilityWire | null {
   return capability === "speak_to_humans" ||
     capability === "speak_to_agents" ||
@@ -182,6 +216,19 @@ export function describeRefusal(input: RefusalInput): Refusal {
   }
 
   const cap = wire(input.capability);
+
+  if (input.source === "room" || (input.source === "space" && input.membership === "member")) {
+    const member = input.membership === "member";
+    const scope = input.source;
+    return {
+      headline: member
+        ? (cap && MEMBER_HEADLINE[scope][cap]) ?? `Members cannot do that in this ${scope}.`
+        : (cap && ROOM_VISITOR_HEADLINE[cap]) ?? "This room is closed to non-members.",
+      recourse: member ? CEILING_RECOURSE.member : CEILING_RECOURSE.visitor,
+      attribution: "reported",
+      hint,
+    };
+  }
 
   if (input.source === "space") {
     return {
