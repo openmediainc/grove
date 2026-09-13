@@ -1,4 +1,3 @@
-import "fastify";
 import { GroveApp, createPool, createBus, loadConfig, migrate, pendingMigrations } from "@grove/domain";
 import { buildApp } from "./create-app.js";
 import { maybeTick, runTick } from "./tick.js";
@@ -90,14 +89,38 @@ export async function getApp() {
   return appPromise;
 }
 
-const app = await getApp();
-export default app;
-
 const serverless = Boolean(
   process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME,
 );
-if (!serverless) {
+
+async function localListen() {
+  const app = await getApp();
   const config = loadConfig();
   await app.listen({ port: config.apiPort, host: config.listenHost });
   console.log(`[grove] api http://${config.listenHost}:${config.apiPort}`);
+}
+
+const { createServer } = await import("node:http");
+const server = createServer((req, res) => {
+  const url = req.url ?? "/";
+  if (url === "/health" || url.startsWith("/health?")) {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true, status: "up" }));
+    return;
+  }
+  void getApp()
+    .then(async (app) => {
+      await app.ready();
+      app.server.emit("request", req, res);
+    })
+    .catch((err) => {
+      res.writeHead(503, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: String((err as Error)?.message ?? err) }));
+    });
+});
+
+export default server;
+
+if (!serverless) {
+  await localListen();
 }
