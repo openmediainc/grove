@@ -985,6 +985,20 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       const parts = v.split(",").map((s) => s.trim()).filter(Boolean);
       return parts.length ? parts : null;
     };
+    // One space's activity (the space page's Activity tab). The SQL world gate
+    // already drops a private space's rows for an outsider, but an empty page
+    // would still confirm the space exists: a private space you are not inside
+    // answers exactly like one that does not exist, operators included (the
+    // world gate has no operator bypass). Accepts the id or the slug.
+    let worldId: string | null = null;
+    if (q.world_id) {
+      const world = await grove.campus.getWorld(q.world_id);
+      const inside = world && humanId ? await grove.campus.isMember(world.id, humanId) : false;
+      if (!world || (world.policyPreset === "private" && !inside)) {
+        throw new GroveError("NOT_FOUND", "World not found.", { httpStatus: 404 });
+      }
+      worldId = world.id;
+    }
     const page = await grove.chronicle.read(
       { humanId: humanId ?? null, isOperator },
       {
@@ -993,7 +1007,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
         actorId: q.actor_id ?? (q.actor ? await chronicleActorId(grove, q.actor) : null),
         types: csv(q.types),
         kinds: csv(q.kinds),
-        worldId: q.world_id ?? null,
+        worldId,
         cursor: q.cursor ?? null,
         limit: q.limit ? Number(q.limit) : null,
       },

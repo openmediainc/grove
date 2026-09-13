@@ -14,6 +14,7 @@ import {
 } from "@grove/protocol";
 import type { CardTarget } from "./card";
 import { agentHref } from "./agent-page";
+import { spaceHref } from "./space-page";
 import type { ThemeLexicon } from "./themes/types";
 
 export type FollowTarget = { subject: "space"; ref: string } | { subject: "agent"; slug: string };
@@ -79,7 +80,7 @@ export function heartLabel(state: Pick<WireFollow, "following" | "followers"> | 
  */
 export function noticeHref(n: WireFollowNotice): string {
   const s = n.payload.subject;
-  return s.kind === "space" ? `/spaces/${encodeURIComponent(s.slug)}` : agentHref(s.slug);
+  return s.kind === "space" ? spaceHref(s.slug) : agentHref(s.slug);
 }
 
 /** The notice as one sentence, in the same words the server's tests use. */

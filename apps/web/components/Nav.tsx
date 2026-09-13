@@ -270,8 +270,8 @@ export function Nav() {
         <Link href={campusHref(viewer)} className={ITEM}>
           Campus
         </Link>
-        <Link href="/spaces" className={ITEM}>
-          Spaces
+        <Link href="/explore" className={ITEM}>
+          Explore
         </Link>
         <Link href="/chronicle" className={ITEM}>
           Chronicle

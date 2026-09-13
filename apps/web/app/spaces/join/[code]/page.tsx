@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { spaceHref } from "@/lib/space-page";
 
 /**
  * The landing page for an invite link. Redemption is a POST, so it happens here
@@ -84,7 +85,7 @@ export default function RedeemInvite() {
             You are a member of <strong className="text-white">{world.name}</strong>.
           </p>
           <Link
-            href={`/spaces/${world.slug}`}
+            href={spaceHref(world.slug)}
             className="mt-6 inline-block rounded-full bg-lantern-400 px-5 py-3 font-semibold text-dusk-950 sm:py-2"
           >
             Go to the space
@@ -98,8 +99,8 @@ export default function RedeemInvite() {
         </p>
       ) : null}
 
-      <Link href="/spaces" className="mt-10 block py-2 text-sm text-white/40">
-        ← All spaces
+      <Link href="/explore" className="mt-10 block py-2 text-sm text-white/40">
+        ← Explore
       </Link>
     </main>
   );

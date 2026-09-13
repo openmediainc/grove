@@ -11,7 +11,9 @@
  * only when its slug is one the map's parser accepts.
  */
 import type { CardTarget } from "./card";
+import { accessWord } from "./access";
 import { buildDeepLink, parseFollow } from "./deep-link";
+import { spaceHref } from "./space-page";
 
 /** A body on the commons map, as the API sends it. */
 export type WireOnline = {
@@ -114,7 +116,7 @@ export function groupResults(r: WireSearch | null): SearchGroup[] {
         key: `space:${s.slug}`,
         slug: s.slug,
         name: s.name,
-        detail: [PRESET_WORD[s.policy_preset] ?? s.policy_preset, s.is_member ? "member" : "", `${s.occupancy} here`]
+        detail: [accessWord(s.policy_preset), s.is_member ? "member" : "", `${s.occupancy} here`]
           .filter(Boolean)
           .join(" · "),
       })),
@@ -134,11 +136,6 @@ export function groupResults(r: WireSearch | null): SearchGroup[] {
   return groups.filter((g) => g.items.length > 0);
 }
 
-const PRESET_WORD: Record<string, string> = {
-  private: "private",
-  public_view: "open to watch",
-  public_write: "open",
-};
 
 function onlineItem(b: WireOnline): SearchItem {
   const doing = b.stalled ? `${b.doing ?? "working"} · gone quiet` : b.doing;
@@ -177,10 +174,10 @@ export function resultPath(item: SearchItem): string {
     case "human":
       return `/u/${encodeURIComponent(item.slug)}`;
     case "space":
-      return `/spaces/${encodeURIComponent(item.slug)}`;
+      return spaceHref(item.slug);
     case "room":
       // A space's room is reached through its space, whose door decides.
-      return item.spaceSlug ? `/spaces/${encodeURIComponent(item.spaceSlug)}` : `/w/${encodeURIComponent(item.slug)}`;
+      return item.spaceSlug ? spaceHref(item.spaceSlug) : `/w/${encodeURIComponent(item.slug)}`;
   }
 }
 

@@ -70,7 +70,7 @@ describe("search results", () => {
     const items = flatItems(g);
     expect(items.map((i) => i.key)).toEqual(["agent:lantern", "space:harbour", "room::plaza", "room:harbour:plaza"]);
     expect(items[0]!.detail).toBe("@ada · here now · Plaza");
-    expect(items.map(resultPath)).toEqual(["/a/lantern", "/spaces/harbour", "/w/plaza", "/spaces/harbour"]);
+    expect(items.map(resultPath)).toEqual(["/a/lantern", "/s/harbour", "/w/plaza", "/s/harbour"]);
     expect(items.map((i) => cardTargetFor(i)?.subject ?? null)).toEqual(["agent", "space", null, null]);
   });
 

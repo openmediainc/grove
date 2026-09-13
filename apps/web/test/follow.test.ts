@@ -61,7 +61,7 @@ describe("the heart", () => {
         stage: { title: "Open mic", starts_at: "2026-09-13T20:00:00Z", ends_at: null },
       },
     });
-    expect(noticeHref(stage)).toBe("/spaces/the%20hall");
+    expect(noticeHref(stage)).toBe("/s/the%20hall");
     expect(noticeText(stage)).toBe("The Hall opened a stage event: Open mic.");
     expect(noticeText(notice({ kind: "agent.gossip" }))).toBeNull();
   });

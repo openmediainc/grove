@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { legacyRedirects } from "./lib/agent-page";
+import { spaceRedirects } from "./lib/space-page";
 
 const api = process.env.VERCEL ? null : (process.env.GROVE_API_ORIGIN ?? "http://127.0.0.1:3511");
 const base = process.env.NEXT_PUBLIC_GROVE_BASE;
@@ -28,9 +29,10 @@ const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_GROVE_BASE: basePath ?? "" },
   skipTrailingSlashRedirect: true,
   allowedDevOrigins: ["q-ai.tail735569.ts.net", "127.0.0.1", "localhost"],
-  // Old agent routes land on the agent page or /me (DECISIONS #5: never a 404).
+  // Old agent routes land on the agent page or /me, old space routes on Explore
+  // or the space page (DECISIONS #5: never a 404).
   async redirects() {
-    return legacyRedirects({ publicDeploy: Boolean(process.env.VERCEL) });
+    return [...legacyRedirects({ publicDeploy: Boolean(process.env.VERCEL) }), ...spaceRedirects()];
   },
   async rewrites() {
     if (!api) return [];

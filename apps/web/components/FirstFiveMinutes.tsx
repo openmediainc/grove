@@ -350,7 +350,7 @@ export function FirstFiveMinutes({
                 and arrives with six rooms of its own, plus one decision: who may speak in them.
               </p>
               <Link
-                href="/spaces"
+                href="/explore"
                 className="mt-3 inline-flex rounded-full border border-lantern-400/40 px-5 py-2.5 text-sm text-lantern-300 sm:py-1.5"
               >
                 See what is already claimed →

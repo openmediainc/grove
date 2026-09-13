@@ -24,6 +24,7 @@ import { ArrivalToast, nameList } from "@/components/ArrivalToast";
 import { CardPanel, useCardLex } from "@/components/Card";
 import { FollowButton } from "@/components/Follow";
 import { LeaveMessage } from "@/components/LeaveMessage";
+import { Tabs } from "@/components/Tabs";
 
 /**
  * One agent, one page: Activity · Card · Settings (`?tab=`).
@@ -300,22 +301,7 @@ export default function AgentPage() {
         ) : null}
       </div>
 
-      <div role="tablist" aria-label="Agent" className="mt-8 flex gap-1 border-b border-white/10">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => chooseTab(t)}
-            className={`-mb-px border-b-2 px-4 py-2.5 text-sm ${
-              tab === t ? "border-lantern-400 text-lantern-300" : "border-transparent text-white/50 hover:text-white/80"
-            }`}
-          >
-            {TAB_LABEL[t]}
-          </button>
-        ))}
-      </div>
+      <Tabs label="Agent" tabs={tabs} current={tab} labels={TAB_LABEL} onChoose={chooseTab} />
 
       {owned === null ? <p className="mt-6 text-sm text-white/40">Loading…</p> : null}
       <div role="tabpanel" hidden={owned === null} className="mt-6">

@@ -8,12 +8,10 @@
 import { WORLD_ID } from "@grove/protocol";
 import type { Budget, Totals, UsageDay } from "./cost";
 
-/** One access vocabulary on pages (DECISIONS #3): Open · Watch only · Private. */
-export function accessWord(preset: string): "Open" | "Watch only" | "Private" {
-  if (preset === "public_write") return "Open";
-  if (preset === "public_view") return "Watch only";
-  return "Private";
-}
+import { accessWord } from "./access";
+
+/** One access vocabulary on pages (DECISIONS #3), shared with every page via lib/access. */
+export { accessWord };
 
 export type WireWorld = {
   id: string;

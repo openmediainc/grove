@@ -6,9 +6,43 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { GROVE_BASE, gp } from "@/lib/base";
 import { describeRoomAccess } from "@grove/ui";
-import { PRESET_ORDER, presetCopy, presetTint, type SpacePolicyPreset } from "../presets";
-import { CardPanel, useCardLex } from "@/components/Card";
+import {
+  ACCESS_ORDER,
+  ROOM_DOOR_CHOICES,
+  accessCopy,
+  accessTint,
+  isPreset,
+  roomDoorWord,
+  type SpacePolicyPreset,
+} from "@/lib/access";
+import {
+  EXPLORE_PATH,
+  SPACE_TABS,
+  SPACE_TAB_LABEL,
+  inviteHref,
+  readSpaceTab,
+  spaceHref,
+  waitingAt,
+  waitingLine,
+  withSpaceTab,
+  type SpaceTab,
+} from "@/lib/space-page";
+import { hasSignedInHint } from "@/lib/unread";
+import { Activity } from "@/components/Activity";
+import { CardFields, CardPanel, useCard, useCardLex } from "@/components/Card";
 import { FollowButton } from "@/components/Follow";
+import { Tabs } from "@/components/Tabs";
+
+/**
+ * One space, one page: About · Activity · Manage (`?tab=`).
+ *
+ * Everyone who may see the space gets About (card, rooms and their doors,
+ * members for members) and Activity (the chronicle filtered to this space; the
+ * API answers 404 for a private space you are not inside, like the page itself).
+ * The owner also gets Manage: access, set here and only here, room doors,
+ * invites, admit by handle, orgs and the card. Join requests are decided in the
+ * Inbox; Manage only says how many are waiting.
+ */
 
 type WireCeiling = { speak_to_agents: boolean; speak_to_humans: boolean; listen_to_agents: boolean; listen_to_humans: boolean };
 
@@ -46,16 +80,6 @@ type Detail = {
   org_bodies: Array<{ human_id: string; org_id: string; colour: string }>;
 };
 
-type JoinRequest = {
-  id: string;
-  human_id: string;
-  handle: string;
-  display_name: string;
-  note: string | null;
-  status: "pending" | "approved" | "declined";
-  created_at: string;
-};
-
 type Invite = {
   code: string;
   expires_at: string;
@@ -65,19 +89,55 @@ type Invite = {
   active: boolean;
 };
 
-export default function SpaceDetail() {
+export default function SpacePage() {
   const { slug } = useParams<{ slug: string }>();
   const [d, setD] = useState<Detail | null>(null);
+  const [missing, setMissing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [tab, setTab] = useState<SpaceTab>("about");
   const lex = useCardLex();
 
   const load = useCallback(async () => {
-    setD(await api<Detail>(`/api/v1/worlds/${encodeURIComponent(slug)}`));
+    try {
+      const r = await api<Detail>(`/api/v1/worlds/${encodeURIComponent(slug)}`);
+      setD(r);
+      setMissing(false);
+      // An id resolves too; show the canonical address.
+      if (r.world.slug !== slug) {
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${gp(spaceHref(r.world.slug))}${withSpaceTab(window.location.search, readSpaceTab(window.location.search, true))}${window.location.hash}`,
+        );
+      }
+    } catch (e) {
+      if ((e as { status?: number }).status === 404) setMissing(true);
+      else setErr((e as Error).message);
+    }
   }, [slug]);
 
   useEffect(() => {
-    void load().catch((e) => setErr((e as Error).message));
+    void load();
   }, [load]);
+
+  useEffect(() => {
+    setSignedIn(hasSignedInHint(document.cookie));
+  }, []);
+
+  const isOwner = Boolean(d?.is_owner);
+  // The tab waits for the space, so `?tab=manage` is not bounced to About
+  // while ownership is still unknown.
+  useEffect(() => {
+    if (!d) return;
+    setTab(readSpaceTab(window.location.search, d.is_owner));
+  }, [d]);
+
+  function chooseTab(t: SpaceTab) {
+    setTab(t);
+    const { pathname, search, hash } = window.location;
+    window.history.replaceState(window.history.state, "", `${pathname}${withSpaceTab(search, t)}${hash}`);
+  }
 
   async function enter(room?: string) {
     setErr(null);
@@ -88,90 +148,157 @@ export default function SpaceDetail() {
       });
       window.location.href = gp(`/w/${room ?? "plaza"}`);
     } catch (e) {
-      setErr((e as Error).message);
+      if ((e as { status?: number }).status === 401) {
+        window.location.href = gp(`/login?why=space&next=${encodeURIComponent(spaceHref(slug))}`);
+      } else setErr((e as Error).message);
     }
   }
 
+  if (missing) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+        <h1 className="font-display text-3xl text-lantern-300">No space here</h1>
+        <p className="mt-3 text-white/60">Nothing by that name that you can see.</p>
+        <Link href={EXPLORE_PATH} className="mt-6 inline-block text-lantern-300 underline">
+          Explore spaces
+        </Link>
+      </main>
+    );
+  }
   if (err && !d) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
         <p className="text-red-300">{err}</p>
-        <Link href="/spaces" className="mt-4 inline-block text-lantern-300">
-          ← All spaces
+        <Link href={EXPLORE_PATH} className="mt-4 inline-block text-lantern-300">
+          ← Explore
         </Link>
       </main>
     );
   }
   if (!d) return <main className="mx-auto max-w-3xl px-4 py-8 text-white/40 sm:px-6 sm:py-12">Loading…</main>;
 
-  const copy = presetCopy(d.world.policy_preset);
+  const copy = accessCopy(d.world.policy_preset);
   // A non-member walks in as a visitor through an open door: the plaza when it
   // is open, else the first open room. Joining stays a separate ask.
   const openRooms = d.rooms.filter((r) => r.admits_non_members);
   const visitRoom = openRooms.find((r) => r.slug === "plaza") ?? openRooms[0] ?? null;
+  const tabs = SPACE_TABS.filter((t) => t !== "manage" || isOwner);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href="/spaces" className="inline-block py-2 text-sm text-white/40">
-        ← All spaces
+      <Link href={EXPLORE_PATH} className="inline-block py-2 text-sm text-white/40">
+        ← Explore
       </Link>
 
       <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">{d.world.name}</h1>
+          <h1 className="break-words font-display text-3xl text-lantern-300 sm:text-4xl">{d.world.name}</h1>
           <p className="mt-2 flex flex-wrap items-center gap-2 text-white/60">
-            <span className={`rounded-full border px-2 py-0.5 text-xs ${presetTint(d.world.policy_preset)}`}>
-              {copy.label}
-            </span>
+            <span className={`rounded-full border px-2 py-0.5 text-xs ${accessTint(d.world.policy_preset)}`}>{copy.word}</span>
             {d.world.plot_index != null ? (
               <span className="text-sm text-white/40">plot {d.world.plot_index}</span>
             ) : (
               <span className="text-sm text-white/40">the civic core</span>
             )}
+            {isOwner ? <span className="text-sm text-lantern-300/80">yours</span> : d.is_member ? <span className="text-sm text-white/50">member</span> : null}
           </p>
-          <p className="mt-1 text-sm text-white/40">{copy.blurb}</p>
+          <p className="mt-1 text-sm text-white/40">{copy.line}</p>
           <OrgChips orgs={d.orgs} mode={d.org_render_mode} />
-          <div className="mt-3">
-            <FollowButton target={{ subject: "space", ref: d.world.slug }} signedIn={null} lex={lex} />
-          </div>
         </div>
-        {d.is_member ? (
-          <button
-            onClick={() => void enter()}
-            className="shrink-0 rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 sm:py-2"
-          >
-            Enter this space
-          </button>
-        ) : (
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            {visitRoom ? (
-              <button
-                onClick={() => void enter(visitRoom.slug)}
-                className="rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 sm:py-2"
+        <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+          {d.is_member ? (
+            <button
+              type="button"
+              onClick={() => void enter()}
+              className="rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 sm:py-2"
+            >
+              Visit
+            </button>
+          ) : visitRoom ? (
+            <button
+              type="button"
+              onClick={() => void enter(visitRoom.slug)}
+              className="rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 sm:py-2"
+            >
+              {accessWordFor(visitRoom.room_preset ?? d.world.policy_preset) === "Watch only" ? "Visit and watch" : "Visit"}
+            </button>
+          ) : null}
+          {!d.is_member ? (
+            signedIn ? (
+              <AskToJoin worldId={d.world.id} />
+            ) : (
+              <Link
+                href={`/login?why=space&what=${encodeURIComponent(d.world.name)}&next=${encodeURIComponent(spaceHref(d.world.slug))}`}
+                className="rounded-full border border-lantern-400/40 px-4 py-2.5 text-center text-sm text-lantern-300 sm:py-2"
               >
-                {d.world.policy_preset === "public_view" ? "Visit and watch" : "Visit"}
-              </button>
-            ) : null}
-            <AskToJoin worldId={d.world.id} />
-          </div>
-        )}
+                Sign in to ask to join
+              </Link>
+            )
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap items-start gap-2">
+        <FollowButton target={{ subject: "space", ref: d.world.slug }} signedIn={signedIn} lex={lex} />
       </div>
 
-      <CardPanel target={{ subject: "space", ref: d.world.id }} saveId={d.world.id} />
+      <Tabs label="Space" tabs={tabs} current={tab} labels={SPACE_TAB_LABEL} onChoose={chooseTab} />
+
+      <div role="tabpanel" className="mt-6">
+        {tab === "about" ? <About detail={d} /> : null}
+        {tab === "activity" ? (
+          <Activity worldId={d.world.id} emptyText={`Nothing in ${d.world.name} that you can see in this window.`} />
+        ) : null}
+        {tab === "manage" && isOwner ? <Manage detail={d} reload={load} /> : null}
+      </div>
+
+      {err ? <p className="mt-6 text-red-300">{err}</p> : null}
+    </main>
+  );
+}
+
+function accessWordFor(preset: string) {
+  return accessCopy(preset).word;
+}
+
+/** What anyone who may see the space reads: the card, the rooms and their doors, and (for members) who is in it. */
+function About({ detail: d }: { detail: Detail }) {
+  const lex = useCardLex();
+  const { card, loaded } = useCard({ subject: "space", ref: d.world.id });
+  const spacePreset = d.world.policy_preset;
+  const hasCard = Boolean(
+    card && (card.card.working_on || card.card.looking_for || card.card.latest || (card.card.links ?? []).length),
+  );
+  return (
+    <>
+      {loaded && card && (hasCard || card.editable.length === 0) ? (
+        <section>
+          <h2 className="font-display text-2xl text-lantern-300">Card</h2>
+          <div className="mt-3 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
+            <CardFields card={card} lex={lex} />
+          </div>
+        </section>
+      ) : null}
+      {loaded && card && !hasCard && card.editable.length > 0 ? (
+        <p className="text-sm text-white/45">
+          No card yet. Say what this space is working on under <em>Manage</em>.
+        </p>
+      ) : null}
 
       <section className="mt-10">
         <h2 className="font-display text-2xl text-lantern-300">Rooms</h2>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {d.rooms.map((r) => (
-            <li
-              key={r.id}
-              className="flex items-center justify-between rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3"
-            >
-              <div>
-                <div className="font-semibold">{r.name}</div>
-                <div className="text-xs text-white/40">{r.kind}</div>
+            <li key={r.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
+              <div className="min-w-0">
+                <div className="truncate font-semibold">{r.name}</div>
+                <div className="text-xs text-white/40">
+                  {r.kind} ·{" "}
+                  <span className={accessTint(r.room_preset ?? spacePreset).split(" ").pop()}>
+                    {roomDoorWord(r.room_preset, spacePreset)}
+                  </span>
+                </div>
               </div>
-              <div className="text-xs text-white/50">
+              <div className="shrink-0 text-xs text-white/50">
                 {r.occupancy}/{r.capacity}
               </div>
             </li>
@@ -187,18 +314,9 @@ export default function SpaceDetail() {
             {d.members.map((m) => {
               const tint = d.org_bodies.find((b) => b.human_id === m.human_id);
               return (
-                <li
-                  key={m.human_id}
-                  className="flex items-center justify-between rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3"
-                >
-                  <Link href={`/u/${m.handle}`} className="flex min-w-0 flex-wrap items-center gap-x-2">
-                    {tint ? (
-                      <span
-                        aria-hidden
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ background: tint.colour }}
-                      />
-                    ) : null}
+                <li key={m.human_id} className="flex items-center justify-between rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
+                  <Link href={`/u/${encodeURIComponent(m.handle)}`} className="flex min-w-0 flex-wrap items-center gap-x-2">
+                    {tint ? <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tint.colour }} /> : null}
                     <span className="truncate font-semibold">{m.display_name}</span>
                     <span className="truncate text-xs text-white/40">@{m.handle}</span>
                   </Link>
@@ -212,16 +330,150 @@ export default function SpaceDetail() {
             })}
           </ul>
         ) : (
-          <p className="mt-3 text-white/40">
-            Who is inside is for members. The access level above is public; the roster is not.
-          </p>
+          <p className="mt-3 text-white/40">Who is inside is for members. The access above is public; the roster is not.</p>
         )}
       </section>
+    </>
+  );
+}
 
-      {d.is_owner ? <OwnerPanel detail={d} reload={load} /> : null}
+/**
+ * The owner's tab. Access is set here and nowhere else on the page; join
+ * requests are decided in the Inbox, so this only counts them.
+ */
+function Manage({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
+  const [waiting, setWaiting] = useState<number | null>(null);
 
-      {err ? <p className="mt-6 text-red-300">{err}</p> : null}
-    </main>
+  useEffect(() => {
+    void api<{ space_requests?: Array<{ world_id: string }> }>("/api/v1/inbox")
+      .then((r) => setWaiting(waitingAt(r.space_requests, detail.world.id)))
+      .catch(() => setWaiting(null));
+  }, [detail.world.id]);
+
+  return (
+    <div className="space-y-10">
+      {waiting ? (
+        <Link
+          href="/inbox"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-lantern-400/40 bg-lantern-400/10 px-4 py-3 text-sm text-lantern-200"
+        >
+          <span>{waitingLine(waiting)}</span>
+          <span aria-hidden>→</span>
+        </Link>
+      ) : (
+        <p className="text-sm text-white/40">
+          Nobody is waiting to join. Asks land in your{" "}
+          <Link href="/inbox" className="text-lantern-300 underline">
+            Inbox
+          </Link>
+          .
+        </p>
+      )}
+
+      <AccessPicker detail={detail} reload={reload} />
+      <RoomAccess detail={detail} reload={reload} />
+      <InviteLinks detail={detail} />
+      <AdmitByHandle detail={detail} reload={reload} />
+      <OrgBindings detail={detail} reload={reload} />
+      <CardPanel target={{ subject: "space", ref: detail.world.id }} saveId={detail.world.id} title="Card" />
+    </div>
+  );
+}
+
+function AccessPicker({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
+  const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  async function choose(p: SpacePolicyPreset) {
+    if (p === detail.world.policy_preset) return;
+    setErr(null);
+    setSaving(p);
+    try {
+      await api(`/api/v1/worlds/${detail.world.id}`, { method: "PATCH", body: JSON.stringify({ policy_preset: p }) });
+      await reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <section>
+      <h3 className="font-display text-xl text-lantern-300">Access</h3>
+      <p className="mt-1 text-xs text-white/40">
+        Who may come in, listen and speak across the whole space. A room door below can differ.
+      </p>
+      <div className="mt-3 space-y-2">
+        {ACCESS_ORDER.map((p) => {
+          const c = accessCopy(p);
+          const current = p === detail.world.policy_preset;
+          return (
+            <button
+              key={p}
+              type="button"
+              onClick={() => void choose(p)}
+              disabled={saving !== null}
+              aria-pressed={current}
+              className={`block w-full rounded-lg border p-3 text-left ${
+                current ? "border-lantern-400/50 bg-lantern-400/5" : "border-white/10"
+              } disabled:opacity-50`}
+            >
+              <strong>{c.word}</strong>
+              {current ? <span className="ml-2 text-xs text-lantern-300">current</span> : null}
+              {saving === p ? <span className="ml-2 text-xs text-white/40">saving…</span> : null}
+              <span className="block text-sm text-white/50">{c.line}</span>
+            </button>
+          );
+        })}
+      </div>
+      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+    </section>
+  );
+}
+
+function AdmitByHandle({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
+  const [handle, setHandle] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [admitted, setAdmitted] = useState<string | null>(null);
+
+  async function admit() {
+    setErr(null);
+    setAdmitted(null);
+    try {
+      const r = await api<{ member: { handle: string } }>(`/api/v1/worlds/${detail.world.id}/members`, {
+        method: "POST",
+        body: JSON.stringify({ handle }),
+      });
+      setAdmitted(r.member.handle);
+      setHandle("");
+      await reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  return (
+    <section>
+      <h3 className="font-display text-xl text-lantern-300">Admit by handle</h3>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <input
+          value={handle}
+          onChange={(e) => setHandle(e.target.value)}
+          placeholder="@handle"
+          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 outline-none focus:border-lantern-400/50"
+        />
+        <button
+          type="button"
+          onClick={() => void admit()}
+          disabled={!handle.trim()}
+          className="shrink-0 rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+        >
+          Admit
+        </button>
+      </div>
+      {admitted ? <p className="mt-2 text-sm text-lantern-300">@{admitted} is now a member.</p> : null}
+      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+    </section>
   );
 }
 
@@ -311,125 +563,6 @@ function AskToJoin({ worldId }: { worldId: string }) {
   );
 }
 
-function OwnerPanel({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
-  const [handle, setHandle] = useState("");
-  const [admitErr, setAdmitErr] = useState<string | null>(null);
-  const [admitted, setAdmitted] = useState<string | null>(null);
-  const [presetErr, setPresetErr] = useState<string | null>(null);
-  const [saving, setSaving] = useState<string | null>(null);
-  // Lifted out of PendingRequests so the count rides the panel heading: the
-  // queue sits below the fold, and an owner should not have to scroll to learn
-  // that somebody is waiting.
-  const [waiting, setWaiting] = useState(0);
-
-  async function admit() {
-    setAdmitErr(null);
-    setAdmitted(null);
-    try {
-      const r = await api<{ member: { handle: string } }>(`/api/v1/worlds/${detail.world.id}/members`, {
-        method: "POST",
-        body: JSON.stringify({ handle }),
-      });
-      setAdmitted(r.member.handle);
-      setHandle("");
-      await reload();
-    } catch (e) {
-      setAdmitErr((e as Error).message);
-    }
-  }
-
-  async function setPreset(p: SpacePolicyPreset) {
-    if (p === detail.world.policy_preset) return;
-    setPresetErr(null);
-    setSaving(p);
-    try {
-      await api(`/api/v1/worlds/${detail.world.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ policy_preset: p }),
-      });
-      await reload();
-    } catch (e) {
-      setPresetErr((e as Error).message);
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  return (
-    <section className="mt-12 space-y-8 rounded-2xl border border-lantern-400/20 bg-dusk-800/70 p-4 sm:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="font-display text-2xl text-lantern-300">Owner controls</h2>
-          <p className="mt-1 text-sm text-white/50">Only you see this panel.</p>
-        </div>
-        {waiting ? (
-          <a
-            href="#asking"
-            className="shrink-0 rounded-full bg-lantern-400 px-3 py-2 text-xs font-semibold text-dusk-950"
-          >
-            {waiting} asking to join
-          </a>
-        ) : null}
-      </div>
-
-      <PendingRequests detail={detail} reload={reload} onCount={setWaiting} />
-
-      <InviteLinks detail={detail} />
-
-      <div>
-        <h3 className="text-sm text-white/70">Admit someone by handle</h3>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <input
-            value={handle}
-            onChange={(e) => setHandle(e.target.value)}
-            placeholder="@handle"
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 outline-none focus:border-lantern-400/50"
-          />
-          <button
-            onClick={admit}
-            disabled={!handle.trim()}
-            className="shrink-0 rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
-          >
-            Admit
-          </button>
-        </div>
-        {admitted ? <p className="mt-2 text-sm text-lantern-300">@{admitted} is now a member.</p> : null}
-        {admitErr ? <p className="mt-2 text-sm text-red-300">{admitErr}</p> : null}
-      </div>
-
-      <OrgBindings detail={detail} reload={reload} />
-
-      <div>
-        <h3 className="text-sm text-white/70">Who may speak here</h3>
-        <div className="mt-2 space-y-2">
-          {PRESET_ORDER.map((p) => {
-            const copy = presetCopy(p);
-            const current = p === detail.world.policy_preset;
-            return (
-              <button
-                key={p}
-                onClick={() => void setPreset(p)}
-                disabled={saving !== null}
-                className={`block w-full rounded-lg border p-3 text-left ${
-                  current ? "border-lantern-400/50 bg-lantern-400/5" : "border-white/10"
-                } disabled:opacity-50`}
-              >
-                <strong>{copy.label}</strong>
-                {current ? <span className="ml-2 text-xs text-lantern-300">current</span> : null}
-                {saving === p ? <span className="ml-2 text-xs text-white/40">saving…</span> : null}
-                <span className="block text-sm text-white/50">{copy.blurb}</span>
-              </button>
-            );
-          })}
-        </div>
-        {presetErr ? <p className="mt-2 text-sm text-red-300">{presetErr}</p> : null}
-      </div>
-
-      <RoomAccess detail={detail} reload={reload} />
-    </section>
-  );
-}
-
 /**
  * SPC-07 / SPC-10 on the existing owner surface. Member ceiling for the whole
  * space, then one row per room: who may come in and what each audience can do,
@@ -462,18 +595,11 @@ function toCeiling(v: WireCeiling | null) {
     : null;
 }
 
-const VISITOR_CHOICES: Array<{ key: string; label: string; value: SpacePolicyPreset | null }> = [
-  { key: "inherit", label: "follow the space (visitors stay out)", value: null },
-  { key: "public_view", label: "open as a lobby: visitors watch", value: "public_view" },
-  { key: "public_write", label: "open as a lobby: visitors talk", value: "public_write" },
-  { key: "private", label: "closed to non-members", value: "private" },
-];
-
 function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const isCore = detail.world.plot_index == null;
-  const spacePreset = (detail.world.policy_preset as SpacePolicyPreset) ?? "public_write";
+  const spacePreset: SpacePolicyPreset = isPreset(detail.world.policy_preset) ? detail.world.policy_preset : "private";
 
   async function patch(url: string, payload: Record<string, unknown>, key: string) {
     setErr(null);
@@ -493,7 +619,7 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
 
   return (
     <div>
-      <h3 className="text-sm text-white/70">Room by room</h3>
+      <h3 className="font-display text-xl text-lantern-300">Room doors</h3>
       <p className="mt-1 text-xs text-white/40">
         A room can differ from the space. Open one as a lobby and only that room is listed publicly; the rest of the
         space stays behind the door. Members are never held below visitors in the same room.
@@ -529,29 +655,27 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
             <li key={r.id} className="rounded-lg border border-white/10 bg-dusk-950/40 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <strong>{r.name}</strong>
-                {view.isLobby ? (
-                  <span className="rounded-full border border-lantern-400/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-lantern-300">
-                    public lobby
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-full border px-2 py-0.5 text-[11px] ${accessTint(r.room_preset ?? spacePreset)}`}>
+                    {roomDoorWord(r.room_preset, spacePreset)}
                   </span>
-                ) : r.room_preset || r.member_policy ? (
-                  <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/50">
-                    own rules
-                  </span>
-                ) : null}
+                  {view.isLobby ? <span className="text-[11px] text-lantern-300/80">lobby</span> : null}
+                  {!r.room_preset && !r.member_policy ? <span className="text-[11px] text-white/35">same as the space</span> : null}
+                </span>
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <label className="text-xs text-white/50">
-                  Non-members
+                  Door for non-members
                   <select
                     value={r.room_preset ?? "inherit"}
                     disabled={busy !== null}
                     onChange={(e) => {
-                      const c = VISITOR_CHOICES.find((x) => x.key === e.target.value);
+                      const c = ROOM_DOOR_CHOICES.find((x) => x.key === e.target.value);
                       void patch(`/api/v1/worlds/${detail.world.id}/rooms/${encodeURIComponent(r.slug)}`, { room_preset: c?.value ?? null }, r.id);
                     }}
                     className="mt-1 block w-full rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1.5 text-sm text-white"
                   >
-                    {VISITOR_CHOICES.map((c) => (
+                    {ROOM_DOOR_CHOICES.map((c) => (
                       <option key={c.key} value={c.key}>
                         {c.label}
                       </option>
@@ -603,94 +727,6 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
   );
 }
 
-function PendingRequests({
-  detail,
-  reload,
-  onCount,
-}: {
-  detail: Detail;
-  reload: () => Promise<void>;
-  onCount: (n: number) => void;
-}) {
-  const [requests, setRequests] = useState<JoinRequest[]>([]);
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    const r = await api<{ requests: JoinRequest[] }>(`/api/v1/worlds/${detail.world.id}/join-requests`);
-    setRequests(r.requests ?? []);
-  }, [detail.world.id]);
-
-  useEffect(() => {
-    void load().catch((e) => setErr((e as Error).message));
-  }, [load]);
-
-  async function decide(id: string, decision: "approve" | "decline") {
-    setErr(null);
-    setBusy(id);
-    try {
-      await api(`/api/v1/worlds/${detail.world.id}/join-requests/${id}`, {
-        method: "POST",
-        body: JSON.stringify({ decision }),
-      });
-      await load();
-      if (decision === "approve") await reload();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  const pending = requests.filter((r) => r.status === "pending");
-
-  useEffect(() => {
-    onCount(pending.length);
-  }, [onCount, pending.length]);
-
-  return (
-    <div id="asking">
-      <h3 className="text-sm text-white/70">
-        People asking to join {pending.length ? <span className="text-lantern-300">({pending.length})</span> : null}
-      </h3>
-      {pending.length === 0 ? (
-        <p className="mt-2 text-sm text-white/40">Nobody is waiting.</p>
-      ) : (
-        <ul className="mt-2 space-y-2">
-          {pending.map((r) => (
-            <li key={r.id} className="rounded-lg border border-white/10 bg-dusk-950/40 p-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <span className="font-semibold">{r.display_name}</span>
-                  <span className="ml-2 text-xs text-white/40">@{r.handle}</span>
-                </div>
-                <div className="flex gap-2 sm:shrink-0">
-                  <button
-                    onClick={() => void decide(r.id, "approve")}
-                    disabled={busy === r.id}
-                    className="flex-1 rounded-full bg-lantern-400 px-4 py-2.5 text-xs font-semibold text-dusk-950 disabled:opacity-40 sm:flex-none sm:px-3 sm:py-1"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => void decide(r.id, "decline")}
-                    disabled={busy === r.id}
-                    className="flex-1 rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/60 disabled:opacity-40 sm:flex-none sm:px-3 sm:py-1"
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-              {r.note ? <p className="mt-2 text-sm text-white/50">{r.note}</p> : null}
-            </li>
-          ))}
-        </ul>
-      )}
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
-    </div>
-  );
-}
-
 function InviteLinks({ detail }: { detail: Detail }) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [singleUse, setSingleUse] = useState(true);
@@ -710,8 +746,8 @@ function InviteLinks({ detail }: { detail: Detail }) {
 
   const linkFor = (code: string) =>
     typeof window === "undefined"
-      ? `${GROVE_BASE}/spaces/join/${code}`
-      : `${window.location.origin}${GROVE_BASE}/spaces/join/${code}`;
+      ? `${GROVE_BASE}${inviteHref(code)}`
+      : `${window.location.origin}${GROVE_BASE}${inviteHref(code)}`;
 
   async function mint() {
     setErr(null);
@@ -743,7 +779,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
 
   return (
     <div>
-      <h3 className="text-sm text-white/70">Invite links</h3>
+      <h3 className="font-display text-xl text-lantern-300">Invite links</h3>
       <p className="mt-1 text-xs text-white/40">
         A link admits whoever holds it. Every link expires; revoking one stops it immediately.
       </p>
@@ -860,7 +896,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
 
   return (
     <div>
-      <h3 className="text-sm text-white/70">Orgs in this space</h3>
+      <h3 className="font-display text-xl text-lantern-300">Orgs</h3>
       <p className="mt-1 text-xs text-white/40">
         Bring several projects into one space, or keep a space per org. Same control either way — the mode
         below decides how bodies are tinted.

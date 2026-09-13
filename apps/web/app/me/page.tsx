@@ -17,6 +17,7 @@ import {
   type YourSpace,
 } from "@/lib/me";
 import { signOut } from "@/lib/session";
+import { spaceHref } from "@/lib/space-page";
 import { GeoAvatar } from "@/components/Avatar";
 import { CostToday } from "@/components/CostToday";
 
@@ -197,7 +198,7 @@ export default function YouPage() {
           {spaces.map((s) => (
             <li key={s.id}>
               <Link
-                href={`/spaces/${encodeURIComponent(s.slug)}`}
+                href={spaceHref(s.slug)}
                 className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3 hover:border-lantern-400/30"
               >
                 <span className="min-w-0 break-words font-semibold">{s.name}</span>
@@ -210,7 +211,7 @@ export default function YouPage() {
         {worlds && spaces.length === 0 ? (
           <p className="mt-4 text-sm text-white/45">
             You don&rsquo;t own or belong to a space yet.{" "}
-            <Link href="/spaces" className="text-lantern-300 underline">
+            <Link href="/explore" className="text-lantern-300 underline">
               Find or create one
             </Link>
             .

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { AutonomyMode, ClaimState, PermissionPolicy, SpacePolicyPreset } from "@grove/protocol";
+import { ACCESS } from "@/lib/access";
 import {
   ALWAYS_ALLOWED,
   CAPABILITY_NODES,
@@ -65,9 +66,9 @@ export interface TreeSpace {
 }
 
 const PRESET_LABEL: Record<SpacePolicyPreset, string> = {
-  public_write: "anyone may speak",
-  public_view: "anyone may watch, members speak",
-  private: "members only",
+  public_write: ACCESS.public_write.word,
+  public_view: ACCESS.public_view.word,
+  private: ACCESS.private.word,
 };
 
 const LANE_STYLE: Record<Lane, { chip: string; live: string; rule: string; glow: string }> = {

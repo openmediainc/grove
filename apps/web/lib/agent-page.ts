@@ -6,10 +6,12 @@
  * Settings from a non-owner is tidiness: every owner write is refused by the API.
  */
 
+import { TAB_PARAM, readTabParam, writeTabParam } from "./tabs";
+
+export { TAB_PARAM };
+
 export const AGENT_TABS = ["activity", "card", "settings"] as const;
 export type AgentTab = (typeof AGENT_TABS)[number];
-
-export const TAB_PARAM = "tab";
 export const CLAIM_PARAM = "claim";
 
 /**
@@ -32,18 +34,12 @@ export function agentHref(slugOrId: string, tab: AgentTab = "activity", extra?: 
 
 /** The tab a query string asks for, as this viewer may see it. */
 export function readTab(search: string, isOwner: boolean): AgentTab {
-  const raw = new URLSearchParams(search).get(TAB_PARAM);
-  const tab = (AGENT_TABS as readonly string[]).includes(raw ?? "") ? (raw as AgentTab) : "activity";
-  return tab === "settings" && !isOwner ? "activity" : tab;
+  return readTabParam(search, AGENT_TABS, (t) => t !== "settings" || isOwner);
 }
 
 /** The query string with `tab` written (activity = removed); other params kept. */
 export function withTab(search: string, tab: AgentTab): string {
-  const qs = new URLSearchParams(search);
-  if (tab === "activity") qs.delete(TAB_PARAM);
-  else qs.set(TAB_PARAM, tab);
-  const out = qs.toString();
-  return out ? `?${out}` : "";
+  return writeTabParam(search, AGENT_TABS, tab);
 }
 
 export function wantsClaim(search: string): boolean {

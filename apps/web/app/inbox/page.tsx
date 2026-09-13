@@ -6,7 +6,8 @@ import { api } from "@/lib/api";
 import { agentHref } from "@/lib/agent-page";
 import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
-import { presetCopy, presetTint } from "../spaces/presets";
+import { accessTint, accessWord } from "@/lib/access";
+import { spaceHref } from "@/lib/space-page";
 import { noticeHref, noticeText, type WireFollowNotice } from "@/lib/follow";
 import { partyHref, replyTarget, type WireMessage, type WireMessages } from "@/lib/message";
 import { LeaveMessage } from "@/components/LeaveMessage";
@@ -157,7 +158,7 @@ export default function InboxPage() {
                     <span className="ml-2 text-xs text-white/40">@{r.handle}</span>
                     <div className="mt-0.5 truncate text-xs text-white/50">
                       wants into{" "}
-                      <Link href={`/spaces/${r.world_slug}`} className="text-lantern-300">
+                      <Link href={spaceHref(r.world_slug)} className="text-lantern-300">
                         {r.world_name}
                       </Link>
                     </div>
@@ -200,7 +201,7 @@ export default function InboxPage() {
                       <p className="text-sm">
                         You are in{" "}
                         {a.slug ? (
-                          <Link href={`/spaces/${a.slug}`} className="font-semibold text-lantern-300">
+                          <Link href={spaceHref(a.slug)} className="font-semibold text-lantern-300">
                             {a.name}
                           </Link>
                         ) : (
@@ -222,8 +223,8 @@ export default function InboxPage() {
                       </p>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/35">
-                      <span className={`rounded-full border px-2 py-0.5 ${presetTint(a.policy_preset)}`}>
-                        {presetCopy(a.policy_preset).label}
+                      <span className={`rounded-full border px-2 py-0.5 ${accessTint(a.policy_preset)}`}>
+                        {accessWord(a.policy_preset)}
                       </span>
                       <span>plot {a.plot_index ?? "—"}</span>
                     </div>

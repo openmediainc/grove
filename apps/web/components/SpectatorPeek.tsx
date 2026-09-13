@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { gp } from "@/lib/base";
 import { buildDeepLink } from "@/lib/deep-link";
+import { spaceHref } from "@/lib/space-page";
 import { walkOverTarget, type CardTarget } from "@/lib/card";
 import type { ThemeLexicon } from "@/lib/themes/types";
 import { followTargetFromCard, type FollowTarget } from "@/lib/follow";
@@ -346,7 +347,7 @@ function SpacePeek({
       {signedIn ? null : (
         <a
           href={loginHref({
-            next: redacted ? "/spaces" : `/spaces/${peek.slug}`,
+            next: redacted ? "/explore" : spaceHref(peek.slug ?? ""),
             why: "space",
             what: redacted ? "" : peek.name ?? "",
           })}

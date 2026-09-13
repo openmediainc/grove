@@ -53,7 +53,7 @@ describe("walk over", () => {
   });
 
   it("walks to a space's page, where its own door decides", () => {
-    expect(walkOverTarget({ kind: "space", slug: "harbour" }, false)).toEqual({ path: "/spaces/harbour", needsLogin: false });
+    expect(walkOverTarget({ kind: "space", slug: "harbour" }, false)).toEqual({ path: "/s/harbour", needsLogin: false });
   });
 });
 
