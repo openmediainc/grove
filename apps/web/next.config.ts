@@ -20,6 +20,11 @@ const nextConfig: NextConfig = {
     return config;
   },
   ...(basePath ? { basePath } : {}),
+  // `lib/base.ts` falls back on `process.env.VERCEL`, but Next only inlines
+  // NEXT_PUBLIC_* into client bundles — in the browser VERCEL is undefined, so
+  // every client fetch and canvas image went to `/grove/...` and 404'd on
+  // Vercel. Inline the resolved base so server and client always agree.
+  env: { NEXT_PUBLIC_GROVE_BASE: basePath ?? "" },
   skipTrailingSlashRedirect: true,
   allowedDevOrigins: ["q-ai.tail735569.ts.net", "127.0.0.1", "localhost"],
   async rewrites() {
