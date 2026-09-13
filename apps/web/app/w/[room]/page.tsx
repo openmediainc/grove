@@ -454,6 +454,7 @@ export default function RoomPage() {
         data?.nearby ?? [],
         (data?.room as RoomWithWorld | undefined)?.world_id,
         space,
+        data?.room.id,
       ),
     [data, space],
   );

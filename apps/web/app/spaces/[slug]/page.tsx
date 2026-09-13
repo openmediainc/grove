@@ -5,7 +5,10 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { GROVE_BASE, gp } from "@/lib/base";
+import { describeRoomAccess } from "@grove/ui";
 import { PRESET_ORDER, presetCopy, presetTint, type SpacePolicyPreset } from "../presets";
+
+type WireCeiling = { speak_to_agents: boolean; speak_to_humans: boolean; listen_to_agents: boolean; listen_to_humans: boolean };
 
 type Org = { id: string; slug: string; name: string; colour: string };
 
@@ -17,10 +20,21 @@ type Detail = {
     owner_human_id: string | null;
     plot_index: number | null;
     policy_preset: string;
+    member_policy: WireCeiling | null;
     org_render_mode: "shared" | "dedicated";
     created_at: string;
   };
-  rooms: Array<{ id: string; slug: string; name: string; kind: string; capacity: number; occupancy: number }>;
+  rooms: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    kind: string;
+    capacity: number;
+    occupancy: number;
+    room_preset: SpacePolicyPreset | null;
+    member_policy: WireCeiling | null;
+    admits_non_members: boolean;
+  }>;
   members: Array<{ human_id: string; handle: string; display_name: string; is_owner: boolean }>;
   is_member: boolean;
   is_owner: boolean;
@@ -385,7 +399,182 @@ function OwnerPanel({ detail, reload }: { detail: Detail; reload: () => Promise<
         </div>
         {presetErr ? <p className="mt-2 text-sm text-red-300">{presetErr}</p> : null}
       </div>
+
+      <RoomAccess detail={detail} reload={reload} />
     </section>
+  );
+}
+
+/**
+ * SPC-07 / SPC-10 on the existing owner surface. Member ceiling for the whole
+ * space, then one row per room: who may come in and what each audience can do,
+ * stated as the consequence the kernel will actually enforce (describeRoomAccess
+ * calls the kernel's own resolveCeiling).
+ */
+const MEMBER_CHOICES: Array<{ key: string; label: string; value: WireCeiling | null }> = [
+  { key: "inherit", label: "follow the space", value: null },
+  {
+    key: "full",
+    label: "members speak and listen",
+    value: { speak_to_agents: true, speak_to_humans: true, listen_to_agents: true, listen_to_humans: true },
+  },
+  {
+    key: "listen",
+    label: "members listen only",
+    value: { speak_to_agents: false, speak_to_humans: false, listen_to_agents: true, listen_to_humans: true },
+  },
+];
+
+function choiceKey(v: WireCeiling | null): string {
+  if (!v) return "inherit";
+  const hit = MEMBER_CHOICES.find((c) => c.value && JSON.stringify(c.value) === JSON.stringify(v));
+  return hit?.key ?? "custom";
+}
+
+function toCeiling(v: WireCeiling | null) {
+  return v
+    ? { speakToAgents: v.speak_to_agents, speakToHumans: v.speak_to_humans, listenToAgents: v.listen_to_agents, listenToHumans: v.listen_to_humans }
+    : null;
+}
+
+const VISITOR_CHOICES: Array<{ key: string; label: string; value: SpacePolicyPreset | null }> = [
+  { key: "inherit", label: "follow the space (visitors stay out)", value: null },
+  { key: "public_view", label: "open as a lobby: visitors watch", value: "public_view" },
+  { key: "public_write", label: "open as a lobby: visitors talk", value: "public_write" },
+  { key: "private", label: "closed to non-members", value: "private" },
+];
+
+function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const isCore = detail.world.plot_index == null;
+  const spacePreset = (detail.world.policy_preset as SpacePolicyPreset) ?? "public_write";
+
+  async function patch(url: string, payload: Record<string, unknown>, key: string) {
+    setErr(null);
+    setBusy(key);
+    try {
+      await api(url, { method: "PATCH", body: JSON.stringify(payload) });
+      await reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (isCore) return null;
+  const spaceMemberKey = choiceKey(detail.world.member_policy);
+
+  return (
+    <div>
+      <h3 className="text-sm text-white/70">Room by room</h3>
+      <p className="mt-1 text-xs text-white/40">
+        A room can differ from the space. Open one as a lobby and only that room is listed publicly; the rest of the
+        space stays behind the door. Members are never held below visitors in the same room.
+      </p>
+
+      <label className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-white/60">Across the space,</span>
+        <select
+          value={spaceMemberKey === "inherit" ? "full" : spaceMemberKey}
+          disabled={busy !== null}
+          onChange={(e) => {
+            const c = MEMBER_CHOICES.find((x) => x.key === e.target.value);
+            void patch(`/api/v1/worlds/${detail.world.id}`, { member_policy: c?.key === "full" ? null : c?.value ?? null }, "space");
+          }}
+          className="rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1.5"
+        >
+          <option value="full">members speak and listen</option>
+          <option value="listen">members listen only</option>
+          {spaceMemberKey === "custom" ? <option value="custom">custom</option> : null}
+        </select>
+      </label>
+
+      <ul className="mt-4 space-y-3">
+        {detail.rooms.map((r) => {
+          const view = describeRoomAccess({
+            spacePreset,
+            spaceMemberPolicy: toCeiling(detail.world.member_policy),
+            roomPreset: r.room_preset,
+            roomMemberPolicy: toCeiling(r.member_policy),
+          });
+          const memberKey = choiceKey(r.member_policy);
+          return (
+            <li key={r.id} className="rounded-lg border border-white/10 bg-dusk-950/40 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <strong>{r.name}</strong>
+                {view.isLobby ? (
+                  <span className="rounded-full border border-lantern-400/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-lantern-300">
+                    public lobby
+                  </span>
+                ) : r.room_preset || r.member_policy ? (
+                  <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/50">
+                    own rules
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <label className="text-xs text-white/50">
+                  Non-members
+                  <select
+                    value={r.room_preset ?? "inherit"}
+                    disabled={busy !== null}
+                    onChange={(e) => {
+                      const c = VISITOR_CHOICES.find((x) => x.key === e.target.value);
+                      void patch(`/api/v1/worlds/${detail.world.id}/rooms/${encodeURIComponent(r.slug)}`, { room_preset: c?.value ?? null }, r.id);
+                    }}
+                    className="mt-1 block w-full rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1.5 text-sm text-white"
+                  >
+                    {VISITOR_CHOICES.map((c) => (
+                      <option key={c.key} value={c.key}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-white/50">
+                  Members
+                  <select
+                    value={memberKey}
+                    disabled={busy !== null}
+                    onChange={(e) => {
+                      const c = MEMBER_CHOICES.find((x) => x.key === e.target.value);
+                      void patch(`/api/v1/worlds/${detail.world.id}/rooms/${encodeURIComponent(r.slug)}`, { member_policy: c?.value ?? null }, r.id);
+                    }}
+                    className="mt-1 block w-full rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1.5 text-sm text-white"
+                  >
+                    {MEMBER_CHOICES.map((c) => (
+                      <option key={c.key} value={c.key}>
+                        {c.label}
+                      </option>
+                    ))}
+                    {memberKey === "custom" ? <option value="custom">custom</option> : null}
+                  </select>
+                </label>
+              </div>
+              {/* The preview: what each audience gets, in the kernel's own terms. */}
+              <div className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
+                <p className="text-white/70">
+                  <span className="text-white/40">A member sees: </span>
+                  {view.member.line}
+                  {view.member.decidedBy === "room" ? <span className="text-white/35"> (this room)</span> : null}
+                </p>
+                <p className="text-white/70">
+                  <span className="text-white/40">A non-member sees: </span>
+                  {view.visitor.line}
+                  {view.isLobby && spacePreset === "private" ? (
+                    <span className="block text-white/35">On the map: this room only, never the space's name or other rooms.</span>
+                  ) : null}
+                </p>
+              </div>
+              {busy === r.id ? <p className="mt-1 text-xs text-white/40">saving…</p> : null}
+            </li>
+          );
+        })}
+      </ul>
+      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+    </div>
   );
 }
 

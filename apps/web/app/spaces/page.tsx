@@ -10,6 +10,8 @@ type Space = {
   id: string;
   plot_index: number;
   policy_preset: string;
+  /** SPC-07: rooms opened to non-members. The only thing a private plot publishes about its insides. */
+  open_rooms?: Array<{ id: string; slug: string; name: string; room_preset: string; occupancy: number }>;
   occupancy: number;
   slug: string | null;
   name: string | null;
@@ -119,6 +121,7 @@ function SpaceRow({ space, waiting }: { space: Space; waiting: number }) {
         <div className="min-w-0">
           <div className="font-semibold text-white/45">Held plot</div>
           <div className="text-xs text-white/35">This plot is claimed. Its name is not public.</div>
+          <LobbyDoors space={space} />
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:shrink-0 sm:flex-col sm:items-end sm:text-right">
           <span className={`rounded-full border px-2 py-0.5 text-xs ${tint}`}>{copy.label}</span>
@@ -170,6 +173,38 @@ function SpaceRow({ space, waiting }: { space: Space; waiting: number }) {
         <div className="text-xs text-white/35 sm:mt-1">plot {space.plot_index}</div>
       </div>
     </Link>
+  );
+}
+
+/** A non-member's way in: only the rooms the owner opened, entered as a visitor. */
+function LobbyDoors({ space }: { space: Space }) {
+  const [err, setErr] = useState<string | null>(null);
+  if (space.is_member || !space.open_rooms?.length) return null;
+  async function visit(slug: string) {
+    setErr(null);
+    try {
+      await api(`/api/v1/worlds/${space.id}/enter`, { method: "POST", body: JSON.stringify({ room: slug }) });
+      window.location.href = `/grove/w/${slug}`;
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {space.open_rooms.map((r) => (
+        <button
+          key={r.id}
+          onClick={(e) => {
+            e.preventDefault();
+            void visit(r.slug);
+          }}
+          className="rounded-full border border-lantern-400/40 px-3 py-1 text-xs text-lantern-300"
+        >
+          Visit the {r.name} {r.room_preset === "public_view" ? "(watch)" : "(talk)"}
+        </button>
+      ))}
+      {err ? <span className="text-xs text-red-300">{err}</span> : null}
+    </div>
   );
 }
 

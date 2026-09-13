@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Nameplate, asPermissionBadges } from "@grove/ui";
+import { Nameplate, asPermissionBadges, describeRoomAccess } from "@grove/ui";
+import type { SpacePolicyPreset } from "@grove/protocol";
 import type { Nearby } from "@/lib/api";
 import { GeoAvatar } from "@/components/Avatar";
 
@@ -22,10 +23,16 @@ export const CIVIC_CORE_WORLD_ID = "aetheria-prime";
 
 /** The slice of `GET /api/v1/worlds/:id` this needs. */
 export type SpaceSilenceSource = {
-  world: { id: string; policy_preset: string };
+  world: { id: string; policy_preset: string; member_policy?: WireCeiling | null };
   members: Array<{ handle: string }>;
   is_member: boolean;
+  /** SPC-07/10: per-room overrides, when the space detail carries them. */
+  rooms?: Array<{ id: string; room_preset?: SpacePolicyPreset | null; member_policy?: WireCeiling | null }>;
 };
+
+type WireCeiling = { speak_to_agents: boolean; speak_to_humans: boolean; listen_to_agents: boolean; listen_to_humans: boolean };
+const camel = (v: WireCeiling | null | undefined) =>
+  v ? { speakToAgents: v.speak_to_agents, speakToHumans: v.speak_to_humans, listenToAgents: v.listen_to_agents, listenToHumans: v.listen_to_humans } : null;
 
 /**
  * Which actors in this room are stopped by the ROOM rather than by themselves.
@@ -48,12 +55,22 @@ export function spaceSilencedActorIds(
   nearby: Nearby[],
   roomWorldId: string | undefined,
   space: SpaceSilenceSource | null,
+  roomId?: string,
 ): Set<string> {
   const out = new Set<string>();
   if (!roomWorldId || roomWorldId === CIVIC_CORE_WORLD_ID) return out;
   if (!space || space.world.id !== roomWorldId) return out;
-  // public_write is identical to no space policy at all.
-  if (space.world.policy_preset === "public_write") return out;
+  // SPC-07/10: the room's own overrides and the member ceiling, resolved by the
+  // kernel's rule (describeRoomAccess -> resolveCeiling).
+  const room = roomId ? space.rooms?.find((r) => r.id === roomId) : undefined;
+  const access = describeRoomAccess({
+    spacePreset: space.world.policy_preset as SpacePolicyPreset,
+    spaceMemberPolicy: camel(space.world.member_policy),
+    roomPreset: room?.room_preset ?? null,
+    roomMemberPolicy: camel(room?.member_policy),
+  });
+  // Nothing narrows anyone's voice to people here.
+  if (access.member.ceiling.speakToHumans && access.visitor.ceiling.speakToHumans) return out;
   // The roster is member-only. Without it we cannot tell a member (who sits at
   // the full ceiling) from a non-member, so we say nothing. In practice we are
   // always a member here: assertWorldAccess() refuses a non-member the room.
@@ -62,7 +79,8 @@ export function spaceSilencedActorIds(
   const members = new Set(space.members.map((m) => m.handle));
   for (const n of nearby) {
     const memberHandle = n.kind === "human" ? n.slug : n.owner_handle;
-    if (memberHandle && members.has(memberHandle)) continue;
+    const isMember = Boolean(memberHandle && members.has(memberHandle));
+    if ((isMember ? access.member : access.visitor).ceiling.speakToHumans) continue;
     // Humans carry no matrix (§5.1), so their actor half is implicitly all-true
     // and the space is the only thing that can be narrowing them.
     const stillHoldsSpeech =

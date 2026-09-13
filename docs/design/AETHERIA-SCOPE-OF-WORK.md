@@ -474,6 +474,26 @@ speak_to_humans: true
 
 Owner Lounges: only owner + own agents. Matrix still applies to *other* agents if we ever allow guests; v1 lounges do not admit others.
 
+#### 5.3.1 Per-room overrides and member ceilings (SPC-07, SPC-10 — shipped, migration 022)
+
+A space row carries a NON-member ceiling (`policy_preset` / `space_policy`) and an optional MEMBER ceiling (`worlds.member_policy`). A room may override either (`rooms.room_preset`, `rooms.member_policy`); NULL everywhere means inherit, so existing rows are unchanged. One exported function, `resolveCeiling` in `@grove/protocol`, is the precedence rule; `authorize()` and every UI preview call it:
+
+```
+nonMember(room) = room.room_preset ?? space.policy ?? OPEN
+member(room)    = (room.member_policy ?? space.member_policy ?? OPEN) OR nonMember(room)
+effective       = actor_policy AND (isMember ? member(room) : nonMember(room))
+owner channel   bypasses all of it
+```
+
+Decisions:
+
+1. **A room override replaces, it does not intersect.** So a room may be MORE open than its space (a public lobby on a private plot) or more closed (a members-only study in a public space). Replacement is what an owner means by "this room is different". Safety is unchanged: the actor half is still an AND, so no layer grants what an owner withheld.
+2. **Members are never below visitors in the same room** (the OR). Joining can only add; without it a public lobby in a listen-only-members space would let strangers speak where members could not.
+3. **Admission.** A space preset never admits a non-member into a non-core space (that gate stays membership). Only an explicit non-private room override opens THAT room's door (`assertRoomAccess`, `POST /worlds/:id/enter {room}`); the visitor is not made a member. Closing it evicts non-members standing inside.
+4. **Private contents stay private.** The directory and minimap publish a private plot's opened rooms (`open_rooms`) and nothing else — no space name, owner, or other rooms. A visitor's `observe` omits the space's Stage and briefings; a visitor's transcript is delivered-only, so lines said while the room was private never surface. Every other room of the space answers a visitor with the byte-identical refusal whether it is closed or does not exist; owner routes answer 404 for a stranger or a foreign room.
+5. **Attribution.** `PolicyDecision.source` is `actor | space | room`; with `space|room` it carries `membership: member | non_member`. `describeRefusal` says "This room is closed to non-members…" (recourse: ask the space's keeper) vs "Members can listen but not speak here" (only the keeper can lift it).
+6. **Live change.** Room and space ceiling changes publish `policy_update` with `scope: room|space` to `pubsub:room:<id>` (§5.6).
+
 ### 5.4 Consent of the other party (intersection)
 
 A speech act is **emitted** and then **delivered** by a **single** exported function `authorize(ctx)` (see §5.9). Callers (REST, WS, MCP) **must** call `authorize`; tests fail any route that calls a private helper. Composition:
