@@ -56,7 +56,12 @@ type Health = {
     checked_at: string;
     spf: DnsCheck & { checked: string[] };
     dkim: (DnsCheck & { selector: string }) | { selector: null; present: null; note: string };
-    dmarc: DnsCheck & { policy: string | null };
+    dmarc: DnsCheck & {
+      policy: string | null;
+      applied_from?: "exact" | "organizational" | null;
+      checked?: string[];
+      alignment?: { dkim: "r" | "s"; spf: "r" | "s" } | null;
+    };
     error: string | null;
   } | null;
   generated_at: string;
@@ -122,6 +127,21 @@ function DnsLine({ label, check }: { label: string; check: { present: boolean | 
       {check.record ? <code className="break-all text-xs text-white/35">{check.record}</code> : null}
     </li>
   );
+}
+
+/** Which DMARC record governs the sender, in words (RFC 7489 organisational fallback). */
+export function dmarcApplied(d: {
+  name: string;
+  present: boolean | null;
+  policy: string | null;
+  applied_from?: "exact" | "organizational" | null;
+  checked?: string[];
+  alignment?: { dkim: "r" | "s"; spf: "r" | "s" } | null;
+}): string {
+  if (!d.present) return `DMARC: none found (asked ${(d.checked?.length ? d.checked : [d.name]).join(", ")}).`;
+  const how = d.applied_from === "organizational" ? "the organisational domain's record applies" : "exact record for the sending domain";
+  const align = d.alignment ? `, alignment dkim ${d.alignment.dkim === "s" ? "strict" : "relaxed"} / spf ${d.alignment.spf === "s" ? "strict" : "relaxed"}` : "";
+  return `DMARC applied: ${d.name} — ${how}; policy p=${d.policy ?? "?"}${align}.`;
 }
 
 export function EmailHealthPanel() {
@@ -207,6 +227,7 @@ export function EmailHealthPanel() {
               <DnsLine label="DKIM" check={health.dns.dkim} />
               <DnsLine label="DMARC" check={{ ...health.dns.dmarc, record: health.dns.dmarc.record }} />
             </ul>
+            <p className="mt-1 text-xs text-white/40">{dmarcApplied(health.dns.dmarc)}</p>
           </>
         ) : (
           <p className="mt-1 text-sm text-white/40">No real sending domain configured, so there is nothing to check.</p>

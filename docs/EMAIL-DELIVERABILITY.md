@@ -11,7 +11,7 @@ This is what watches for it.
 | **Send** | the provider's synchronous answer, per attempt | `accepted` means the API took it. Not delivered. |
 | **Delivery / bounce / complaint** | Resend events API, **polled** (`GET /emails/:id` → `last_event`), backoff 1m→1h, gives up after 48h | Resend only. SMTP has no events API: delivery stays `unknown`. |
 | **Redeemed** | the link was clicked (`consumeMagicLink`) | Provider-independent; the only signal that catches "delivered to spam". Measured **per recipient**: asking twice and using the second link counts as got-in. |
-| **Sender DNS** | TXT lookups for SPF (`send.<domain>` then apex for Resend), DKIM (`resend._domainkey` or `GROVE_MAIL_DKIM_SELECTOR`), DMARC | Cached 10 min. Presence only; not a full SPF/DKIM validator. |
+| **Sender DNS** | TXT lookups for SPF (`send.<domain>` then apex for Resend), DKIM (`resend._domainkey` or `GROVE_MAIL_DKIM_SELECTOR`), DMARC (`_dmarc.<domain>`, then the organisational domain's `_dmarc.<org>` per RFC 7489 §6.6.3, using its `sp=` if set; the report says which applied in `dmarc.applied_from`) | Cached 10 min. Presence only; not a full SPF/DKIM validator. |
 
 **Why polling, not webhooks.** Grove is tailnet-only. A provider on the public
 internet cannot reach a webhook here, and a Funnel for it is against the house

@@ -80,8 +80,46 @@ export interface EmailDnsReport {
   checkedAt: string;
   spf: DnsRecordCheck & { checked: string[] };
   dkim: (DnsRecordCheck & { selector: string }) | { selector: null; present: null; note: string };
-  dmarc: DnsRecordCheck & { policy: string | null };
+  /**
+   * The DMARC record that governs mail From `domain`. RFC 7489 §6.6.3: look at
+   * `_dmarc.<domain>` first; if there is none, the organisational domain's
+   * record applies (with its `sp=` subdomain policy, else `p=`). `name` is the
+   * record that answered (or the exact name when neither did), `appliedFrom`
+   * says which, and `checked` lists every name asked.
+   */
+  dmarc: DnsRecordCheck & {
+    policy: string | null;
+    appliedFrom: "exact" | "organizational" | null;
+    checked: string[];
+    /** adkim / aspf: "r" relaxed (the default) or "s" strict. Null when no record. */
+    alignment: { dkim: "r" | "s"; spf: "r" | "s" } | null;
+  };
   error: string | null;
+}
+
+/**
+ * Two-label public suffixes common enough to matter. Not the Public Suffix
+ * List (no dependency, no fetch): a sender on an unlisted multi-part suffix
+ * gets its registrable domain guessed one label short, which can only make the
+ * fallback find nothing — never a record from someone else's zone, because the
+ * exact name is always asked first and a bare suffix has no _dmarc record.
+ */
+const MULTI_LABEL_SUFFIXES = new Set([
+  "co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "ltd.uk", "plc.uk", "net.uk", "sch.uk",
+  "com.au", "net.au", "org.au", "edu.au", "gov.au", "co.nz", "org.nz", "net.nz",
+  "co.jp", "ne.jp", "or.jp", "ac.jp", "com.br", "com.cn", "com.mx", "co.za", "co.in",
+  "com.sg", "com.hk", "co.kr", "com.tr", "com.ar", "co.il", "com.tw", "com.my",
+]);
+
+/** RFC 7489 organisational domain: the registrable domain (public suffix + one label). */
+export function organizationalDomain(domain: string): string {
+  const labels = domain.toLowerCase().replace(/\.$/, "").split(".").filter(Boolean);
+  const keep = labels.length >= 3 && MULTI_LABEL_SUFFIXES.has(labels.slice(-2).join(".")) ? 3 : 2;
+  return labels.slice(-keep).join(".");
+}
+
+function dmarcTag(record: string, tag: string): string | null {
+  return new RegExp(`(?:^|;)\\s*${tag}\\s*=\\s*([a-z]+)`, "i").exec(record)?.[1]?.toLowerCase() ?? null;
 }
 
 async function txt(resolve: TxtResolver, name: string): Promise<string[]> {
@@ -105,7 +143,7 @@ export async function checkSenderDns(
     checkedAt: new Date().toISOString(),
     spf: { name: domain, present: false, record: null, checked: [] },
     dkim: { selector: null, present: null, note: "no DKIM selector known for this transport; set GROVE_MAIL_DKIM_SELECTOR" },
-    dmarc: { name: `_dmarc.${domain}`, present: false, record: null, policy: null },
+    dmarc: { name: `_dmarc.${domain}`, present: false, record: null, policy: null, appliedFrom: null, checked: [], alignment: null },
     error: null,
   };
   try {
@@ -126,11 +164,28 @@ export async function checkSenderDns(
       const dkim = (await txt(resolve, name)).find((r) => /(^|;)\s*p=/.test(r));
       report.dkim = { name, selector, present: Boolean(dkim), record: dkim ? `${dkim.slice(0, 40)}…` : null };
     }
-    const dmarc = (await txt(resolve, report.dmarc.name)).find((r) => r.toUpperCase().startsWith("V=DMARC1"));
-    if (dmarc) {
-      report.dmarc.present = true;
-      report.dmarc.record = dmarc;
-      report.dmarc.policy = /(?:^|;)\s*p=([a-z]+)/i.exec(dmarc)?.[1]?.toLowerCase() ?? null;
+    const org = organizationalDomain(domain);
+    const candidates: Array<{ name: string; from: "exact" | "organizational" }> = [{ name: `_dmarc.${domain}`, from: "exact" }];
+    if (org && org !== domain.toLowerCase()) candidates.push({ name: `_dmarc.${org}`, from: "organizational" });
+    for (const c of candidates) {
+      report.dmarc.checked.push(c.name);
+      const dmarc = (await txt(resolve, c.name)).find((r) => r.toUpperCase().startsWith("V=DMARC1"));
+      if (!dmarc) continue;
+      // A subdomain covered by its organisational record gets sp= when present.
+      const policy = c.from === "organizational" ? (dmarcTag(dmarc, "sp") ?? dmarcTag(dmarc, "p")) : dmarcTag(dmarc, "p");
+      report.dmarc = {
+        ...report.dmarc,
+        name: c.name,
+        present: true,
+        record: dmarc,
+        policy,
+        appliedFrom: c.from,
+        alignment: {
+          dkim: dmarcTag(dmarc, "adkim") === "s" ? "s" : "r",
+          spf: dmarcTag(dmarc, "aspf") === "s" ? "s" : "r",
+        },
+      };
+      break;
     }
   } catch (err) {
     report.error = `DNS lookup failed: ${(err as Error).message}`.slice(0, 200);
@@ -270,7 +325,7 @@ export function assessEmailHealth(input: EmailHealthInput): { status: EmailHealt
       reasons.push({ code: "DNS_DKIM_MISSING", severity: "warning", message: `No DKIM key at ${dns.dkim.name}.` });
     }
     if (!dns.dmarc.present) {
-      reasons.push({ code: "DNS_DMARC_MISSING", severity: "warning", message: `No DMARC record at ${dns.dmarc.name}.` });
+      reasons.push({ code: "DNS_DMARC_MISSING", severity: "warning", message: `No DMARC record at ${dns.dmarc.checked.length ? dns.dmarc.checked.join(" or ") : dns.dmarc.name}.` });
     }
   } else if (dns?.error) {
     reasons.push({ code: "DNS_UNCHECKED", severity: "info", message: dns.error });

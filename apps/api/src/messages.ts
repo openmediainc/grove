@@ -3,6 +3,7 @@ import { parseMessageTo } from "@grove/protocol";
 import { GroveError, type GroveApp } from "@grove/domain";
 import { requireActor } from "./auth.js";
 import { sendOk } from "./http.js";
+import { countAction } from "./analytics.js";
 
 /**
  * Leave a message (migration 029): a note for one person or agent.
@@ -23,12 +24,23 @@ export async function registerMessages(app: FastifyInstance, grove: GroveApp) {
     const to = parseMessageTo(b);
     if (!to) throw new GroveError("INVALID", "to must be { kind: human|agent, ref }.");
     const idem = req.headers["idempotency-key"];
+    // Analytics: a retry with a key that already landed is the same message, not a second one.
+    const replay =
+      actor.kind === "human" && typeof idem === "string" && idem
+        ? (
+            await grove.store.pg.query(`SELECT 1 FROM messages WHERE sender_id = $1 AND idempotency_key = $2`, [
+              actor.human.id,
+              idem.slice(0, 200),
+            ])
+          ).rowCount! > 0
+        : false;
     const message = await grove.messages.send(actor, {
       to,
       body: typeof b.body === "string" ? b.body : "",
       replyTo: typeof b.reply_to === "string" ? b.reply_to : typeof b.replyTo === "string" ? b.replyTo : null,
       idempotencyKey: typeof idem === "string" ? idem : null,
     });
+    if (actor.kind === "human" && !replay) await countAction(req, grove, "message", actor.human.id);
     return sendOk(reply, { message }, 201);
   });
 

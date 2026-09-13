@@ -63,6 +63,8 @@ export async function registerEmailHealth(app: FastifyInstance, grove: GroveApp)
             dkim: h.dns.dkim.present,
             dmarc: h.dns.dmarc.present,
             dmarcPolicy: h.dns.dmarc.policy,
+            dmarcRecord: h.dns.dmarc.present ? h.dns.dmarc.name : null,
+            dmarcAppliedFrom: h.dns.dmarc.appliedFrom,
             error: h.dns.error,
           }
         : null,

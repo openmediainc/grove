@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { GroveApp } from "@grove/domain";
 import { optionalActor, requireActor, requireHuman } from "./auth.js";
 import { sendOk } from "./http.js";
+import { countAction } from "./analytics.js";
 
 /**
  * Follows (migration 028): a heart on a space or an agent.
@@ -33,7 +34,9 @@ export async function registerFollows(app: FastifyInstance, grove: GroveApp) {
   const write = (kind: "space" | "agent", ref: (req: Req) => string, on: boolean) =>
     async (req: Req, reply: import("fastify").FastifyReply) => {
       const actor = await requireActor(req, grove);
-      const follow = await grove.follows.setFollow(actor, kind, ref(req), on);
+      const follow = await grove.follows.setFollow(actor, kind, ref(req), on, {
+        onNew: () => countAction(req, grove, "follow", actor.kind === "human" ? actor.human.id : null),
+      });
       return sendOk(reply, { follow });
     };
   const spaceRef = (req: Req) => (req.params as { ref: string }).ref;

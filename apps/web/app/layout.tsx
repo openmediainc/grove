@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { SearchPalette } from "@/components/SearchPalette";
+import { VisitBeacon } from "@/components/VisitBeacon";
 
 export const metadata: Metadata = {
   title: "Grove — an inhabited campus",
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Nav />
         {children}
         <SearchPalette />
+        <VisitBeacon />
       </body>
     </html>
   );

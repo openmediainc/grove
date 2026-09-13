@@ -8,6 +8,7 @@ import { MailSendError, type Mailer, type ProviderDeliveryState } from "../src/m
 import {
   assessEmailHealth,
   checkSenderDns,
+  organizationalDomain,
   EmailDeliveryService,
   fromAddress,
   maskEmail,
@@ -108,7 +109,15 @@ describe("assessEmailHealth", () => {
           checkedAt: "",
           spf: { name: "x.test", present: false, record: null, checked: ["send.x.test", "x.test"] },
           dkim: { name: "resend._domainkey.x.test", selector: "resend", present: true, record: "p=…" },
-          dmarc: { name: "_dmarc.x.test", present: false, record: null, policy: null },
+          dmarc: {
+            name: "_dmarc.x.test",
+            present: false,
+            record: null,
+            policy: null,
+            appliedFrom: null,
+            checked: ["_dmarc.x.test"],
+            alignment: null,
+          },
           error: null,
         },
       }),
@@ -133,7 +142,62 @@ describe("checkSenderDns", () => {
     expect(r.error).toBeNull();
     expect(r.spf).toMatchObject({ present: true, name: "send.grove.test" });
     expect(r.dkim).toMatchObject({ present: true, selector: "resend" });
-    expect(r.dmarc).toMatchObject({ present: true, policy: "quarantine" });
+    expect(r.dmarc).toMatchObject({ present: true, policy: "quarantine", appliedFrom: "exact", name: "_dmarc.grove.test" });
+  });
+
+  it("falls back to the organisational domain's DMARC for a sending subdomain (RFC 7489 §6.6.3)", async () => {
+    // The prod shape: mail From glasshouse.rendrr.app, DMARC only on rendrr.app.
+    const zone: Record<string, string[][]> = {
+      "send.glasshouse.rendrr.app": [["v=spf1 include:amazonses.com ~all"]],
+      "resend._domainkey.glasshouse.rendrr.app": [["p=MIGfMA0"]],
+      "_dmarc.rendrr.app": [["v=DMARC1; p=quarantine; sp=none; adkim=r; aspf=r"]],
+    };
+    const asked: string[] = [];
+    const resolve = async (name: string) => {
+      asked.push(name);
+      if (zone[name]) return zone[name]!;
+      throw Object.assign(new Error("nope"), { code: "ENOTFOUND" });
+    };
+    const r = await checkSenderDns("glasshouse.rendrr.app", { transport: "resend", resolve });
+    expect(r.dmarc).toMatchObject({
+      present: true,
+      name: "_dmarc.rendrr.app",
+      appliedFrom: "organizational",
+      policy: "none", // sp= governs subdomains
+      checked: ["_dmarc.glasshouse.rendrr.app", "_dmarc.rendrr.app"],
+      alignment: { dkim: "r", spf: "r" },
+    });
+    expect(asked.indexOf("_dmarc.glasshouse.rendrr.app")).toBeLessThan(asked.indexOf("_dmarc.rendrr.app"));
+    const v = assessEmailHealth(input({ dns: r }));
+    expect(v.reasons.map((x) => x.code)).not.toContain("DNS_DMARC_MISSING");
+  });
+
+  it("an exact record wins over the organisational one, and neither means missing with both names", async () => {
+    const both: Record<string, string[][]> = {
+      "_dmarc.mail.example.co.uk": [["v=DMARC1; p=reject; adkim=s"]],
+      "_dmarc.example.co.uk": [["v=DMARC1; p=none"]],
+    };
+    const resolver = (zone: Record<string, string[][]>) => async (name: string) => {
+      if (zone[name]) return zone[name]!;
+      throw Object.assign(new Error("nope"), { code: "ENODATA" });
+    };
+    const exact = await checkSenderDns("mail.example.co.uk", { transport: "smtp", resolve: resolver(both) });
+    expect(exact.dmarc).toMatchObject({ appliedFrom: "exact", policy: "reject", alignment: { dkim: "s", spf: "r" } });
+
+    const none = await checkSenderDns("mail.example.co.uk", { transport: "smtp", resolve: resolver({}) });
+    expect(none.dmarc).toMatchObject({ present: false, appliedFrom: null, name: "_dmarc.mail.example.co.uk" });
+    expect(none.dmarc.checked).toEqual(["_dmarc.mail.example.co.uk", "_dmarc.example.co.uk"]);
+    const v = assessEmailHealth(input({ dns: none }));
+    expect(v.reasons.find((x) => x.code === "DNS_DMARC_MISSING")?.message).toBe(
+      "No DMARC record at _dmarc.mail.example.co.uk or _dmarc.example.co.uk.",
+    );
+  });
+
+  it("organizationalDomain keeps one label above the public suffix", () => {
+    expect(organizationalDomain("glasshouse.rendrr.app")).toBe("rendrr.app");
+    expect(organizationalDomain("a.b.example.co.uk")).toBe("example.co.uk");
+    expect(organizationalDomain("rendrr.app")).toBe("rendrr.app");
+    expect(organizationalDomain("Send.Grove.Test.")).toBe("grove.test");
   });
 
   it("SMTP without a selector leaves DKIM unchecked rather than guessing", async () => {

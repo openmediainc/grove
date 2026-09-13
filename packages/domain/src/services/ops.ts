@@ -1,6 +1,7 @@
 import type { GroveStore } from "../store.js";
 import { schemaStatus, type SchemaStatus } from "../migrate.js";
 import type { EmailDeliveryService, EmailHealthReport } from "./email-deliveries.js";
+import type { AnalyticsService, AnalyticsSummary } from "./analytics.js";
 
 /**
  * OPS-01 — the operator overview on /mod.
@@ -359,7 +360,11 @@ export interface OpsOverview {
   cost: Section<CostBurn>;
   email: Section<Pick<EmailHealthReport, "status" | "reasons" | "transport" | "deliveryTruth"> & {
     day: { attempts: number; accepted: number; rejected: number; errored: number; redeemed: number };
+    /** Which DMARC record governs the sender (exact name or the organisational domain's), null when unchecked. */
+    dmarc: { name: string; present: boolean; policy: string | null; appliedFrom: "exact" | "organizational" | null } | null;
   }>;
+  /** First-party visitor and funnel counts (033). Absent when the service is not wired. */
+  analytics?: Section<AnalyticsSummary>;
 }
 
 async function timed(run: () => Promise<unknown>): Promise<{ ok: boolean; ms: number | null; error?: string }> {
@@ -386,6 +391,7 @@ export class OpsService {
   constructor(
     private store: GroveStore,
     private emailDeliveries: EmailDeliveryService,
+    private analytics?: AnalyticsService,
   ) {}
 
   async metrics(): Promise<Record<string, MetricWindows>> {
@@ -444,7 +450,7 @@ export class OpsService {
   }
 
   async overview(): Promise<OpsOverview> {
-    const [postgres, redis, schema, windows, cost, email] = await Promise.all([
+    const [postgres, redis, schema, windows, cost, email, analytics] = await Promise.all([
       timed(() => this.store.pg.query("SELECT 1")),
       timed(() => this.store.redis.ping()),
       section(() => schemaStatus(this.store.pg)),
@@ -459,8 +465,17 @@ export class OpsService {
           transport: h.transport,
           deliveryTruth: h.deliveryTruth,
           day: { attempts: d.attempts, accepted: d.accepted, rejected: d.rejected, errored: d.errored, redeemed: d.redeemed },
+          dmarc: h.dns
+            ? {
+                name: h.dns.dmarc.name,
+                present: h.dns.dmarc.present,
+                policy: h.dns.dmarc.policy,
+                appliedFrom: h.dns.dmarc.appliedFrom,
+              }
+            : null,
         };
       }),
+      this.analytics ? section(() => this.analytics!.summary()) : Promise.resolve(undefined),
     ]);
 
     const ok = !("error" in windows);
@@ -474,6 +489,7 @@ export class OpsService {
       schema,
       cost,
       email,
+      ...(analytics ? { analytics } : {}),
     };
   }
 }

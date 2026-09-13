@@ -102,7 +102,14 @@ export class FollowService implements FollowHooks {
     return this.stateOf(follower ? actorIdOf(follower) : null, subject);
   }
 
-  async setFollow(follower: Follower, subjectKind: string, ref: string, on: boolean): Promise<FollowState> {
+  /** `onNew` runs after a follow row was actually written (not on a re-follow or an unfollow). */
+  async setFollow(
+    follower: Follower,
+    subjectKind: string,
+    ref: string,
+    on: boolean,
+    hooks: { onNew?: () => Promise<void> } = {},
+  ): Promise<FollowState> {
     const followerId = actorIdOf(follower);
     if (!on) {
       // Unfollowing always deletes your own row, even behind a door you no
@@ -140,6 +147,7 @@ export class FollowService implements FollowHooks {
     // is idempotent and free.
     if ((rowCount ?? 0) > 0) {
       await this.quota.consumeWrite(followerId, follower.kind === "agent" && isFirst24h(follower.agent.claimedAt));
+      await hooks.onNew?.().catch(() => {});
     }
     return this.stateOf(followerId, subject);
   }

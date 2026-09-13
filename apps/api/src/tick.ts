@@ -7,6 +7,7 @@ export async function runTick(grove: GroveApp): Promise<void> {
   await grove.presence.evictStale();
   await grove.toolCalls.sweep().catch(() => {});
   await grove.whispers.maybePrune().catch(() => 0);
+  await grove.analytics.maybePrune().catch(() => {});
   await grove.identity.purgeExpiredUnclaimed();
   await grove.jobs.processDue();
   await grove.emailDeliveries.pollDue().catch(() => {});

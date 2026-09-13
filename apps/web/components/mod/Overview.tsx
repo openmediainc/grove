@@ -15,6 +15,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { money } from "@/lib/cost";
+import { dmarcApplied } from "@/components/mod/EmailHealth";
+import { cohortPercent, countText, weekLabel } from "@/lib/analytics";
 
 type Anomaly = {
   metric: string;
@@ -61,8 +63,18 @@ type Overview = {
         reasons: Array<{ code: string; severity: string; message: string }>;
         transport: string;
         day: { attempts: number; accepted: number; rejected: number; errored: number; redeemed: number };
+        dmarc: { name: string; present: boolean; policy: string | null; applied_from: "exact" | "organizational" | null } | null;
       }
     | Failed;
+  analytics?: Analytics | Failed;
+};
+
+type Analytics = {
+  day: string;
+  week: string;
+  retention_days: number;
+  series: Array<{ key: string; label: string; today: number; yesterday: number; median7: number; days: number[] }>;
+  cohorts: Array<{ cohort_week: string; size: number; active: number[] }>;
 };
 
 const failed = (v: unknown): v is Failed => typeof v === "object" && v !== null && "error" in v;
@@ -244,11 +256,15 @@ export function OverviewPanel() {
                   {r.message}
                 </p>
               ))}
+              {email.dmarc ? <p className="mt-1 text-xs text-white/50">{dmarcApplied(email.dmarc)}</p> : null}
               <p className="mt-1 text-xs text-white/40">Details in the Email tab.</p>
             </>
           )}
         </Card>
       </div>
+
+      {/* --- visitors & funnel (first-party, docs/PRIVACY.md) ------------------ */}
+      {data.analytics ? <FunnelCard a={data.analytics} /> : null}
 
       {/* --- every metric ----------------------------------------------------- */}
       {!failed(data.metrics) ? (
@@ -288,5 +304,92 @@ export function OverviewPanel() {
 
       {err ? <p className="text-xs text-red-300">Last refresh failed: {err}</p> : null}
     </section>
+  );
+}
+
+/**
+ * Visitors & funnel: first-party counts only (docs/PRIVACY.md). Calendar UTC
+ * days here, unlike the trailing windows above: the counters are per day by
+ * design, so "today" is today so far.
+ */
+function FunnelCard({ a }: { a: Analytics | Failed }) {
+  if (failed(a)) {
+    return (
+      <Card title="Visitors & funnel" tone="bad">
+        <p className="text-red-200">Could not read analytics: {a.error}</p>
+      </Card>
+    );
+  }
+  const weeks = Math.max(1, ...a.cohorts.map((c) => c.active.length));
+  return (
+    <Card title="Visitors & funnel">
+      <p className="text-xs text-white/40">
+        UTC day {a.day} so far, against yesterday and the median of the 7 days before. People only, no IPs or identities
+        stored, DNT/GPC honoured, kept {a.retention_days} days ·{" "}
+        <a
+          className="underline decoration-dotted"
+          href="https://github.com/openmediainc/grove/blob/main/docs/PRIVACY.md"
+          target="_blank"
+          rel="noreferrer"
+        >
+          privacy stance
+        </a>
+      </p>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[360px] text-left text-sm">
+          <thead className="text-xs text-white/40">
+            <tr>
+              <th className="py-1 pr-3 font-normal"> </th>
+              <th className="py-1 pr-3 font-normal">Today</th>
+              <th className="py-1 pr-3 font-normal">Yesterday</th>
+              <th className="py-1 font-normal">7-day median</th>
+            </tr>
+          </thead>
+          <tbody>
+            {a.series.map((r) => (
+              <tr key={r.key} className="border-t border-white/5">
+                <td className="py-1 pr-3 text-white/80">{r.label}</td>
+                <td className="py-1 pr-3">{r.today}</td>
+                <td className="py-1 pr-3 text-white/60">{r.yesterday}</td>
+                <td className="py-1 text-white/60">{countText(r.median7)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h4 className="mt-4 text-xs uppercase tracking-widest text-white/50">Weekly retention (signed-in people)</h4>
+      <p className="text-xs text-white/40">
+        Rows: the week people first signed in. Columns: share of them active in week N (0 = that week).
+      </p>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[420px] text-left text-xs">
+          <thead className="text-white/40">
+            <tr>
+              <th className="py-1 pr-2 font-normal">Cohort</th>
+              <th className="py-1 pr-2 font-normal">People</th>
+              {Array.from({ length: weeks }, (_, n) => (
+                <th key={n} className="py-1 pr-2 font-normal">
+                  W{n}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {a.cohorts.map((c) => (
+              <tr key={c.cohort_week} className="border-t border-white/5">
+                <td className="py-1 pr-2 text-white/70">{weekLabel(c.cohort_week)}</td>
+                <td className="py-1 pr-2">{c.size}</td>
+                {Array.from({ length: weeks }, (_, n) => (
+                  <td key={n} className="py-1 pr-2 text-white/70" title={n < c.active.length ? `${c.active[n]} of ${c.size}` : ""}>
+                    {n < c.active.length ? cohortPercent(c.active[n] ?? 0, c.size) : ""}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }

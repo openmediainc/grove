@@ -5,6 +5,7 @@ import { EMOTE_ENUM, WORLD_ID, toCamel, type PermissionPolicy, type SpeechChanne
 import { assertRoomAccess, assertWorldAccess, optionalActor, optionalHuman, requireActor, requireAgent, requireHuman, requireOperator, type Actor } from "./auth.js";
 import { COOKIE, SIGNED_IN_HINT, clientIp, sendOk, setSignedInHint } from "./http.js";
 import { fetchPaperclipAgents } from "./paperclip.js";
+import { countAction } from "./analytics.js";
 
 function body(req: { body: unknown }): Record<string, unknown> {
   return (toCamel(req.body ?? {}) as Record<string, unknown>) ?? {};
@@ -275,6 +276,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       maxAge: 30 * 24 * 3600,
     });
     setSignedInHint(reply, true, grove.store.config.nodeEnv === "production");
+    await countAction(req, grove, "sign_in", human.id);
     return sendOk(reply, { human });
   });
 
@@ -646,6 +648,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
         worldId: await assertWorldAccess(req, grove, { kind: "human", human }),
       },
     );
+    await countAction(req, grove, "walk_in", human.id);
     return sendOk(reply, { room: result.room, presence: result.presence, overflowed: result.overflowed });
   });
 
@@ -675,6 +678,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
         worldId: access.worldId,
       },
     );
+    await countAction(req, grove, "walk_in", human?.id ?? null);
     return sendOk(reply, { room: result.room, presence: result.presence, overflowed: result.overflowed });
   });
 
@@ -813,6 +817,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       emoji: String(b.emoji ?? ""),
       on: b.on === undefined ? true : b.on !== false,
     });
+    if (result.on) await countAction(req, grove, "reaction", actor.kind === "human" ? actor.human.id : null);
     return sendOk(reply, { reaction: result });
   });
 

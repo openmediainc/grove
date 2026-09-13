@@ -18,6 +18,7 @@ import { registerCards } from "./cards.js";
 import { registerFollows } from "./follows.js";
 import { registerSearch } from "./search.js";
 import { registerMessages } from "./messages.js";
+import { registerAnalytics } from "./analytics.js";
 import { sendError } from "./http.js";
 
 export async function buildApp(grove: GroveApp) {
@@ -63,6 +64,7 @@ export async function buildApp(grove: GroveApp) {
   await registerFollows(app, grove);
   await registerSearch(app, grove);
   await registerMessages(app, grove);
+  await registerAnalytics(app, grove);
   await registerRealtime(app, grove);
   await registerMcp(app, grove);
   await registerDocs(app);

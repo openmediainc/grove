@@ -4,6 +4,7 @@ import { GroveError, isFirst24h } from "@grove/domain";
 import { SPACE_POLICY_PRESETS, WORLD_ID, toCamel, type SpacePolicyPreset } from "@grove/protocol";
 import { assertWorldAccess, optionalHuman, requireActor, requireHuman, requireOperator } from "./auth.js";
 import { WORLD_COOKIE, sendOk } from "./http.js";
+import { countAction } from "./analytics.js";
 
 const PRESET_NAMES = Object.keys(SPACE_POLICY_PRESETS);
 
@@ -182,6 +183,7 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
         worldId: world.id,
       },
     );
+    await countAction(req, grove, "walk_in", human.id);
     return sendOk(reply, { world, room: result.room, presence: result.presence, overflowed: result.overflowed });
   });
 

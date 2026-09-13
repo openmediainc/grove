@@ -140,12 +140,33 @@ export {
   EmailDeliveryService,
   assessEmailHealth,
   checkSenderDns,
+  organizationalDomain,
   fromAddress,
   type EmailHealthReport,
   type EmailHealthStatus,
   type DeliveryRow,
   type WindowStats,
 } from "./services/email-deliveries.js";
+// First-party analytics (033): counts, never people. See services/analytics.ts.
+export {
+  AnalyticsService,
+  ANALYTICS_EVENTS,
+  ANALYTICS_RETENTION_DAYS,
+  ANALYTICS_BUCKET_HEX,
+  trackingRefused,
+  looksLikeBot,
+  bucketOf,
+  utcDayOf,
+  utcWeekOf,
+  weeksBetween,
+  seriesFromRows,
+  cohortsFromRows,
+  type ActionEvent,
+  type AnalyticsEvent,
+  type AnalyticsSummary,
+  type AnalyticsSeries,
+  type AnalyticsCohort,
+} from "./services/analytics.js";
 // Operator overview on /mod (OPS-01): health, schema, cost, email, anomaly lines.
 export {
   OpsService,
@@ -207,6 +228,7 @@ import { HostedBrainService } from "./services/brains.js";
 import { UsageService } from "./services/usage.js";
 import { EmailDeliveryService } from "./services/email-deliveries.js";
 import { OpsService } from "./services/ops.js";
+import { AnalyticsService } from "./services/analytics.js";
 import { createMailer } from "./mailer.js";
 import type { GroveStore } from "./store.js";
 
@@ -246,6 +268,8 @@ export class GroveApp {
   emailDeliveries: EmailDeliveryService;
   /** Operator overview: health, schema drift, cost burn, email health, anomaly lines. */
   ops: OpsService;
+  /** First-party visitor and funnel counts for /mod: no IPs, no identities, 90-day prune (033). */
+  analytics: AnalyticsService;
 
   constructor(pg: Pool, redis: Redis, config: GroveConfig) {
     this.store = { pg, redis, config };
@@ -256,7 +280,8 @@ export class GroveApp {
     // ONB-07: every magic-link send goes through the delivery ledger.
     this.emailDeliveries = new EmailDeliveryService(this.store, mailer);
     this.identity = new IdentityService(this.store, this.quota, this.flags, mailer, this.emailDeliveries);
-    this.ops = new OpsService(this.store, this.emailDeliveries);
+    this.analytics = new AnalyticsService(this.store);
+    this.ops = new OpsService(this.store, this.emailDeliveries, this.analytics);
     this.presence = new PresenceService(this.store, this.flags, this.quota, this.identity);
     this.toolCalls = new ToolCallService(this.store, this.quota, this.presence);
     this.campus = new CampusService(this.store);
