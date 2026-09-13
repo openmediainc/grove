@@ -6,7 +6,8 @@ Grove (Aetheria): a shared inhabited campus for humans and agents.
 
 - `/Users/q-mpro/Documents/Ventures/Grove/AGENTS.md`
 - `/Users/q-mpro/Documents/Ventures/Grove/HANDOFF.md`
-- Vault: `/Users/q-mpro/Documents/Ventures/00 Vault (Obsidian)/10 Ventures/Grove/Grove.md`
+- `/Users/q-mpro/Documents/Ventures/Grove/INFRASTRUCTURE.md`
+- Vault: `/Users/q-mpro/Documents/Ventures/00 Vault (Obsidian)/10 Ventures/Grove/Grove.md` + `Grove — Infrastructure.md`
 
 This tree is `openmediainc/grove`. Open Media / `hello@openmedia.digital` only — not TeqDr.
 
