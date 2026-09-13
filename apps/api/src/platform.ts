@@ -80,12 +80,14 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
     if (world.policyPreset === "private" && !isMember) {
       throw new GroveError("NOT_FOUND", "Not found.", { httpStatus: 404 });
     }
-    const [rooms, members, orgRender] = await Promise.all([
+    const [rooms, members, orgRender, branding] = await Promise.all([
       grove.campus.roomsOf(world.id),
       // A public space lists its rooms to anyone, but who is inside it is
       // member-only: presence is not permission state.
       isMember ? grove.campus.membersOf(world.id) : Promise.resolve([]),
       grove.campus.orgRenderFor(world.id),
+      // 035: past the same door as the name, so safe to carry here.
+      grove.branding.ofWorld(world.id),
     ]);
     return sendOk(reply, {
       world,
@@ -100,6 +102,7 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
       orgRenderMode: orgRender.mode,
       orgs: orgRender.orgs,
       orgBodies: isMember ? orgRender.bodies : [],
+      branding,
     });
   });
 

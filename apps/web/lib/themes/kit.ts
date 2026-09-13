@@ -18,6 +18,7 @@
  */
 
 import { VERB_RING, type AgentVerb } from "@/lib/agent-verbs";
+import type { BrandEmblem } from "@grove/protocol";
 import { HAZARD_COLOUR, type Ctx, type HazardTone, type SignMark, type Signboard, type SpeechBubble } from "./types";
 
 export type { Ctx } from "./types";
@@ -353,6 +354,14 @@ export function drawSignboard(ctx: Ctx, b: Signboard, style: SignStyle): void {
     else if (style.tintAt === "bottom") ctx.fillRect(x0 + 2, y0 + h - 3, w - 4, 2);
     else if (style.tintAt === "left") ctx.fillRect(x0 + 1, y0 + 2, 3, h - 4);
   }
+  // The org, when an owner accent took the stripe: a short second stripe in the
+  // corner opposite the primary one, so both read and neither covers the text.
+  const second = b.held ? null : b.secondaryTint;
+  if (second) {
+    ctx.fillStyle = second;
+    if (style.tintAt === "top") ctx.fillRect(x0 + w - 12, y0 + h - 3, 9, 2);
+    else ctx.fillRect(x0 + w - 12, y0 + 1, 9, 2);
+  }
   style.trim?.(ctx, x0, y0, w, h, b.held);
   ctx.strokeStyle = style.edge;
   ctx.lineWidth = 1;
@@ -361,21 +370,216 @@ export function drawSignboard(ctx: Ctx, b: Signboard, style: SignStyle): void {
   ctx.stroke();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const cx = x0 + w / 2;
+  const cx = b.held ? x0 + w / 2 : b.tx;
+  const orgInk = second ?? tint;
+  const textW = b.emblem && !b.held ? w - 6 - (b.tx - (x0 + w / 2)) * 2 : w - 6;
   for (const line of b.lines) {
     const title = line.role === "title";
-    ctx.font = `${title ? "600 " : ""}${line.fontPx}px ${family}`;
-    ctx.fillStyle = title ? (b.held ? style.heldTitle : style.title) : line.role === "org" && tint ? tint : style.detail;
-    ctx.fillText(line.text, cx, line.y, w - 6);
+    ctx.font = `${title ? "600 " : line.role === "tagline" ? "italic " : ""}${line.fontPx}px ${family}`;
+    ctx.fillStyle = title ? (b.held ? style.heldTitle : style.title) : line.role === "org" && orgInk ? orgInk : style.detail;
+    ctx.fillText(line.text, cx, line.y, textW);
     if (title && tint && style.tintAt === "underline") {
       const tw = Math.min(w - 8, ctx.measureText(line.text).width);
       ctx.fillStyle = tint;
       ctx.fillRect(Math.round(cx - tw / 2), Math.round(line.y + line.fontPx / 2 + 1), Math.round(tw), 1);
     }
   }
+  if (!b.held && b.emblem) drawBrandEmblem(ctx, b.emblem.key, b.emblem.cx, b.emblem.cy, b.emblem.size, b.emblem.colour ?? style.title);
   if (b.held) lockMark(ctx, x0 + w - 3, y0 + 1, style.lock.body, style.lock.shackle);
   // A held board never carries a mark, whatever the layout was handed.
   else for (const m of b.marks) drawSignMark(ctx, m, style.mark);
+  ctx.restore();
+}
+
+/**
+ * An owner's emblem (035), SCREEN space, centred on (cx, cy) in a `size` px box.
+ * Sixteen original glyphs drawn from paths, the same shape in every theme (like
+ * the mark glyphs): a theme's board and the owner's accent change the look,
+ * never which emblem it is. One colour, no gradients, nothing in the hazard
+ * triangle's shape.
+ */
+export function drawBrandEmblem(ctx: Ctx, key: BrandEmblem, cx: number, cy: number, size: number, colour: string): void {
+  const u = size / 12;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(u, u);
+  ctx.fillStyle = colour;
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const P = Math.PI;
+  ctx.beginPath();
+  switch (key) {
+    case "leaf":
+      ctx.moveTo(-4.5, 4.5);
+      ctx.quadraticCurveTo(-5, -4.5, 4.5, -4.5);
+      ctx.quadraticCurveTo(4.5, 5, -4.5, 4.5);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(7,8,20,0.55)";
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(-3.5, 3.5);
+      ctx.lineTo(3, -3);
+      ctx.stroke();
+      break;
+    case "star":
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 ? 2.3 : 5.5;
+        const a = -P / 2 + (i * P) / 5;
+        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath();
+      ctx.fill();
+      break;
+    case "moon":
+      ctx.arc(0, 0, 5, P * 0.3, P * 1.7, false);
+      ctx.arc(2.2, -0.6, 3.9, P * 1.45, P * 0.62, true);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    case "sun":
+      ctx.arc(0, 0, 2.6, 0, P * 2);
+      ctx.fill();
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i * P) / 4;
+        ctx.moveTo(Math.cos(a) * 4, Math.sin(a) * 4);
+        ctx.lineTo(Math.cos(a) * 5.6, Math.sin(a) * 5.6);
+      }
+      ctx.stroke();
+      break;
+    case "wave":
+      for (const dy of [-2.2, 2.2]) {
+        ctx.moveTo(-5.5, dy);
+        ctx.bezierCurveTo(-3.5, dy - 2.5, -1.5, dy + 2.5, 0, dy);
+        ctx.bezierCurveTo(1.5, dy - 2.5, 3.5, dy + 2.5, 5.5, dy);
+      }
+      ctx.stroke();
+      break;
+    case "peak":
+      ctx.moveTo(-5.5, 4.5);
+      ctx.lineTo(-1.5, -4.5);
+      ctx.lineTo(1, 0);
+      ctx.lineTo(2.5, -2);
+      ctx.lineTo(5.5, 4.5);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    case "key":
+      ctx.arc(-2.8, 0, 2.6, 0, P * 2);
+      ctx.moveTo(-0.2, 0);
+      ctx.lineTo(5.2, 0);
+      ctx.moveTo(3.2, 0);
+      ctx.lineTo(3.2, 2.4);
+      ctx.moveTo(5, 0);
+      ctx.lineTo(5, 2);
+      ctx.stroke();
+      break;
+    case "book":
+      ctx.moveTo(0, -3.2);
+      ctx.lineTo(-5.2, -4.4);
+      ctx.lineTo(-5.2, 3.8);
+      ctx.lineTo(0, 5);
+      ctx.lineTo(5.2, 3.8);
+      ctx.lineTo(5.2, -4.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(7,8,20,0.55)";
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(0, -3);
+      ctx.lineTo(0, 4.6);
+      ctx.stroke();
+      break;
+    case "gear":
+      for (let i = 0; i < 16; i++) {
+        const r = i % 4 < 2 ? 5.6 : 4.1;
+        const a = (i * P) / 8;
+        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath();
+      ctx.moveTo(1.7, 0);
+      ctx.arc(0, 0, 1.7, 0, P * 2, true);
+      ctx.fill("evenodd");
+      break;
+    case "feather":
+      ctx.moveTo(-4.8, 5.2);
+      ctx.quadraticCurveTo(-3.5, -2, 4.8, -5.2);
+      ctx.quadraticCurveTo(3.4, 2.8, -3.2, 3.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-5.4, 5.8);
+      ctx.lineTo(-2.6, 2.6);
+      ctx.stroke();
+      break;
+    case "heart":
+      ctx.moveTo(0, 5);
+      ctx.bezierCurveTo(-7, 0, -4.5, -6.5, 0, -2.4);
+      ctx.bezierCurveTo(4.5, -6.5, 7, 0, 0, 5);
+      ctx.fill();
+      break;
+    case "anchor":
+      ctx.arc(0, -4, 1.4, 0, P * 2);
+      ctx.moveTo(0, -2.6);
+      ctx.lineTo(0, 5);
+      ctx.moveTo(-3, -1);
+      ctx.lineTo(3, -1);
+      ctx.moveTo(-4.8, 1.6);
+      ctx.quadraticCurveTo(-4, 5, 0, 5);
+      ctx.quadraticCurveTo(4, 5, 4.8, 1.6);
+      ctx.stroke();
+      break;
+    case "diamond":
+      ctx.moveTo(0, -5.6);
+      ctx.lineTo(4.4, 0);
+      ctx.lineTo(0, 5.6);
+      ctx.lineTo(-4.4, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(7,8,20,0.5)";
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(-4.4, 0);
+      ctx.lineTo(4.4, 0);
+      ctx.stroke();
+      break;
+    case "compass":
+      ctx.arc(0, 0, 5, 0, P * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -4);
+      ctx.lineTo(1.4, 0);
+      ctx.lineTo(0, 4);
+      ctx.lineTo(-1.4, 0);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    case "flower":
+      for (let i = 0; i < 5; i++) {
+        const a = -P / 2 + (i * 2 * P) / 5;
+        ctx.moveTo(Math.cos(a) * 3.2 + 2.2, Math.sin(a) * 3.2);
+        ctx.arc(Math.cos(a) * 3.2, Math.sin(a) * 3.2, 2.2, 0, P * 2);
+      }
+      ctx.fill();
+      ctx.fillStyle = "rgba(7,8,20,0.55)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 1.3, 0, P * 2);
+      ctx.fill();
+      break;
+    case "tree":
+      // Two round tiers of canopy on a trunk: nothing like the hazard triangle.
+      ctx.arc(0, -2.6, 3.2, 0, P * 2);
+      ctx.moveTo(4.6, 0.8);
+      ctx.arc(0, 0.8, 4.6, 0, P);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(-0.9, 1.5, 1.8, 4.2);
+      break;
+  }
   ctx.restore();
 }
 

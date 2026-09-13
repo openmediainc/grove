@@ -16,10 +16,16 @@
  * Marks (030) hang under the board as small medallions, one per mark the space
  * holds, in the protocol's fixed order. There is no count and no ranking to
  * draw: a space holds a mark or it does not.
+ *
+ * Branding (035): the owner's accent takes the board's stripe and the plot's
+ * fence, with a bound org kept as a small secondary stripe; the sign text is a
+ * line under the name; the emblem sits inside the board left of the text. A
+ * private plot carries NONE of it — a colour or an emblem identifies a space as
+ * well as its name does — whatever the payload says.
  */
 
-import { normaliseMarks, type SpaceMark } from "@grove/protocol";
-import type { Signboard, SignLine, SignMark, ThemeLexicon } from "@/lib/themes/types";
+import { normaliseMarks, readStoredBranding, type BrandEmblem, type SpaceBranding, type SpaceMark } from "@grove/protocol";
+import type { SignEmblem, Signboard, SignLine, SignMark, ThemeLexicon } from "@/lib/themes/types";
 
 /** Below this zoom a signboard is dropped: the text would be wider than its building. */
 export const LOD_SIGNBOARD = 0.55;
@@ -33,16 +39,41 @@ export type SignPlot = {
   orgs: ReadonlyArray<{ name: string; colour: string }>;
   /** Mark keys the server published. Ignored for a private plot. */
   marks?: readonly string[];
+  /** The owner's branding as the server published it. Ignored for a private plot. */
+  branding?: SpaceBranding | null;
 };
 
 export type SignContent = {
   held: boolean;
   title: string;
+  /** The owner's sign text, or null. */
+  tagline: string | null;
   detail: string;
   orgLine: string | null;
+  /** Primary stripe: owner accent, else first org colour. */
   tint: string | null;
+  /** The org colour when the accent took the primary stripe. */
+  secondaryTint: string | null;
+  emblem: BrandEmblem | null;
+  /** The owner's accent alone (colours the emblem), or null. */
+  accent: string | null;
   marks: SpaceMark[];
 };
+
+/**
+ * A plot's branding off the wire: re-validated, and dropped outright for a
+ * private plot, so a stale or hand-made payload still cannot brand a held plot.
+ */
+export function plotBranding(preset: string | null | undefined, raw: unknown): SpaceBranding | null {
+  if (preset === "private") return null;
+  return readStoredBranding(raw);
+}
+
+/** The colour a plot's fence is drawn in: owner accent, else first org, else none. Never on a private plot. */
+export function plotEdgeColour(plot: Pick<SignPlot, "preset" | "orgs" | "branding">): string | null {
+  const accent = plot.preset === "private" ? null : (plot.branding?.accent ?? null);
+  return accent ?? plot.orgs[0]?.colour ?? null;
+}
 
 export function signboardVisible(zoom: number): boolean {
   return zoom >= LOD_SIGNBOARD;
@@ -55,15 +86,33 @@ export function signContent(
 ): SignContent {
   const access = (lexicon.access as Record<string, { label: string } | undefined>)[plot.preset]?.label ?? plot.preset;
   if (plot.preset === "private") {
-    return { held: true, title: lexicon.heldPlot, detail: access, orgLine: null, tint: null, marks: [] };
+    return {
+      held: true,
+      title: lexicon.heldPlot,
+      tagline: null,
+      detail: access,
+      orgLine: null,
+      tint: null,
+      secondaryTint: null,
+      emblem: null,
+      accent: null,
+      marks: [],
+    };
   }
   const name = plot.name?.trim();
+  const brand = plotBranding(plot.preset, plot.branding);
+  const org = plot.orgs[0]?.colour ?? null;
+  const accent = brand?.accent ?? null;
   return {
     held: false,
     title: name ? name : lexicon.claimedPlot,
+    tagline: brand?.signText ?? null,
     detail: `${access}${plot.occupancy ? ` · ${plot.occupancy} here` : ""}`,
     orgLine: plot.orgs.length ? plot.orgs.map((o) => o.name).join(" · ") : null,
-    tint: plot.orgs[0]?.colour ?? null,
+    tint: accent ?? org,
+    secondaryTint: accent && org && org.toLowerCase() !== accent ? org : null,
+    emblem: brand?.emblem ?? null,
+    accent,
     marks: normaliseMarks(plot.marks),
   };
 }
@@ -86,6 +135,11 @@ export function fitSignText(text: string, maxW: number, fontPx: number, measure:
 }
 
 const TITLE_PX = 11;
+/** The owner's sign text: between the name and the detail line. */
+const TAGLINE_PX = 9;
+/** Emblem glyph box and the gap to the text, SCREEN px. Fixed like the text. */
+export const EMBLEM_PX = 12;
+const EMBLEM_GAP = 4;
 const DETAIL_PX = 9;
 const PAD_X = 6;
 const PAD_Y = 4;
@@ -120,21 +174,33 @@ export function layoutSignboard(
 ): Signboard | null {
   if (!signboardVisible(zoom)) return null;
   const maxW = Math.max(MIN_W, Math.min(MAX_W, BUILDING_W * zoom * 0.8));
-  const inner = maxW - PAD_X * 2;
+  // A held board never carries branding, whatever the content was handed.
+  const emblemKey = content.held ? null : content.emblem;
+  const emblemRoom = emblemKey ? EMBLEM_PX + EMBLEM_GAP : 0;
+  const inner = maxW - PAD_X * 2 - emblemRoom;
   const raw: Array<{ text: string; fontPx: number; role: SignLine["role"] }> = [
     { text: fitSignText(content.title, inner, TITLE_PX, measure), fontPx: TITLE_PX, role: "title" },
-    { text: fitSignText(content.detail, inner, DETAIL_PX, measure), fontPx: DETAIL_PX, role: "detail" },
   ];
+  if (!content.held && content.tagline) {
+    raw.push({ text: fitSignText(content.tagline, inner, TAGLINE_PX, measure), fontPx: TAGLINE_PX, role: "tagline" });
+  }
+  raw.push({ text: fitSignText(content.detail, inner, DETAIL_PX, measure), fontPx: DETAIL_PX, role: "detail" });
   if (content.orgLine && zoom >= LOD_SIGN_ORGS) {
     raw.push({ text: fitSignText(content.orgLine, inner, DETAIL_PX, measure), fontPx: DETAIL_PX, role: "org" });
   }
   const lines = raw.filter((l) => l.text);
   const textW = Math.max(0, ...lines.map((l) => measure(l.text, l.fontPx)));
-  const w = Math.round(Math.min(maxW, Math.max(MIN_W, textW + PAD_X * 2)));
-  const h = Math.round(PAD_Y * 2 + lines.reduce((s, l) => s + l.fontPx + GAP, 0) - (lines.length ? GAP : 0));
+  const w = Math.round(Math.min(maxW, Math.max(MIN_W, textW + PAD_X * 2 + emblemRoom)));
+  const textH = PAD_Y * 2 + lines.reduce((s, l) => s + l.fontPx + GAP, 0) - (lines.length ? GAP : 0);
+  const h = Math.round(Math.max(textH, emblemKey ? EMBLEM_PX + PAD_Y * 2 : 0));
   const x0 = Math.round(anchor.x - w / 2);
   const y0 = Math.round(anchor.y - h / 2);
-  let cursor = y0 + PAD_Y;
+  const emblem: SignEmblem | null = emblemKey
+    ? { key: emblemKey, cx: x0 + PAD_X + EMBLEM_PX / 2, cy: y0 + h / 2, size: EMBLEM_PX, colour: content.accent }
+    : null;
+  // Text centred in what is left of the board once the emblem has its column.
+  const tx = x0 + emblemRoom + (w - emblemRoom) / 2;
+  let cursor = y0 + Math.round((h - textH) / 2) + PAD_Y;
   const placed: SignLine[] = lines.map((l) => {
     const y = cursor + l.fontPx / 2;
     cursor += l.fontPx + GAP;
@@ -149,7 +215,10 @@ export function layoutSignboard(
     ay: Math.round(anchor.y),
     lines: placed,
     held: content.held,
-    tint: content.tint,
+    tint: content.held ? null : content.tint,
+    secondaryTint: content.held ? null : content.secondaryTint,
+    emblem,
+    tx: content.held ? x0 + w / 2 : tx,
     marks: content.held ? [] : layoutSignMarks(content.marks, x0 + w / 2, y0 + h),
   };
 }

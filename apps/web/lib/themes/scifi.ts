@@ -541,7 +541,7 @@ const SPEECH_STYLE = {
  * name. Held: a violet-dim panel with a padlock. No neon pink — that is the
  * injection-flag colour.
  */
-const SIGN_STYLE: SignStyle = {
+export const SIGN_STYLE: SignStyle = {
   board: "rgba(4,10,14,0.86)",
   edge: "rgba(45,226,230,0.35)",
   title: TEAL,

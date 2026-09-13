@@ -524,7 +524,7 @@ const SPEECH_STYLE = { bg: "rgba(250,250,249,0.95)", fg: "#1c1917", border: "rgb
  * two brackets, the org colour as a band along the bottom. Held: a grey
  * "no entry" blade with a padlock.
  */
-const SIGN_STYLE: SignStyle = {
+export const SIGN_STYLE: SignStyle = {
   board: "#14532d",
   edge: "rgba(250,250,249,0.85)",
   title: "#fafaf9",

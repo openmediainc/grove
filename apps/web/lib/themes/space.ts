@@ -536,7 +536,7 @@ const SPEECH_STYLE = { bg: "rgba(2,6,23,0.92)", fg: "#a5f3fc", border: "rgba(103
  * A hull placard on a short strut, rivets in the corners and the mission
  * colour as a patch down its left edge. Held: a blast-shutter grey with a padlock.
  */
-const SIGN_STYLE: SignStyle = {
+export const SIGN_STYLE: SignStyle = {
   board: "rgba(15,23,42,0.94)",
   edge: "rgba(103,232,249,0.6)",
   title: "#a5f3fc",

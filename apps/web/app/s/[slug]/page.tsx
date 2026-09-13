@@ -30,6 +30,7 @@ import {
 import { hasSignedInHint } from "@/lib/unread";
 import { Activity } from "@/components/Activity";
 import { CardFields, CardPanel, useCard, useCardLex } from "@/components/Card";
+import { BrandingPanel, type WireBranding } from "@/components/Branding";
 import { FollowButton } from "@/components/Follow";
 import { Tabs } from "@/components/Tabs";
 import { roomHref } from "@/lib/world-url";
@@ -41,7 +42,7 @@ import { roomHref } from "@/lib/world-url";
  * members for members) and Activity (the chronicle filtered to this space; the
  * API answers 404 for a private space you are not inside, like the page itself).
  * The owner also gets Manage: access, set here and only here, room doors,
- * invites, admit by handle, orgs and the card. Join requests are decided in the
+ * invites, admit by handle, orgs, branding and the card. Join requests are decided in the
  * Inbox; Manage only says how many are waiting.
  */
 
@@ -79,6 +80,8 @@ type Detail = {
   orgs: Org[];
   /** Per-body tint the mode resolves to. The map renderer reads this. */
   org_bodies: Array<{ human_id: string; org_id: string; colour: string }>;
+  /** 035: the owner's accent, sign text and emblem. */
+  branding?: WireBranding;
 };
 
 type Invite = {
@@ -376,6 +379,7 @@ function Manage({ detail, reload }: { detail: Detail; reload: () => Promise<void
       <InviteLinks detail={detail} />
       <AdmitByHandle detail={detail} reload={reload} />
       <OrgBindings detail={detail} reload={reload} />
+      <BrandingPanel worldId={detail.world.id} space={detail.world} orgs={detail.orgs} branding={detail.branding ?? null} reload={reload} />
       <CardPanel target={{ subject: "space", ref: detail.world.id }} saveId={detail.world.id} title="Card" />
     </div>
   );

@@ -15,6 +15,7 @@ import { registerRooms } from "./rooms.js";
 import { registerAwn } from "./awn.js";
 import { registerUsage } from "./usage.js";
 import { registerCards } from "./cards.js";
+import { registerBranding } from "./branding.js";
 import { registerFollows } from "./follows.js";
 import { registerGuests } from "./guests.js";
 import { registerSearch } from "./search.js";
@@ -62,6 +63,7 @@ export async function buildApp(grove: GroveApp) {
   await registerAwn(app, grove);
   await registerUsage(app, grove);
   await registerCards(app, grove);
+  await registerBranding(app, grove);
   await registerFollows(app, grove);
   await registerGuests(app, grove);
   await registerSearch(app, grove);

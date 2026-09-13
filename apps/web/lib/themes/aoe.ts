@@ -90,7 +90,7 @@ const POSE: Record<AmbientPose, AnimalKey> = {
  * A timber board hung from the eaves on two cords, the org's colour painted
  * along its top edge. Held: a dark barred board with a padlock.
  */
-const SIGN_STYLE: SignStyle = {
+export const SIGN_STYLE: SignStyle = {
   board: "#5a3b1f",
   edge: "#24160a",
   title: "#f4d19a",

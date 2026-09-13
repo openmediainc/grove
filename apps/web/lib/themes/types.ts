@@ -20,7 +20,7 @@
  */
 
 import type { AgentVerb } from "@/lib/agent-verbs";
-import type { SpaceMark } from "@grove/protocol";
+import type { BrandEmblem, SpaceMark } from "@grove/protocol";
 import type {
   AccessLevel,
   CharKey,
@@ -172,7 +172,14 @@ export interface ThemeArt {
 }
 
 /** One fitted line on a signboard. `y` is the vertical middle, SCREEN px. */
-export type SignLine = { text: string; fontPx: number; y: number; role: "title" | "detail" | "org" };
+export type SignLine = { text: string; fontPx: number; y: number; role: "title" | "tagline" | "detail" | "org" };
+
+/**
+ * The owner's emblem (035), laid out inside the board to the left of the text.
+ * The GLYPH is fixed per key (kit `drawBrandEmblem`); `colour` is the owner's
+ * accent, or null for the theme's own title colour. SCREEN px.
+ */
+export type SignEmblem = { key: BrandEmblem; cx: number; cy: number; size: number; colour: string | null };
 
 /** A laid-out plot signboard as the renderer hands it to a theme. SCREEN px. */
 export type Signboard = {
@@ -186,8 +193,20 @@ export type Signboard = {
   lines: readonly SignLine[];
   /** A private plot: "Held plot", no name, no org, no headcount. */
   held: boolean;
-  /** The first bound org's colour, or null. Always null when held. */
+  /**
+   * The primary stripe: the owner's accent (035) when set, else the first bound
+   * org's colour, else null. Always null when held.
+   */
   tint: string | null;
+  /**
+   * The org colour, when an owner accent took the primary stripe: drawn as a
+   * small secondary stripe so the org still shows. Always null when held.
+   */
+  secondaryTint: string | null;
+  /** The owner's emblem, or null. Always null when held. */
+  emblem: SignEmblem | null;
+  /** Horizontal centre of the text, SCREEN px (shifted right of an emblem). */
+  tx: number;
   /**
    * Achievement marks (030), laid out as medallions hanging under the board,
    * SCREEN px. Always empty when held. The SHAPE of each mark's glyph is fixed

@@ -1,0 +1,18 @@
+-- Space branding: an owner's accent colour, sign text and emblem.
+--
+-- One nullable JSONB on worlds, shaped and checked by normaliseBrandingPatch()
+-- in @grove/protocol (branding.ts): accent is a lowercase #rrggbb that reads on
+-- every theme's signboard and is not a hazard colour; sign_text is at most 24
+-- characters on one line; emblem is a key from the built-in glyph set. There
+-- are no uploads, so there is nothing here but those three short values.
+-- NULL = unbranded. Readers re-check the value, so a later tightening of the
+-- rules never draws something that no longer passes.
+--
+-- Privacy: branding is behind the same door as a space's name. The public
+-- minimap never carries a private plot's branding (a colour and an emblem can
+-- identify a space as well as its name), and the space detail that carries it
+-- already answers 404 to anyone outside a private space.
+--
+-- Additive and re-runnable. Grants-not-RLS: grove_runtime already holds its
+-- grants on worlds.
+ALTER TABLE worlds ADD COLUMN IF NOT EXISTS branding JSONB;

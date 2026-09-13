@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { asPermissionBadges, consequenceOf, STANCES, type Rect, type Speaker } from "@grove/ui";
-import { AWAY_ALPHA, describeToolCall, normaliseMarks, type SpaceMark, type ToolCallView } from "@grove/protocol";
+import { AWAY_ALPHA, describeToolCall, normaliseMarks, type SpaceBranding, type SpaceMark, type ToolCallView } from "@grove/protocol";
 import { api } from "@/lib/api";
 import {
   BUILDING,
@@ -59,7 +59,7 @@ import {
 } from "@/lib/map-layout";
 import { SpectatorPeek, loginHref, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { deepLinkApplies, parseDeepLink, type DeepLink } from "@/lib/deep-link";
-import { layoutSignboard, signContent, signboardVisible } from "@/lib/signboard";
+import { layoutSignboard, plotBranding, plotEdgeColour, signContent, signboardVisible } from "@/lib/signboard";
 import { WATCH_HEADER, formatHeadcount, makeWatchToken } from "@/lib/headcount";
 import { AttentionBell } from "./AttentionBell";
 import { FirstVisitCard, MAP_KEYS, MapMenu, MapPanel, MenuHeading, MenuItem, MenuLink } from "./MapMenu";
@@ -287,6 +287,8 @@ type SpaceView = {
   orgs?: OrgBadge[];
   /** Achievement mark keys (030). Empty for a redacted row. */
   marks?: string[];
+  /** Owner branding (035). Null for a redacted row. */
+  branding?: unknown;
 };
 
 type Plot = {
@@ -301,6 +303,8 @@ type Plot = {
   orgs: OrgBadge[];
   /** Achievement marks, keys only. Always empty on a private plot. */
   marks: SpaceMark[];
+  /** Owner branding (035), re-checked. Always null on a private plot (lib/signboard). */
+  branding: SpaceBranding | null;
 };
 
 /*
@@ -1482,6 +1486,7 @@ export function WorldMap() {
             // The server already sends none for a private plot; dropped here too
             // so a stale or hand-made payload still cannot mark a held plot.
             marks: (sp.policy_preset ?? sp.policyPreset) === "private" ? [] : normaliseMarks(sp.marks),
+            branding: plotBranding(sp.policy_preset ?? sp.policyPreset, sp.branding),
           };
         });
         plotRef.current = plots;
@@ -2393,7 +2398,8 @@ export function WorldMap() {
 
           // Bound orgs colour the FENCE, not the ground: the fill already says
           // who may speak here, so an org takes the edge instead of fighting it.
-          const orgColour = plot.orgs[0]?.colour;
+          // An owner's accent (035) wins the fence; the org keeps a stripe on the sign.
+          const orgColour = plotEdgeColour(plot);
           if (anyExplored && orgColour) {
             ctx.save();
             ctx.strokeStyle = orgColour;

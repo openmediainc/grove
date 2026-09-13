@@ -65,6 +65,7 @@ export {
   type MergeResult,
 } from "./services/guests.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
+export { BrandingService } from "./services/branding.js";
 export { FollowService, type Follower, type FollowState, type FollowHooks } from "./services/follows.js";
 export {
   SearchService,
@@ -230,6 +231,7 @@ import { ChronicleService } from "./services/chronicle.js";
 import { ReactionService } from "./services/reactions.js";
 import { GuestService } from "./services/guests.js";
 import { CardService } from "./services/cards.js";
+import { BrandingService } from "./services/branding.js";
 import { FollowService } from "./services/follows.js";
 import { SearchService } from "./services/search.js";
 import { MessageService } from "./services/messages.js";
@@ -266,6 +268,7 @@ export class GroveApp {
   guests: GuestService;
   /** Working on / looking for / latest / links, for spaces and bodies (027). */
   cards: CardService;
+  branding: BrandingService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
   follows: FollowService;
   /** `/` search across bodies, spaces and rooms, plus who is online (no private results). */
@@ -310,6 +313,7 @@ export class GroveApp {
     // for the agent asking.
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);
     this.cards = new CardService(this.store, this.identity, this.campus);
+    this.branding = new BrandingService(this.store, this.campus);
     // Written on the event: the three sources call back into this after their
     // own write. Late-bound because all three are built before speech/mailbox.
     this.follows = new FollowService(this.store, this.identity, this.campus, this.presence, this.speech, this.mailbox, this.quota);

@@ -35,9 +35,13 @@ describe("signboard content", () => {
     expect(c).toEqual({
       held: true,
       title: "Held plot",
+      tagline: null,
       detail: AOE_LEXICON.access.private.label,
       orgLine: null,
       tint: null,
+      secondaryTint: null,
+      emblem: null,
+      accent: null,
       marks: [],
     });
     const board = layoutSignboard(c, { x: 100, y: 100 }, 1, measure)!;

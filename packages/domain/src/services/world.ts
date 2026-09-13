@@ -1,4 +1,4 @@
-import { EMOTE_ENUM, normaliseMarks, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
+import { EMOTE_ENUM, normaliseMarks, readStoredBranding, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
 import type { GroveStore } from "../store.js";
 import { visibleOccupancySql } from "../visibility.js";
 import { GroveError } from "../errors.js";
@@ -313,7 +313,9 @@ export class WorldService {
               ${OPEN_ROOMS_SQL} AS open_rooms,
               -- 030: which achievement marks the space holds. Keys only, never
               -- a count, so there is nothing to rank by.
-              (SELECT array_agg(sm.mark) FROM space_marks sm WHERE sm.world_id = w.id) AS marks
+              (SELECT array_agg(sm.mark) FROM space_marks sm WHERE sm.world_id = w.id) AS marks,
+              -- 035: the owner's accent, sign text and emblem.
+              w.branding
        FROM worlds w LEFT JOIN humans h ON h.id = w.owner_human_id
        WHERE w.plot_index IS NOT NULL
        ORDER BY w.plot_index`,
@@ -336,6 +338,9 @@ export class WorldService {
         // A private plot never shows marks: what was done behind a closed door
         // is part of what is behind it, like its name.
         marks: open ? normaliseMarks(r.marks) : [],
+        // Branding redacts with the name: a colour and an emblem can identify a
+        // private space as surely as its name can, so none of it leaves here.
+        branding: open ? readStoredBranding(r.branding) : null,
       };
     });
 
