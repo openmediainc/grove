@@ -49,7 +49,7 @@ export async function getApp() {
   if (appPromise) return appPromise;
   appPromise = (async () => {
     const config = loadConfig();
-    await prepareSchema(config.databaseUrl, config.migrateOnBoot || Boolean(process.env.VERCEL));
+    await prepareSchema(config.databaseUrl, config.migrateOnBoot);
     const pg = createPool(config.databaseUrl);
     const redis = createBus(pg, config.redisUrl, config.databaseUrl);
     const grove = new GroveApp(pg, redis, config);
