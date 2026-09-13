@@ -268,6 +268,7 @@ const ROUTE_BUCKETS: Record<string, string[]> = {
   "GET /api/v1/world": ["read"],
   "GET /api/v1/rooms/:slug": ["read"],
   "GET /api/v1/rooms/:slug/transcript": ["read"],
+  "GET /api/v1/whisper/check": ["read"],
   "GET /api/v1/notices": ["read"],
 };
 
