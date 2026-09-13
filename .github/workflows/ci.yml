@@ -142,6 +142,10 @@ jobs:
             exit 1
           fi
 
+      # Lantern's concierge retrieval/intent helpers (pure Python, no model).
+      - name: Inhabitants unit tests
+        run: pnpm test:inhabitants
+
   # Separate job: no database needed, and it should go red on its own so the
   # cause is obvious. Now covers apps/web and every package's tests via the
   # per-package tsconfig.test.json files.
