@@ -647,6 +647,7 @@ export const CITY_LEXICON: ThemeLexicon = {
   accessUnknown: "Somebody holds this lot.",
   claimedPlot: "claimed lot",
   heldPlot: "Held lot",
+  resting: "home for the night",
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "everyone's at work" },
   hud: { hereNow: "in town", watching: "watching", awake: "at work", asleep: "off shift", fog: "limits", world: "city", claimed: "lots", quiet: "the street is quiet" },

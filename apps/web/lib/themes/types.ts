@@ -301,6 +301,11 @@ export interface ThemeLexicon {
   claimedPlot: string;
   /** A private plot's signboard. Never a name: "Held plot" in its own words. */
   heldPlot: string;
+  /**
+   * Caption under an agent resting at its home plot while nobody runs it.
+   * Must read as not working. The dim and the moon mark beside it are fixed.
+   */
+  resting: string;
 
   /** What a work site is called: prefixes the url on the hover card. */
   construction: string;

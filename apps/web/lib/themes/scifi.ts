@@ -711,6 +711,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
   accessUnknown: "Somebody holds this node.",
   claimedPlot: "claimed node",
   heldPlot: "Held node",
+  resting: "standby at home node",
   construction: "compiling",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle units", allBusy: "all units running" },
   hud: { hereNow: "connected", watching: "observing", awake: "online", asleep: "dormant", fog: "range", world: "grid", claimed: "nodes", quiet: "no broadcasts recently" },

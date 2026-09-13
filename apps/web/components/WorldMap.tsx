@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { asPermissionBadges, consequenceOf, STANCES, type Rect, type Speaker } from "@grove/ui";
-import { describeToolCall, type ToolCallView } from "@grove/protocol";
+import { AWAY_ALPHA, describeToolCall, type ToolCallView } from "@grove/protocol";
 import { api } from "@/lib/api";
 import {
   BUILDING,
@@ -29,7 +29,8 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
 import { MotionDirector, mergeSpan, spanFromWire, OUTCOME_MARK_MS } from "@/lib/motion/director";
-import { drawOutcomeMark, drawStanceMark, drawWorkBar, scaffoldStageFor } from "@/lib/motion/marks";
+import { drawOutcomeMark, drawRestingMark, drawStanceMark, drawWorkBar, RESTING_MARK_COLOUR, scaffoldStageFor } from "@/lib/motion/marks";
+import { restingBodies, type RestingBody, type RestingWire } from "@/lib/resting";
 import { SpeechBook, markRect, paintSpeech, speechPainter } from "@/lib/speech-render";
 import {
   groveVerb,
@@ -315,6 +316,8 @@ type Minimap = {
   recentSpeech?: RecentLine[];
   bodies?: GroveBody[];
   spaces?: SpaceView[];
+  /** Agents resting at their home plot (never live bodies); see lib/resting. */
+  resting?: RestingWire[];
   claimed_agents?: number;
   claimedAgents?: number;
   /** Distinct map tabs heard from recently (AudienceService); null = not counted. */
@@ -703,6 +706,8 @@ export function WorldMap() {
   const radiusRef = useRef(4);
   const plotsRef = useRef(0);
   const plotRef = useRef<Plot[]>([]);
+  /** Resting at plot: drawn, never counted, followed, cut to or rung for. */
+  const restingRef = useRef<RestingBody[]>([]);
   const seatsRef = useRef<Map<string, Seat>>(new Map());
   const lastHeardRef = useRef<string | null>(null);
   /** Where every body is going and why: docs/design/MOTION.md. */
@@ -1374,6 +1379,11 @@ export function WorldMap() {
         });
         plotRef.current = plots;
         plotsRef.current = plots.length;
+        // Resting at plot is a live-map truth ("nobody runs it now"), so replay
+        // shows none. Kept out of `actors` on purpose: see lib/resting.
+        restingRef.current = replaying
+          ? []
+          : restingBodies(data.resting, plots, new Set(grove.map((b) => b.id)));
         // The "my space" bookmark only exists when there is one to go to.
         // owner_handle is redacted to null on a private plot the viewer cannot
         // see, which is exactly right: a plot you cannot be told about is not
@@ -2052,6 +2062,8 @@ export function WorldMap() {
         detailFill: string;
         alpha: number;
         orgColour: string | null;
+        /** Resting at plot: placed after every live caption, so it never hides one. */
+        resting?: boolean;
       };
 
       const draw = (t: number) => {
@@ -2521,6 +2533,49 @@ export function WorldMap() {
           }
         }
 
+        /* ---- resting at plot ------------------------------------------
+         * Agents nobody runs, lying at their home plot (MOTION.md §3). The
+         * `resting` state with `away` set: no bob, no ring, no verb glyph, no
+         * carried item — nothing a watcher could read as work. Dimmer than
+         * any live body, with the fixed moon mark at readable strength.
+         * -------------------------------------------------------------- */
+        if (z >= LOD_PLOTS) {
+          for (const r of restingRef.current) {
+            const { x: tx, y: ty } = r.tile;
+            if (!near(tx, ty, 1, 1) || !tileExplored(tx, ty, radius)) continue;
+            const q = iso(tx, ty);
+            const x = ox + q.x;
+            const y = oy + q.y - 18;
+            scene.push({
+              s: tx + ty - 0.5,
+              draw: () => {
+                ctx.save();
+                ctx.globalAlpha = AWAY_ALPHA;
+                if (!art.body(ctx, "agent-front", x, y)) {
+                  ctx.fillStyle = pal.placeholder.agent;
+                  ctx.fillRect(x - 6, y - 6, 12, 12);
+                }
+                ctx.globalAlpha = 0.85;
+                drawRestingMark(ctx, x, y);
+                ctx.restore();
+              },
+            });
+            if (z >= LOD_LABELS) {
+              labels.push({
+                x,
+                y,
+                name: r.name,
+                detail: theme.lexicon.resting,
+                nameFill: pal.nameFill,
+                detailFill: RESTING_MARK_COLOUR,
+                alpha: 0.5,
+                orgColour: null,
+                resting: true,
+              });
+            }
+          }
+        }
+
         /* ---- and gone -------------------------------------------------
          * The last rung of the ladder. A departure goes through the SAME
          * depth-sorted list as everything else — a body leaving from behind
@@ -2651,7 +2706,7 @@ export function WorldMap() {
         // Captions last, front-most first, skipping any that would collide:
         // a smeared pile of half-readable task titles is worse than a gap.
         const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
-        for (const l of [...labels].sort((p, q) => q.y - p.y)) {
+        for (const l of [...labels].sort((p, q) => Number(Boolean(p.resting)) - Number(Boolean(q.resting)) || q.y - p.y)) {
           const box = { x0: l.x - CAPTION_W / 2, y0: l.y + 20, x1: l.x + CAPTION_W / 2, y1: l.y + 44 };
           if (placed.some((r) => box.x0 < r.x1 && box.x1 > r.x0 && box.y0 < r.y1 && box.y1 > r.y0)) continue;
           placed.push(box);

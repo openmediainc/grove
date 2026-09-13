@@ -122,6 +122,7 @@ export const REGISTER_IPS = {
   search: "10.99.14.1",
   messages: "10.99.15.1",
   messagesRoutes: "10.99.15.2",
+  resting: "10.99.16.1",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */

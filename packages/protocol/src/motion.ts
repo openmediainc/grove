@@ -13,7 +13,7 @@
  * flight, never because the renderer thought it would look busy.
  */
 import type { AgentVerb } from "./agent-verbs.js";
-import { hash32, REGION_RECTS, type MapRegion } from "./map-layout.js";
+import { hash32, REGION_RECTS, type MapRegion, type PlotRect } from "./map-layout.js";
 
 export type Tile = { x: number; y: number };
 
@@ -434,6 +434,13 @@ export function tripMs(route: readonly Tile[], timing: MotionTiming = MOTION_TIM
 
 export interface BodyMotion {
   state: MotionState;
+  /**
+   * Resting at its home plot with nobody running it (MOTION.md §3, "Resting at
+   * plot"). Still `resting` — the same state, not a parallel one — but with no
+   * signals behind it at all, so it takes no errand: it never walks, works,
+   * faults or stalls. Waking up is the body reappearing as a live body.
+   */
+  away?: boolean;
   /** The errand the body is currently acting on. */
   errand: Errand;
   /** A different errand the signals now show, not yet committed. */
@@ -477,6 +484,67 @@ export function restingAt(tile: Tile, now: number): BodyMotion {
     arrivedAt: now,
     workEndedAt: null,
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * 5a. Resting at plot
+ * ------------------------------------------------------------------ */
+
+/**
+ * How bright a body resting at its plot is drawn. Below the dimmest sleeping
+ * body (sleepingAlpha floors at 0.26) so it can never be mistaken for a live
+ * one — even a live one about to leave.
+ */
+export const AWAY_ALPHA = 0.22;
+
+/** A plot building's footprint within its 8x6 plot (mirrors the map's BUILDING anchor). */
+export const PLOT_BUILDING = { dx: 2, dy: 1, w: 3, h: 3 } as const;
+
+/**
+ * The tiles a plot's resting agents lie on: every tile of the plot outside the
+ * building, nearest the building's door first (south face, centre), ties broken
+ * north-to-south then west-to-east so the order is total.
+ */
+export function plotRestTiles(rect: PlotRect): Tile[] {
+  const bx0 = rect.x0 + PLOT_BUILDING.dx;
+  const by0 = rect.y0 + PLOT_BUILDING.dy;
+  const bx1 = bx0 + PLOT_BUILDING.w - 1;
+  const by1 = by0 + PLOT_BUILDING.h - 1;
+  const door = { x: bx0 + 1, y: by1 + 1 };
+  const out: Tile[] = [];
+  for (let y = rect.y0; y <= rect.y1; y++) {
+    for (let x = rect.x0; x <= rect.x1; x++) {
+      if (x >= bx0 && x <= bx1 && y >= by0 && y <= by1) continue;
+      out.push({ x, y });
+    }
+  }
+  const d = (t: Tile) => Math.abs(t.x - door.x) + Math.abs(t.y - door.y);
+  return out.sort((p, q) => d(p) - d(q) || p.y - q.y || p.x - q.x);
+}
+
+/**
+ * One tile per resting agent on a plot, deterministic for a given set of ids
+ * (order-independent). Ids are placed in sorted order so adding one agent never
+ * reshuffles the others more than a probe. Past the plot's tiles, the rest are
+ * not placed: a plot shows who lives there, not a pile.
+ */
+export function assignRestTiles(ids: readonly string[], rect: PlotRect): Map<string, Tile> {
+  const tiles = plotRestTiles(rect);
+  const out = new Map<string, Tile>();
+  const used = new Set<number>();
+  for (const id of [...new Set(ids)].sort()) {
+    if (used.size >= tiles.length) break;
+    let i = hash32(id) % tiles.length;
+    while (used.has(i)) i = (i + 1) % tiles.length;
+    used.add(i);
+    out.set(id, tiles[i]!);
+  }
+  return out;
+}
+
+/** A body resting at its plot: `resting`, standing, and inert. */
+export function restingAway(tile: Tile, now: number): BodyMotion {
+  return { ...restingAt(tile, now), away: true };
 }
 
 /** Where the body is this instant. Eased per trip, linear by distance along the route. */
@@ -539,6 +607,8 @@ function sameTile(a: Tile, b: Tile): boolean {
  *  4. A committed change mid-walk retargets from where the body is now.
  */
 export function stepMotion(prev: BodyMotion, incoming: Errand, ctx: MotionContext): BodyMotion {
+  // Resting at plot: no signal reaches a body nobody runs, so nothing moves it.
+  if (prev.away) return prev;
   const timing = ctx.timing ?? MOTION_TIMING;
   const now = ctx.now;
   const m: BodyMotion = { ...prev, route: prev.route };

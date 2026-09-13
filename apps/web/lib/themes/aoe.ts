@@ -276,6 +276,7 @@ export const AOE_LEXICON: ThemeLexicon = {
   accessUnknown: "Somebody holds this ground.",
   claimedPlot: "claimed",
   heldPlot: "Held plot",
+  resting: "resting at home",
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "all hands busy" },
   hud: { hereNow: "here now", watching: "watching", awake: "awake", asleep: "asleep", fog: "fog", world: "world", claimed: "claimed", quiet: "nobody has spoken here recently" },

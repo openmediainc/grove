@@ -140,3 +140,35 @@ export function drawStanceMark(ctx: Ctx, stance: string, x: number, y: number): 
   ctx.fillText(letter, 0, 2);
   ctx.restore();
 }
+
+/** The resting cue's colour: a pale moon, far from every hazard, verb and outcome colour. */
+export const RESTING_MARK_COLOUR = "#c7d2fe";
+
+/**
+ * Resting at plot (MOTION.md §3): a crescent moon and a small "z" above the
+ * head of an agent nobody is running. Fixed in every theme, like the stall
+ * ring, because "this body is not working" is a truth, not decoration. It never
+ * animates: a mark that bobbed would read as a body doing something.
+ */
+export function drawRestingMark(ctx: Ctx, x: number, y: number): void {
+  ctx.save();
+  ctx.translate(Math.round(x + 10), Math.round(y - 24));
+  ctx.fillStyle = "rgba(7,8,20,0.78)";
+  ctx.beginPath();
+  ctx.arc(0, 0, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = RESTING_MARK_COLOUR;
+  ctx.beginPath();
+  ctx.arc(-1, 0, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  // Bite out of the disc: the crescent.
+  ctx.fillStyle = "rgba(7,8,20,1)";
+  ctx.beginPath();
+  ctx.arc(1.2, -1.4, 3.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = RESTING_MARK_COLOUR;
+  ctx.font = "bold 7px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("z", 7.5, -5);
+  ctx.restore();
+}

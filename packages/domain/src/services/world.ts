@@ -354,6 +354,13 @@ export class WorldService {
       rooms: rooms.map((r) => ({ id: r.id, slug: r.slug, name: r.name, occupancy: r.occupancy })),
       bodies,
       spaces,
+      /**
+       * Agents resting at their home plot while nobody runs them. Deliberately
+       * NOT in `bodies`: everything that counts or watches live bodies (the
+       * headcount, TV cuts, the idle bell, search's Online now) reads `bodies`,
+       * and a resting body is none of those things. See restingAtPlots().
+       */
+      resting: await this.restingAtPlots(),
       recentSpeech: await this.recentPublicSpeech(3),
       claimedAgents: rows[0]?.n ?? 0,
       stallAfterSeconds: STALL_AFTER_SECONDS,
@@ -362,6 +369,48 @@ export class WorldService {
       /** Legend for the colours on the bodies above. */
       orgs,
     };
+  }
+
+  /**
+   * "Resting at plot": a claimed agent with NO presence row anywhere (its
+   * runtime is gone; eviction already happened) whose home room is on a live
+   * claimed plot. The map draws it dimmed at that plot, never as work — the
+   * payload carries no verb, pulse, span or stance to draw work from.
+   *
+   * Public map, so the same redaction the plots follow, applied in SQL before
+   * anything is read: a `private` plot never reveals who rests in it (not a
+   * redacted row, not a count), and neither does a room whose own door is
+   * `private` on an otherwise public plot. Pending agents and agents of a
+   * suspended owner are left out, as they are from search.
+   */
+  async restingAtPlots(): Promise<RestingBody[]> {
+    const { rows } = await this.store.pg.query(
+      `SELECT id, slug, display_name, plot_index FROM (
+         SELECT a.id, a.slug, a.display_name, w.plot_index,
+                row_number() OVER (PARTITION BY w.id ORDER BY a.claimed_at NULLS LAST, a.id) AS n
+           FROM agents a
+           JOIN rooms r ON r.id = a.home_room_id
+           JOIN worlds w ON w.id = r.world_id
+           LEFT JOIN humans h ON h.id = a.owner_human_id
+          WHERE a.claim_state = 'claimed'
+            AND w.plot_index IS NOT NULL
+            AND w.archived_at IS NULL
+            AND w.policy_preset <> 'private'
+            AND (r.room_preset IS NULL OR r.room_preset <> 'private')
+            AND h.suspended_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM presence p WHERE p.actor_id = a.id)
+       ) t
+       WHERE n <= $1
+       ORDER BY plot_index, n
+       LIMIT $2`,
+      [RESTING_PER_PLOT, RESTING_MAX],
+    );
+    return rows.map((r) => ({
+      id: String(r.id),
+      slug: String(r.slug),
+      displayName: String(r.display_name),
+      plotIndex: Number(r.plot_index),
+    }));
   }
 
   /** How this world paints bound orgs. Unknown values read as 'shared'. */
@@ -453,6 +502,19 @@ export class WorldService {
     }
     return out;
   }
+}
+
+/** Most agents drawn resting on one plot: the plot's open tiles, not a crowd. */
+export const RESTING_PER_PLOT = 12;
+/** Most resting bodies on the whole map, so a big world cannot bloat the poll. */
+export const RESTING_MAX = 400;
+
+/** An agent resting at its home plot. Name and plot only: nothing to draw work from. */
+export interface RestingBody {
+  id: string;
+  slug: string;
+  displayName: string;
+  plotIndex: number;
 }
 
 /** What buildMinimap() returns; named so concurrent callers can share one. */

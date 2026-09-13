@@ -665,6 +665,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
   accessUnknown: "Somebody holds this module.",
   claimedPlot: "claimed module",
   heldPlot: "Held module",
+  resting: "docked, powered down",
   construction: "fabricating",
   bell: { faulted: "faulted", stalled: "stalled", fading: "losing signal", idle: "idle crew", allBusy: "all crew at stations" },
   hud: { hereNow: "aboard", watching: "on the feed", awake: "on duty", asleep: "in cryo", fog: "scan", world: "sector", claimed: "modules", quiet: "no transmissions recently" },

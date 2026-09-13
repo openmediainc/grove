@@ -40,11 +40,13 @@ errand the signals show now; the controller decides whether to act on it yet.
  any ──offline─▶ asleep   (walks home, dims toward eviction)
  any ──say+addressee─▶ approaching (walks beside the target)
  gone from the poll ──▶ departing (existing fade, presenceHealth.ts)
+ no presence, home on a public plot ──▶ resting (away) at the plot; inert until it is a live body again
 ```
 
 | state | rendered as |
 |---|---|
 | `resting` | at home seat; idle bob; `think` shows a lamp, `wait` the side sprite |
+| `resting` + `away` | **resting at plot**: on its home plot, `AWAY_ALPHA` (dimmer than any live body), no bob, ring, glyph or item; fixed moon mark; caption = lexicon `resting` |
 | `dispatched` | walking the route, work sprite, caption = tool name · args |
 | `working` | at the slot; work sprite; scaffolding at the site (see §6) |
 | `returning` | walking home; last outcome mark rides along while visible |
@@ -70,6 +72,7 @@ errand the signals show now; the controller decides whether to act on it yet.
 | batch pulse (AGT-10) | one SSE `pulse` with the FINAL state, stamped with its real `pulsed_at`; the poll carries the same | from the final verb; intermediate phases never move a body (a burst is shorter than `commitMs`) and live in the chronicle |
 | heartbeat expiry → `connection: offline` | minimap `connection` | `sleep` |
 | presence row evicted | body absent from poll | `departing` |
+| no presence + home room on a public plot | minimap `resting` (not `bodies`) | none: `away` takes no errand |
 
 Priority when several are true (`errandFor`): **sleep > stall > fault > blocked > open tool call >
 verb site > addressee > rest.** An open span outranks a `think` pulse because Claude Code emits
@@ -104,6 +107,23 @@ claimed space would path to its plot the same way (the grid is open ground outsi
 the civic buildings are shared work sites, so an agent living on a plot still walks in to the
 Workshop to run a tool. The room itself never changes: a trip is an errand, not a `move`, and
 the body's speech stays in its room while it works.
+
+**Resting at plot.** An agent nobody runs (claimed, no presence row at all) whose home room is
+on a claimed plot is published in the minimap's `resting` list — id, slug, name, plot index,
+nothing else — and drawn on that plot by `restingAway()` on a tile from `assignRestTiles()`
+(the plot's open tiles, nearest the building door first, hashed per id, at most one per tile).
+It is the `resting` state, not a new one, with `away: true`, and `stepMotion` returns an away
+body unchanged: no signal reaches a body nobody runs, so nothing moves it. It wakes by
+appearing in `bodies`, where the live body wins over any resting row with its id.
+
+It is never live work, so it is kept out of everything that counts or watches live bodies: the
+"here now" pill, TV cuts (`lib/tv/director.ts`), the idle bell, `?follow=`, follow notices
+(there is no event) and search's Online now all read `bodies` only. Replay shows none.
+Visibility is the plot's: a `private` plot, or a room whose own door is `private`, never
+reveals who rests there — the server leaves the row out (not redacted), and the map refuses to
+draw one on a private plot anyway. Pending agents and agents of suspended owners do not rest.
+The public minimap has no viewer, so a private plot's own members do not see their resting
+agents on the map either (see the space page for them).
 
 ## 4. Pathing
 
