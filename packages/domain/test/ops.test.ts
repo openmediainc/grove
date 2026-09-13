@@ -172,42 +172,51 @@ describe.skipIf(!hasDb)("ops overview against the database", () => {
     expect(after.agent_faults!.days).toHaveLength(8);
   });
 
-  it("every metric's range scan is served by an index that leads with its filter (031)", async () => {
-    // Test tables are tiny, so the planner would happily seq scan; with
-    // enable_seqscan off it still picks one when no index exists. And a full
-    // scan of an index that merely CONTAINS created_at (speech_sender_time) is
-    // not a range scan, so each index used must lead with the time column, or
-    // with a column the metric pins by equality (world_events' type).
+  it("every metric's range filter has an index that leads with it (031)", async () => {
+    // Catalog, not planner: on tiny test tables the planner's pick is noise.
+    // A usable index leads with the metric's time column, or with a column the
+    // metric pins by equality and then the time column (world_events' type).
+    // A partial index counts only if the metric's WHERE carries its predicate,
+    // so reports_open_recent (status = 'open') does not cover every report.
+    const { rows: idx } = await pg.query<{ tbl: string; name: string; cols: string[]; pred: string | null }>(
+      `SELECT t.relname AS tbl, c.relname AS name,
+              array(SELECT a.attname FROM unnest(i.indkey) WITH ORDINALITY k(attnum, ord)
+                      JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+                     ORDER BY k.ord)::text[] AS cols,
+              pg_get_expr(i.indpred, i.indrelid) AS pred
+         FROM pg_index i
+         JOIN pg_class c ON c.oid = i.indexrelid
+         JOIN pg_class t ON t.oid = i.indrelid
+         JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = current_schema() AND i.indisvalid`,
+    );
+    for (const m of OPS_METRICS) {
+      const [, table, column] = /FROM (\w+)\s+WHERE (\w+) >/.exec(m.sql) ?? [];
+      expect(table && column, `${m.key} sql shape`).toBeTruthy();
+      const sql = m.sql.replace(/\s+/g, " ");
+      const usable = idx.filter((i) => {
+        if (i.tbl !== table) return false;
+        if (i.pred && !sql.includes(i.pred.replace(/^\((.*)\)$/, "$1"))) return false;
+        const at = i.cols.indexOf(column!);
+        return at >= 0 && i.cols.slice(0, at).every((c) => new RegExp(`\\b${c} (=|IN)`).test(sql));
+      });
+      expect(usable.map((i) => i.name), `${m.key}: no index on ${table} leads with ${column}`).not.toEqual([]);
+    }
+
+    // And with seq scans disabled the planner finds a path for every metric.
     const client = await pg.connect();
     try {
       await client.query("BEGIN");
       await client.query("SET LOCAL enable_seqscan = off");
       for (const m of OPS_METRICS) {
-        const [, table, column] = /FROM (\w+)\s+WHERE (\w+) >/.exec(m.sql) ?? [];
-        expect(table && column, `${m.key} sql shape`).toBeTruthy();
         const { rows } = await client.query(`EXPLAIN (FORMAT JSON) ${m.sql}`);
         const seq: string[] = [];
-        const indexes: string[] = [];
         const walk = (node: Record<string, unknown>) => {
           if (node["Node Type"] === "Seq Scan") seq.push(String(node["Relation Name"]));
-          if (typeof node["Index Name"] === "string") indexes.push(node["Index Name"]);
           for (const child of (node.Plans as Array<Record<string, unknown>>) ?? []) walk(child);
         };
         walk((rows[0]["QUERY PLAN"] as Array<{ Plan: Record<string, unknown> }>)[0]!.Plan);
         expect(seq, `${m.key} seq scans`).toEqual([]);
-        expect(indexes.length, `${m.key} uses an index`).toBeGreaterThan(0);
-        for (const name of indexes) {
-          const lead = await client.query<{ col: string }>(
-            `SELECT a.attname AS col
-               FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
-               JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
-              WHERE c.relname = $1`,
-            [name],
-          );
-          const col = lead.rows[0]?.col ?? "";
-          const pinned = new RegExp(`\\b${col}\\s*=`).test(m.sql);
-          expect(col === column || pinned, `${m.key}: ${name} leads with ${col}, not ${column}`).toBe(true);
-        }
       }
     } finally {
       await client.query("ROLLBACK");
