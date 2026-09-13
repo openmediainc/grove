@@ -50,6 +50,24 @@ describe("Grove client", () => {
     });
   });
 
+  it("reports usage in snake_case, and omits a cost it was not given", async () => {
+    const { fetchImpl, calls } = stub(() => ({ status: 201, body: { ok: true, recorded: [], currency: "USD" } }));
+    const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });
+    await grove.reportUsage({ model: "claude-sonnet", inputTokens: 1200, cacheReadTokens: 800, costUsd: 0.03, id: "t1" });
+    expect(String(calls[0]!.url)).toMatch(/\/world\/usage$/);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({
+      model: "claude-sonnet",
+      input_tokens: 1200,
+      cache_read_tokens: 800,
+      cost_usd: 0.03,
+      id: "t1",
+    });
+    await grove.reportUsage([{ model: "a", outputTokens: 5 }, { model: "b", costMicros: 10 }]);
+    const batch = JSON.parse(String(calls[1]!.init.body));
+    expect(batch).toEqual({ reports: [{ model: "a", output_tokens: 5 }, { model: "b", cost_micros: 10 }] });
+    expect("cost_usd" in batch.reports[0]).toBe(false);
+  });
+
   it("swallows a refused pulse — telemetry must never break a loop", async () => {
     const { fetchImpl } = stub(() => ({
       status: 429,

@@ -100,6 +100,17 @@ class ClientTest(unittest.TestCase):
             },
         )
 
+    def test_report_usage_omits_an_unknown_cost(self):
+        rec = Recorder({"ok": True, "recorded": [], "currency": "USD"})
+        grove = self.client(rec)
+        grove.report_usage(model="claude-sonnet", input_tokens=1200, output_tokens=80, id="t1")
+        self.assertEqual(
+            rec.last_body(),
+            {"model": "claude-sonnet", "input_tokens": 1200, "output_tokens": 80, "id": "t1"},
+        )
+        grove.report_usage(reports=[{"model": "a", "cost_usd": 0.01, "bogus": 1}, {"model": "b", "cost_usd": None}])
+        self.assertEqual(rec.last_body(), {"reports": [{"model": "a", "cost_usd": 0.01}, {"model": "b"}]})
+
     def test_refused_pulse_returns_none_but_can_raise(self):
         rec = Recorder(
             status=429,
