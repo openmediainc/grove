@@ -18,7 +18,7 @@
  */
 
 import { VERB_RING, type AgentVerb } from "@/lib/agent-verbs";
-import { HAZARD_COLOUR, type Ctx, type HazardTone, type SpeechBubble } from "./types";
+import { HAZARD_COLOUR, type Ctx, type HazardTone, type Signboard, type SpeechBubble } from "./types";
 
 export type { Ctx } from "./types";
 
@@ -219,6 +219,81 @@ export function drawSpeechPip(
   ctx.fill();
   ctx.fillStyle = "rgba(7,8,20,0.9)";
   for (const dx of [-2.5, 0, 2.5]) ctx.fillRect(dx - 0.5, -1, 1, 1);
+  ctx.restore();
+}
+
+/**
+ * How a theme dresses a plot signboard. The box and the words come from
+ * lib/signboard; a style only says what the board is made of.
+ */
+export type SignStyle = {
+  board: string;
+  edge: string;
+  title: string;
+  detail: string;
+  /** A held (private) board is darker and quieter, and carries a padlock. */
+  heldBoard: string;
+  heldTitle: string;
+  lock: { body: string; shackle: string };
+  /** CSS font-family; the layout measured with the sans default, so keep widths close. */
+  font?: string;
+  radius?: number;
+  /** Where the org tint goes: a band along the top or bottom, a patch on the left, or a line under the title. */
+  tintAt: "top" | "bottom" | "left" | "underline";
+  /** Behind the board: ropes, struts, brackets. SCREEN px. */
+  fixings?: (ctx: Ctx, x0: number, y0: number, w: number, h: number) => void;
+  /** Over the board, under the text: rivets, corner marks. */
+  trim?: (ctx: Ctx, x0: number, y0: number, w: number, h: number, held: boolean) => void;
+};
+
+/**
+ * A plot signboard, SCREEN space. Shape rules every theme keeps: the text is
+ * drawn exactly as laid out, a held board never shows a tint and always shows
+ * the padlock, and nothing here uses the hazard colours.
+ */
+export function drawSignboard(ctx: Ctx, b: Signboard, style: SignStyle): void {
+  const family = style.font ?? "ui-sans-serif, system-ui, sans-serif";
+  const x0 = Math.round(b.x0);
+  const y0 = Math.round(b.y0);
+  const w = Math.round(b.x1 - b.x0);
+  const h = Math.round(b.y1 - b.y0);
+  const radius = style.radius ?? 2;
+  ctx.save();
+  style.fixings?.(ctx, x0, y0, w, h);
+  ctx.fillStyle = "rgba(7,8,20,0.55)";
+  ctx.fillRect(x0 + 1, y0 + h, w - 1, 2);
+  ctx.fillStyle = b.held ? style.heldBoard : style.board;
+  ctx.beginPath();
+  ctx.roundRect(x0, y0, w, h, radius);
+  ctx.fill();
+  const tint = b.held ? null : b.tint;
+  if (tint) {
+    ctx.fillStyle = tint;
+    if (style.tintAt === "top") ctx.fillRect(x0 + 2, y0 + 1, w - 4, 2);
+    else if (style.tintAt === "bottom") ctx.fillRect(x0 + 2, y0 + h - 3, w - 4, 2);
+    else if (style.tintAt === "left") ctx.fillRect(x0 + 1, y0 + 2, 3, h - 4);
+  }
+  style.trim?.(ctx, x0, y0, w, h, b.held);
+  ctx.strokeStyle = style.edge;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1, radius);
+  ctx.stroke();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const cx = x0 + w / 2;
+  for (const line of b.lines) {
+    const title = line.role === "title";
+    ctx.font = `${title ? "600 " : ""}${line.fontPx}px ${family}`;
+    ctx.fillStyle = title ? (b.held ? style.heldTitle : style.title) : line.role === "org" && tint ? tint : style.detail;
+    ctx.fillText(line.text, cx, line.y, w - 6);
+    if (title && tint && style.tintAt === "underline") {
+      const tw = Math.min(w - 8, ctx.measureText(line.text).width);
+      ctx.fillStyle = tint;
+      ctx.fillRect(Math.round(cx - tw / 2), Math.round(line.y + line.fontPx / 2 + 1), Math.round(tw), 1);
+    }
+  }
+  if (b.held) lockMark(ctx, x0 + w - 3, y0 + 1, style.lock.body, style.lock.shackle);
   ctx.restore();
 }
 

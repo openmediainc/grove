@@ -25,6 +25,7 @@ import {
   dome,
   door,
   drawSpeechBubble,
+  drawSignboard,
   drawSpeechPip,
   drawHazardTriangle,
   drawVerbGlyph,
@@ -50,6 +51,7 @@ import {
   type Baked,
   type Ctx,
   type FigureSpec,
+  type SignStyle,
 } from "./kit";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
@@ -533,6 +535,41 @@ const SPEECH_STYLE = {
   whisperBorder: "rgba(232,121,249,0.85)",
 } as const;
 
+/**
+ * A holo panel: black glass with teal corner brackets, tethered to the
+ * building by a light line, the org colour as a glowing underline beneath the
+ * name. Held: a violet-dim panel with a padlock. No neon pink — that is the
+ * injection-flag colour.
+ */
+const SIGN_STYLE: SignStyle = {
+  board: "rgba(4,10,14,0.86)",
+  edge: "rgba(45,226,230,0.35)",
+  title: TEAL,
+  detail: "rgba(203,213,225,0.78)",
+  heldBoard: "rgba(13,11,26,0.9)",
+  heldTitle: "rgba(196,181,253,0.7)",
+  lock: { body: CHROME, shackle: "#c4b5fd" },
+  font: MONO,
+  radius: 0,
+  tintAt: "underline",
+  fixings(ctx, x0, y0, w) {
+    ctx.fillStyle = "rgba(45,226,230,0.55)";
+    ctx.fillRect(x0 + Math.round(w / 2), y0 - 7, 1, 7);
+  },
+  trim(ctx, x0, y0, w, h, held) {
+    ctx.fillStyle = held ? "rgba(168,85,247,0.7)" : TEAL;
+    // Four corner brackets, 4px each way.
+    ctx.fillRect(x0, y0, 4, 1);
+    ctx.fillRect(x0, y0, 1, 4);
+    ctx.fillRect(x0 + w - 4, y0, 4, 1);
+    ctx.fillRect(x0 + w - 1, y0, 1, 4);
+    ctx.fillRect(x0, y0 + h - 1, 4, 1);
+    ctx.fillRect(x0, y0 + h - 4, 1, 4);
+    ctx.fillRect(x0 + w - 4, y0 + h - 1, 4, 1);
+    ctx.fillRect(x0 + w - 1, y0 + h - 4, 1, 4);
+  },
+};
+
 const art: ThemeArt = {
   async prepare() {
     /* Procedural: everything bakes on first use. */
@@ -642,6 +679,9 @@ const art: ThemeArt = {
   speechPip(ctx, sx, sy, whisper) {
     drawSpeechPip(ctx, sx, sy, whisper, { fg: TEAL, whisperFg: SPEECH_STYLE.whisperFg });
   },
+  signboard(ctx, board) {
+    drawSignboard(ctx, board, SIGN_STYLE);
+  },
 };
 
 export const SCIFI_LEXICON: ThemeLexicon = {
@@ -670,6 +710,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
   },
   accessUnknown: "Somebody holds this node.",
   claimedPlot: "claimed node",
+  heldPlot: "Held node",
   construction: "compiling",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle units", allBusy: "all units running" },
   hud: { hereNow: "connected", watching: "observing", awake: "online", asleep: "dormant", fog: "range", world: "grid", claimed: "nodes", quiet: "no broadcasts recently" },

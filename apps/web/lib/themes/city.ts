@@ -20,6 +20,7 @@ import {
   cylinder,
   door,
   drawSpeechBubble,
+  drawSignboard,
   drawSpeechPip,
   drawHazardTriangle,
   drawVerbGlyph,
@@ -48,6 +49,7 @@ import {
   type Baked,
   type Ctx,
   type FigureSpec,
+  type SignStyle,
 } from "./kit";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
@@ -517,6 +519,35 @@ function stampOr(ctx: Ctx, b: Baked | null, x: number, y: number): boolean {
 /** Speech: the look is the theme's; a whisper keeps violet and a dashed edge in every theme. */
 const SPEECH_STYLE = { bg: "rgba(250,250,249,0.95)", fg: "#1c1917", border: "rgba(28,25,23,0.7)", radius: 7, whisperBg: "rgba(237,233,254,0.96)", whisperFg: "#4c1d95", whisperBorder: "rgba(91,33,182,0.85)" } as const;
 
+/**
+ * A street-name sign: a rounded blade with an inset white keyline, bolted to
+ * two brackets, the org colour as a band along the bottom. Held: a grey
+ * "no entry" blade with a padlock.
+ */
+const SIGN_STYLE: SignStyle = {
+  board: "#14532d",
+  edge: "rgba(250,250,249,0.85)",
+  title: "#fafaf9",
+  detail: "rgba(250,250,249,0.78)",
+  heldBoard: "#3f3f46",
+  heldTitle: "rgba(250,250,249,0.7)",
+  lock: { body: "#71717a", shackle: "#fafaf9" },
+  radius: 4,
+  tintAt: "bottom",
+  fixings(ctx, x0, y0, w) {
+    ctx.fillStyle = "#6b7280";
+    ctx.fillRect(x0 + 8, y0 - 6, 2, 6);
+    ctx.fillRect(x0 + w - 10, y0 - 6, 2, 6);
+  },
+  trim(ctx, x0, y0, w, h) {
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x0 + 2.5, y0 + 2.5, w - 5, h - 5, 2);
+    ctx.stroke();
+  },
+};
+
 const art: ThemeArt = {
   async prepare() {
     /* Procedural: everything bakes on first use. */
@@ -584,6 +615,9 @@ const art: ThemeArt = {
   speechPip(ctx, sx, sy, whisper) {
     drawSpeechPip(ctx, sx, sy, whisper, { fg: "rgba(250,250,249,0.9)", whisperFg: SPEECH_STYLE.whisperFg });
   },
+  signboard(ctx, board) {
+    drawSignboard(ctx, board, SIGN_STYLE);
+  },
 };
 
 export const CITY_LEXICON: ThemeLexicon = {
@@ -612,6 +646,7 @@ export const CITY_LEXICON: ThemeLexicon = {
   },
   accessUnknown: "Somebody holds this lot.",
   claimedPlot: "claimed lot",
+  heldPlot: "Held lot",
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "everyone's at work" },
   hud: { hereNow: "in town", watching: "watching", awake: "at work", asleep: "off shift", fog: "limits", world: "city", claimed: "lots", quiet: "the street is quiet" },

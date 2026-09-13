@@ -32,6 +32,7 @@ declared `satisfies Theme`, so leaving one out fails `pnpm -r typecheck`
 | `hazard(tone)` | flag / fault / stall | shared triangle | ← | ← | ← |
 | `speech(bubble)` | a laid-out bubble (box, wrapped lines, tail/leader, "+N", whisper) — placement is decided by `@grove/ui` speech-layout, never the theme | dark pill | cyan terminal | comic white | mono teal |
 | `speechPip(whisper)` | far-zoom "said something" mark; quieter than a hazard | lantern pip | cyan pip | white pip | teal pip |
+| `signboard(board)` | a claimed plot's sign on its building front: name, access, headcount, org names, org tint — laid out in SCREEN space by `lib/signboard.ts` (fixed text size, hidden below 0.55x); a private plot's board is "held" (lexicon `heldPlot`), never a name/org/headcount, and carries a padlock | timber board on cords, tint painted on top | hull placard on a strut, tint patch left | green street-name blade, tint band bottom | holo panel with corner brackets, tint underline |
 | `speechFont?` | font family the layout measures speech with | sans | sans | sans | mono |
 
 Plus `ThemePalette` (plot tints, fog, edges, nameplates, lamp glow, daylight

@@ -21,6 +21,7 @@ import {
   dome,
   door,
   drawSpeechBubble,
+  drawSignboard,
   drawSpeechPip,
   drawHazardTriangle,
   drawVerbGlyph,
@@ -47,6 +48,7 @@ import {
   type Baked,
   type Ctx,
   type FigureSpec,
+  type SignStyle,
 } from "./kit";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
@@ -530,6 +532,38 @@ function stampOr(ctx: Ctx, b: Baked | null, x: number, y: number): boolean {
 /** Speech: the look is the theme's; a whisper keeps violet and a dashed edge in every theme. */
 const SPEECH_STYLE = { bg: "rgba(2,6,23,0.92)", fg: "#a5f3fc", border: "rgba(103,232,249,0.55)", radius: 2, whisperBg: "rgba(30,16,56,0.94)", whisperFg: "#e9d5ff", whisperBorder: "rgba(216,180,254,0.9)" } as const;
 
+/**
+ * A hull placard on a short strut, rivets in the corners and the mission
+ * colour as a patch down its left edge. Held: a blast-shutter grey with a padlock.
+ */
+const SIGN_STYLE: SignStyle = {
+  board: "rgba(15,23,42,0.94)",
+  edge: "rgba(103,232,249,0.6)",
+  title: "#a5f3fc",
+  detail: "rgba(203,213,225,0.8)",
+  heldBoard: "rgba(42,50,70,0.96)",
+  heldTitle: "rgba(203,213,225,0.7)",
+  lock: { body: HULL_DARK, shackle: "#e2e8f0" },
+  radius: 0,
+  tintAt: "left",
+  fixings(ctx, x0, y0, w) {
+    ctx.fillStyle = HULL_DARK;
+    ctx.fillRect(x0 + Math.round(w / 2) - 1, y0 - 6, 3, 6);
+    ctx.fillRect(x0 + Math.round(w / 2) - 5, y0 - 7, 11, 2);
+  },
+  trim(ctx, x0, y0, w, h, held) {
+    ctx.fillStyle = held ? "rgba(148,163,184,0.5)" : "rgba(103,232,249,0.7)";
+    ctx.fillRect(x0 + 5, y0 + 2, 1, 1);
+    ctx.fillRect(x0 + w - 3, y0 + 2, 1, 1);
+    ctx.fillRect(x0 + 5, y0 + h - 3, 1, 1);
+    ctx.fillRect(x0 + w - 3, y0 + h - 3, 1, 1);
+    if (held) {
+      ctx.fillStyle = "rgba(7,8,20,0.35)";
+      for (let y = y0 + 3; y < y0 + h - 2; y += 3) ctx.fillRect(x0 + 2, y, w - 4, 1);
+    }
+  },
+};
+
 const art: ThemeArt = {
   async prepare() {
     /* Procedural: everything bakes on first use. */
@@ -599,6 +633,9 @@ const art: ThemeArt = {
   speechPip(ctx, sx, sy, whisper) {
     drawSpeechPip(ctx, sx, sy, whisper, { fg: "rgba(165,243,252,0.8)", whisperFg: SPEECH_STYLE.whisperFg });
   },
+  signboard(ctx, board) {
+    drawSignboard(ctx, board, SIGN_STYLE);
+  },
 };
 
 export const SPACE_LEXICON: ThemeLexicon = {
@@ -627,6 +664,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
   },
   accessUnknown: "Somebody holds this module.",
   claimedPlot: "claimed module",
+  heldPlot: "Held module",
   construction: "fabricating",
   bell: { faulted: "faulted", stalled: "stalled", fading: "losing signal", idle: "idle crew", allBusy: "all crew at stations" },
   hud: { hereNow: "aboard", watching: "on the feed", awake: "on duty", asleep: "in cryo", fog: "scan", world: "sector", claimed: "modules", quiet: "no transmissions recently" },

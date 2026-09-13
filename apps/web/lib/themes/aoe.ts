@@ -40,7 +40,7 @@ import {
   type ScaffoldStage,
   type ScatterKey,
 } from "@/lib/art";
-import { drawHazardTriangle, drawPennantFlag, drawSpeechBubble, drawSpeechPip, drawVerbGlyph } from "./kit";
+import { drawHazardTriangle, drawPennantFlag, drawSignboard, drawSpeechBubble, drawSpeechPip, drawVerbGlyph, type SignStyle } from "./kit";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 /** Lantern text on night stone; a whisper in the violet the whisper UI rings bodies with. */
@@ -84,6 +84,42 @@ const POSE: Record<AmbientPose, AnimalKey> = {
   idle: "sheep-idle",
   "walk-a": "sheep-walk-a",
   "walk-b": "sheep-walk-b",
+};
+
+/**
+ * A timber board hung from the eaves on two cords, the org's colour painted
+ * along its top edge. Held: a dark barred board with a padlock.
+ */
+const SIGN_STYLE: SignStyle = {
+  board: "#5a3b1f",
+  edge: "#24160a",
+  title: "#f4d19a",
+  detail: "rgba(244,209,154,0.72)",
+  heldBoard: "#2b2118",
+  heldTitle: "rgba(244,209,154,0.62)",
+  lock: { body: "#8b6a3e", shackle: "#d6c3a0" },
+  radius: 1,
+  tintAt: "top",
+  fixings(ctx, x0, y0, w) {
+    ctx.strokeStyle = "rgba(20,12,4,0.9)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0 + 6.5, y0);
+    ctx.lineTo(x0 + 10.5, y0 - 7);
+    ctx.moveTo(x0 + w - 6.5, y0);
+    ctx.lineTo(x0 + w - 10.5, y0 - 7);
+    ctx.stroke();
+  },
+  trim(ctx, x0, y0, w, h, held) {
+    // Plank seams, and two iron bars across a held board.
+    ctx.fillStyle = "rgba(20,12,4,0.35)";
+    for (let y = y0 + 6; y < y0 + h - 2; y += 6) ctx.fillRect(x0 + 2, y, w - 4, 1);
+    if (held) {
+      ctx.fillStyle = "rgba(90,90,96,0.55)";
+      ctx.fillRect(x0 + 5, y0 + 1, 2, h - 2);
+      ctx.fillRect(x0 + w - 7, y0 + 1, 2, h - 2);
+    }
+  },
 };
 
 const art: ThemeArt = {
@@ -208,6 +244,9 @@ const art: ThemeArt = {
   speechPip(ctx, sx, sy, whisper) {
     drawSpeechPip(ctx, sx, sy, whisper, { fg: "rgba(244,209,154,0.78)", whisperFg: AOE_SPEECH.whisperFg });
   },
+  signboard(ctx, board) {
+    drawSignboard(ctx, board, SIGN_STYLE);
+  },
 };
 
 export const AOE_LEXICON: ThemeLexicon = {
@@ -236,6 +275,7 @@ export const AOE_LEXICON: ThemeLexicon = {
   },
   accessUnknown: "Somebody holds this ground.",
   claimedPlot: "claimed",
+  heldPlot: "Held plot",
   construction: "under construction",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle", allBusy: "all hands busy" },
   hud: { hereNow: "here now", watching: "watching", awake: "awake", asleep: "asleep", fog: "fog", world: "world", claimed: "claimed", quiet: "nobody has spoken here recently" },

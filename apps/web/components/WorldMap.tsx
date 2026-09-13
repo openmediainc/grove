@@ -58,6 +58,7 @@ import {
 } from "@/lib/map-layout";
 import { SpectatorPeek, type OrgBadge, type Peek } from "./SpectatorPeek";
 import { deepLinkApplies, parseDeepLink, type DeepLink } from "@/lib/deep-link";
+import { layoutSignboard, signContent, signboardVisible } from "@/lib/signboard";
 import { WATCH_HEADER, formatHeadcount, makeWatchToken } from "@/lib/headcount";
 import { AttentionBell } from "./AttentionBell";
 import { CameraBookmarks, type Bookmark } from "./CameraBookmarks";
@@ -2182,6 +2183,8 @@ export function WorldMap() {
           });
         };
 
+        /** Plot signboards, in layout space; laid out and painted after the sky. */
+        const signs: Array<{ plot: Plot; x: number; y: number }> = [];
         // Claimed land, drawn over the terrain and under the bodies.
         for (const plot of plotRef.current) {
           const { rect } = plot;
@@ -2246,25 +2249,12 @@ export function WorldMap() {
             }
             ctx.restore();
           }
-          if (!anyExplored || z < LOD_PLOTS) continue;
-          const mid = iso((rect.x0 + rect.x1) / 2, (rect.y0 + rect.y1) / 2);
-          const lx = ox + mid.x;
-          const ly = oy + mid.y;
-          ctx.textAlign = "center";
-          ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
-          ctx.fillStyle = pal.plotName;
-          ctx.fillText(plot.name ?? theme.lexicon.claimedPlot, lx, ly - 2);
-          ctx.font = "9px ui-sans-serif, system-ui, sans-serif";
-          ctx.fillStyle = tint.replace(/[\d.]+\)$/, "0.95)");
-          ctx.fillText(
-            `${accessLabel(theme, plot.preset)}${plot.occupancy ? ` · ${plot.occupancy} here` : ""}`,
-            lx,
-            ly + 10,
-          );
-          if (plot.orgs.length && z >= LOD_LABELS) {
-            ctx.fillStyle = plot.orgs[0]!.colour;
-            ctx.fillText(plot.orgs.map((o) => o.name).join(" · "), lx, ly + 21);
-          }
+          // The signboard hangs on the building's front, so it lives and dies
+          // with the building. It is only COLLECTED here; it is painted in
+          // screen space after the sky, with the other things you read.
+          if (!anyExplored || !signboardVisible(z)) continue;
+          const front = iso(rect.x0 + 3.5, rect.y0 + 2.5);
+          signs.push({ plot, x: ox + front.x, y: oy + front.y + 18 });
         }
 
         const actors = actorsRef.current;
@@ -2597,6 +2587,30 @@ export function WorldMap() {
           for (const l of lamps) ctx.drawImage(glowSprite, l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
           ctx.restore();
           ctx.imageSmoothingEnabled = false;
+        }
+
+        // Plot signboards: fixed screen size so a name reads at every zoom
+        // above the threshold, back-to-front so the nearer board wins. A
+        // private plot's board says "held" and never its name (lib/signboard).
+        if (signs.length) {
+          ctx.save();
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          const signFamily = art.speechFont ?? "ui-sans-serif, system-ui, sans-serif";
+          const measure = (text: string, px: number) => {
+            ctx.font = `${px >= 11 ? "600 " : ""}${px}px ${signFamily}`;
+            return ctx.measureText(text).width;
+          };
+          signs.sort((p, q) => p.y - q.y);
+          for (const sg of signs) {
+            const board = layoutSignboard(
+              signContent(sg.plot, theme.lexicon),
+              { x: sg.x * z + v.px, y: sg.y * z + v.py },
+              z,
+              measure,
+            );
+            if (board && board.x1 > 0 && board.x0 < cssW && board.y1 > 0 && board.y0 < cssH) art.signboard(ctx, board, t);
+          }
+          ctx.restore();
         }
 
         // Captions last, front-most first, skipping any that would collide:

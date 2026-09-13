@@ -159,7 +159,35 @@ export interface ThemeArt {
    * smaller and quieter than hazard() — speech never outranks a fault.
    */
   speechPip(ctx: Ctx, sx: number, sy: number, whisper: boolean, t: number): void;
+  /**
+   * SCREEN space. A claimed plot's signboard, hung on the front of its
+   * building, already laid out by lib/signboard (box, fitted lines, org tint).
+   * The theme draws the board, its fixings and the text; it may not move the
+   * box or change the words. A `held` board is a private plot: it never has a
+   * name or a tint to draw, and should read closed. Drawn after the sky, and
+   * only above the signboard zoom threshold.
+   */
+  signboard(ctx: Ctx, board: Signboard, t: number): void;
 }
+
+/** One fitted line on a signboard. `y` is the vertical middle, SCREEN px. */
+export type SignLine = { text: string; fontPx: number; y: number; role: "title" | "detail" | "org" };
+
+/** A laid-out plot signboard as the renderer hands it to a theme. SCREEN px. */
+export type Signboard = {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** The point on the building's front the board is centred on. */
+  ax: number;
+  ay: number;
+  lines: readonly SignLine[];
+  /** A private plot: "Held plot", no name, no org, no headcount. */
+  held: boolean;
+  /** The first bound org's colour, or null. Always null when held. */
+  tint: string | null;
+};
 
 /** A laid-out bubble as the renderer hands it to a theme. SCREEN px. */
 export type SpeechBubble = {
@@ -271,6 +299,8 @@ export interface ThemeLexicon {
   accessUnknown: string;
   /** Unnamed claimed plot label on the map. */
   claimedPlot: string;
+  /** A private plot's signboard. Never a name: "Held plot" in its own words. */
+  heldPlot: string;
 
   /** What a work site is called: prefixes the url on the hover card. */
   construction: string;
