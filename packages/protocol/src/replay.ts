@@ -340,6 +340,11 @@ export class ReplayTimeline {
     return this.steps.length;
   }
 
+  /** Number of steps at or before `t`: changes exactly when the state at `t` can. */
+  stepIndexAt(t: number): number {
+    return this.indexAt(t);
+  }
+
   /** Number of steps at or before `t`. */
   private indexAt(t: number): number {
     let lo = 0;

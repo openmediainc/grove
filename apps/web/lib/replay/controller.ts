@@ -25,7 +25,101 @@ import {
   type ReplayKeyframeBodyInput,
   type ReplayMarker,
 } from "@grove/protocol";
+import { TOOL_RESULT_VISIBLE_SECONDS, type ToolCallView } from "@grove/protocol";
 import { api } from "@/lib/api";
+import { spanFromWire } from "@/lib/motion/director";
+
+/** The server's stall threshold (presence.STALL_AFTER_SECONDS); the minimap publishes the same number. */
+const STALL_AFTER_SECONDS_WIRE = 180;
+
+export type LiveContext = {
+  rooms?: Array<{ id: string; slug: string }>;
+  spaces?: unknown[];
+  orgs?: unknown[];
+  stall_after_seconds?: number;
+  stallAfterSeconds?: number;
+  org_render_mode?: string;
+  orgRenderMode?: string;
+  claimed_agents?: number;
+  claimedAgents?: number;
+};
+
+export type ReplayWireBody = Record<string, unknown> & {
+  id: string;
+  kind: "human" | "agent";
+  room_slug: string;
+  activity: string;
+  connection: string;
+  verb: string | null;
+  pulsed_at: string | null;
+  stalled: boolean;
+  tool_calls: ToolCallView[];
+};
+
+type HistoricalSpan = ToolCallView & { actorId: string };
+
+/**
+ * A span as it looked at `t`: absent before it started, open (no outcome yet)
+ * until it finished, then finished for TOOL_RESULT_VISIBLE_SECONDS — exactly
+ * the list the live minimap would have carried at that moment.
+ */
+export function toolCallsAt(spans: readonly HistoricalSpan[], t: number): ToolCallView[] {
+  const out: ToolCallView[] = [];
+  for (const s of spans) {
+    const started = Date.parse(s.startedAt);
+    if (!(started <= t)) continue;
+    const finished = s.finishedAt ? Date.parse(s.finishedAt) : null;
+    const { actorId: _a, ...view } = s;
+    void _a;
+    if (finished !== null && finished <= t) {
+      if (t - finished < TOOL_RESULT_VISIBLE_SECONDS * 1000) out.push({ ...view, stalled: false });
+      continue;
+    }
+    const updated = Date.parse(s.updatedAt);
+    out.push({
+      ...view,
+      finishedAt: null,
+      outcome: null,
+      result: null,
+      durationMs: null,
+      // Last report known to have happened by t. A later report is future news.
+      updatedAt: updated <= t ? s.updatedAt : s.startedAt,
+      stalled: t - (updated <= t ? updated : started) > STALL_AFTER_SECONDS_WIRE * 1000,
+    });
+  }
+  return out.sort((p, q) => Number(q.finishedAt === null) - Number(p.finishedAt === null) || Date.parse(q.startedAt) - Date.parse(p.startedAt)).slice(0, 6);
+}
+
+/** Every instant at which some span's view changes. */
+function spanEdgesOf(spans: readonly HistoricalSpan[]): number[] {
+  const edges: number[] = [];
+  for (const s of spans) {
+    const started = Date.parse(s.startedAt);
+    edges.push(started);
+    const updated = Date.parse(s.updatedAt);
+    if (Number.isFinite(updated)) {
+      edges.push(updated);
+      edges.push(updated + STALL_AFTER_SECONDS_WIRE * 1000 + 1);
+    }
+    edges.push(started + STALL_AFTER_SECONDS_WIRE * 1000 + 1);
+    if (s.finishedAt) {
+      const f = Date.parse(s.finishedAt);
+      edges.push(f, f + TOOL_RESULT_VISIBLE_SECONDS * 1000);
+    }
+  }
+  return edges.filter(Number.isFinite).sort((a, b) => a - b);
+}
+
+function countAtOrBefore(sorted: readonly number[], t: number): number {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sorted[mid]! <= t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
 
 export const REPLAY_SPEEDS = [1, 10, 60] as const;
 export type ReplaySpeed = (typeof REPLAY_SPEEDS)[number];
@@ -48,6 +142,8 @@ type RawPage = {
   entries?: Array<Record<string, unknown>>;
   next_cursor?: string | null;
   nextCursor?: string | null;
+  tool_calls?: Array<Record<string, unknown>>;
+  toolCalls?: Array<Record<string, unknown>>;
   viewer?: { signed_in?: boolean; signedIn?: boolean; operator?: boolean };
 };
 
@@ -147,6 +243,8 @@ export class ReplayController {
   private timeline: ReplayTimeline | null = null;
   private entries: ReplayEvent[] = [];
   private keyframe: ReplayKeyframeBodyInput[] = [];
+  private spansByActor = new Map<string, HistoricalSpan[]>();
+  private spanEdges: number[] = [];
   private listeners = new Set<() => void>();
   private raf = 0;
   private lastTick = 0;
@@ -172,6 +270,29 @@ export class ReplayController {
 
   /** Called whenever the map should redraw from the playhead. */
   constructor(private onFrame: () => void) {}
+
+  /** Test and first-page hook: historical spans off the wire. */
+  loadSpans(raw: ReadonlyArray<Record<string, unknown>>): void {
+    const byActor = new Map<string, HistoricalSpan[]>();
+    const all: HistoricalSpan[] = [];
+    for (const r of raw) {
+      const view = spanFromWire(r as Record<string, unknown>);
+      const actorId = String((r as Record<string, unknown>).actor_id ?? (r as Record<string, unknown>).actorId ?? "");
+      if (!view || !actorId) continue;
+      const span = { ...view, actorId };
+      all.push(span);
+      byActor.set(actorId, [...(byActor.get(actorId) ?? []), span]);
+    }
+    this.spansByActor = byActor;
+    this.spanEdges = spanEdgesOf(all);
+  }
+
+  /** Test hook: install a window without the network. */
+  loadWindow(input: { since: number; until: number; timeline: ReplayTimeline; spans?: ReadonlyArray<Record<string, unknown>> }): void {
+    this.timeline = input.timeline;
+    this.loadSpans(input.spans ?? []);
+    this.emit({ active: true, loading: false, since: input.since, until: input.until, playhead: input.since, markers: input.timeline.markers });
+  }
 
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
@@ -219,6 +340,7 @@ export class ReplayController {
         if (token !== this.loadToken) return;
         if (page === 0) {
           this.keyframe = (res.keyframe?.bodies ?? []).map(normaliseKeyframeBody);
+          this.loadSpans(res.tool_calls ?? res.toolCalls ?? []);
           const d = res.density;
           const bucketMs = ((d?.bucket_seconds ?? d?.bucketSeconds ?? 60) as number) * 1000;
           const density = (d?.buckets ?? []).map((b) => ({
@@ -312,78 +434,89 @@ export class ReplayController {
     if (this.view.playing) this.emit({ playing: false });
   }
 
+  /** The last real minimap: rooms (id -> slug), plots, orgs, stall threshold. */
+  private live: LiveContext | null = null;
+
+  setLive(live: LiveContext | null): void {
+    this.live = live;
+  }
+
   /**
-   * The map's payload at the playhead. `live` is the last real minimap, used
-   * only for what the ledger has no history of: the room id -> slug table, the
-   * plots, the org legend and the stall threshold.
+   * A value that changes exactly when the motion inputs at `t` change: a
+   * timeline step or a tool-call boundary. Between two changes every body's
+   * signals are identical, so the motion model is re-synced only on a change.
    */
-  snapshot(live: {
-    rooms?: Array<{ id: string; slug: string }>;
-    spaces?: unknown[];
-    orgs?: unknown[];
-    stall_after_seconds?: number;
-    stallAfterSeconds?: number;
-    org_render_mode?: string;
-    orgRenderMode?: string;
-    claimed_agents?: number;
-    claimedAgents?: number;
-  } | null): ReplaySnapshot {
-    const t = this.view.playhead;
+  signalKey(t: number): string {
+    if (!this.timeline) return "empty";
+    return `${this.timeline.stepIndexAt(t)}|${countAtOrBefore(this.spanEdges, t)}`;
+  }
+
+  /**
+   * Minimap-shaped bodies at historical time `t`. Pure in (window, t, speed):
+   * no wall clock. `pulsed_at` is the span's real start, the way a batch pulse
+   * dates its errand live; `pulse_age_seconds` 0 marks it current at `t`.
+   */
+  bodiesAt(t: number): ReplayWireBody[] {
     const lineMs = LINE_WALL_MS * this.view.speed;
     const frame = this.timeline ? this.timeline.frameAt(t, { lineMs }) : [];
-    const slugOf = new Map((live?.rooms ?? []).map((r) => [r.id, r.slug]));
-    const wallNow = new Date().toISOString();
-    const bodies = frame.map((b) => {
+    const slugOf = new Map((this.live?.rooms ?? []).map((r) => [r.id, r.slug]));
+    return frame.map((b) => {
       const roomSlug =
         (b.roomId && slugOf.get(b.roomId)) ||
         (b.roomId?.includes(":") ? b.roomId.split(":").pop() : b.roomId) ||
         "plaza";
       const phase = b.phase;
+      const tool_calls = toolCallsAt(this.spansByActor.get(b.id) ?? [], t);
       return {
         id: b.id,
         kind: b.kind === "human" ? "human" : "agent",
         display_name: b.name,
         slug: b.slug ?? b.id,
         room_id: b.roomId,
-        room_slug: roomSlug,
+        room_slug: roomSlug ?? "plaza",
         // Presence activity is not in the ledger. A fresh line is the one
         // activity history can vouch for; everything else rests.
         activity: b.line ? "chatting" : "idle",
         connection: phase?.verb === "offline" ? "offline" : "async",
         badges: [],
-        verb: phase?.verb ?? null,
+        verb: phase?.verb ?? (tool_calls.some((c) => c.finishedAt === null) ? "tool" : null),
         detail: phase?.detail ?? null,
-        pulsed_at: phase ? wallNow : null,
+        pulsed_at: phase ? new Date(phase.startedAt).toISOString() : null,
         pulse_age_seconds: phase ? 0 : null,
-        stalled: false,
+        stalled: tool_calls.some((c) => c.stalled),
         url: phase?.url ?? null,
         error_text: phase?.errorText ?? null,
         org_id: null,
         org_colour: null,
         source: "grove",
+        stance: null,
+        tool_calls,
       };
     });
+  }
+
+  /** The map's payload at the playhead, shaped like GET /world/minimap. */
+  snapshot(live: LiveContext | null): ReplaySnapshot {
+    if (live) this.live = live;
+    const t = this.view.playhead;
+    const lineMs = LINE_WALL_MS * this.view.speed;
+    const bodies = this.bodiesAt(t);
+    const frame = this.timeline ? this.timeline.frameAt(t, { lineMs }) : [];
     const recent_speech = frame
-      .filter((b) => b.line)
+      .filter((b) => b.line && b.line.body !== null)
       .sort((p, q) => p.line!.at - q.line!.at || (p.id < q.id ? -1 : 1))
-      .map((b) => ({
-        speech_id: `${b.id}@${b.line!.at}`,
-        sender_id: b.id,
-        sender_name: b.name,
-        // A line this viewer was not delivered is still a line: the map shows
-        // THAT they spoke, never what.
-        body: b.line!.body ?? "…",
-      }));
+      .map((b) => ({ speech_id: `${b.id}@${b.line!.at}`, sender_id: b.id, sender_name: b.name, body: b.line!.body! }));
+    const l = this.live;
     return {
       bodies,
       recent_speech,
-      spaces: live?.spaces ?? [],
-      rooms: live?.rooms ?? [],
+      spaces: l?.spaces ?? [],
+      rooms: l?.rooms ?? [],
       // Not historical; carried so the fog and the HUD do not jump on entry.
-      claimed_agents: live?.claimed_agents ?? live?.claimedAgents ?? 0,
-      stall_after_seconds: live?.stall_after_seconds ?? live?.stallAfterSeconds,
-      org_render_mode: live?.org_render_mode ?? live?.orgRenderMode,
-      orgs: live?.orgs ?? [],
+      claimed_agents: l?.claimed_agents ?? l?.claimedAgents ?? 0,
+      stall_after_seconds: l?.stall_after_seconds ?? l?.stallAfterSeconds,
+      org_render_mode: l?.org_render_mode ?? l?.orgRenderMode,
+      orgs: l?.orgs ?? [],
       paperclip: { ok: false, agents: [], issues: [] },
     };
   }
