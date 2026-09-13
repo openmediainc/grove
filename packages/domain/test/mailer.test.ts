@@ -22,6 +22,7 @@ function cfg(over: Partial<GroveConfig> = {}): GroveConfig {
     resendApiKey: null,
     mailFrom: "Grove <grove@example.com>",
     smtpUrl: null,
+    publicDeploy: false,
     ...over,
   };
 }

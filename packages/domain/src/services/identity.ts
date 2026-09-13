@@ -44,7 +44,7 @@ import { CampusService } from "./campus.js";
 import type { QuotaService } from "./quota.js";
 import type { FlagService } from "./flags.js";
 import type { Mailer } from "../mailer.js";
-import { isProduction } from "../config.js";
+import { isProduction, mayReturnMagicLink } from "../config.js";
 
 const SESSION_TTL = 30 * 24 * 3600;
 const MAGIC_TTL = 15 * 60;
@@ -177,7 +177,8 @@ export class IdentityService {
       MAGIC_TTL,
     );
     const url = `${this.store.config.publicUrl}/login?token=${token}`;
-    if (this.store.config.magicLinkStdout) {
+    const cfg = this.store.config;
+    if (cfg.magicLinkStdout) {
       console.log(`[grove] magic link for ${email}: ${url}`);
     }
     try {
@@ -186,8 +187,7 @@ export class IdentityService {
       console.warn("[grove] mailer failed:", (err as Error).message);
     }
     const includeDevUrl =
-      this.store.config.magicLinkStdout &&
-      (!isProduction(this.store.config) || process.env.GROVE_MAGIC_LINK_STDOUT === "1");
+      mayReturnMagicLink(cfg) && (!isProduction(cfg) || process.env.GROVE_MAGIC_LINK_STDOUT === "1");
     return { token, devLoginUrl: includeDevUrl ? url : undefined };
   }
 

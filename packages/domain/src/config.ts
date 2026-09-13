@@ -38,6 +38,8 @@ export interface GroveConfig {
   resendApiKey: string | null;
   mailFrom: string | null;
   smtpUrl: string | null;
+  /** Served on the open internet (Vercel), not only over the tailnet. */
+  publicDeploy: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
@@ -70,7 +72,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GroveConfig {
     resendApiKey: env.RESEND_API_KEY || null,
     mailFrom: env.GROVE_MAIL_FROM || null,
     smtpUrl: env.GROVE_SMTP_URL || null,
+    publicDeploy: Boolean(env.VERCEL),
   };
+}
+
+/**
+ * Whether a sign-in link may go back in the HTTP response. The link is a working
+ * credential for the email it names, and anyone holding the invite code can ask for
+ * any email, so a public deploy never returns it. The operator reads it from the
+ * server log instead (stdout on Vercel is private to the project).
+ */
+export function mayReturnMagicLink(cfg: Pick<GroveConfig, "magicLinkStdout" | "publicDeploy">): boolean {
+  return cfg.magicLinkStdout && !cfg.publicDeploy;
 }
 
 export function isProduction(cfg: GroveConfig): boolean {
