@@ -1,3 +1,4 @@
+import Fastify from "fastify";
 import { GroveApp, createPool, createBus, loadConfig, migrate, pendingMigrations } from "@grove/domain";
 import { buildApp } from "./create-app.js";
 import { maybeTick, runTick } from "./tick.js";
@@ -119,6 +120,7 @@ const server = createServer((req, res) => {
     });
 });
 
+void Fastify;
 export default server;
 
 if (!serverless) {
