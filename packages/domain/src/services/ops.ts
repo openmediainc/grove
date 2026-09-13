@@ -13,7 +13,12 @@ import type { EmailDeliveryService, EmailHealthReport } from "./email-deliveries
  * The last one is the anomaly lines. Each metric is bucketed in SQL into eight
  * trailing 24-hour windows (0 = the last 24h, 1 = the 24h before, ...), one
  * grouped range scan per metric, all in ONE statement against created_at-style
- * indexes. The comparison and the wording are pure functions below, so they
+ * indexes where they exist. world_events, tool_calls, usage_events and
+ * email_deliveries have them; speech, messages, reactions, follows and reports
+ * have no index leading with created_at, so those five scan (small in alpha).
+ * Follow-up: a migration adding `(created_at DESC)` indexes on those five,
+ * applied to Supabase before it ships. The comparison and the wording are pure
+ * functions below, so they
  * are tested without a database and cannot drift from what the page says.
  *
  * Trailing 24h windows rather than "today since UTC midnight": at 00:30 UTC a
