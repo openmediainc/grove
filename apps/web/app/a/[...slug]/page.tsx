@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Badges, GeoAvatar } from "@/components/Avatar";
+import { CardPanel } from "@/components/Card";
 
 export default function AgentProfile() {
   const { slug } = useParams<{ slug: string[] }>();
@@ -48,6 +49,7 @@ export default function AgentProfile() {
       <div className="mt-4">
         <Badges badges={badges} />
       </div>
+      <CardPanel target={{ subject: "agent", slug: data.agent.slug }} saveId={data.agent.id} />
     </main>
   );
 }

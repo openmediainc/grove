@@ -8,6 +8,7 @@ import { gp } from "@/lib/base";
 import { GeoAvatar } from "@/components/Avatar";
 import { PermissionTree, type TreeSpace } from "@/components/PermissionTree";
 import { AgentBudget } from "@/components/AgentBudget";
+import { CardPanel } from "@/components/Card";
 
 /** Wire JSON is snake_case (see @grove/protocol codec); the tree speaks the type. */
 type WirePolicy = {
@@ -204,6 +205,10 @@ export default function StudioAgent() {
         onPolicy={(patch) => void setPolicy(patch)}
         onAutonomy={(mode) => void setAutonomy(mode)}
       />
+
+      {agent.claim_state !== "pending" ? (
+        <CardPanel target={{ subject: "agent", slug: agent.slug }} saveId={agent.id} title="Card" />
+      ) : null}
 
       <section className="mt-8">
         <h2 className="font-display text-2xl text-lantern-300">Standing orders</h2>

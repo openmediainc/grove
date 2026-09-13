@@ -13,6 +13,7 @@ import { registerEmailHealth } from "./email-health.js";
 import { registerRooms } from "./rooms.js";
 import { registerAwn } from "./awn.js";
 import { registerUsage } from "./usage.js";
+import { registerCards } from "./cards.js";
 import { sendError } from "./http.js";
 
 export async function buildApp(grove: GroveApp) {
@@ -53,6 +54,7 @@ export async function buildApp(grove: GroveApp) {
   await registerRooms(app, grove);
   await registerAwn(app, grove);
   await registerUsage(app, grove);
+  await registerCards(app, grove);
   await registerRealtime(app, grove);
   await registerMcp(app, grove);
   await registerDocs(app);

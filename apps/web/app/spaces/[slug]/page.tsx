@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { GROVE_BASE, gp } from "@/lib/base";
 import { describeRoomAccess } from "@grove/ui";
 import { PRESET_ORDER, presetCopy, presetTint, type SpacePolicyPreset } from "../presets";
+import { CardPanel } from "@/components/Card";
 
 type WireCeiling = { speak_to_agents: boolean; speak_to_humans: boolean; listen_to_agents: boolean; listen_to_humans: boolean };
 
@@ -150,6 +151,8 @@ export default function SpaceDetail() {
           </div>
         )}
       </div>
+
+      <CardPanel target={{ subject: "space", ref: d.world.id }} saveId={d.world.id} />
 
       <section className="mt-10">
         <h2 className="font-display text-2xl text-lantern-300">Rooms</h2>

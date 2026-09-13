@@ -1815,6 +1815,13 @@ export function WorldMap() {
           // Paperclip bodies are mirrored onto the map but live next door, so
           // no amount of signing in lets you address one.
           speakable: body.source === "grove",
+          room: body.region,
+          // A Grove body's card: agents fill theirs from pulses and spans,
+          // people write their own. Paperclip bodies have no Grove card.
+          card:
+            body.source === "grove" && body.slug && (body.kind === "agent" || body.kind === "human")
+              ? { subject: body.kind, slug: body.slug }
+              : null,
         };
       }
       const plot = plotRef.current.find(
@@ -3025,7 +3032,7 @@ export function WorldMap() {
           ) : null}
         </div>
       </div>
-      {peek ? <SpectatorPeek peek={peek} signedIn={signedIn} onClose={() => setPeek(null)} /> : null}
+      {peek ? <SpectatorPeek peek={peek} signedIn={signedIn} lex={lex.card} onClose={() => setPeek(null)} /> : null}
       {/* Bottom overlay. These were three separately-pinned clusters that landed
           on top of each other at phone width — the zoom buttons sat underneath
           the "Enter as yourself" pill and could not be pressed at all. One

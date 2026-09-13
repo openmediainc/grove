@@ -283,6 +283,23 @@ export interface ThemeLexicon {
   hud: { hereNow: string; watching: string; awake: string; asleep: string; fog: string; world: string; claimed: string; quiet: string };
   legend: readonly string[];
 
+  /** The card on a space or body (peek + profile pages). */
+  card: {
+    workingOn: string;
+    lookingFor: string;
+    latest: string;
+    links: string;
+    /** Where a derived row came from. */
+    fromToolCalls: string;
+    fromPulse: string;
+    /** Nothing written, nothing read. */
+    empty: string;
+    walkOver: string;
+    follow: string;
+    /** Follow is not built yet: the tag on the disabled button. */
+    soon: string;
+  };
+
   /** Controls. */
   controls: {
     goTo: string;

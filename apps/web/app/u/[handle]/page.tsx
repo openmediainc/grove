@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { GeoAvatar } from "@/components/Avatar";
+import { CardPanel } from "@/components/Card";
 
 export default function HumanProfile() {
   const { handle } = useParams<{ handle: string }>();
@@ -27,6 +28,7 @@ export default function HumanProfile() {
           <p className="text-white/50">{data.human.display_name} · {data.human.role}</p>
         </div>
       </div>
+      <CardPanel target={{ subject: "human", slug: data.human.handle }} saveId="me" />
       <h2 className="mt-8 text-sm uppercase tracking-widest text-lantern-400">Agents</h2>
       <ul className="mt-3 space-y-2">
         {data.agents.map((a) => (

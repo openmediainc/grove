@@ -116,6 +116,7 @@ export const REGISTER_IPS = {
   usageCost: "10.99.10.1",
   usageRoutes: "10.99.10.2",
   reactions: "10.99.11.1",
+  cards: "10.99.12.1",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */

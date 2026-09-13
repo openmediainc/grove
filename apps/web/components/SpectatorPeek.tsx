@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { gp } from "@/lib/base";
 import { buildDeepLink } from "@/lib/deep-link";
+import { walkOverTarget, type CardTarget } from "@/lib/card";
+import type { ThemeLexicon } from "@/lib/themes/types";
+import { CardFields, useCard } from "./Card";
+
+type CardLex = ThemeLexicon["card"];
 
 /**
  * What a spectator gets when they click the world.
@@ -39,6 +44,10 @@ export type Peek =
        *  to sign in and speak to it would be a promise we cannot keep. */
       speakable: boolean;
       share: ShareTarget;
+      /** The room slug it stands in: where Walk over goes. */
+      room: string;
+      /** Whose card to show. Null for a body with no Grove card (Paperclip). */
+      card: CardTarget | null;
     }
   | {
       kind: "space";
@@ -81,7 +90,7 @@ export function loginHref(opts: { next?: string; why?: string; what?: string }):
  * address the viewer is on at the moment of the click, so it carries the right
  * base path and theme pin, and never the viewer's kiosk or TV mode.
  */
-function CopyLink({ share }: { share: ShareTarget }) {
+function CopyLink({ share, className }: { share: ShareTarget; className?: string }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   const key = "follow" in share ? `f:${share.follow}` : `a:${share.at.tx},${share.at.ty}`;
   useEffect(() => setState("idle"), [key]);
@@ -103,7 +112,10 @@ function CopyLink({ share }: { share: ShareTarget }) {
       type="button"
       onClick={() => void copy()}
       title={"follow" in share ? "Copy a link that opens the map following this body" : "Copy a link that opens the map centred here"}
-      className="mt-2 block w-full rounded-full border border-white/15 px-4 py-3 text-center text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:py-2"
+      className={
+        className ??
+        "mt-2 block w-full rounded-full border border-white/15 px-4 py-3 text-center text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:py-2"
+      }
     >
       <span aria-live="polite">{state === "copied" ? "Link copied" : state === "failed" ? "Could not copy" : "Copy link"}</span>
     </button>
@@ -122,9 +134,12 @@ function Chip({ org }: { org: OrgBadge }) {
 export function SpectatorPeek({
   peek,
   signedIn,
+  lex,
   onClose,
 }: {
   peek: Peek;
+  /** The theme's card words: working on, walk over, follow… */
+  lex: CardLex;
   /** null while we are still finding out; the copy stays honest either way. */
   signedIn: boolean | null;
   onClose: () => void;
@@ -149,15 +164,75 @@ export function SpectatorPeek({
         </button>
       </div>
 
-      {peek.kind === "body" ? <BodyPeek peek={peek} signedIn={signedIn} /> : null}
-      {peek.kind === "space" ? <SpacePeek peek={peek} signedIn={signedIn} /> : null}
-      {peek.kind === "region" ? <RegionPeek peek={peek} signedIn={signedIn} /> : null}
-      <CopyLink share={peek.share} />
+      {peek.kind === "body" ? <BodyPeek peek={peek} signedIn={signedIn} lex={lex} /> : null}
+      {peek.kind === "space" ? <SpacePeek peek={peek} signedIn={signedIn} lex={lex} /> : null}
+      {peek.kind === "region" ? (
+        <>
+          <RegionPeek peek={peek} signedIn={signedIn} />
+          <CopyLink share={peek.share} />
+        </>
+      ) : null}
     </aside>
   );
 }
 
-function BodyPeek({ peek, signedIn }: { peek: Extract<Peek, { kind: "body" }>; signedIn: boolean | null }) {
+const ACTION =
+  "flex min-h-11 items-center justify-center rounded-full border border-white/15 px-2 py-2 text-center text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:min-h-0";
+
+/**
+ * Walk over, Follow and Copy link, in that order, on every card. Follow is not
+ * built yet (queue item 7), so it is shown switched off and says so, rather than
+ * pretending to do something.
+ */
+function CardActions({
+  walk,
+  share,
+  signedIn,
+  lex,
+}: {
+  walk: { kind: "body"; room: string; what: string } | { kind: "space"; slug: string; what: string } | null;
+  share: ShareTarget;
+  signedIn: boolean | null;
+  lex: CardLex;
+}) {
+  const target = walk ? walkOverTarget(walk, signedIn) : null;
+  return (
+    <div className="mt-3 grid grid-cols-3 gap-2">
+      {target && walk ? (
+        <a
+          href={target.needsLogin ? loginHref({ next: target.path, why: "enter-room", what: walk.what }) : gp(target.path)}
+          className={ACTION}
+        >
+          {lex.walkOver}
+        </a>
+      ) : (
+        <span aria-hidden />
+      )}
+      <button
+        type="button"
+        disabled
+        aria-disabled="true"
+        title={`${lex.follow} is coming soon`}
+        className={`${ACTION} cursor-not-allowed opacity-50 hover:border-white/15 hover:text-white/70`}
+      >
+        {lex.follow}
+        <span className="ml-1 text-[10px] text-white/40">{lex.soon}</span>
+      </button>
+      <CopyLink share={share} className={ACTION} />
+    </div>
+  );
+}
+
+function BodyPeek({
+  peek,
+  signedIn,
+  lex,
+}: {
+  peek: Extract<Peek, { kind: "body" }>;
+  signedIn: boolean | null;
+  lex: CardLex;
+}) {
+  const { card } = useCard(peek.card);
   return (
     <>
       <h2 className="font-display mt-1 text-2xl text-lantern-300">{peek.title}</h2>
@@ -176,13 +251,14 @@ function BodyPeek({ peek, signedIn }: { peek: Extract<Peek, { kind: "body" }>; s
         </ul>
       ) : null}
       {peek.url ? <p className="mt-2 break-all text-xs text-white/35">{peek.url}</p> : null}
-      {signedIn ? (
-        peek.speakable ? (
-          <p className="mt-4 text-xs text-white/45">
-            You have a body here — walk into the {peek.region} to speak to them.
-          </p>
-        ) : null
-      ) : (
+      {peek.card ? <CardFields card={card} lex={lex} compact /> : null}
+      <CardActions
+        walk={peek.speakable ? { kind: "body", room: peek.room, what: peek.region } : null}
+        share={peek.share}
+        signedIn={signedIn}
+        lex={lex}
+      />
+      {signedIn ? null : (
         <a
           href={loginHref({ next: "/enter", why: peek.speakable ? "speak" : "", what: peek.speakable ? peek.title : "" })}
           className="mt-4 block rounded-full bg-lantern-400 px-4 py-3 text-center font-semibold text-dusk-950 sm:py-2"
@@ -195,9 +271,20 @@ function BodyPeek({ peek, signedIn }: { peek: Extract<Peek, { kind: "body" }>; s
   );
 }
 
-function SpacePeek({ peek, signedIn }: { peek: Extract<Peek, { kind: "space" }>; signedIn: boolean | null }) {
+function SpacePeek({
+  peek,
+  signedIn,
+  lex,
+}: {
+  peek: Extract<Peek, { kind: "space" }>;
+  signedIn: boolean | null;
+  lex: CardLex;
+}) {
   // The server withheld the name: say that, rather than drawing a fake one.
   const redacted = !peek.slug;
+  // A redacted plot is never asked for its card: the map has no slug to ask
+  // with, and the server would answer 404 to a non-member anyway.
+  const { card } = useCard(peek.slug ? { subject: "space", ref: peek.slug } : null);
   return (
     <>
       <h2 className="font-display mt-1 text-2xl text-lantern-300">{redacted ? "Held plot" : peek.name}</h2>
@@ -207,9 +294,12 @@ function SpacePeek({ peek, signedIn }: { peek: Extract<Peek, { kind: "space" }>;
         {peek.occupancy === 1 ? "1 body inside" : `${peek.occupancy} bodies inside`}
       </p>
       {redacted ? (
-        <p className="mt-2 text-xs text-white/40">
-          Somebody claimed this ground. That much is public; its name, owner and orgs are not.
-        </p>
+        <>
+          <p className="mt-2 text-xs text-white/40">
+            Somebody claimed this ground. That much is public; its name, owner, orgs and card are not.
+          </p>
+          <CopyLink share={peek.share} />
+        </>
       ) : (
         <>
           <p className="mt-2 text-xs text-white/40">{peek.ownerHandle ? `held by @${peek.ownerHandle}` : "unowned"}</p>
@@ -220,12 +310,13 @@ function SpacePeek({ peek, signedIn }: { peek: Extract<Peek, { kind: "space" }>;
               ))}
             </p>
           ) : null}
-          <a
-            href={gp(`/spaces/${peek.slug}`)}
-            className="mt-4 block rounded-full border border-lantern-400/40 px-4 py-3 text-center text-lantern-300 sm:py-2"
-          >
-            Look at {peek.name}
-          </a>
+          <CardFields card={card} lex={lex} compact />
+          <CardActions
+            walk={{ kind: "space", slug: peek.slug!, what: peek.name ?? "" }}
+            share={peek.share}
+            signedIn={signedIn}
+            lex={lex}
+          />
         </>
       )}
       {signedIn ? null : (
