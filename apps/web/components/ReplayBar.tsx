@@ -7,6 +7,7 @@ import {
   REPLAY_SPEEDS,
   previousVisit,
   replayClock,
+  replayWindowLabel,
   type ReplayController,
   type ReplayView,
 } from "@/lib/replay/controller";
@@ -234,7 +235,7 @@ export function ReplayBar({ controller }: { controller: ReplayController }) {
         </div>
         <span className="tabular-nums text-amber-200">{replayClock(view.playhead)}</span>
         <span className="text-white/35">
-          {replayClock(view.since)}–{replayClock(view.until)} UTC
+          {replayWindowLabel(view.since, view.until)} UTC
         </span>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button

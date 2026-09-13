@@ -193,6 +193,17 @@ export function replayClock(ms: number, now: number = Date.now()): string {
 }
 
 /**
+ * The replay window as one label. Each end drops its date only when it is today,
+ * so a "last day" window read "Sept 12 14:49–14:49" — a day that looked like a
+ * minute. When the ends fall on different UTC days, both carry their date.
+ */
+export function replayWindowLabel(since: number, until: number, now: number = Date.now()): string {
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  if (day(since) === day(until)) return `${replayClock(since, now)}–${replayClock(until, now)}`;
+  return `${replayClock(since, until)}–${replayClock(until, since)}`;
+}
+
+/**
  * "Since my last visit", per browser. The value that matters is the one from
  * BEFORE this page load, so it is read once and kept, and only then is the
  * clock started that stamps this visit (every minute and when the tab hides).
