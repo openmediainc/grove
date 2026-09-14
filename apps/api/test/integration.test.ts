@@ -9,6 +9,7 @@ import {
   hasTestDatabase,
   isTestDatabase,
   TEST_DB_SUFFIX,
+  testClient,
   warnIfNotTestDatabase,
 } from "@grove/domain/test-support";
 import { buildApp } from "../src/create-app.js";
@@ -23,6 +24,9 @@ import { buildApp } from "../src/create-app.js";
 // domain suites: packages/domain/test/support/fixtures.ts. Compose with it.
 const DATABASE_URL = process.env.DATABASE_URL ?? "";
 const hasDb = hasTestDatabase();
+// This file's own address. Registration resets exactly its window, never a
+// pattern over every address: a wildcard delete wipes files running alongside.
+const client = testClient("integration");
 warnIfNotTestDatabase("integration suite");
 
 // Wire shapes for the space-access and org routes. The API answers snake_case.
@@ -87,8 +91,7 @@ describe.skipIf(!hasDb)("api integration", () => {
     await migrate(config.databaseUrl);
     const pg = createPool(config.databaseUrl);
     const redis = new Redis(config.redisUrl);
-    const leftover = await redis.keys("ratelimit:ip:*:register:*");
-    if (leftover.length) await redis.del(...leftover);
+    await client.reset(redis);
     grove = new GroveApp(pg, redis, config);
     app = await buildApp(grove);
     return app;
@@ -196,11 +199,11 @@ describe.skipIf(!hasDb)("api integration", () => {
     const cookieHeader = Array.isArray(cookie) ? cookie[0] : cookie;
     trackHuman((consumed.json() as { human: { id: string } }).human.id, cookieHeader);
 
-    const uniqueIp = `203.0.113.${Date.now() % 250}`;
+    await client.reset(grove!.store.redis);
     const reg = await server.inject({
       method: "POST",
       url: "/api/v1/agents/register",
-      headers: { "x-forwarded-for": uniqueIp },
+      headers: client.headers,
       payload: { name: "scribe", description: "listen-only" },
     });
     expect(reg.statusCode).toBe(200);
@@ -671,11 +674,11 @@ describe.skipIf(!hasDb)("api integration", () => {
     const cookie = consumed.headers["set-cookie"];
     const cookieHeader = Array.isArray(cookie) ? cookie[0] : cookie;
     trackHuman((consumed.json() as { human: { id: string } }).human.id, cookieHeader);
-    const uniqueIp = `203.0.113.${(Date.now() % 200) + 1}`;
+    await client.reset(grove!.store.redis);
     const reg = await server.inject({
       method: "POST",
       url: "/api/v1/agents/register",
-      headers: { "x-forwarded-for": uniqueIp },
+      headers: client.headers,
       payload: { name: "awnbot", description: "bridge" },
     });
     const regBody = reg.json() as { agent_id: string; api_key: string };
@@ -711,18 +714,16 @@ describe.skipIf(!hasDb)("api integration", () => {
 
   // --- world scope: the x-grove-world header is a request, not a grant -------
 
-  let ipCounter = 0;
-
   async function registerAgent(
     server: Awaited<ReturnType<typeof buildApp>>,
     name: string,
   ): Promise<{ id: string; apiKey: string }> {
-    // A fresh IP per registration: the limiter allows only 3 per IP per hour.
-    const ip = `198.51.100.${(ipCounter++ % 250) + 1}`;
+    // The limiter allows 3 per address an hour; this file owns its address, so it resets it.
+    await client.reset(grove!.store.redis);
     const reg = await server.inject({
       method: "POST",
       url: "/api/v1/agents/register",
-      headers: { "x-forwarded-for": ip },
+      headers: client.headers,
       payload: { name },
     });
     expect(reg.statusCode).toBe(200);

@@ -5,11 +5,15 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import Redis from "ioredis";
-import { GroveApp, createPool, guestIdForToken, guestIpBucket, loadConfig, migrate } from "@grove/domain";
-import { assertTestDatabase, createFixtures, hasTestDatabase, warnIfNotTestDatabase } from "@grove/domain/test-support";
+import type { InjectOptions } from "fastify";
+import { GroveApp, createPool, guestIdForToken, loadConfig, migrate } from "@grove/domain";
+import { assertTestDatabase, createFixtures, hasTestDatabase, testClient, warnIfNotTestDatabase } from "@grove/domain/test-support";
 import { buildApp } from "../src/create-app.js";
 
 const hasDb = hasTestDatabase();
+// Every request in this file comes from its own address, so its guest issue
+// and act windows are nobody else's (a bare inject() shares 127.0.0.1).
+const client = testClient("guestsRoutes");
 warnIfNotTestDatabase("guest routes suite");
 
 function cookiesOf(res: { headers: Record<string, unknown> }): string[] {
@@ -54,10 +58,14 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
     }
   });
 
-  /** inject() arrives from 127.0.0.1; clear that network's issue and act windows between steps. */
+  /** Clear this file's own issue and act windows between steps. Exact keys, never a pattern. */
   async function clearGuestLimits() {
-    const b = guestIpBucket("127.0.0.1");
-    for (const key of await redis.keys(`ratelimit:guestip:${b}:*`)) await redis.del(key);
+    await client.reset(redis);
+  }
+
+  /** app.inject() from this file's own address. */
+  function inject(opts: InjectOptions) {
+    return app.inject({ ...opts, headers: { ...client.headers, ...(opts.headers ?? {}) } });
   }
 
   function track(setCookie: string): string {
@@ -69,13 +77,13 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
 
   async function signIn(tagName: string, extraCookie?: string) {
     const local = `${tagName}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    const magic = await app.inject({
+    const magic = await inject({
       method: "POST",
       url: "/api/v1/humans/session",
       payload: { email: `${local}@example.com`, invite_code: "grove-alpha", age_attested: true },
     });
     const token = new URL((magic.json() as { dev_login_url?: string }).dev_login_url ?? "http://x?token=").searchParams.get("token");
-    const consumed = await app.inject({
+    const consumed = await inject({
       method: "POST",
       url: "/api/v1/humans/session/consume",
       payload: { token },
@@ -101,14 +109,14 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
     const eventId = await arrivalOf(newcomer.id);
 
     const views = await Promise.all([
-      app.inject({ method: "GET", url: "/api/v1/chronicle" }),
-      app.inject({ method: "GET", url: "/api/v1/world/minimap" }),
-      app.inject({ method: "GET", url: "/api/v1/guest" }),
+      inject({ method: "GET", url: "/api/v1/chronicle" }),
+      inject({ method: "GET", url: "/api/v1/world/minimap" }),
+      inject({ method: "GET", url: "/api/v1/guest" }),
     ]);
     for (const v of views) expect(guestCookie(v)).toBeNull();
     expect(views[2]!.statusCode).toBe(401);
 
-    const missing = await app.inject({
+    const missing = await inject({
       method: "POST",
       url: "/api/v1/reactions",
       payload: { target_kind: "event", target_id: "999999999999", emoji: "up" },
@@ -116,14 +124,14 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
     expect(missing.statusCode).toBe(404);
     expect(guestCookie(missing)).toBeNull();
 
-    const removeWithout = await app.inject({
+    const removeWithout = await inject({
       method: "POST",
       url: "/api/v1/reactions",
       payload: { target_kind: "event", target_id: eventId, emoji: "up", on: false },
     });
     expect(removeWithout.statusCode).toBe(401);
 
-    const badKey = await app.inject({
+    const badKey = await inject({
       method: "POST",
       url: "/api/v1/reactions",
       headers: { authorization: "Bearer aeth_live_nope" },
@@ -132,7 +140,7 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
     expect(badKey.statusCode).toBe(401);
     expect(guestCookie(badKey)).toBeNull();
 
-    const ok = await app.inject({
+    const ok = await inject({
       method: "POST",
       url: "/api/v1/reactions",
       payload: { target_kind: "event", target_id: eventId, emoji: "party" },
@@ -146,7 +154,7 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
     const cookie = track(set!);
 
     // The chronicle shows the guest its own reaction.
-    const page = await app.inject({ method: "GET", url: `/api/v1/chronicle?types=actor_registered&limit=100`, headers: { cookie } });
+    const page = await inject({ method: "GET", url: `/api/v1/chronicle?types=actor_registered&limit=100`, headers: { cookie } });
     const entry = (page.json() as { entries: Array<{ id: string; reactions: { mine: string[] } | null }> }).entries.find(
       (e) => e.id === eventId,
     );
@@ -162,7 +170,7 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
       [open, "public_view"],
       [shut, "private"],
     ] as const) {
-      const created = await app.inject({
+      const created = await inject({
         method: "POST",
         url: "/api/v1/worlds",
         headers: { cookie: owner.cookie },
@@ -172,44 +180,44 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
       fixtures.trackWorld((created.json() as { world: { id: string } }).world.id);
     }
 
-    const privateTry = await app.inject({ method: "PUT", url: `/api/v1/follows/spaces/${shut}` });
+    const privateTry = await inject({ method: "PUT", url: `/api/v1/follows/spaces/${shut}` });
     expect(privateTry.statusCode).toBe(404);
     expect(guestCookie(privateTry)).toBeNull();
 
-    const follow = await app.inject({ method: "PUT", url: `/api/v1/follows/spaces/${open}` });
+    const follow = await inject({ method: "PUT", url: `/api/v1/follows/spaces/${open}` });
     expect(follow.statusCode).toBe(200);
     expect(follow.json()).toMatchObject({ as_guest: true, follow: { following: true, followers: 1 } });
     const cookie = track(guestCookie(follow)!);
 
-    const state = await app.inject({ method: "GET", url: `/api/v1/follows/spaces/${open}`, headers: { cookie } });
+    const state = await inject({ method: "GET", url: `/api/v1/follows/spaces/${open}`, headers: { cookie } });
     expect((state.json() as { follow: unknown }).follow).toMatchObject({ following: true });
-    const mine = await app.inject({ method: "GET", url: "/api/v1/guest", headers: { cookie } });
+    const mine = await inject({ method: "GET", url: "/api/v1/guest", headers: { cookie } });
     expect(mine.statusCode).toBe(200);
     expect((mine.json() as { guest: { follows: Array<{ slug: string }> } }).guest.follows.map((f) => f.slug)).toEqual([open]);
 
     // Everything else answers as it does to anyone signed out.
     const refused = await Promise.all([
-      app.inject({ method: "POST", url: "/api/v1/say", headers: { cookie }, payload: { channel: "room_say", body: "hi", idempotency_key: `g-${tag()}` } }),
-      app.inject({ method: "POST", url: "/api/v1/messages", headers: { cookie }, payload: { to: owner.id, body: "hi" } }),
-      app.inject({ method: "POST", url: "/api/v1/worlds", headers: { cookie }, payload: { name: "Nope", slug: `nope-${tag()}` } }),
-      app.inject({ method: "GET", url: "/api/v1/follows/notices", headers: { cookie } }),
-      app.inject({ method: "GET", url: "/api/v1/humans/me", headers: { cookie } }),
+      inject({ method: "POST", url: "/api/v1/say", headers: { cookie }, payload: { channel: "room_say", body: "hi", idempotency_key: `g-${tag()}` } }),
+      inject({ method: "POST", url: "/api/v1/messages", headers: { cookie }, payload: { to: owner.id, body: "hi" } }),
+      inject({ method: "POST", url: "/api/v1/worlds", headers: { cookie }, payload: { name: "Nope", slug: `nope-${tag()}` } }),
+      inject({ method: "GET", url: "/api/v1/follows/notices", headers: { cookie } }),
+      inject({ method: "GET", url: "/api/v1/humans/me", headers: { cookie } }),
     ]);
     expect(refused.map((r) => r.statusCode)).toEqual([401, 401, 401, 401, 401]);
 
     // Forget this browser: the guest and its follow are gone.
-    const forget = await app.inject({ method: "DELETE", url: "/api/v1/guest", headers: { cookie } });
+    const forget = await inject({ method: "DELETE", url: "/api/v1/guest", headers: { cookie } });
     expect(forget.json()).toMatchObject({ forgotten: true });
-    const after = await app.inject({ method: "GET", url: `/api/v1/follows/spaces/${open}` });
+    const after = await inject({ method: "GET", url: `/api/v1/follows/spaces/${open}` });
     expect((after.json() as { follow: unknown }).follow).toMatchObject({ followers: 0 });
-    expect((await app.inject({ method: "GET", url: "/api/v1/guest", headers: { cookie } })).statusCode).toBe(401);
+    expect((await inject({ method: "GET", url: "/api/v1/guest", headers: { cookie } })).statusCode).toBe(401);
   });
 
   it("merges the guest into the person who signs in from that browser, and clears the cookie", async () => {
     await clearGuestLimits();
     const owner = await signIn("gstmown");
     const slug = `gmerge-${tag()}`;
-    const created = await app.inject({
+    const created = await inject({
       method: "POST",
       url: "/api/v1/worlds",
       headers: { cookie: owner.cookie },
@@ -218,9 +226,9 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
     fixtures.trackWorld((created.json() as { world: { id: string } }).world.id);
     const eventId = await arrivalOf(owner.id);
 
-    const follow = await app.inject({ method: "PUT", url: `/api/v1/follows/spaces/${slug}` });
+    const follow = await inject({ method: "PUT", url: `/api/v1/follows/spaces/${slug}` });
     const cookie = track(guestCookie(follow)!);
-    const react = await app.inject({
+    const react = await inject({
       method: "POST",
       url: "/api/v1/reactions",
       headers: { cookie },
@@ -234,13 +242,13 @@ describe.skipIf(!hasDb)("guest pass routes", () => {
     const cleared = cookiesOf(person.consumed).find((c) => c.startsWith("grove_guest="));
     expect(cleared).toMatch(/^grove_guest=;/);
 
-    const mine = await app.inject({ method: "GET", url: "/api/v1/follows", headers: { cookie: person.cookie } });
+    const mine = await inject({ method: "GET", url: "/api/v1/follows", headers: { cookie: person.cookie } });
     expect((mine.json() as { follows: Array<{ slug: string }> }).follows.map((f) => f.slug)).toEqual([slug]);
-    const page = await app.inject({ method: "GET", url: `/api/v1/chronicle?types=actor_registered&limit=100`, headers: { cookie: person.cookie } });
+    const page = await inject({ method: "GET", url: `/api/v1/chronicle?types=actor_registered&limit=100`, headers: { cookie: person.cookie } });
     const entry = (page.json() as { entries: Array<{ id: string; reactions: { counts: Record<string, number>; mine: string[] } | null }> }).entries.find(
       (e) => e.id === eventId,
     );
     expect(entry?.reactions).toEqual({ counts: { heart: 1 }, mine: ["heart"] });
-    expect((await app.inject({ method: "GET", url: "/api/v1/guest", headers: { cookie } })).statusCode).toBe(401);
+    expect((await inject({ method: "GET", url: "/api/v1/guest", headers: { cookie } })).statusCode).toBe(401);
   });
 });

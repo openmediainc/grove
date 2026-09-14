@@ -5,7 +5,11 @@
 #
 #   pnpm test:soak                      # 20 full runs against soak_test
 #   pnpm test:soak 50 civic-rooms       # 50 runs, vitest file filter
-#   SOAK_DB=mine_test SOAK_REDIS_URL=redis://localhost:6379/9 pnpm test:soak 30
+#   SOAK_DB=mine_test pnpm test:soak 30   # parallel soaks: give each its own SOAK_DB
+#
+# Redis: each run claims its own logical db through infra/test-db.sh, so two
+# soaks from two worktrees cannot share rate-limit windows. SOAK_REDIS_URL pins
+# one instead (no claim; only for a db you know is free).
 #
 # Extra args go to vitest in every package (with --passWithNoTests, so a filter
 # that matches nothing in one package is not an error there).
@@ -20,7 +24,7 @@ case "$RUNS" in ''|*[!0-9]*) echo "usage: soak.sh [runs] [vitest args...]" >&2; 
 
 # Never the shared default: a soak hammers its database, so it gets its own.
 export GROVE_TEST_DB="${SOAK_DB:-soak_test}"
-export GROVE_TEST_REDIS_URL="${SOAK_REDIS_URL:-redis://localhost:6379/2}"
+if [ -n "${SOAK_REDIS_URL:-}" ]; then export GROVE_TEST_REDIS_URL="$SOAK_REDIS_URL"; else unset GROVE_TEST_REDIS_URL; fi
 DIR="${SOAK_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/grove-soak.XXXXXX")}"
 mkdir -p "$DIR"
 
@@ -30,7 +34,7 @@ mkdir -p "$DIR"
 # so test-db.sh leaves it out whenever it is handed arguments.
 if [ $# -gt 0 ]; then set -- -- --passWithNoTests "$@"; fi
 
-echo "soak: $RUNS runs, db=$GROVE_TEST_DB redis=$GROVE_TEST_REDIS_URL logs=$DIR"
+echo "soak: $RUNS runs, db=$GROVE_TEST_DB redis=${GROVE_TEST_REDIS_URL:-claimed per run} logs=$DIR"
 red=0
 for i in $(seq 1 "$RUNS"); do
   log="$DIR/run-$i.log"

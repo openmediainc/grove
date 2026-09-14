@@ -8,11 +8,13 @@
 import { afterAll, describe, expect, it } from "vitest";
 import Redis from "ioredis";
 import { GroveApp, createPool, loadConfig, migrate, trialProofFor } from "@grove/domain";
-import { assertTestDatabase, createFixtures, hasTestDatabase, warnIfNotTestDatabase } from "@grove/domain/test-support";
+import { assertTestDatabase, createFixtures, hasTestDatabase, testClient, warnIfNotTestDatabase } from "@grove/domain/test-support";
 import { buildApp } from "../src/create-app.js";
 
 const hasDb = hasTestDatabase();
 warnIfNotTestDatabase("trials routes suite");
+// This file's own address: its register and guest-cheer windows are nobody else's.
+const client = testClient("trialsRoutes");
 
 describe.skipIf(!hasDb)("trial routes", () => {
   let app: Awaited<ReturnType<typeof buildApp>> | undefined;
@@ -27,6 +29,7 @@ describe.skipIf(!hasDb)("trial routes", () => {
     const pg = createPool(config.databaseUrl);
     const redis = new Redis(config.redisUrl);
     grove = new GroveApp(pg, redis, config);
+    await client.reset(redis);
     app = await buildApp(grove);
     return app;
   }
@@ -56,13 +59,12 @@ describe.skipIf(!hasDb)("trial routes", () => {
     return { id, cookie };
   }
 
-  let ipOctet = 0;
   async function agent(server: Server, owner: { cookie: string }) {
-    ipOctet += 1;
+    await client.reset(grove!.store.redis);
     const reg = await server.inject({
       method: "POST",
       url: "/api/v1/agents/register",
-      headers: { "x-forwarded-for": `203.0.113.${((Date.now() + ipOctet * 37) % 200) + 20}` },
+      headers: client.headers,
       payload: { name: `trialr${Math.random().toString(36).slice(2, 7)}`, description: "trial routes" },
     });
     expect(reg.statusCode).toBe(200);
@@ -176,7 +178,7 @@ describe.skipIf(!hasDb)("trial routes", () => {
     const cheer = await server.inject({
       method: "POST",
       url: "/api/v1/reactions",
-      headers: { "x-forwarded-for": "203.0.113.250" },
+      headers: client.headers,
       payload: { target_kind: "event", target_id: finish.event_id, emoji: "party" },
     });
     expect(cheer.statusCode).toBe(200);

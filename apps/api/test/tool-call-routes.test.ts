@@ -7,10 +7,12 @@
 import { afterAll, describe, expect, it } from "vitest";
 import Redis from "ioredis";
 import { GroveApp, createPool, loadConfig, migrate } from "@grove/domain";
-import { assertTestDatabase, createFixtures, hasTestDatabase, warnIfNotTestDatabase } from "@grove/domain/test-support";
+import { assertTestDatabase, createFixtures, hasTestDatabase, testClient, warnIfNotTestDatabase } from "@grove/domain/test-support";
 import { buildApp } from "../src/create-app.js";
 
 const hasDb = hasTestDatabase();
+// This file's own address, so its register window is nobody else's.
+const client = testClient("toolCallRoutes");
 warnIfNotTestDatabase("tool-call routes suite");
 
 describe.skipIf(!hasDb)("tool-call routes", () => {
@@ -49,10 +51,11 @@ describe.skipIf(!hasDb)("tool-call routes", () => {
     const raw = consumed.headers["set-cookie"];
     const cookie = (Array.isArray(raw) ? raw[0] : raw) ?? "";
     fixtures.trackHuman((consumed.json() as { human: { id: string } }).human.id, cookie);
+    await client.reset(grove!.store.redis);
     const reg = await server.inject({
       method: "POST",
       url: "/api/v1/agents/register",
-      headers: { "x-forwarded-for": `198.51.100.${(Date.now() % 200) + 20}` },
+      headers: client.headers,
       payload: { name: `spans${local.slice(-4)}`, description: "tool-call routes" },
     });
     expect(reg.statusCode).toBe(200);

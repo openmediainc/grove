@@ -154,22 +154,37 @@ describe.skipIf(!hasDb)("ops overview against the database", () => {
   });
 
   it("buckets rows into trailing 24h windows in one statement", async () => {
-    const before = await grove.ops.metrics();
-    // Six faults in the last 24h, three 1.5 days ago, two 9 days ago (outside every window).
-    const at = (hours: number, n: number) =>
-      Array.from({ length: n }, () =>
-        pg.query(
-          `INSERT INTO world_events (type, actor_id, payload, created_at)
-           VALUES ('agent_phase', $1, '{"verb":"error"}'::jsonb, now() - make_interval(hours => $2))`,
-          [actor, hours],
-        ),
-      );
-    await Promise.all([...at(2, 6), ...at(36, 3), ...at(24 * 9, 2)]);
-    const after = await grove.ops.metrics();
-    // Other suites write to the same ledger in parallel, so assert at least our rows.
-    expect(after.agent_faults!.current - before.agent_faults!.current).toBeGreaterThanOrEqual(6);
-    expect(after.agent_faults!.previous - before.agent_faults!.previous).toBeGreaterThanOrEqual(3);
-    expect(after.agent_faults!.days).toHaveLength(8);
+    // One REPEATABLE READ snapshot, rolled back. Other suites insert AND delete
+    // agent_phase rows in parallel (fixture cleanup), so a before/after pair on
+    // the pool can see fewer rows after than before — the old flake. Inside
+    // the snapshot only this transaction's own writes move the counts, and
+    // now() is fixed, so the windows cannot slide between the two reads.
+    const client = await pg.connect();
+    try {
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      const read = async () => metricsFromRows((await client.query(opsMetricsSql())).rows);
+      const before = await read();
+      // Six faults in the last 24h, three 1.5 days ago, two 9 days ago (outside every window).
+      for (const [hours, n] of [[2, 6], [36, 3], [24 * 9, 2]] as const) {
+        for (let i = 0; i < n; i++) {
+          await client.query(
+            `INSERT INTO world_events (type, actor_id, payload, created_at)
+             VALUES ('agent_phase', $1, '{"verb":"error"}'::jsonb, now() - make_interval(hours => $2))`,
+            [actor, hours],
+          );
+        }
+      }
+      const after = await read();
+      expect(after.agent_faults!.current - before.agent_faults!.current).toBe(6);
+      expect(after.agent_faults!.previous - before.agent_faults!.previous).toBe(3);
+      expect(after.agent_faults!.days).toHaveLength(8);
+      expect(after.agent_faults!.days.reduce((a, b) => a + b, 0) - before.agent_faults!.days.reduce((a, b) => a + b, 0)).toBe(9);
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+    // And the service runs the same statement on the pool.
+    expect((await grove.ops.metrics()).agent_faults!.days).toHaveLength(8);
   });
 
   it("every metric's range filter has an index that leads with it (031)", async () => {

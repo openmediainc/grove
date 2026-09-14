@@ -8,10 +8,12 @@ import zlib from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import Redis from "ioredis";
 import { GroveApp, createPool, loadConfig, migrate } from "@grove/domain";
-import { assertTestDatabase, createFixtures, hasTestDatabase, warnIfNotTestDatabase } from "@grove/domain/test-support";
+import { assertTestDatabase, createFixtures, hasTestDatabase, testClient, warnIfNotTestDatabase } from "@grove/domain/test-support";
 import { buildApp } from "../src/create-app.js";
 
 const hasDb = hasTestDatabase();
+// This file's own address, so its register window is nobody else's.
+const client = testClient("boardRoutes");
 warnIfNotTestDatabase("board routes suite");
 
 function tinyPng(): Buffer {
@@ -89,13 +91,12 @@ describe.skipIf(!hasDb)("board routes", () => {
     return { cookie, id: human.id };
   }
 
-  let ipOctet = 0;
   async function agentFor(owner: { cookie: string }) {
-    ipOctet += 1;
+    await client.reset(redis);
     const reg = await app.inject({
       method: "POST",
       url: "/api/v1/agents/register",
-      headers: { "x-forwarded-for": `198.51.100.${((Date.now() + ipOctet * 41) % 200) + 20}` },
+      headers: client.headers,
       payload: { name: `boardr${Math.random().toString(36).slice(2, 7)}`, description: "board routes" },
     });
     expect(reg.statusCode).toBe(200);

@@ -147,6 +147,18 @@ in `afterEach`/`afterAll`, and compose with it rather than growing another copy 
 if you need a table it does not sweep, add it to `cleanupSteps` in foreign-key
 order and every suite gains it at once.
 
+**Parallel runs and limiter isolation.** Several worktrees can run
+`GROVE_TEST_DB=<name>_test pnpm test:safe` at once: each run gets its own
+Postgres database *and* claims its own Redis logical db (3..15, released on
+exit; see the header of `infra/test-db.sh`). Inside one run, vitest runs files
+in parallel on that one Redis db, so every file that registers agents or acts as
+a guest owns a client address: `testClient("<name>")` from the test-support
+module (a `REGISTER_IPS` entry) gives it `headers` for `inject()` and a
+`reset(redis)` that deletes exactly that address's limiter keys. Never send a
+hand-picked `x-forwarded-for`, never clear `ratelimit:ip:*`-style patterns;
+`packages/domain/test/test-isolation.test.ts` fails the build if you do.
+Prove a fix with `pnpm test:soak 5` (give parallel soaks distinct `SOAK_DB`s).
+
 Policy golden tests always run and need no database.
 
 Load harness (not in `pnpm test`; 50 humans + 50 agents; p95 gate 1500ms — production SLO is 150ms on staging hardware):

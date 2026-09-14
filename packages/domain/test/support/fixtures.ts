@@ -24,6 +24,7 @@
  */
 import type { Pool } from "pg";
 import type Redis from "ioredis";
+import { guestIpBucket } from "../../src/services/guests.js";
 
 // ---------------------------------------------------------------------------
 // The *_test database guard.
@@ -135,13 +136,57 @@ export const REGISTER_IPS = {
   tables: "10.99.22.1",
   tablesRoutes: "10.99.22.2",
   effectivePermissionsRoutes: "10.99.23.1",
+  integration: "10.99.24.1",
+  toolCallRoutes: "10.99.25.1",
+  guestsRoutes: "10.99.26.1",
   replayCheckpoints: "10.99.63.1",
 } as const;
+
+export type TestClientName = keyof typeof REGISTER_IPS;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */
 export async function clearRegisterLimiter(redis: Redis, ip: string): Promise<void> {
   await redis.del(`ratelimit:ip:${ip}:register:hour`);
   await redis.del(`ratelimit:ip:${ip}:register:day`);
+}
+
+/**
+ * Every limiter window keyed by a client address: registration (by address)
+ * and the guest windows (by `guestIpBucket(address)`). Exact keys, never a
+ * pattern, so clearing them cannot touch a file running alongside.
+ */
+export function clientLimiterKeys(ip: string): string[] {
+  const bucket = guestIpBucket(ip);
+  return [
+    `ratelimit:ip:${ip}:register:hour`,
+    `ratelimit:ip:${ip}:register:day`,
+    `ratelimit:guestip:${bucket}:issue:hour`,
+    `ratelimit:guestip:${bucket}:act:min`,
+    `ratelimit:guestip:${bucket}:follow_state:min`,
+  ];
+}
+
+/**
+ * A test file's private client (queue #71). Requests carry the file's own
+ * address, so its register window (3 an hour) and its guest windows (10 passes
+ * an hour, 60 acts a minute) are its alone. inject() arrives from 127.0.0.1 and
+ * the API trusts `x-forwarded-for` from loopback, so the header IS the address.
+ *
+ * A file that sends a guest act or a registration WITHOUT these headers shares
+ * 127.0.0.1 with every other such file — the flake this exists to end.
+ * `reset()` clears exactly this address's windows: call it before a file's
+ * first request and before any step that would otherwise count towards a
+ * limit across runs (a soak runs the suite many times inside one hour).
+ */
+export function testClient(name: TestClientName) {
+  const ip = REGISTER_IPS[name];
+  return {
+    ip,
+    headers: { "x-forwarded-for": ip } as Record<string, string>,
+    async reset(redis: Redis): Promise<void> {
+      await redis.del(...clientLimiterKeys(ip));
+    },
+  };
 }
 
 /** Clear the per-actor limiters so back-to-back fixtures don't trip them. */

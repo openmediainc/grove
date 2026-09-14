@@ -6,11 +6,21 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import Redis from "ioredis";
-import { GroveApp, createPool, guestIdForToken, guestIpBucket, loadConfig, migrate } from "@grove/domain";
-import { assertTestDatabase, clearRegisterLimiter, createFixtures, hasTestDatabase, REGISTER_IPS, warnIfNotTestDatabase } from "@grove/domain/test-support";
+import { GroveApp, createPool, guestIdForToken, loadConfig, migrate } from "@grove/domain";
+import {
+  assertTestDatabase,
+  clearRegisterLimiter,
+  createFixtures,
+  hasTestDatabase,
+  REGISTER_IPS,
+  testClient,
+  warnIfNotTestDatabase,
+} from "@grove/domain/test-support";
 import { buildApp } from "../src/create-app.js";
 
 const hasDb = hasTestDatabase();
+// This file's own address: the guest pass it mints counts against nobody else's window.
+const client = testClient("privateActivityRoutes");
 warnIfNotTestDatabase("private activity routes suite");
 
 describe.skipIf(!hasDb)("private activity routes", { timeout: 60_000 }, () => {
@@ -62,9 +72,8 @@ describe.skipIf(!hasDb)("private activity routes", { timeout: 60_000 }, () => {
 
   /** A guest pass, issued the only way one is: by following something public. */
   async function guestCookie(publicSlug: string): Promise<string> {
-    const b = guestIpBucket("127.0.0.1");
-    for (const key of await redis.keys(`ratelimit:guestip:${b}:*`)) await redis.del(key);
-    const res = await app.inject({ method: "PUT", url: `/api/v1/follows/spaces/${publicSlug}` });
+    await client.reset(redis);
+    const res = await app.inject({ method: "PUT", url: `/api/v1/follows/spaces/${publicSlug}`, headers: client.headers });
     expect(res.statusCode).toBe(200);
     const raw = res.headers["set-cookie"];
     const set = (Array.isArray(raw) ? raw : [raw]).map(String).find((c) => c.startsWith("grove_guest="))!;

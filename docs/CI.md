@@ -34,8 +34,10 @@ CI does exactly that, and needs no `.env` to do it:
 - `DATABASE_URL` and `REDIS_URL` are set as job `env`, which is the whole of the
   configuration the suite needs — everything else in `packages/domain/src/config.ts`
   falls back to a safe default;
-- `REDIS_URL` uses logical db 1, matching `infra/test-db.sh`, so test sessions
-  and rate limits never share a keyspace;
+- `REDIS_URL` uses logical db 1, apart from live db 0, so test sessions and
+  rate limits never share a keyspace with live (locally `infra/test-db.sh`
+  claims a per-run db in 3..15 instead, because several worktrees run at once
+  on one Redis; a CI runner has its own Redis, so db 1 is fine there);
 - a step asserts the database name ends in `_test` **before** the suite runs, so
   a mistyped url fails the build instead of silently skipping every
   database-backed test and reporting a green run that proved nothing. A second
