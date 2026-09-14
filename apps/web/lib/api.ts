@@ -7,10 +7,11 @@ export const WS_ORIGIN =
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(gp(path), {
     ...init,
-    // Only a request with a body says it is JSON: the API used to refuse a
-    // bodiless DELETE/POST that still carried the header (board Delete 500'd).
+    // Every write says JSON, body or not: the API reads an empty JSON body as
+    // none (it used to refuse it, so board Delete 500'd), while a bodiless
+    // POST with no content-type reached Fastify as an unsupported media type.
     headers: {
-      ...(init?.body != null ? { "content-type": "application/json" } : {}),
+      ...(init?.body != null || (init?.method && !/^(GET|HEAD)$/i.test(init.method)) ? { "content-type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },
     credentials: "include",

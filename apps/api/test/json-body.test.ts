@@ -31,6 +31,16 @@ describe("JSON bodies", () => {
     }
   });
 
+  it("a bare write with no content-type, even chunked, is no body; a stray body is 415", async () => {
+    const plain = await app.inject({ method: "POST", url: "/thing" });
+    expect(plain.statusCode).toBe(200);
+    const chunked = await app.inject({ method: "POST", url: "/thing", headers: { "transfer-encoding": "chunked" }, payload: "" });
+    expect(chunked.statusCode).toBe(200);
+    const stray = await app.inject({ method: "POST", url: "/thing", headers: { "content-type": "application/xml" }, payload: "<a/>" });
+    expect(stray.statusCode).toBe(415);
+    expect(stray.json().error.code).toBe("INVALID");
+  });
+
   it("a real body still parses", async () => {
     const res = await app.inject({ method: "POST", url: "/thing", payload: { a: 1 } });
     expect(res.json()).toEqual({ ok: true, body: { a: 1 } });

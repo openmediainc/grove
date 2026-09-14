@@ -469,6 +469,16 @@ export function installJsonBodyParser(app: FastifyInstance): void {
     }
     parse(req, text, done);
   });
+  // No content-type, or one nobody parses: an empty body is still no body (a
+  // bare `POST` arrives chunked through Vercel, which Fastify refused as 415).
+  // Anything non-empty keeps the 415 it always got.
+  app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => {
+    if (body.length === 0) {
+      done(null, undefined);
+      return;
+    }
+    done(Object.assign(new Error("Unsupported Media Type"), { statusCode: 415 }), undefined);
+  });
 }
 
 export function sendOk(reply: FastifyReply, data: Record<string, unknown>, status = 200) {

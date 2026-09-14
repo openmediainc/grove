@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../lib/api";
 
-// #57: a bodiless DELETE carried content-type: application/json and the API
-// refused it, so board Delete failed from the page.
+// #57: board Delete failed from the page (empty JSON body refused by the API).
 describe("api() headers", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -15,10 +14,12 @@ describe("api() headers", () => {
     return calls;
   }
 
-  it("sends no JSON content-type without a body", async () => {
+  it("a GET says nothing; a bodiless write still says JSON (the API reads it as no body)", async () => {
     const calls = stub();
-    await api("/api/v1/board/posts/x", { method: "DELETE" });
+    await api("/api/v1/world");
     expect(new Headers(calls[0]!.headers).has("content-type")).toBe(false);
+    await api("/api/v1/board/posts/x", { method: "DELETE" });
+    expect(new Headers(calls[1]!.headers).get("content-type")).toBe("application/json");
   });
 
   it("marks a body as JSON, and a caller's header still wins", async () => {
