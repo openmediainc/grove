@@ -18,6 +18,8 @@ import { RefusalNotice, toRefusalInput } from "@/components/RefusalNotice";
 import { RoomSignpost, type SignpostRoom } from "@/components/RoomSignpost";
 import { StageTrial } from "@/components/StageTrial";
 import { RoomTables } from "@/components/RoomTables";
+import { ReadAloudControl, useReadAloud } from "@/components/ReadAloud";
+import type { HeardEntry } from "@/lib/read-aloud";
 import {
   CIVIC_CORE_WORLD_ID,
   RoomPresence,
@@ -159,6 +161,10 @@ export function RoomDrawer(props: RoomDrawerProps) {
   const [socketLive, setSocketLive] = useState(false);
   /** Bumped by a `table_update` frame on the room socket: the tables section re-reads (#42). */
   const [tableTick, setTableTick] = useState(0);
+  /** The room whose transcript has loaded, so read aloud treats what was already said as history. */
+  const [transcriptFor, setTranscriptFor] = useState<string | null>(null);
+  /** Lines the server hid from this viewer after sending them (a mute): never shown, never read aloud. */
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const asSpectator = signedIn === false || spectator;
 
@@ -190,6 +196,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
     setRefusal(null);
     setErr(null);
     setSpectator(false);
+    setTranscriptFor(null);
   }, [room]);
 
   /** The room this drawer is on now, so a slow read for the last room lands nowhere. */
@@ -205,6 +212,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
     const t = await api<{ transcript: TranscriptLine[] }>(`/api/v1/rooms/${r.room.slug}/transcript`);
     if (roomRef.current !== asked) return;
     setLines(t.transcript);
+    setTranscriptFor(asked);
     const whispersAsked = Date.now();
     void fetchWhisperHistory(r.room.slug)
       .then((stored) => setWhispers((cur) => mergeWhisperLines(cur, stored, { replaceBefore: whispersAsked })))
@@ -271,6 +279,12 @@ export function RoomDrawer(props: RoomDrawerProps) {
         ws.onmessage = (ev) => {
           try {
             const msg = JSON.parse(String(ev.data)) as { type?: string; body?: string; sender_id?: string; sender_kind?: string; speech_id?: string; room_id?: string };
+            if (msg.type === "speech_hidden" && msg.speech_id) {
+              const hid = msg.speech_id;
+              setHiddenIds((cur) => new Set(cur).add(hid));
+              setLines((cur) => cur.filter((l) => l.id !== hid));
+              return;
+            }
             if (msg.type === "table_update") {
               setTableTick((n) => n + 1);
               return;
@@ -539,6 +553,35 @@ export function RoomDrawer(props: RoomDrawerProps) {
     ];
     return out.sort((a, b) => a.at - b.at || a.order - b.order);
   }, [lines, whispers]);
+
+  const heard = useMemo<HeardEntry[]>(
+    () =>
+      log.map((e) =>
+        e.kind === "say"
+          ? { kind: "say", id: e.line.id, body: e.line.body, at: e.at, senderId: e.line.sender_id, senderKind: e.line.sender_kind }
+          : {
+              kind: "whisper",
+              id: e.line.id,
+              body: e.line.body,
+              at: e.at,
+              direction: e.line.direction,
+              otherId: e.line.other_id,
+              otherKind: e.line.other_kind,
+            },
+      ),
+    [log],
+  );
+
+  const readAloud = useReadAloud({
+    roomKey: room,
+    ready: transcriptFor === room && !asSpectator,
+    entries: heard,
+    meId: me?.id ?? null,
+    hiddenIds,
+  });
+  /** Captions: the line being read aloud is highlighted in the transcript. */
+  const speakingClass = (key: string) =>
+    readAloud.speakingKey === key ? " rounded-md bg-lantern-400/10 ring-1 ring-lantern-400/50" : "";
 
   const mention = useMemo(
     () => (whisperTo ? null : leadingMention(draft, data?.nearby ?? [], me?.id)),
@@ -816,6 +859,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
             </section>
             <section className="flex-1 px-4 py-3">
               <h3 className="text-xs uppercase tracking-widest text-lantern-400">Transcript</h3>
+              <ReadAloudControl state={readAloud} />
               <ul className="mt-3 space-y-2 text-sm" role="log" aria-live="polite" aria-label="Transcript">
                 {lines.length === 0 ? (
                   <li key="empty-log" className="text-white/50">
@@ -828,7 +872,11 @@ export function RoomDrawer(props: RoomDrawerProps) {
                     const other = nameOf.get(w.other_id) ?? (w.other_kind === "agent" ? "an agent, since gone" : "someone, since gone");
                     const partner = (data?.nearby ?? []).find((n) => n.actor_id === w.other_id);
                     return (
-                      <li key={`w-${w.id}`} className="rounded-lg border border-violet-300/30 bg-violet-400/5 px-2 py-1.5">
+                      <li
+                        key={`w-${w.id}`}
+                        data-speaking={readAloud.speakingKey === `whisper:${w.id}` ? "true" : undefined}
+                        className={`rounded-lg border border-violet-300/30 bg-violet-400/5 px-2 py-1.5${speakingClass(`whisper:${w.id}`)}`}
+                      >
                         <span className="mr-1.5 rounded bg-violet-300/20 px-1 py-px text-[9px] font-bold uppercase tracking-widest text-violet-200">
                           {w.direction === "out" ? "whisper" : "whispered"}
                         </span>
@@ -854,7 +902,11 @@ export function RoomDrawer(props: RoomDrawerProps) {
                   }
                   const l = entry.line;
                   return (
-                    <li key={l.id} className="break-words">
+                    <li
+                      key={l.id}
+                      data-speaking={readAloud.speakingKey === `say:${l.id}` ? "true" : undefined}
+                      className={`break-words${speakingClass(`say:${l.id}`)}`}
+                    >
                       <span className="grove-kind">{l.sender_kind === "agent" ? "AGENT" : "HUMAN"}</span>
                       <span className="mr-1.5 font-semibold text-lantern-300/80">
                         {l.sender_id === me?.id
@@ -906,6 +958,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
               aria-label={whisperTo ? `Whisper to ${nameFor(whisperTo)}` : "Speak in this room"}
               onChange={(e) => {
                 const next = e.target.value;
+                if (next) readAloud.interrupt();
                 const cmd = whisperTo ? null : parseWhisperCommand(next, data?.nearby ?? [], me?.id);
                 if (cmd) startWhisper(cmd.target, cmd.rest);
                 else setDraft(next);
