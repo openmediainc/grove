@@ -11,6 +11,7 @@ import { GroveApp, createPool, loadConfig, migrate } from "@grove/domain";
 import {
   REGISTER_IPS,
   assertTestDatabase,
+  clearActorLimiters,
   clearRegisterLimiter,
   createFixtures,
   hasTestDatabase,
@@ -165,6 +166,7 @@ describe.skipIf(!hasDb)("effective permissions route", () => {
 
     // A lobby on someone else's private plot: the room is named, the space is not.
     expect((await app.inject({ method: "PATCH", url: `/api/v1/worlds/${theirPrivate.id}/rooms/garden`, headers: { cookie: other.cookie }, payload: { room_preset: "public_write" } })).statusCode).toBe(200);
+    await clearActorLimiters(redis, agent.id);
     await grove.presence.enter({ id: agent.id, kind: "agent", ownerHumanId: owner.id }, `${theirPrivate.id}:garden`, {
       connection: "async",
       mode: "autonomous",
