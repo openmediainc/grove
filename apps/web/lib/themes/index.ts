@@ -72,12 +72,48 @@ export function readThemeChoice(): ThemeId {
   return resolveThemeId({ query: readThemeQuery(), stored });
 }
 
+/**
+ * Same-tab signal that the viewer switched theme (#58). The map's switcher and
+ * its T key write the choice through `writeThemeChoice`, so anything else on
+ * the page that draws in the theme — the room drawer, its pixel room and board
+ * tables — follows the switch live without the map passing it down. Other tabs
+ * hear the `storage` event instead.
+ */
+export const THEME_EVENT = "grove-theme-change";
+
 export function writeThemeChoice(id: ThemeId): void {
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, id);
   } catch {
     /* private mode: the choice lasts as long as the tab */
   }
+  try {
+    window.dispatchEvent(new CustomEvent<ThemeId>(THEME_EVENT, { detail: id }));
+  } catch {
+    /* no window (tests, server) */
+  }
+}
+
+/**
+ * Follow the viewer's theme: calls `onChange` with the id on a same-tab switch,
+ * and on a switch in another tab unless this tab's URL pins one. Returns the
+ * unsubscribe.
+ */
+export function subscribeThemeChoice(onChange: (id: ThemeId) => void): () => void {
+  const same = (e: Event) => {
+    const id = (e as CustomEvent<unknown>).detail;
+    if (isThemeId(id)) onChange(id);
+  };
+  const other = (e: StorageEvent) => {
+    if (e.key !== THEME_STORAGE_KEY) return;
+    onChange(resolveThemeId({ query: readThemeQuery(), stored: e.newValue }));
+  };
+  window.addEventListener(THEME_EVENT, same);
+  window.addEventListener("storage", other);
+  return () => {
+    window.removeEventListener(THEME_EVENT, same);
+    window.removeEventListener("storage", other);
+  };
 }
 
 /**

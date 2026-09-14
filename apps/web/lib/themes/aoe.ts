@@ -43,6 +43,7 @@ import {
 } from "@/lib/art";
 import { drawEstateFence, drawEstateSign, drawHazardTriangle, drawPennantFlag, drawSignboard, drawSpeechBubble, drawSpeechPip, drawVerbGlyph, type EstateStyle, type SignStyle } from "./kit";
 import { makeDecorArt, type DecorStyle } from "./decor";
+import { makeRoomArt, type RoomStyle } from "./room";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 /** Lantern text on night stone; a whisper in the violet the whisper UI rings bodies with. */
@@ -143,6 +144,24 @@ export const DECOR_STYLE: DecorStyle = {
   trim: "#f4d19a",
   paper: "#efe3c4",
   spine: "#7c2d12",
+};
+
+/** The pixel room (#58). A timber hall: plank floor, boarded walls, stools and lanterns. */
+export const ROOM_STYLE: RoomStyle = {
+  material: "timber",
+  floor: "#6b4a2b",
+  floorAlt: "#5c3f24",
+  floorLine: "#3b2610",
+  wall: "#4a3a2c",
+  wallTrim: "#3b2610",
+  wallDetail: "#2e2218",
+  seat: "#4a2f14",
+  seatTop: "#8a5a2b",
+  table: "#4a2f14",
+  tableTop: "#8a5a2b",
+  lamp: "#3f3a33",
+  lampLight: "#fde68a",
+  lampGlow: "rgba(253,230,138,0.45)",
 };
 
 export const ESTATE_STYLE: EstateStyle = {
@@ -285,6 +304,7 @@ const art: ThemeArt = {
     drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
   },
   decor: makeDecorArt(DECOR_STYLE),
+  room: makeRoomArt(ROOM_STYLE),
 };
 
 export const AOE_LEXICON: ThemeLexicon = {

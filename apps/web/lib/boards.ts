@@ -10,6 +10,7 @@ import {
   FOUR_COLS,
   FOUR_ROWS,
   boardEndWords,
+  inCheck,
   isBoardState,
   legalChessMoves,
   parseFen,
@@ -111,6 +112,33 @@ export function fourRows(state: BoardState | null): string[][] {
   const rows: string[][] = [];
   for (let r = FOUR_ROWS - 1; r >= 0; r--) rows.push(grid.slice(r * FOUR_COLS, (r + 1) * FOUR_COLS).split(""));
   return rows;
+}
+
+/**
+ * The last disc dropped on a four-in-a-row board, as [row, col] in `fourRows`
+ * order (top row first), or null. The column comes from the last move; the
+ * disc is the highest one in it.
+ */
+export function fourLastCell(
+  state: BoardState | null,
+  moves: ReadonlyArray<Pick<TableMoveWire, "move">> | null | undefined,
+): [number, number] | null {
+  if (state?.game !== "four" || !moves?.length) return null;
+  const col = Number.parseInt(moves[moves.length - 1]!.move, 10) - 1;
+  if (!Number.isInteger(col) || col < 0 || col >= FOUR_COLS) return null;
+  for (let r = FOUR_ROWS - 1; r >= 0; r--) {
+    if (state.grid[r * FOUR_COLS + col] !== ".") return [FOUR_ROWS - 1 - r, col];
+  }
+  return null;
+}
+
+/** The square of the king of the side to move, while it is in check; else null. */
+export function checkedKing(state: BoardState | null): string | null {
+  const s = state?.game === "chess" ? parseFen(state.fen) : null;
+  if (!s || !inCheck(s)) return null;
+  const king = s.turn === "w" ? "K" : "k";
+  const sq = s.board.indexOf(king);
+  return sq < 0 ? null : squareName(sq);
 }
 
 /** Original, text-only piece marks: a letter in a disc, so no font or artwork is borrowed. */

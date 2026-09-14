@@ -50,6 +50,9 @@ export type AmbientPose = "graze" | "idle" | "walk-a" | "walk-b";
  */
 export type BodySprite = CharKey;
 
+/** The furniture of the pixel room (#58), named semantically. */
+export type RoomPiece = "floor" | "wall" | "seat" | "table" | "lamp";
+
 /* ------------------------------------------------------------------ *
  * Semantics a theme cannot touch.
  *
@@ -130,6 +133,18 @@ export interface ThemeArt {
    * never in the hazard colours.
    */
   decor(ctx: Ctx, preset: DecorPreset, px: number, py: number): void;
+  /**
+   * The pixel room (#58): the inside of a room, as the room drawer's pixel
+   * mode draws it. SCREEN space in the pixel room's own canvas: (x, y) is the
+   * top-left of a w x h box and the piece fills it (the room grid decides the
+   * box; a theme never moves it). `floor` is stamped per cell, `wall` along
+   * the strip above the first row, `lamp` on that wall, `seat` under each body
+   * and `table` on empty cells. Baked once per piece, stamped per frame. Shape
+   * per piece is shared (themes/room.ts); a theme picks its materials. Never
+   * the hazard colours, and never a permission: who may hear a room is the
+   * kernel's, not the furniture's.
+   */
+  room(ctx: Ctx, piece: RoomPiece, x: number, y: number, w: number, h: number): void;
 
   /** A body. Returns false if not drawable yet (the renderer draws a placeholder). */
   body(ctx: Ctx, sprite: BodySprite, x: number, y: number): boolean;

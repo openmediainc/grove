@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_SPEECH_METRICS, SpeechBook, type Rect, type Speaker, type SpeechMetrics } from "@grove/ui";
 import type { Nearby } from "@/lib/api";
-import { CHAR_SRC, type CharKey, tileSrc } from "@/lib/art";
-import { tileRoomOf } from "@/lib/pixel";
+import type { CharKey } from "@/lib/art";
 import { paintSpeech, speechPainter } from "@/lib/speech-render";
-import { getTheme, readThemeChoice } from "@/lib/themes";
+import type { Theme } from "@/lib/themes";
+import { roomColours } from "@/lib/themes/room-palette";
 
 const SPRITE = 64;
 /** A cell never shrinks below this, so a phone gets fewer columns, not smaller bodies. */
@@ -32,16 +32,6 @@ function spriteKey(kind: "human" | "agent", activity: string | undefined): CharK
   if (act === "working") return "agent-work";
   if (act === "listening" || act === "reading") return "agent-side";
   return "agent-front";
-}
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.decoding = "async";
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(src));
-    img.src = src;
-  });
 }
 
 /**
@@ -91,8 +81,20 @@ export function roomActorAt(
   return bySeat(nearby)[row * g.cols + col]?.actor_id ?? null;
 }
 
+/** Where the pixel room's furniture stands, for a grid holding `count` bodies. Pure. */
+export function roomFurniture(count: number, g: Pick<ReturnType<typeof roomGrid>, "cols" | "rows">) {
+  const lamps = g.cols >= 2 ? [0, g.cols - 1] : [0];
+  const tables: number[] = [];
+  // Empty cells of the last row: every other one gets a table, so a quiet room
+  // still reads as a room and not as a wall of floor.
+  for (let i = count; i < g.cols * g.rows; i++) if (i % 2 === 0) tables.push(i);
+  return { lamps, tables };
+}
+
 export function PixelRoom({
   roomSlug,
+  roomTitle,
+  theme,
   capacity,
   nearby,
   bubbles,
@@ -101,6 +103,10 @@ export function PixelRoom({
   highlightId,
 }: {
   roomSlug: string;
+  /** The room's name in the active theme's words, painted on its wall. */
+  roomTitle?: string;
+  /** The active map theme (DECISIONS #3): floor, walls, furniture, bodies and speech follow it live. */
+  theme: Theme;
   capacity: number;
   nearby: Nearby[];
   bubbles?: RoomBubble[];
@@ -121,6 +127,19 @@ export function PixelRoom({
   widthRef.current = availW;
   const expandRef = useRef<{ id: string; until: number } | null>(null);
   const hoverRef = useRef<string | null>(null);
+  const titleRef = useRef(roomTitle ?? roomSlug);
+  titleRef.current = roomTitle ?? roomSlug;
+  // Like the map: keep drawing the previous theme until the new one's art is prepared.
+  const drawnThemeRef = useRef<Theme>(theme);
+  useEffect(() => {
+    let live = true;
+    void theme.art.prepare().then(() => {
+      if (live) drawnThemeRef.current = theme;
+    });
+    return () => {
+      live = false;
+    };
+  }, [theme]);
 
   // Newest line per speaker, rebuilt when the transcript changes. The old
   // lookup took each speaker's FIRST line in the transcript — their oldest.
@@ -150,27 +169,9 @@ export function PixelRoom({
     if (!canvas) return;
     let raf = 0;
     let cancelled = false;
-    const tileSlug = tileRoomOf(roomSlug);
     const painter = speechPainter();
-    const theme = getTheme(readThemeChoice());
 
-    const start = async () => {
-      let tile: HTMLImageElement;
-      try {
-        tile = await loadImage(tileSrc(tileSlug));
-      } catch {
-        tile = await loadImage(tileSrc("plaza"));
-      }
-      const chars = new Map<CharKey, HTMLImageElement>();
-      await Promise.all(
-        (Object.keys(CHAR_SRC) as CharKey[]).map(async (k) => {
-          try {
-            chars.set(k, await loadImage(CHAR_SRC[k]));
-          } catch {
-            /* keep missing */
-          }
-        }),
-      );
+    const start = () => {
       if (cancelled || !canvasRef.current) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
@@ -180,6 +181,8 @@ export function PixelRoom({
         if (cancelled) return;
         const el = canvasRef.current;
         if (!el) return;
+        const theme = drawnThemeRef.current;
+        const colours = roomColours(theme.palette);
         const actors = bySeat(nearbyRef.current ?? []);
         const g = roomGrid(actors.length, capacity, widthRef.current);
         if (el.width !== Math.floor(g.w * dpr) || el.height !== Math.floor(g.h * dpr)) {
@@ -190,13 +193,51 @@ export function PixelRoom({
         }
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.imageSmoothingEnabled = false;
-        for (let y = 0; y < g.h; y += g.cell) {
-          for (let x = 0; x < g.w; x += g.cell) ctx.drawImage(tile, x, y, g.cell, g.cell);
+        ctx.clearRect(0, 0, g.w, g.h);
+        for (let x = 0; x < g.w; x += g.cell) theme.art.room(ctx, "wall", x, 0, g.cell, HEADROOM);
+        for (let y = HEADROOM; y < g.h; y += g.cell) {
+          for (let x = 0; x < g.w; x += g.cell) theme.art.room(ctx, "floor", x, y, g.cell, g.cell);
         }
-        // The floor steps back so the bodies and what they say come forward:
-        // at phone width, full-strength cobble was louder than anybody on it.
-        ctx.fillStyle = "rgba(7,8,20,0.55)";
+        // The room steps back so the bodies and what they say come forward:
+        // at phone width, full-strength floor was louder than anybody on it.
+        ctx.fillStyle = colours.dim;
         ctx.fillRect(0, 0, g.w, g.h);
+
+        const furniture = roomFurniture(actors.length, g);
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        for (const col of furniture.lamps) theme.art.room(ctx, "lamp", col * g.cell, 0, g.cell, HEADROOM);
+        for (const i of furniture.tables) {
+          const { cx, cy } = cellCentre(i, g);
+          theme.art.room(ctx, "table", cx - g.cell / 2, cy - g.cell / 2, g.cell, g.cell);
+        }
+        actors.forEach((_, i) => {
+          const { cx, cy } = cellCentre(i, g);
+          theme.art.room(ctx, "seat", cx - g.cell / 2, cy - g.cell / 2 + 4, g.cell, g.cell);
+        });
+        ctx.restore();
+
+        // The room's name on its wall, in the theme's words and display face.
+        const title = titleRef.current;
+        if (title) {
+          const room = Math.max(0, g.w - (g.cols >= 2 ? 2 * g.cell : 0) - 12);
+          ctx.font = `11px ${theme.palette.displayFont}`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          let label = title;
+          while (label.length > 1 && ctx.measureText(label).width > room - 12) label = label.slice(0, -1);
+          if (label !== title) label = `${label.slice(0, -1)}…`;
+          if (room > 30) {
+            const lw = ctx.measureText(label).width + 12;
+            ctx.fillStyle = colours.placardBg;
+            ctx.fillRect(g.w / 2 - lw / 2, 6, lw, 16);
+            ctx.strokeStyle = colours.placardEdge;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(g.w / 2 - lw / 2 + 0.5, 6.5, lw - 1, 15);
+            ctx.fillStyle = colours.placardText;
+            ctx.fillText(label, g.w / 2, 14);
+          }
+        }
 
         const scale = g.cell / SPRITE;
         const names: Rect[] = [];
@@ -212,14 +253,13 @@ export function PixelRoom({
           const seat = n.presence?.seat_index ?? i;
           const activity = n.presence?.activity ?? "idle";
           const key = spriteKey(n.kind, activity);
-          const img = chars.get(key) ?? chars.get(n.kind === "human" ? "human-front" : "agent-front");
           const idleBob = activity === "idle" || activity === "chatting" || activity === "performing";
           const bob = idleBob ? Math.sin(t / 220 + seat * 0.85) * 3 : activity === "working" ? Math.sin(t / 160 + seat) * 1.5 : 0;
           const faceLeft = col >= g.cols / 2 && (activity === "listening" || activity === "reading");
           const size = SPRITE * scale;
           if (highlightRef.current === n.actor_id) {
             ctx.save();
-            ctx.strokeStyle = "rgba(196,181,253,0.95)";
+            ctx.strokeStyle = colours.whisperRing;
             ctx.lineWidth = 2;
             ctx.setLineDash([4, 3]);
             ctx.beginPath();
@@ -227,14 +267,15 @@ export function PixelRoom({
             ctx.stroke();
             ctx.restore();
           }
-          if (img) {
-            ctx.save();
-            ctx.translate(cx, cy + bob);
-            if (faceLeft) ctx.scale(-1, 1);
-            ctx.drawImage(img, -size / 2, -size / 2, size, size);
-            ctx.restore();
-          } else {
-            ctx.fillStyle = n.kind === "agent" ? "#7c3aed" : "#e8b86d";
+          // The theme's body sprite is a 40 x 40 box; the room draws it at cell size.
+          ctx.save();
+          ctx.translate(cx, cy + bob);
+          const k = size / 40;
+          ctx.scale(faceLeft ? -k : k, k);
+          const drawn = theme.art.body(ctx, key, 0, 0);
+          ctx.restore();
+          if (!drawn) {
+            ctx.fillStyle = theme.palette.placeholder[n.kind === "agent" ? "agent" : "human"];
             ctx.fillRect(cx - 10, cy - 10 + bob, 20, 20);
           }
           // Names under the bodies: on a phone the roster is a long scroll away.
@@ -247,9 +288,9 @@ export function PixelRoom({
           if (label !== name) label = `${label.slice(0, -1)}…`;
           const lw = ctx.measureText(label).width;
           const ny = cy + g.cell / 2 + 1;
-          ctx.fillStyle = "rgba(7,8,20,0.7)";
+          ctx.fillStyle = colours.nameBg;
           ctx.fillRect(cx - lw / 2 - 3, ny - 1, lw + 6, NAME_H);
-          ctx.fillStyle = n.kind === "agent" ? "#c4b5fd" : "#f4d19a";
+          ctx.fillStyle = n.kind === "agent" ? colours.agentName : colours.humanName;
           ctx.fillText(label, cx, ny);
           names.push({ x0: cx - lw / 2 - 3, y0: ny - 1, x1: cx + lw / 2 + 3, y1: ny - 1 + NAME_H });
 
@@ -290,7 +331,7 @@ export function PixelRoom({
       raf = requestAnimationFrame(draw);
     };
 
-    void start();
+    start();
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
@@ -314,7 +355,7 @@ export function PixelRoom({
         className={className ?? "mx-auto block rounded-xl border border-lantern-400/20 bg-dusk-950"}
         style={{ imageRendering: "pixelated", cursor: onPickActor ? "pointer" : undefined }}
         role="img"
-        aria-label={`${roomSlug}: ${nearby.length} here${speaking ? `, ${speaking} speaking — the transcript has every line` : ""}`}
+        aria-label={`${roomTitle ?? roomSlug}: ${nearby.length} here${speaking ? `, ${speaking} speaking — the transcript has every line` : ""}`}
         onPointerMove={(e) => {
           if (e.pointerType === "mouse") hoverRef.current = pointAt(e.clientX, e.clientY);
         }}

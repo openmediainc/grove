@@ -55,6 +55,7 @@ import {
   type SignStyle,
 } from "./kit";
 import { makeDecorArt, type DecorStyle } from "./decor";
+import { makeRoomArt, type RoomStyle } from "./room";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 const HULL = "#8a94a8";
@@ -590,6 +591,24 @@ export const DECOR_STYLE: DecorStyle = {
   spine: "#334155",
 };
 
+/** The pixel room (#58). A module interior: deck plates, bulkheads with a lit strip, seat modules, consoles and beacons. */
+export const ROOM_STYLE: RoomStyle = {
+  material: "hull",
+  floor: "#334155",
+  floorAlt: "#2b3648",
+  floorLine: "#1e293b",
+  wall: "#1e293b",
+  wallTrim: "#0f172a",
+  wallDetail: "#475569",
+  seat: "#475569",
+  seatTop: "#64748b",
+  table: "#334155",
+  tableTop: "#94a3b8",
+  lamp: "#94a3b8",
+  lampLight: "#a5f3fc",
+  lampGlow: "rgba(103,232,249,0.4)",
+};
+
 export const ESTATE_STYLE: EstateStyle = {
   frame: "rgba(30,41,59,0.96)",
   frameEdge: "rgba(103,232,249,0.7)",
@@ -677,6 +696,7 @@ const art: ThemeArt = {
     drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
   },
   decor: makeDecorArt(DECOR_STYLE),
+  room: makeRoomArt(ROOM_STYLE),
 };
 
 export const SPACE_LEXICON: ThemeLexicon = {

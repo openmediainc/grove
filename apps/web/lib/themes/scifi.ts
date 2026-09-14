@@ -58,6 +58,7 @@ import {
   type SignStyle,
 } from "./kit";
 import { makeDecorArt, type DecorStyle } from "./decor";
+import { makeRoomArt, type RoomStyle } from "./room";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 const TEAL = "#2de2e6";
@@ -596,6 +597,24 @@ export const DECOR_STYLE: DecorStyle = {
   spine: "#6366f1",
 };
 
+/** The pixel room (#58). A holo deck: a lit grid, scanlined panels, hover seats, holo tables and neon pylons. Teal and indigo only. */
+export const ROOM_STYLE: RoomStyle = {
+  material: "holo",
+  floor: "#0b0a1a",
+  floorAlt: "#a5f3fc",
+  floorLine: "rgba(45,226,230,0.35)",
+  wall: "#0f172a",
+  wallTrim: "#1e1b4b",
+  wallDetail: "rgba(99,102,241,0.25)",
+  seat: "#1e293b",
+  seatTop: "#2de2e6",
+  table: "#1e293b",
+  tableTop: "#2de2e6",
+  lamp: "#1e293b",
+  lampLight: "#2de2e6",
+  lampGlow: "rgba(45,226,230,0.4)",
+};
+
 export const ESTATE_STYLE: EstateStyle = {
   frame: "rgba(8,20,26,0.9)",
   frameEdge: "rgba(45,226,230,0.6)",
@@ -723,6 +742,7 @@ const art: ThemeArt = {
     drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
   },
   decor: makeDecorArt(DECOR_STYLE),
+  room: makeRoomArt(ROOM_STYLE),
 };
 
 export const SCIFI_LEXICON: ThemeLexicon = {

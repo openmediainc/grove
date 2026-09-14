@@ -56,6 +56,7 @@ import {
   type SignStyle,
 } from "./kit";
 import { makeDecorArt, type DecorStyle } from "./decor";
+import { makeRoomArt, type RoomStyle } from "./room";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 const TAXI = "#facc15";
@@ -574,6 +575,24 @@ export const DECOR_STYLE: DecorStyle = {
   spine: "#0f3d22",
 };
 
+/** The pixel room (#58). A civic hall: stone tiles, brick walls, café chairs and tables, street lamps. */
+export const ROOM_STYLE: RoomStyle = {
+  material: "civic",
+  floor: "#a8a29e",
+  floorAlt: "#78716c",
+  floorLine: "#57534e",
+  wall: "#7a3b22",
+  wallTrim: "#a8a29e",
+  wallDetail: "#4a2213",
+  seat: "#27272a",
+  seatTop: "#166534",
+  table: "#27272a",
+  tableTop: "#fafaf9",
+  lamp: "#27272a",
+  lampLight: "#fef3c7",
+  lampGlow: "rgba(254,243,199,0.45)",
+};
+
 export const ESTATE_STYLE: EstateStyle = {
   frame: "#0f3d22",
   frameEdge: "rgba(250,250,249,0.9)",
@@ -659,6 +678,7 @@ const art: ThemeArt = {
     drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
   },
   decor: makeDecorArt(DECOR_STYLE),
+  room: makeRoomArt(ROOM_STYLE),
 };
 
 export const CITY_LEXICON: ThemeLexicon = {

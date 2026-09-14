@@ -8,6 +8,8 @@ import type { ReactionSummaryWire } from "@/lib/reactions";
 import {
   PIECE_LETTER,
   boardOf,
+  checkedKing,
+  fourLastCell,
   chessMoveFor,
   chessSquares,
   fourRows,
@@ -19,6 +21,8 @@ import {
   targetsFrom,
   type TableWire,
 } from "@/lib/boards";
+import type { Theme } from "@/lib/themes";
+import { TABLE_MARKS, tableColours, type TableColours } from "@/lib/themes/room-palette";
 
 /** The open table refreshes this often while the drawer is open and the tab is visible. */
 const TABLE_POLL_MS = 4_000;
@@ -35,9 +39,11 @@ type Detail = { table: TableWire; reactions?: Record<string, ReactionSummaryWire
  * refreshes at once, and a short poll covers Vercel, where the socket may not
  * hold.
  *
- * Themed with the drawer (DECISIONS #3): the board uses the chrome tokens
- * (dusk, lantern) the theme reskins. Pieces are letters in discs — original,
- * no borrowed artwork.
+ * Themed with the drawer (DECISIONS #3, #58): the board and its pieces take the
+ * active theme's palette (`tableColours`), while the marks that say something
+ * about the game — last move, the piece you picked up, where it may go, a king
+ * in check — are fixed (`TABLE_MARKS`) in every theme. Pieces are letters in
+ * discs — original, no borrowed artwork.
  */
 export function RoomTables({
   roomKey,
@@ -45,6 +51,7 @@ export function RoomTables({
   signedIn,
   meId,
   tick,
+  theme,
 }: {
   /** The room id (or a commons slug) the tables stand in. */
   roomKey: string;
@@ -54,6 +61,8 @@ export function RoomTables({
   meId: string | null;
   /** Bumped by the drawer's socket on a `table_update` frame. */
   tick: number;
+  /** The active map theme; the board's colours follow it. */
+  theme: Theme;
 }) {
   const [tables, setTables] = useState<TableWire[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -238,6 +247,7 @@ export function RoomTables({
           busy={busy}
           now={now}
           onAct={act}
+          colours={tableColours(theme.palette)}
         />
       ) : null}
     </section>
@@ -252,7 +262,9 @@ function TableBoard({
   busy,
   now,
   onAct,
+  colours,
 }: {
+  colours: TableColours;
   table: TableWire;
   reactions: Record<string, ReactionSummaryWire | undefined>;
   meId: string | null;
@@ -305,11 +317,12 @@ function TableBoard({
       </p>
 
       {table.game === "four" ? (
-        <FourBoard rows={fourRows(state)} legal={legal} onMove={move} disabled={busy || !myTurn} />
+        <FourBoard rows={fourRows(state)} last={fourLastCell(state, table.moves)} legal={legal} onMove={move} disabled={busy || !myTurn} colours={colours} />
       ) : (
         <ChessBoard
           table={table}
           flip={seat === 1}
+          colours={colours}
           legal={legal}
           from={from}
           onPick={(sq) => {
@@ -389,7 +402,22 @@ function TableBoard({
   );
 }
 
-function FourBoard({ rows, legal, onMove, disabled }: { rows: string[][]; legal: string[]; onMove: (col: string) => void; disabled: boolean }) {
+function FourBoard({
+  rows,
+  last,
+  legal,
+  onMove,
+  disabled,
+  colours,
+}: {
+  rows: string[][];
+  /** [row, col] of the last disc dropped, in `rows` order, or null. */
+  last: readonly [number, number] | null;
+  legal: string[];
+  onMove: (col: string) => void;
+  disabled: boolean;
+  colours: TableColours;
+}) {
   return (
     <div className="mt-2 w-full max-w-[20rem]">
       {legal.length ? (
@@ -401,23 +429,34 @@ function FourBoard({ rows, legal, onMove, disabled }: { rows: string[][]; legal:
               disabled={disabled || !legal.includes(col)}
               onClick={() => onMove(col)}
               aria-label={`Drop in column ${col}`}
-              className="h-7 rounded-md border border-lantern-400/40 text-[11px] text-lantern-300 hover:bg-lantern-400/15 disabled:opacity-30"
+              className="h-7 rounded-md border text-[11px] hover:bg-white/10 disabled:opacity-30"
+              style={{ borderColor: colours.controlEdge, color: colours.control }}
             >
               {col}
             </button>
           ))}
         </div>
       ) : null}
-      <div className="grid grid-cols-7 gap-1 rounded-lg bg-dusk-700/80 p-1.5" role="img" aria-label="Four-in-a-row board">
+      <div className="grid grid-cols-7 gap-1 rounded-lg p-1.5" style={{ background: colours.frame }} role="img" aria-label="Four-in-a-row board">
         {rows.flatMap((row, r) =>
-          row.map((cell, c) => (
-            <span
-              key={`${r}-${c}`}
-              className={`aspect-square rounded-full ${
-                cell === "x" ? "bg-lantern-400" : cell === "o" ? "border-2 border-white/80 bg-white/10" : "bg-dusk-950/80"
-              }`}
-            />
-          )),
+          row.map((cell, c) => {
+            const isLast = last !== null && last[0] === r && last[1] === c;
+            return (
+              <span
+                key={`${r}-${c}`}
+                data-last-move={isLast ? "true" : undefined}
+                className="aspect-square rounded-full"
+                style={{
+                  ...(cell === "x"
+                    ? { background: colours.firstDisc }
+                    : cell === "o"
+                      ? { background: colours.secondDiscFill, border: `2px solid ${colours.secondDiscRing}` }
+                      : { background: colours.hole }),
+                  ...(isLast ? { boxShadow: `0 0 0 2px ${TABLE_MARKS.selected}` } : null),
+                }}
+              />
+            );
+          }),
         )}
       </div>
     </div>
@@ -430,39 +469,52 @@ function ChessBoard({
   legal,
   from,
   onPick,
+  colours,
 }: {
   table: TableWire;
   flip: boolean;
+  colours: TableColours;
   legal: string[];
   from: string | null;
   onPick: (square: string) => void;
 }) {
-  const squares = chessSquares(boardOf(table), flip);
+  const state = boardOf(table);
+  const squares = chessSquares(state, flip);
   const targets = from ? new Set(targetsFrom(legal, from)) : new Set<string>();
   const movable = new Set(legal.map((m) => m.slice(0, 2)));
   const last = table.moves?.length ? table.moves[table.moves.length - 1]!.move : null;
+  const checked = table.status === "active" ? checkedKing(state) : null;
   return (
     <div className="mt-2 grid w-full max-w-[20rem] grid-cols-8 overflow-hidden rounded-lg border border-white/10" role="grid" aria-label="Chess board">
       {squares.map((sq) => {
         const white = sq.piece !== "" && sq.piece === sq.piece.toUpperCase();
-        const highlight = sq.name === from ? "ring-2 ring-inset ring-lantern-300" : targets.has(sq.name) ? "ring-2 ring-inset ring-lantern-400/70" : "";
-        const moved = last && (last.slice(0, 2) === sq.name || last.slice(2, 4) === sq.name);
+        const moved = Boolean(last && (last.slice(0, 2) === sq.name || last.slice(2, 4) === sq.name));
+        const ring =
+          sq.name === from ? TABLE_MARKS.selected : sq.name === checked ? TABLE_MARKS.check : targets.has(sq.name) ? TABLE_MARKS.target : null;
         return (
           <button
             key={sq.name}
             type="button"
             onClick={() => onPick(sq.name)}
             disabled={!movable.has(sq.name) && !targets.has(sq.name)}
-            aria-label={`${sq.name}${sq.piece ? ` ${white ? "white" : "black"} ${pieceWord(sq.piece)}` : ""}`}
-            className={`relative flex aspect-square items-center justify-center ${sq.dark ? "bg-dusk-700" : "bg-lantern-300/25"} ${
-              moved ? "after:absolute after:inset-0 after:bg-lantern-400/20" : ""
-            } ${highlight} disabled:cursor-default`}
+            aria-label={`${sq.name}${sq.piece ? ` ${white ? "white" : "black"} ${pieceWord(sq.piece)}` : ""}${sq.name === checked ? ", in check" : ""}`}
+            className="relative flex aspect-square items-center justify-center disabled:cursor-default"
+            style={{
+              background: sq.dark ? colours.darkSquare : colours.lightSquare,
+              boxShadow: ring ? `inset 0 0 0 2px ${ring}` : undefined,
+            }}
           >
+            {moved ? <span aria-hidden className="absolute inset-0" style={{ background: TABLE_MARKS.lastMove }} /> : null}
             {sq.piece ? (
               <span
                 className={`relative z-[1] flex h-[72%] w-[72%] items-center justify-center rounded-full text-[10px] font-bold sm:text-xs ${
-                  white ? "bg-white text-dusk-950 shadow" : "border border-white/40 bg-dusk-950 text-white"
+                  white ? "shadow" : "border"
                 } ${sq.piece.toLowerCase() === "p" ? "scale-[0.6]" : ""}`}
+                style={
+                  white
+                    ? { background: colours.whitePiece, color: colours.whiteText }
+                    : { background: colours.blackPiece, color: colours.blackText, borderColor: colours.blackEdge }
+                }
               >
                 {PIECE_LETTER[sq.piece.toLowerCase()]}
               </span>

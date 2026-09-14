@@ -39,6 +39,8 @@ import {
 } from "@/lib/whisper";
 import { fetchWhisperHistory, mergeWhisperLines } from "@/lib/whisper-history";
 import { roomHref } from "@/lib/world-url";
+import { themeStyle } from "@/lib/themes";
+import { useActiveTheme } from "@/lib/themes/useActiveTheme";
 
 /**
  * A room, as a drawer on the map (DECISIONS #1).
@@ -54,8 +56,10 @@ import { roomHref } from "@/lib/world-url";
  * transcript with live reaction counts, the room socket with the poll behind it.
  * The pixel room is an expandable mode: the drawer widens and draws it on top.
  *
- * It sits inside the map's themed section, so the theme's chrome tokens reskin
- * it along with the map (DECISIONS #3).
+ * Themed with the map (DECISIONS #3, #58): the drawer root carries the active
+ * theme's chrome tokens itself (`useActiveTheme`, following the switcher, the T
+ * key and `?theme=` live), and hands the theme to the pixel room (floor, walls,
+ * furniture, bodies, speech) and the board tables. Pages stay neutral.
  *
  * A viewer with no body gets the public face of the room instead of a 401: the
  * sign, who the map shows standing there, what was heard, and "Sign in to speak".
@@ -138,6 +142,8 @@ export type RoomDrawerProps = {
 export function RoomDrawer(props: RoomDrawerProps) {
   const { room, signedIn, arrived, themedTitle, titleFor, publicView, signInHref, onClose, onOpenRoom, onExpandedChange } = props;
   const [data, setData] = useState<RoomPayload | null>(null);
+  // DECISIONS #3: the drawer follows the live map theme (switcher, T key, `?theme=`).
+  const theme = useActiveTheme();
   const [lines, setLines] = useState<TranscriptLine[]>([]);
   const [draft, setDraft] = useState("");
   const [noticeTitle, setNoticeTitle] = useState("");
@@ -671,6 +677,8 @@ export function RoomDrawer(props: RoomDrawerProps) {
       data-speech-avoid
       data-map-drawer
       aria-label={`${title}, room`}
+      data-theme-skin={theme.id}
+      style={themeStyle(theme)}
       className={`pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex h-[86%] flex-col overflow-hidden rounded-t-2xl border-t border-lantern-400/25 bg-dusk-950/[0.97] text-sm shadow-2xl sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-0 sm:h-auto sm:rounded-none sm:border-l sm:border-t-0 ${
         wide ? "sm:w-[min(880px,calc(100%-2rem))]" : "sm:w-[420px]"
       }`}
@@ -749,7 +757,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
         </div>
         {slug === "stage" ? <StageTrial signedIn={signedIn} /> : null}
         {data?.room.kind === "owner_lounge" || slug.startsWith("lounge") ? null : (
-          <RoomTables roomKey={data?.room.id ?? slug} roomTitle={title} signedIn={signedIn} meId={me?.id ?? null} tick={tableTick} />
+          <RoomTables roomKey={data?.room.id ?? slug} roomTitle={title} signedIn={signedIn} meId={me?.id ?? null} tick={tableTick} theme={theme} />
         )}
 
         {asSpectator ? (
@@ -776,6 +784,8 @@ export function RoomDrawer(props: RoomDrawerProps) {
               <div className="flex justify-center px-3 pt-3">
                 <PixelRoom
                   roomSlug={slug}
+                  roomTitle={title}
+                  theme={theme}
                   capacity={data?.room.capacity ?? 40}
                   nearby={data?.nearby ?? []}
                   bubbles={roomBubbles}

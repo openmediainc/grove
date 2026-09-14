@@ -37,6 +37,7 @@ declared `satisfies Theme`, so leaving one out fails `pnpm -r typecheck`
 | `signboard` → owner branding (035) | a space owner's accent colour, sign text (≤ 24 chars) and emblem, set on the space's Manage tab. The accent takes the board's tint stripe (`SignStyle.tintAt`) and the plot's fence; a bound org then keeps a short secondary stripe in the opposite corner and still colours the org line. The sign text is an italic line under the name; the emblem sits inside the board left of the text. The 16 emblem GLYPHS are fixed in `kit.drawBrandEmblem` (drawn from paths, no image files), coloured in the accent or the theme's title colour. Accents are checked in `@grove/protocol` branding.ts at ≥ 3:1 against every theme's board (`SIGN_BOARD_COLOURS`, pinned to each `SIGN_STYLE.board` by a web test — restyle a board and that test tells you to update it) and away from the hazard colours. **Never on a held board**, and never in the minimap payload for a private plot | ← | ← | ← | ← |
 | `estateSign(board)` + `estateFence(segments, accent)` | an **estate** (#37): adjacent non-private plots sharing a primary org, else an owner (4-neighbour on the plot grid; grouped server-side in `@grove/protocol` estates.ts and published as the minimap's `estates`). ONE shared sign on a seam between member plots (`layoutEstateSign`, visible from 0.4x), and one continuous fence round the union's outer edge (`lib/estates` `estatePerimeter`) in the estate's accent (org colour, else the owner's branding accent) or the theme rail. Each member plot keeps its own tint, building and a smaller board (`layoutSignboard(..., { compact: true })`): **access stays per plot**. A private plot never joins, bridges or appears; lexicon `estate.label` / `estate.plots` name it. Optional name ≤ 24 chars (migration 038: `humans.estate_name`, `orgs.estate_name`) on the space's Manage tab | gable-crested timber mount, split-rail fence ("Estate · plots") | banner-crested hull mount, dashed lit walkway ("Station · modules") | dome-crested civic plaque, kerb + bollards ("Block · lots") | braced holo panel, dashed light wall ("Compound · nodes") |
 | `decor(preset)` + `DecorStyle` | **plot decor** (#45): small cosmetic props an owner places round their plot's building from Manage → Decor, unlocked by real work (3 base presets for every plot, 2 more per achievement mark, 2 more while the owner is a supporter; no currency, counts or ranking). Anchored 1x1 on the fixed `PLOT_DECOR_SLOTS` (`@grove/protocol` map-layout: never the building, the door or its approach, never a resting body's tile), ≤ 6 per plot, stored as `worlds.decor` (044). The SHAPE of each of the 11 presets (bench, planter, lamp pair, desk, bookshelf, notice board, crates, banner post, telescope, fountain, garden patch) is shared in `themes/decor.ts`; the theme supplies materials. World art pass under the bodies: the renderer cuts decor away round any body box it overlaps (`lib/decor` `paintDecorClear`, the #52 rule). **Never on a private plot** (not drawn, not in the minimap payload), never in the hazard colours | timber: planks, brass lamps, blue cloth | hull: grey plates, cyan screens, amber trim | civic: green-painted steel, stone, white trim | holo: dark panels with lit teal edges |
+| `room(piece, x, y, w, h)` + `RoomStyle` | **the pixel room** (#58): the inside of a room as the room drawer's pixel mode draws it, SCREEN space in its own canvas. `floor` stamped per cell, `wall` along the strip above the first row, `lamp` at the wall's ends, `seat` under each body, `table` on every other empty cell of the last row; the room's name (lexicon) on a placard on the wall in the display face. The SHAPE of each of the 5 pieces is shared in `themes/room.ts`; the theme supplies materials. Bodies are the theme's `body()` sprites scaled to the cell, speech is the theme's `speech()`. Never the hazard colours, never a permission | planks, boarded walls, stools, tables, hanging lanterns | deck plates, bulkheads with a lit strip, seat modules, consoles, beacons | stone tiles, brick, café chairs + tables, street lamps | lit grid, scanlined panels, hover seats, holo tables, neon pylons |
 | `speechFont?` | font family the layout measures speech with | sans | sans | sans | mono |
 
 ## Optional slot: `sound` (#43)
@@ -76,6 +77,22 @@ Chrome re-skins through CSS variables: the section sets `--g-dusk-*`,
 `--g-lantern-*`, `--g-font-display` from the palette, and Tailwind's `dusk`/`lantern`
 colours resolve through them (aoe values as fallback everywhere else). Note: a
 Tailwind config change needs `rm -rf apps/web/.next` and a web restart.
+
+## The room drawer (#58)
+
+Themes reskin the map **and the room drawer only** (DECISIONS #3); pages
+(`/s`, `/a`, `/u`, `/explore`, the space page's Board) stay neutral, and the nav
+wordmark is always the neutral Glasshouse. The drawer root sets `themeStyle()`
+itself and reads the theme through `useActiveTheme()` (`?theme=` / stored choice
+on mount, then `THEME_EVENT` from `writeThemeChoice` in this tab and `storage`
+from other tabs), so it follows the switcher and the T key live without the map
+passing the theme down. Its colours come from `themes/room-palette.ts`, a pure
+mapping of the palette: `roomColours` (floor dim, name plates, wall placard) for
+the pixel room and `tableColours` (frame, holes, discs, squares, pieces) for
+board tables. What a mark means stays fixed: the whisper ring, the agent name
+colour (human and agent stay distinguishable), and `TABLE_MARKS` — last move,
+the piece you picked up, legal targets and a king in check — never come from a
+theme and are never a hazard colour.
 
 ## Rules a theme may not break
 
