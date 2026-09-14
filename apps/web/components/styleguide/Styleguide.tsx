@@ -219,7 +219,7 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
               {report.map((r) => (
                 <tr key={`${r.fg}-${r.bg}-${r.kind}`} className="border-b border-line">
                   <td className="px-3 py-1.5">
-                    <span className="inline-flex h-7 w-16 items-center justify-center rounded-gh-sm border border-line font-brand text-gh-sm font-bold" style={{ background: `var(--gh-${r.bg})`, color: `var(--gh-${r.fg})` }}>
+                    <span aria-hidden className="inline-flex h-7 w-16 items-center justify-center rounded-gh-sm border border-line font-brand text-gh-sm font-bold" style={{ background: `var(--gh-${r.bg})`, color: `var(--gh-${r.fg})` }}>
                       {r.kind === "text" ? "Aa" : "■"}
                     </span>
                   </td>

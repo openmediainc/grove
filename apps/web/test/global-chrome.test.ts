@@ -49,6 +49,15 @@ describe("global chrome on brand tokens (#73)", () => {
     expect(css).not.toContain("--g-lantern-400, 232 184 109");
   });
 
+  it("the shared Nameplate is dressed in brand tokens everywhere, not only inside the map (#77)", () => {
+    const css = web("app/globals.css");
+    for (const cls of ["grove-badge", "grove-kind", "grove-name", "grove-owner", "grove-avatar", "grove-you"]) {
+      const rules = [...css.matchAll(new RegExp(`(^|\\n)([^{}\\n]*\\.${cls}\\b[^{}]*)\\{([^}]*)\\}`, "g"))];
+      expect(rules.length, cls).toBeGreaterThan(0);
+      for (const r of rules) expect(r[3], `${r[2]!.trim()} uses a raw colour`).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    }
+  });
+
   it("the You menu and the map's ⋯ both carry Appearance", () => {
     expect(web("components/Nav.tsx")).toContain("<AppearanceMenuGroup />");
     expect(web("components/WorldMap.tsx")).toContain("<AppearanceMenuGroup />");

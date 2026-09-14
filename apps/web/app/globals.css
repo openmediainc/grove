@@ -84,6 +84,12 @@ body {
   background-size: 48px 36px;
 }
 
+/* The shared Nameplate (packages/ui) ships unstyled markup; the host owns the
+   look. Brand tokens everywhere it appears (the drawer roster, peek cards, the
+   agent Settings preview), so it reads in light, night and TV (#74, #77):
+   human amber / agent cyan as the kind chip, the name in ink, the rest muted.
+   It used to keep the old lantern palette outside the map, which put amber
+   text on white (1.45:1) on /a/<slug> Settings by day. */
 .grove-badge {
   display: inline-flex;
   align-items: center;
@@ -93,44 +99,40 @@ body {
   text-transform: uppercase;
   padding: 1px 6px;
   border-radius: 999px;
-  border: 1px solid rgba(232, 184, 109, 0.35);
-  color: #f4d19a;
-  background: rgba(11, 18, 32, 0.6);
+  border: 1px solid var(--gh-line-strong);
+  color: var(--gh-ink);
+  background: var(--gh-surface-raised);
   margin-right: 4px;
 }
 
 .grove-kind {
   font-size: 9px;
-  letter-spacing: 0.16em;
-  font-weight: 700;
+  font-family: var(--gh-font-mono);
+  font-weight: 400;
+  letter-spacing: 0.08em;
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--gh-radius-sm);
   margin-right: 6px;
+  color: var(--gh-ground);
 }
 
 .grove-nameplate-agent .grove-kind {
-  background: #7c3aed;
-  color: white;
+  background: var(--gh-agent);
 }
 
 .grove-nameplate-human .grove-kind {
-  background: #e8b86d;
-  color: #1a1204;
+  background: var(--gh-human);
 }
 
-/* Nameplate emits grove-name, grove-owner, grove-avatar and grove-you, and none
-   of them were styled — so every nameplate rendered its parts butted together
-   as one run of text ("maya/hostowned by @maya"). packages/ui ships the markup
-   but sits outside this app's Tailwind globs, so the host stylesheet owns this. */
 .grove-name {
   font-weight: 600;
-  color: #f4d19a;
+  color: var(--gh-ink);
   margin-right: 6px;
 }
 
 .grove-owner {
   font-size: 11px;
-  color: rgba(236, 231, 221, 0.55);
+  color: var(--gh-muted);
   margin-right: 6px;
   white-space: nowrap;
 }
@@ -142,58 +144,21 @@ body {
   border-radius: 999px;
   margin-right: 6px;
   vertical-align: -3px;
-  background: rgba(124, 58, 237, 0.35);
-  border: 1px solid rgba(232, 184, 109, 0.28);
+  background: var(--gh-tint);
+  border: 1px solid var(--gh-line-strong);
 }
 
 .grove-you {
   font-size: 10px;
+  font-family: var(--gh-font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #0b0d18;
-  background: #e8b86d;
-  border-radius: 999px;
-  padding: 1px 7px;
-  margin-right: 6px;
-}
-
-/* Map chrome (#74, DECISIONS #7): inside the map (the drawer roster, peek
-   cards) the shared Nameplate speaks brand tokens instead of the old lantern
-   palette. Human amber / agent cyan as the kind chip, day-safe by day and
-   Nightwatch by night; the name is ink, the rest muted. */
-[data-map-chrome] .grove-name {
-  color: var(--gh-ink);
-}
-[data-map-chrome] .grove-owner {
-  color: var(--gh-muted);
-}
-[data-map-chrome] .grove-kind {
-  font-family: var(--gh-font-mono);
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  border-radius: var(--gh-radius-sm);
-  color: var(--gh-ground);
-}
-[data-map-chrome] .grove-nameplate-human .grove-kind {
-  background: var(--gh-human);
-}
-[data-map-chrome] .grove-nameplate-agent .grove-kind {
-  background: var(--gh-agent);
-}
-[data-map-chrome] .grove-you {
-  font-family: var(--gh-font-mono);
   color: var(--gh-ink);
   background: var(--gh-tint);
   border: 1px solid var(--gh-line-strong);
-}
-[data-map-chrome] .grove-badge {
-  color: var(--gh-ink);
-  background: var(--gh-surface-raised);
-  border-color: var(--gh-line-strong);
-}
-[data-map-chrome] .grove-avatar {
-  background: var(--gh-tint);
-  border-color: var(--gh-line-strong);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-right: 6px;
 }
 
 .seat {
