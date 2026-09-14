@@ -105,7 +105,7 @@ import {
   type DistrictStop,
 } from "@/lib/districts";
 import { districtName, worldDistricts } from "@grove/protocol";
-import { estateSignContent, estateSignVisible, layoutEstateSign, layoutSignboard, plotBranding, plotEdgeColour, signContent, signboardVisible } from "@/lib/signboard";
+import { estateSignContent, estateSignVisible, layoutEstateSign, layoutSignboard, plotBranding, plotEdgeColour, signContent, signboardVisible, supporterTrim } from "@/lib/signboard";
 import { estatePerimeter, estateSignTile, readEstates, type MapEstate } from "@/lib/estates";
 import { WATCH_HEADER, formatHeadcount, makeWatchToken } from "@/lib/headcount";
 import { AttentionBell } from "./AttentionBell";
@@ -364,6 +364,8 @@ type SpaceView = {
   branding?: unknown;
   /** Placed plot decor (#45). Empty for a redacted row. */
   decor?: unknown;
+  /** The owner is an active supporter (#47). False on a private plot and while supporters are off. */
+  supporter?: boolean;
   /** The owner's default theme (#59). Null for a redacted row. */
   default_theme?: string | null;
   defaultTheme?: string | null;
@@ -389,6 +391,8 @@ type Plot = {
   decor: DecorItem[];
   /** The owner's default theme (#59), public plots only; members get a private plot's from their own list. */
   defaultTheme: string | null;
+  /** Supporter sign trim (#51). Never true on a private plot (lib/signboard `supporterTrim`). */
+  supporter: boolean;
 };
 
 /*
@@ -1918,6 +1922,7 @@ export function WorldMap() {
             decor: plotDecor(sp.policy_preset ?? sp.policyPreset, sp.decor),
             // Never trusted for a private plot, whatever the payload says (lib/themes/owner-default).
             defaultTheme: (sp.policy_preset ?? sp.policyPreset) === "private" ? null : (sp.default_theme ?? sp.defaultTheme ?? null),
+            supporter: supporterTrim(sp.policy_preset ?? sp.policyPreset ?? "public_write", sp.supporter),
           };
         });
         const estates = readEstates(data.estates, plots);

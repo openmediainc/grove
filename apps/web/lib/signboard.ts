@@ -22,6 +22,12 @@
  * line under the name; the emblem sits inside the board left of the text. A
  * private plot carries NONE of it — a colour or an emblem identifies a space as
  * well as its name does — whatever the payload says.
+ *
+ * Supporter trim (#51): a thin accent round the board of a plot whose owner is
+ * an active supporter (#47), read from the minimap's public `supporter` flag.
+ * Cosmetic only, never text, never louder than a hazard mark. The server sends
+ * false for a private plot and for every plot while supporters are switched
+ * off; the map re-checks both anyway (`supporterTrim`).
  */
 
 import { normaliseMarks, readStoredBranding, type BrandEmblem, type SpaceBranding, type SpaceMark } from "@grove/protocol";
@@ -41,6 +47,8 @@ export type SignPlot = {
   marks?: readonly string[];
   /** The owner's branding as the server published it. Ignored for a private plot. */
   branding?: SpaceBranding | null;
+  /** The minimap's public supporter flag (#47). Ignored for a private plot. */
+  supporter?: boolean;
 };
 
 export type SignContent = {
@@ -58,7 +66,19 @@ export type SignContent = {
   /** The owner's accent alone (colours the emblem), or null. */
   accent: string | null;
   marks: SpaceMark[];
+  /** Draw the supporter trim. Always false when held. */
+  supporter: boolean;
 };
+
+/**
+ * Whether a plot's board carries the supporter trim (#51): only a literal
+ * `true` from the payload (absent, null or any other value is no trim, which
+ * is what every plot sends while supporters are switched off), and never on a
+ * private plot, whatever the payload says.
+ */
+export function supporterTrim(preset: string | null | undefined, flag: unknown): boolean {
+  return preset !== "private" && flag === true;
+}
 
 /**
  * A plot's branding off the wire: re-validated, and dropped outright for a
@@ -97,6 +117,7 @@ export function signContent(
       emblem: null,
       accent: null,
       marks: [],
+      supporter: false,
     };
   }
   const name = plot.name?.trim();
@@ -114,6 +135,7 @@ export function signContent(
     emblem: brand?.emblem ?? null,
     accent,
     marks: normaliseMarks(plot.marks),
+    supporter: supporterTrim(plot.preset, plot.supporter),
   };
 }
 
@@ -245,6 +267,7 @@ function layoutBoard(
     emblem,
     tx: content.held ? x0 + w / 2 : tx,
     marks: content.held ? [] : layoutSignMarks(content.marks, x0 + w / 2, y0 + h),
+    supporter: !content.held && content.supporter === true,
   };
 }
 
@@ -280,6 +303,8 @@ export function estateSignContent(e: EstateSignInput, lexicon: Pick<ThemeLexicon
     emblem: null,
     accent: e.accent,
     marks: [],
+    // An estate joins plots of one org or owner; the trim stays on each member's own board.
+    supporter: false,
   };
 }
 
@@ -290,5 +315,5 @@ export function layoutEstateSign(
   measure: Measure,
 ): Signboard | null {
   if (!estateSignVisible(zoom)) return null;
-  return layoutBoard({ ...content, held: false, marks: [], emblem: null }, anchor, zoom, measure, SPECS.estate);
+  return layoutBoard({ ...content, held: false, marks: [], emblem: null, supporter: false }, anchor, zoom, measure, SPECS.estate);
 }

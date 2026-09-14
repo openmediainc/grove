@@ -559,6 +559,14 @@ export const SIGN_STYLE: SignStyle = {
   radius: 0,
   mark: { plate: "rgba(4,10,14,0.92)", rim: "rgba(45,226,230,0.85)", glyph: "#c4b5fd", shape: "hex" },
   tintAt: "underline",
+  supporterTrim(ctx, x0, y0, w) {
+    // A glow line along the panel's top, between the corner brackets: a 1px
+    // violet core over a faint 3px halo. Static: a supporter is not an event.
+    ctx.fillStyle = "rgba(167,139,250,0.22)";
+    ctx.fillRect(x0 + 6, y0, w - 12, 3);
+    ctx.fillStyle = "rgba(196,181,253,0.9)";
+    ctx.fillRect(x0 + 6, y0 + 1, w - 12, 1);
+  },
   fixings(ctx, x0, y0, w) {
     ctx.fillStyle = "rgba(45,226,230,0.55)";
     ctx.fillRect(x0 + Math.round(w / 2), y0 - 7, 1, 7);

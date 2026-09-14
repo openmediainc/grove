@@ -541,6 +541,15 @@ export const SIGN_STYLE: SignStyle = {
   radius: 4,
   mark: { plate: "#a16207", rim: "#fafaf9", glyph: "#fefce8", shape: "square" },
   tintAt: "bottom",
+  supporterTrim(ctx, x0, y0, w, h) {
+    // An enamel border: the blade's inner keyline turns cream-gold, the way a
+    // heritage street sign carries a second enamelled frame.
+    ctx.strokeStyle = "rgba(236,213,140,0.85)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x0 + 2.5, y0 + 2.5, w - 5, h - 5, 2);
+    ctx.stroke();
+  },
   fixings(ctx, x0, y0, w) {
     ctx.fillStyle = "#6b7280";
     ctx.fillRect(x0 + 8, y0 - 6, 2, 6);

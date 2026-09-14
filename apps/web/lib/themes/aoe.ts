@@ -104,6 +104,17 @@ export const SIGN_STYLE: SignStyle = {
   radius: 1,
   mark: { plate: "#b08a3e", rim: "#24160a", glyph: "#fff1cc", shape: "shield" },
   tintAt: "top",
+  supporterTrim(ctx, x0, y0, w, h) {
+    // A gilded edge: one thin gold line just inside the dark rim, and a gold
+    // nail head in each corner.
+    ctx.strokeStyle = "rgba(222,184,92,0.8)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x0 + 1.5, y0 + 1.5, w - 3, h - 3, 1);
+    ctx.stroke();
+    ctx.fillStyle = "#f0cf7a";
+    for (const [nx, ny] of [[x0 + 1, y0 + 1], [x0 + w - 2, y0 + 1], [x0 + 1, y0 + h - 2], [x0 + w - 2, y0 + h - 2]] as const) ctx.fillRect(nx, ny, 1, 1);
+  },
   fixings(ctx, x0, y0, w) {
     ctx.strokeStyle = "rgba(20,12,4,0.9)";
     ctx.lineWidth = 1;

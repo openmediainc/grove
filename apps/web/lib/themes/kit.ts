@@ -246,6 +246,13 @@ export type SignStyle = {
   /** Over the board, under the text: rivets, corner marks. */
   trim?: (ctx: Ctx, x0: number, y0: number, w: number, h: number, held: boolean) => void;
   /**
+   * The supporter trim (#51): a thin accent on the board's edge, drawn over the
+   * edge and under the text. Required, so no theme can forget it. Subtle: at
+   * most a 1px line (plus a faint halo), never text, never the hazard colours,
+   * never animated. Only called for a public board whose owner supports.
+   */
+  supporterTrim: (ctx: Ctx, x0: number, y0: number, w: number, h: number) => void;
+  /**
    * What an achievement-mark medallion is made of. The glyph's SHAPE is not the
    * theme's: a thousand calls is always a four-point star, a week streak always
    * a ring of seven studs (see drawSignMark). Never the hazard colours.
@@ -379,6 +386,12 @@ export function drawSignboard(ctx: Ctx, b: Signboard, style: SignStyle): void {
   ctx.beginPath();
   ctx.roundRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1, radius);
   ctx.stroke();
+  // A held board never carries the supporter trim, whatever it was handed.
+  if (b.supporter === true && !b.held) {
+    ctx.save();
+    style.supporterTrim(ctx, x0, y0, w, h);
+    ctx.restore();
+  }
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const cx = b.held ? x0 + w / 2 : b.tx;
@@ -450,7 +463,7 @@ export function drawEstateSign(ctx: Ctx, b: Signboard, sign: SignStyle, estate: 
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
-  drawSignboard(ctx, { ...b, held: false, marks: [], emblem: null }, sign);
+  drawSignboard(ctx, { ...b, held: false, marks: [], emblem: null, supporter: false }, sign);
   const ink = b.tint ?? estate.crest;
   const cx = Math.round(x0 + w / 2);
   ctx.save();

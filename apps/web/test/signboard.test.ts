@@ -43,6 +43,7 @@ describe("signboard content", () => {
       emblem: null,
       accent: null,
       marks: [],
+      supporter: false,
     });
     const board = layoutSignboard(c, { x: 100, y: 100 }, 1, measure)!;
     const text = board.lines.map((l) => l.text).join(" ");

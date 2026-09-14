@@ -553,6 +553,16 @@ export const SIGN_STYLE: SignStyle = {
   radius: 0,
   mark: { plate: "#1e3a5f", rim: "rgba(103,232,249,0.8)", glyph: "#e0f2fe", shape: "round" },
   tintAt: "left",
+  supporterTrim(ctx, x0, y0, w, h) {
+    // A thin light strip along the placard's foot, clear of the tint patch on
+    // the left: a run of pale deck light, brightest at its middle.
+    const sx = x0 + 6;
+    const sw = w - 9;
+    ctx.fillStyle = "rgba(224,242,254,0.35)";
+    ctx.fillRect(sx, y0 + h - 2, sw, 1);
+    ctx.fillStyle = "rgba(240,249,255,0.85)";
+    ctx.fillRect(sx + Math.round(sw * 0.2), y0 + h - 2, Math.round(sw * 0.6), 1);
+  },
   fixings(ctx, x0, y0, w) {
     ctx.fillStyle = HULL_DARK;
     ctx.fillRect(x0 + Math.round(w / 2) - 1, y0 - 6, 3, 6);

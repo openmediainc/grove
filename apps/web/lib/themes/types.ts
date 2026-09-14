@@ -253,6 +253,11 @@ export type Signboard = {
    * (kit `drawSignMark`); a theme only chooses what the medallion is made of.
    */
   marks: readonly SignMark[];
+  /**
+   * The owner is an active supporter (#47): the theme's `supporterTrim` goes
+   * round the board. Always false when held, and on an estate's shared sign.
+   */
+  supporter: boolean;
 };
 
 /** One laid-out mark medallion: centre and radius, SCREEN px. */
