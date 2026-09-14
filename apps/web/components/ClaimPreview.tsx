@@ -21,6 +21,13 @@ import { DEFAULT_THEME, THEME_IDS, THEMES, readThemeChoice, type ThemeId } from 
 import type { Theme } from "@/lib/themes/types";
 
 const TW = 64;
+
+/** A pressed / unpressed chip: signal edge marks the choice, never the only signal (aria-pressed). */
+function toggleClass(on: boolean): string {
+  return `min-h-11 rounded-gh-pill border px-3 text-xs transition-colors duration-gh-fast hover:bg-tint focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-8 ${
+    on ? "border-signal bg-tint font-medium text-ink" : "border-line-strong text-muted"
+  }`;
+}
 const TH = 32;
 
 /**
@@ -98,9 +105,7 @@ export function ClaimPreview({
             type="button"
             onClick={() => setThemeId(id)}
             aria-pressed={id === themeId}
-            className={`rounded-full border px-3 py-1.5 text-xs sm:py-1 ${
-              id === themeId ? "border-lantern-400/60 bg-lantern-400/10 text-lantern-200" : "border-white/15 text-white/60"
-            }`}
+            className={toggleClass(id === themeId)}
           >
             {THEMES[id].lexicon.name}
           </button>
@@ -112,9 +117,7 @@ export function ClaimPreview({
             type="button"
             onClick={() => onViewAs("visitors")}
             aria-pressed={viewAs === "visitors"}
-            className={`rounded-full border px-3 py-1.5 text-xs sm:py-1 ${
-              viewAs === "visitors" ? "border-lantern-400/60 bg-lantern-400/10 text-lantern-200" : "border-white/15 text-white/60"
-            }`}
+            className={toggleClass(viewAs === "visitors")}
           >
             As visitors see it
           </button>
@@ -122,15 +125,13 @@ export function ClaimPreview({
             type="button"
             onClick={() => onViewAs("owner")}
             aria-pressed={viewAs === "owner"}
-            className={`rounded-full border px-3 py-1.5 text-xs sm:py-1 ${
-              viewAs === "owner" ? "border-lantern-400/60 bg-lantern-400/10 text-lantern-200" : "border-white/15 text-white/60"
-            }`}
+            className={toggleClass(viewAs === "owner")}
           >
             As you see it
           </button>
         </div>
       ) : null}
-      <div ref={wrapRef} className="w-full overflow-hidden rounded-xl border border-white/10 bg-dusk-950">
+      <div ref={wrapRef} className="w-full overflow-hidden rounded-gh-lg border border-line-strong bg-surface shadow-gh-1">
         <canvas
           ref={canvasRef}
           role="img"
@@ -138,7 +139,7 @@ export function ClaimPreview({
           style={{ width: "100%", height, display: "block" }}
         />
       </div>
-      <p className="text-xs text-white/55">
+      <p className="text-xs text-muted">
         {plotCaption(preview.plot_index, preview.ring)} · {viewLine(draft.preset, viewAs)}
       </p>
     </div>

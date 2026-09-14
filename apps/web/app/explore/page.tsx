@@ -13,6 +13,7 @@ import { GeoAvatar } from "@/components/Avatar";
 import { DiscoveryShelves } from "@/components/Discovery";
 import { roomHref } from "@/lib/world-url";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { CARD_CLASS, EMPTY_CLASS, PAGE_TITLE_CLASS, PILL_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
 /* The create-space flow and its preview canvas load when Create is pressed (#68). */
 const CreateSpaceFlow = dynamic(() => import("@/components/CreateSpaceFlow").then((m) => m.CreateSpaceFlow), {
@@ -66,8 +67,8 @@ export default function ExplorePage() {
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">Explore</h1>
-          <p className="mt-2 text-white/60">
+          <h1 className={PAGE_TITLE_CLASS}>Explore</h1>
+          <p className="mt-2 text-muted">
             Every space on the world, and who is around right now. Each space is a plot somebody claimed, with its
             own access: Open, Watch only or Private.
           </p>
@@ -77,14 +78,14 @@ export default function ExplorePage() {
             type="button"
             onClick={() => setCreating((o) => !o)}
             aria-expanded={creating}
-            className="shrink-0 rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 sm:py-2"
+            className={buttonClass("primary", "md", "shrink-0")}
           >
             {creating ? "Close" : "Create space"}
           </button>
         ) : signedIn === false ? (
           <Link
             href={`/login?next=${encodeURIComponent("/explore#create")}`}
-            className="shrink-0 rounded-full border border-lantern-400/40 px-4 py-2.5 text-sm text-lantern-300 sm:py-2"
+            className={buttonClass("secondary", "md", "shrink-0")}
           >
             Sign in to create a space
           </Link>
@@ -96,21 +97,21 @@ export default function ExplorePage() {
       <DiscoveryShelves online={online} signedIn={signedIn} />
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl text-lantern-300">Online now</h2>
-        {online === null ? <p className="mt-3 text-sm text-white/55">Looking around…</p> : null}
+        <h2 className={SECTION_TITLE_CLASS}>Online now</h2>
+        {online === null ? <p className="mt-3 text-sm text-muted">Looking around…</p> : null}
         {online && people.length === 0 ? (
-          <p className="mt-3 text-sm text-white/55">Nobody is on the open map right now.</p>
+          <p className={`mt-3 ${EMPTY_CLASS}`}>Nobody on the open map right now.</p>
         ) : null}
         {people.length ? (
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
             {people.map((p) => {
               const jump = jumpHref(p, mapUrl());
               return (
-                <li key={p.key} className="flex items-center gap-3 rounded-xl border border-white/10 bg-dusk-800/60 px-3 py-2.5">
+                <li key={p.key} className="flex items-center gap-3 rounded-gh-lg border border-line bg-surface-raised px-3 py-2.5 shadow-gh-1">
                   <GeoAvatar kind={p.type === "agent" ? "agent" : "human"} seed={p.slug} size={28} label={false} />
                   <Link href={resultPath(p)} className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{p.name}</span>
-                    <span className="block truncate text-xs text-white/55">
+                    <span className="block truncate font-semibold text-ink">{p.name}</span>
+                    <span className="block truncate text-xs text-muted">
                       {p.type === "agent" ? "agent" : "person"}
                       {p.detail ? ` · ${p.detail}` : ""}
                     </span>
@@ -118,7 +119,7 @@ export default function ExplorePage() {
                   {jump ? (
                     <a
                       href={jump}
-                      className="shrink-0 rounded-full border border-white/15 px-3 py-2 text-xs text-white/65 hover:text-lantern-300 sm:py-1"
+                      className={buttonClass("ghost", "sm", "min-h-11 shrink-0 border-line-strong sm:min-h-8")}
                     >
                       Watch
                     </a>
@@ -131,7 +132,7 @@ export default function ExplorePage() {
       </section>
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl text-lantern-300">Spaces</h2>
+        <h2 className={SECTION_TITLE_CLASS}>Spaces</h2>
         <ul className="mt-3 space-y-3">
           {(spaces ?? []).map((s) => (
             <li key={s.id}>
@@ -139,9 +140,9 @@ export default function ExplorePage() {
             </li>
           ))}
         </ul>
-        {spaces === null && !err ? <p className="mt-3 text-sm text-white/55">Loading…</p> : null}
+        {spaces === null && !err ? <p className="mt-3 text-sm text-muted">Loading…</p> : null}
         {spaces && spaces.length === 0 ? (
-          <p className="mt-3 text-white/55">No plot has been claimed yet. The world is bare ground.</p>
+          <p className={`mt-3 ${EMPTY_CLASS}`}>No plot claimed yet. The world is bare ground.</p>
         ) : null}
         <ErrorNotice error={err} className="mt-4" />
       </section>
@@ -151,7 +152,7 @@ export default function ExplorePage() {
 
 function AccessChip({ preset }: { preset: string }) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-xs ${accessTint(preset)}`}>{accessCopy(preset).word}</span>
+    <span className={`${PILL_CLASS} ${accessTint(preset)}`}>{accessCopy(preset).word}</span>
   );
 }
 
@@ -162,15 +163,15 @@ function SpaceRow({ space }: { space: DirectorySpace }) {
   // server will say. No name, no owner, no headcount beyond the directory's.
   if (!space.slug) {
     return (
-      <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-dusk-800/40 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${CARD_CLASS}`}>
         <div className="min-w-0">
-          <div className="font-semibold text-white/55">Held plot</div>
-          <div className="text-xs text-white/50">This plot is claimed. Its name is not public.</div>
+          <div className="font-semibold text-muted">Held plot</div>
+          <div className="text-xs text-muted">This plot is claimed. Its name is not public.</div>
           <LobbyDoors space={space} />
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:shrink-0 sm:flex-col sm:items-end sm:text-right">
           <AccessChip preset={space.policy_preset} />
-          <div className="text-xs text-white/50 sm:mt-1">plot {space.plot_index}</div>
+          <div className="font-brand-mono text-xs tabular-nums text-muted sm:mt-1">plot {space.plot_index}</div>
         </div>
       </div>
     );
@@ -179,28 +180,28 @@ function SpaceRow({ space }: { space: DirectorySpace }) {
   return (
     <Link
       href={spaceHref(space.slug)}
-      className="flex flex-col gap-2 rounded-xl border border-white/10 bg-dusk-800/60 p-4 hover:border-lantern-400/30 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+      className={`flex flex-col gap-2 transition-colors duration-gh-fast hover:bg-tint sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${CARD_CLASS}`}
     >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="min-w-0 truncate font-semibold">{space.name}</span>
+          <span className="min-w-0 truncate font-semibold text-ink">{space.name}</span>
           {space.is_owner ? (
-            <span className="rounded-full bg-lantern-400/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-lantern-300">
+            <span className="gh-label rounded-gh-pill bg-tint px-2 py-0.5 text-ink">
               yours
             </span>
           ) : space.is_member ? (
-            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/60">
+            <span className="gh-label rounded-gh-pill bg-tint px-2 py-0.5 text-muted">
               member
             </span>
           ) : null}
         </div>
-        <div className="truncate text-xs text-white/50">
+        <div className="truncate text-xs text-muted">
           {space.owner_handle ? `@${space.owner_handle}` : "unowned"} · {occupancy}
         </div>
         {space.orgs?.length ? (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {space.orgs.map((o) => (
-              <span key={o.id} className="inline-flex items-center gap-1 text-[10px] text-white/55">
+              <span key={o.id} className="inline-flex items-center gap-1 text-[10px] text-muted">
                 <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: o.colour }} />
                 {o.name}
               </span>
@@ -210,7 +211,7 @@ function SpaceRow({ space }: { space: DirectorySpace }) {
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:shrink-0 sm:flex-col sm:items-end sm:text-right">
         <AccessChip preset={space.policy_preset} />
-        <div className="text-xs text-white/50 sm:mt-1">plot {space.plot_index}</div>
+        <div className="font-brand-mono text-xs tabular-nums text-muted sm:mt-1">plot {space.plot_index}</div>
       </div>
     </Link>
   );
@@ -238,7 +239,7 @@ function LobbyDoors({ space }: { space: DirectorySpace }) {
           key={r.id}
           type="button"
           onClick={() => void visit(r.slug)}
-          className="rounded-full border border-lantern-400/40 px-3 py-1.5 text-xs text-lantern-300"
+          className={buttonClass("secondary", "sm", "min-h-11 sm:min-h-8")}
         >
           Visit the {r.name} · {accessCopy(r.room_preset).word}
         </button>

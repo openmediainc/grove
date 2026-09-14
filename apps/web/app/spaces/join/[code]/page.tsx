@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { spaceHref } from "@/lib/space-page";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { PAGE_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
 /**
  * The landing page for an invite link. Redemption is a POST, so it happens here
@@ -48,17 +49,17 @@ export default function RedeemInvite() {
 
   return (
     <main className="mx-auto max-w-lg px-4 py-10 sm:px-6 sm:py-16">
-      <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">An invitation</h1>
+      <h1 className={PAGE_TITLE_CLASS}>An invitation</h1>
 
       {signedIn === false ? (
         <>
-          <p className="mt-3 text-white/60">
+          <p className="mt-3 text-muted">
             Sign in first and we will bring you straight back here — the invite admits a person, so Glasshouse
             has to know which one.
           </p>
           <Link
             href={loginHref(code)}
-            className="mt-6 inline-block rounded-full bg-lantern-400 px-5 py-3 text-sm font-semibold text-dusk-950 sm:py-2"
+            className={buttonClass("primary", "md", "mt-6")}
           >
             Sign in
           </Link>
@@ -67,13 +68,13 @@ export default function RedeemInvite() {
 
       {signedIn && state !== "done" ? (
         <>
-          <p className="mt-3 text-white/60">
+          <p className="mt-3 text-muted">
             Someone has held a plot open for you. Accepting makes you a member of their space.
           </p>
           <button
             onClick={() => void redeem()}
             disabled={state === "working"}
-            className="mt-6 rounded-full bg-lantern-400 px-5 py-3 font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+            className={buttonClass("primary", "md", "mt-6")}
           >
             {state === "working" ? "Accepting…" : "Accept the invitation"}
           </button>
@@ -82,12 +83,12 @@ export default function RedeemInvite() {
 
       {state === "done" && world ? (
         <>
-          <p className="mt-3 text-white/60">
-            You are a member of <strong className="text-white">{world.name}</strong>.
+          <p className="mt-3 text-muted">
+            You are a member of <strong className="text-ink">{world.name}</strong>.
           </p>
           <Link
             href={spaceHref(world.slug)}
-            className="mt-6 inline-block rounded-full bg-lantern-400 px-5 py-3 font-semibold text-dusk-950 sm:py-2"
+            className={buttonClass("primary", "md", "mt-6")}
           >
             Go to the space
           </Link>
@@ -97,11 +98,11 @@ export default function RedeemInvite() {
       {err ? (
         <div className="mt-6">
           <ErrorNotice error={err} action="accept this invite" />
-          <p className="mt-2 text-sm text-white/50">An invite stops working once it is revoked, spent, or past its expiry.</p>
+          <p className="mt-2 text-sm text-muted">An invite stops working once it is revoked, spent, or past its expiry.</p>
         </div>
       ) : null}
 
-      <Link href="/explore" className="mt-10 block py-2 text-sm text-white/55">
+      <Link href="/explore" className="mt-10 inline-block py-2 text-sm text-muted underline-offset-2 hover:text-ink hover:underline">
         ← Explore
       </Link>
     </main>

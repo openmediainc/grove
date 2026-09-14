@@ -31,6 +31,7 @@ import { spaceHref, suggestSlug } from "@/lib/space-page";
 import { drawBrandEmblem } from "@/lib/themes/kit";
 import { ClaimPreview } from "@/components/ClaimPreview";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { CHECKBOX_CLASS, INPUT_CLASS, SECTION_TITLE_CLASS, buttonClass, optionClass } from "@/lib/brand-ui";
 
 /**
  * Create space (queue #26), as two steps (queue #48):
@@ -158,8 +159,8 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
   const header = (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="font-display text-2xl text-lantern-300">Create a space</h2>
-        <p className="mt-1 text-sm text-white/50">
+        <h2 className={SECTION_TITLE_CLASS}>Create a space</h2>
+        <p className="mt-1 text-sm text-muted">
           {step === "details"
             ? "Step 1 of 2: details. You get the next free plot on the shared world, and it stays yours. Six rooms come with it."
             : step === "preview"
@@ -167,7 +168,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
               : "Your space is claimed."}
         </p>
       </div>
-      <button type="button" onClick={onClose} className="shrink-0 text-xs text-white/55 hover:text-white/70">
+      <button type="button" onClick={onClose} className={buttonClass("ghost", "sm", "min-h-11 shrink-0 sm:min-h-8")}>
         Close
       </button>
     </div>
@@ -176,22 +177,22 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
   if (step === "moved" && moved && preview) {
     const at = plotCentre(moved.to);
     return (
-      <section ref={topRef} id="create" className="mt-8 space-y-4 rounded-2xl border border-white/10 bg-dusk-800/70 p-4 sm:p-6">
+      <section ref={topRef} id="create" className="mt-8 space-y-4 rounded-gh-lg border border-line bg-surface-raised p-4 shadow-gh-1 sm:p-6">
         {header}
-        <p className="rounded-lg border border-amber-300/30 bg-amber-300/5 p-3 text-sm text-amber-100" role="status">
+        <p className="rounded-gh-md border border-line-strong bg-tint p-3 text-sm text-ink" role="status">
           {moved.message}
         </p>
         <ClaimPreview preview={preview} draft={draft} viewAs={viewAs} onViewAs={setViewAs} />
         <div className="flex flex-col gap-2 sm:flex-row">
           <a
             href={gp(spaceHref(moved.slug))}
-            className="rounded-full bg-lantern-400 px-4 py-3 text-center font-semibold text-dusk-950 sm:py-2"
+            className={buttonClass("primary", "md")}
           >
             Go to your space
           </a>
           <a
             href={gp(`/?at=${at.tx},${at.ty}`)}
-            className="rounded-full border border-white/15 px-4 py-3 text-center text-sm text-white/70 sm:py-2"
+            className={buttonClass("secondary", "md")}
           >
             See it on the map
           </a>
@@ -203,19 +204,19 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
   if (step === "preview") {
     const copy = accessCopy(preset);
     return (
-      <section ref={topRef} id="create" className="mt-8 space-y-4 rounded-2xl border border-white/10 bg-dusk-800/70 p-4 sm:p-6">
+      <section ref={topRef} id="create" className="mt-8 space-y-4 rounded-gh-lg border border-line bg-surface-raised p-4 shadow-gh-1 sm:p-6">
         {header}
-        <dl className="grid grid-cols-1 gap-x-4 gap-y-1 rounded-lg border border-white/10 p-3 text-sm sm:grid-cols-[auto_1fr]">
-          <dt className="text-white/55">Name</dt>
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-1 rounded-gh-md border border-line bg-surface p-3 text-sm text-ink sm:grid-cols-[auto_1fr]">
+          <dt className="text-muted">Name</dt>
           <dd className="min-w-0 break-words">{name.trim()}</dd>
-          <dt className="text-white/55">Page</dt>
-          <dd className="min-w-0 break-all font-mono text-xs leading-5">/s/{finalSlug}</dd>
-          <dt className="text-white/55">Access</dt>
+          <dt className="text-muted">Page</dt>
+          <dd className="min-w-0 break-all font-brand-mono text-xs leading-5">/s/{finalSlug}</dd>
+          <dt className="text-muted">Access</dt>
           <dd>
-            <strong>{copy.word}</strong> <span className="text-white/50">· {copy.line}</span>
+            <strong>{copy.word}</strong> <span className="text-muted">· {copy.line}</span>
           </dd>
-          <dt className="text-white/55">Branding</dt>
-          <dd className="text-white/70">
+          <dt className="text-muted">Branding</dt>
+          <dd className="text-muted">
             {hasBranding
               ? [check.valid.accent ? "colour" : null, check.valid.signText ? `"${check.valid.signText}"` : null, check.valid.emblem ? BRAND_EMBLEM_LABEL[check.valid.emblem].toLowerCase() : null]
                   .filter(Boolean)
@@ -227,16 +228,16 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
         {preview ? (
           <>
             <ClaimPreview preview={preview} draft={draft} viewAs={viewAs} onViewAs={setViewAs} />
-            <p className="text-xs text-white/55">
+            <p className="text-xs text-muted">
               Nothing is reserved: {plotCaption(preview.plot_index, preview.ring).toLowerCase()} is the next free plot right now. Your plot
               may shift if someone claims first.{" "}
-              <button type="button" onClick={() => void loadPreview()} disabled={loadingPreview} className="underline hover:text-white/70">
+              <button type="button" onClick={() => void loadPreview()} disabled={loadingPreview} className="text-ink underline decoration-line-strong underline-offset-2 hover:decoration-ink">
                 {loadingPreview ? "Checking…" : "Check again"}
               </button>
             </p>
           </>
         ) : loadingPreview ? (
-          <p className="text-sm text-white/55">Finding your plot…</p>
+          <p className="text-sm text-muted">Finding your plot…</p>
         ) : null}
         <ErrorNotice error={previewErr} />
 
@@ -247,7 +248,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
               setStep("details");
               scrollTop();
             }}
-            className="rounded-full border border-white/15 px-4 py-3 text-sm text-white/70 sm:py-2"
+            className={buttonClass("secondary", "md")}
           >
             Back
           </button>
@@ -255,7 +256,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={() => void confirm()}
             disabled={busy || !preview}
-            className="rounded-full bg-lantern-400 px-5 py-3 font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+            className={buttonClass("primary", "md")}
           >
             {busy ? "Claiming…" : "Confirm and create"}
           </button>
@@ -267,11 +268,11 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
 
   const swatch = paletteKeyOf(brand.accent);
   return (
-    <section ref={topRef} id="create" className="mt-8 space-y-4 rounded-2xl border border-white/10 bg-dusk-800/70 p-4 sm:p-6">
+    <section ref={topRef} id="create" className="mt-8 space-y-4 rounded-gh-lg border border-line bg-surface-raised p-4 shadow-gh-1 sm:p-6">
       {header}
 
       <label className="block">
-        <span className="text-sm text-white/70">Name</span>
+        <span className="text-sm text-muted">Name</span>
         <input
           value={name}
           onChange={(e) => {
@@ -279,12 +280,12 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
             if (!slugTouched) setSlug(suggestSlug(e.target.value));
           }}
           placeholder="Harbour workshop"
-          className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 outline-none focus:border-lantern-400"
+          className={`mt-1 ${INPUT_CLASS}`}
         />
       </label>
 
       <label className="block">
-        <span className="text-sm text-white/70">Slug</span>
+        <span className="text-sm text-muted">Slug</span>
         <input
           value={slug}
           onChange={(e) => {
@@ -293,43 +294,41 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
           }}
           onBlur={() => setSlug(suggestSlug(slug))}
           placeholder="harbour-workshop"
-          className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 font-mono text-sm outline-none focus:border-lantern-400"
+          className={`mt-1 font-brand-mono text-sm ${INPUT_CLASS}`}
         />
-        <span className="mt-1 block break-all text-xs text-white/55">
+        <span className="mt-1 block break-all text-xs text-muted">
           Lowercase and dashes. Its page will be <code>/s/{finalSlug || "your-slug"}</code>.
         </span>
       </label>
 
       <fieldset className="space-y-2">
-        <legend className="text-sm text-white/70">Access</legend>
+        <legend className="text-sm text-muted">Access</legend>
         {ACCESS_ORDER.map((p) => {
           const copy = accessCopy(p);
           return (
             <label
               key={p}
-              className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${
-                preset === p ? "border-lantern-400/50 bg-lantern-400/5" : "border-white/10"
-              }`}
+              className={`flex cursor-pointer items-start gap-3 ${optionClass(preset === p)}`}
             >
               <input
                 type="radio"
                 name="access"
-                className="mt-1 h-4 w-4 shrink-0 accent-lantern-400"
+                className={`mt-1 ${CHECKBOX_CLASS}`}
                 checked={preset === p}
                 onChange={() => setPreset(p)}
               />
               <span>
                 <strong>{copy.word}</strong>
-                <span className="block text-sm text-white/50">{copy.line}</span>
+                <span className="block text-sm text-muted">{copy.line}</span>
               </span>
             </label>
           );
         })}
-        <p className="text-xs text-white/50">You can change it later under Manage on the space&apos;s page.</p>
+        <p className="text-xs text-muted">You can change it later under Manage on the space&apos;s page.</p>
       </fieldset>
 
-      <details className="rounded-lg border border-white/10 p-3" open={hasBranding || undefined}>
-        <summary className="cursor-pointer text-sm text-white/70">Branding (optional)</summary>
+      <details className="rounded-gh-md border border-line bg-surface p-3" open={hasBranding || undefined}>
+        <summary className="min-h-11 cursor-pointer text-sm text-ink sm:min-h-0">Branding (optional)</summary>
         <div className="mt-3 space-y-4">
           <div>
             <form
@@ -339,7 +338,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
               }}
               className="flex flex-wrap items-end gap-2"
             >
-              <label className="block min-w-0 flex-1 text-xs text-white/50">
+              <label className="block min-w-0 flex-1 text-xs text-muted">
                 Use my website
                 <input
                   value={siteUrl}
@@ -348,33 +347,33 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
                   inputMode="url"
                   autoComplete="url"
                   maxLength={2048}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white/85"
+                  className={`mt-1 text-sm ${INPUT_CLASS}`}
                 />
               </label>
               <button
                 type="submit"
                 disabled={suggesting || !siteUrl.trim()}
-                className="rounded-full border border-lantern-400/50 px-4 py-2 text-sm text-lantern-200 disabled:opacity-50"
+                className={buttonClass("secondary", "md")}
               >
                 {suggesting ? "Reading…" : "Suggest"}
               </button>
             </form>
-            <p className="mt-1 text-[11px] text-white/50">
+            <p className="mt-1 text-[11px] text-muted">
               Glasshouse reads only the site&apos;s name, theme colour and icon colour. Nothing is saved.
             </p>
             <ErrorNotice error={suggestErr} size="xs" className="mt-2" />
             {suggestion ? (
-              <div className="mt-3 space-y-1 text-xs text-white/70" aria-live="polite">
-                <p className="break-all text-white/50">From {suggestion.source.url}</p>
+              <div className="mt-3 space-y-1 text-xs text-muted" aria-live="polite">
+                <p className="break-all text-muted">From {suggestion.source.url}</p>
                 {suggestion.name ? <p>Sign text: {suggestion.name}</p> : null}
                 {suggestion.accent ? (
                   <p className="flex items-center gap-2">
-                    <span className="inline-block h-3 w-3 shrink-0 rounded-full border border-white/20" style={{ background: suggestion.accent.accent }} aria-hidden />
+                    <span className="inline-block h-3 w-3 shrink-0 rounded-full border border-line-strong" style={{ background: suggestion.accent.accent }} aria-hidden />
                     {suggestionColourLine(suggestion)}
                   </p>
                 ) : null}
                 {suggestion.notes.map((n) => (
-                  <p key={n} className="text-white/55">
+                  <p key={n} className="text-muted">
                     {n}
                   </p>
                 ))}
@@ -385,14 +384,14 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
                       setBrand(applySuggestion(brand, suggestion));
                       setSuggestion(null);
                     }}
-                    className="rounded-full bg-lantern-400 px-3 py-1.5 text-xs font-medium text-dusk-950"
+                    className={buttonClass("secondary", "sm")}
                   >
                     Apply
                   </button>
                   <button
                     type="button"
                     onClick={() => setSuggestion(null)}
-                    className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/60"
+                    className={buttonClass("ghost", "sm")}
                   >
                     Dismiss
                   </button>
@@ -402,13 +401,13 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <p className="text-xs text-white/50">Accent colour</p>
+            <p className="text-xs text-muted">Accent colour</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setBrand({ ...brand, accent: "" })}
                 aria-pressed={!brand.accent.trim()}
-                className={`h-8 rounded-full border px-3 text-xs ${!brand.accent.trim() ? "border-lantern-400/60 text-lantern-200" : "border-white/15 text-white/60"}`}
+                className={`h-8 rounded-gh-pill border px-3 text-xs ${!brand.accent.trim() ? "border-signal bg-tint text-ink" : "border-line-strong text-muted"}`}
               >
                 None
               </button>
@@ -420,7 +419,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
                   aria-label={p.label}
                   aria-pressed={swatch === p.key}
                   onClick={() => setBrand({ ...brand, accent: p.hex })}
-                  className={`h-8 w-8 rounded-full border-2 ${swatch === p.key ? "border-white" : "border-white/10"}`}
+                  className={`h-8 w-8 rounded-gh-pill border-2 ${swatch === p.key ? "border-ink shadow-gh-ring" : "border-line"}`}
                   style={{ background: p.hex }}
                 />
               ))}
@@ -430,33 +429,33 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
                 placeholder="#rrggbb"
                 maxLength={7}
                 aria-label="Accent hex"
-                className="w-24 rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1.5 font-mono text-xs text-white/85"
+                className={`${INPUT_CLASS} !w-24 font-brand-mono text-xs`}
               />
             </div>
-            {check.accentError ? <p className="mt-1 text-xs text-red-300">{check.accentError}</p> : null}
+            {check.accentError ? <p className="mt-1 text-xs text-danger-ink">{check.accentError}</p> : null}
           </div>
 
-          <label className="block text-xs text-white/50">
+          <label className="block text-xs text-muted">
             Sign text
             <input
               value={brand.signText}
               onChange={(e) => setBrand({ ...brand, signText: e.target.value })}
               placeholder="Open late on Fridays"
-              className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white/85"
+              className={`mt-1 text-sm ${INPUT_CLASS}`}
             />
-            <span className={`mt-1 block ${check.signTextCount > SIGN_TEXT_MAX ? "text-red-300" : "text-white/50"}`}>
+            <span className={`mt-1 block ${check.signTextCount > SIGN_TEXT_MAX ? "text-danger-ink" : "text-muted"}`}>
               {check.signTextError ?? `${check.signTextCount}/${SIGN_TEXT_MAX}`}
             </span>
           </label>
 
           <div>
-            <p className="text-xs text-white/50">Emblem</p>
+            <p className="text-xs text-muted">Emblem</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <button
                 type="button"
                 onClick={() => setBrand({ ...brand, emblem: null })}
                 aria-pressed={brand.emblem === null}
-                className={`h-9 rounded-lg border px-3 text-xs ${brand.emblem === null ? "border-lantern-400/60 text-lantern-200" : "border-white/10 text-white/60"}`}
+                className={`h-9 rounded-gh-md border px-3 text-xs ${brand.emblem === null ? "border-signal bg-tint text-ink" : "border-line-strong text-muted"}`}
               >
                 None
               </button>
@@ -468,7 +467,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
                   aria-label={BRAND_EMBLEM_LABEL[key]}
                   aria-pressed={brand.emblem === key}
                   onClick={() => setBrand({ ...brand, emblem: key })}
-                  className={`grid h-9 w-9 place-items-center rounded-lg border ${brand.emblem === key ? "border-lantern-400/60 bg-lantern-400/10" : "border-white/10"}`}
+                  className={`grid h-9 w-9 place-items-center rounded-gh-md border ${brand.emblem === key ? "border-signal bg-tint" : "border-line-strong"}`}
                 >
                   <Emblem emblem={key} colour={check.valid.accent ?? "#f4d19a"} />
                 </button>
@@ -476,7 +475,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           {preset === "private" ? (
-            <p className="text-xs text-white/55">
+            <p className="text-xs text-muted">
               This space is Private, so the map will show everyone else a held plot with none of this on it. The preview shows both views.
             </p>
           ) : null}
@@ -487,7 +486,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
         type="button"
         onClick={toPreview}
         disabled={!detailsOk}
-        className="w-full rounded-full bg-lantern-400 py-3 font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+        className={buttonClass("primary", "md", "w-full")}
       >
         Next: preview on the map
       </button>

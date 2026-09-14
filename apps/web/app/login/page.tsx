@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { gp } from "@/lib/base";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { CHECKBOX_CLASS, INPUT_CLASS, LINK_CLASS, PAGE_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
 /** Where the visitor was heading when we asked them to sign in. */
 const AFTER_LOGIN = "grove-after-login";
@@ -167,21 +168,21 @@ function LoginForm() {
   if (sent) {
     return (
       <main className="mx-auto max-w-md px-4 py-10 sm:px-6 sm:py-16">
-        <p className="text-xs uppercase tracking-[0.25em] text-lantern-400/80">Glasshouse · sign in</p>
+        <p className="gh-label text-muted">Glasshouse · sign in</p>
         {sent.delivery === "email" ? (
           <>
-            <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">Check your email</h1>
-            <p className="mt-3 text-white/70">
-              We sent a sign-in link to <span className="break-all text-white/90">{sent.to}</span>
+            <h1 className={`mt-1 ${PAGE_TITLE_CLASS}`}>Check your email</h1>
+            <p className="mt-3 text-muted">
+              We sent a sign-in link to <span className="break-all text-ink">{sent.to}</span>
               {sent.from ? (
                 <>
                   {" "}
-                  from <span className="break-all text-lantern-300">{sent.from}</span>
+                  from <span className="break-all text-ink">{sent.from}</span>
                 </>
               ) : null}
               . It works once and expires in 15 minutes.
             </p>
-            <ul className="mt-5 space-y-2 text-sm text-white/55">
+            <ul className="mt-5 space-y-2 text-sm text-muted">
               <li>Nothing after a minute? Look in spam, junk or Promotions, and search your mail for “Enter Glasshouse”.</li>
               {sent.from ? <li>Adding {sent.from} to your contacts helps the next one land in your inbox.</li> : null}
               <li>If you ask again, use the newest email — each one carries a fresh link.</li>
@@ -189,16 +190,16 @@ function LoginForm() {
           </>
         ) : sent.delivery === "failed" ? (
           <>
-            <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">That link didn’t go out</h1>
-            <p className="mt-3 text-white/70">
+            <h1 className={`mt-1 ${PAGE_TITLE_CLASS}`}>That link didn’t go out</h1>
+            <p className="mt-3 text-muted">
               Our mail provider didn’t accept the message just now, so there is no email to wait for. Try again in a
               minute. If it keeps happening, it is on our side and the operators can see it.
             </p>
           </>
         ) : (
           <>
-            <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">Email isn’t set up here</h1>
-            <p className="mt-3 text-white/70">
+            <h1 className={`mt-1 ${PAGE_TITLE_CLASS}`}>Email isn’t set up here</h1>
+            <p className="mt-3 text-muted">
               This Glasshouse server has no way to send email yet, so no link was sent. Let the operator know.
             </p>
           </>
@@ -207,7 +208,7 @@ function LoginForm() {
           type="button"
           disabled={busy || waitSeconds > 0}
           onClick={() => void requestLink()}
-          className="mt-8 w-full rounded-full bg-lantern-400 py-3 font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+          className={buttonClass("primary", "md", "mt-8 w-full")}
         >
           {busy ? "Sending…" : waitSeconds > 0 ? `Send another link in ${waitSeconds}s` : "Send another link"}
         </button>
@@ -218,13 +219,13 @@ function LoginForm() {
             setMsg(null);
             setSendErr(null);
           }}
-          className="mt-3 block w-full py-2 text-sm text-white/50 hover:text-white/80"
+          className={buttonClass("ghost", "md", "mt-3 w-full text-muted")}
         >
           Use a different address
         </button>
-        {msg ? <p className="mt-4 text-sm text-lantern-300">{msg}</p> : null}
+        {msg ? <p className="mt-4 text-sm text-ink">{msg}</p> : null}
         <ErrorNotice error={sendErr} className="mt-4" />
-        <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/55 hover:text-white/70">
+        <a href={gp("/")} className="mt-8 inline-block py-2 text-sm text-muted underline-offset-2 hover:text-ink hover:underline">
           ← Keep watching the world instead
         </a>
       </main>
@@ -233,42 +234,42 @@ function LoginForm() {
 
   return (
     <main className="mx-auto max-w-md px-4 py-10 sm:px-6 sm:py-16">
-      <p className="text-xs uppercase tracking-[0.25em] text-lantern-400/80">Glasshouse · sign in</p>
-      <h1 className="font-display mt-1 text-3xl text-lantern-300 sm:text-4xl">
+      <p className="gh-label text-muted">Glasshouse · sign in</p>
+      <h1 className={`mt-1 ${PAGE_TITLE_CLASS}`}>
         {why ? "One step first" : "Magic link"}
       </h1>
-      <p className="mt-3 text-white/70">{reason(why, what)}</p>
+      <p className="mt-3 text-muted">{reason(why, what)}</p>
       {next ? (
-        <p className="mt-2 text-sm text-white/55">
-          You were heading for <code className="break-all text-lantern-300/80">{next}</code>. We will drop you there once
+        <p className="mt-2 text-sm text-muted">
+          You were heading for <code className="break-all font-brand-mono text-ink">{next}</code>. We will drop you there once
           you are in.
         </p>
       ) : null}
-      <p className="mt-2 text-sm text-white/55">Closed alpha: an invite code and an 18+ attestation are required.</p>
+      <p className="mt-2 text-sm text-muted">Closed alpha: an invite code and an 18+ attestation are required.</p>
       <form onSubmit={submit} className="mt-8 space-y-4">
-        <label className="block text-sm">
+        <label className="block text-sm font-medium text-ink">
           Email
           <input
-            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2.5 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-lantern-400"
+            className={`mt-1 font-normal ${INPUT_CLASS}`}
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </label>
-        <label className="block text-sm">
+        <label className="block text-sm font-medium text-ink">
           Invite code
           <input
-            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2.5 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-lantern-400"
+            className={`mt-1 font-normal ${INPUT_CLASS}`}
             required
             value={invite}
             onChange={(e) => setInvite(e.target.value)}
           />
         </label>
-        <label className="flex cursor-pointer items-center gap-3 py-1 text-sm">
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 py-1 text-sm text-ink">
           <input
             type="checkbox"
-            className="h-6 w-6 shrink-0 accent-lantern-400"
+            className={`${CHECKBOX_CLASS} !h-5 !w-5`}
             checked={age}
             onChange={(e) => setAge(e.target.checked)}
           />
@@ -276,19 +277,20 @@ function LoginForm() {
         </label>
         <button
           disabled={busy}
-          className="w-full rounded-full bg-lantern-400 py-3 font-semibold text-dusk-950 disabled:opacity-50 sm:py-2"
+          type="submit"
+          className={buttonClass("primary", "md", "w-full")}
         >
           {busy ? "Sending…" : "Send link"}
         </button>
       </form>
-      {msg ? <p className="mt-4 text-sm text-lantern-300">{msg}</p> : null}
+      {msg ? <p className="mt-4 text-sm text-ink">{msg}</p> : null}
       <ErrorNotice error={sendErr} className="mt-4" />
       {url ? (
-        <a className="mt-3 block break-all text-sm underline text-lantern-400" href={url}>
+        <a className={`mt-3 block break-all text-sm ${LINK_CLASS}`} href={url}>
           {url}
         </a>
       ) : null}
-      <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/55 hover:text-white/70">
+      <a href={gp("/")} className="mt-8 inline-block py-2 text-sm text-muted underline-offset-2 hover:text-ink hover:underline">
         ← Keep watching the world instead
       </a>
     </main>
