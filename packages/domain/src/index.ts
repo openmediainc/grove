@@ -381,7 +381,7 @@ export class GroveApp {
   supporters: SupporterService;
   /** Plot decor (044): owner-placed cosmetic presets unlocked by marks. */
   decor: DecorService;
-  /** Owner default theme per space (046). */
+  /** Owner default theme per space (045). */
   spaceTheme: SpaceThemeService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
   follows: FollowService;
