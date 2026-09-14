@@ -66,15 +66,32 @@ import { SpectatorPeek, loginHref, type OrgBadge, type Peek } from "./SpectatorP
 import { deepLinkApplies, parseDeepLink, resolveAt, type DeepLink } from "@/lib/deep-link";
 import {
   centreOn,
-  clampPan as clampPanView,
   clampTile,
-  fitZoom,
   insetCollapsedDefault,
   insetTransform,
-  viewportBox,
   worldCentre,
-  zoomRange,
 } from "@/lib/camera";
+import {
+  DEPTH_ANGLE,
+  DEPTH_KEY,
+  aimScreenY,
+  clampPanTilted,
+  depthPreference,
+  easeTilt,
+  fitZoomTilted,
+  focusOf,
+  fromScreen,
+  groundTransform,
+  perspectiveScale,
+  shadowSpec,
+  stepParallax,
+  tiltFor,
+  tiltY,
+  toScreen,
+  viewportBoxTilted,
+  zoomRangeTilted,
+  type LayerHeight,
+} from "@/lib/depth";
 import {
   districtLabelsVisible,
   districtStops,
@@ -842,6 +859,14 @@ export function WorldMap() {
   /** The last inset transform, so a click on the inset maps back to the world. */
   const insetXformRef = useRef<ReturnType<typeof insetTransform> | null>(null);
   const [insetCollapsed, setInsetCollapsed] = useState(true);
+  /** Depth view (#46): a viewer preference, off by default, remembered in this browser. */
+  const [depthOn, setDepthOn] = useState(false);
+  /**
+   * What the renderer reads for Depth view each frame: whether it is on, the
+   * tilt as currently drawn (it eases), the ground's parallax trail, and the
+   * last focus it was measured from. Never stored in a shot or a link.
+   */
+  const depthRef = useRef({ on: false, k: 1, lag: { x: 0, y: 0 }, lastF: null as { fx: number; fy: number } | null, lastT: 0 });
   /** Resting at plot: drawn, never counted, followed, cut to or rung for. */
   const restingRef = useRef<RestingBody[]>([]);
   const seatsRef = useRef<Map<string, Seat>>(new Map());
@@ -1508,6 +1533,27 @@ export function WorldMap() {
       return next;
     });
   }, []);
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(DEPTH_KEY);
+    } catch {
+      /* private window: off */
+    }
+    const on = depthPreference(stored);
+    depthRef.current.on = on;
+    setDepthOn(on);
+  }, []);
+  const toggleDepth = useCallback(() => {
+    const next = !depthRef.current.on;
+    depthRef.current.on = next;
+    setDepthOn(next);
+    try {
+      window.localStorage.setItem(DEPTH_KEY, next ? "1" : "0");
+    } catch {
+      /* not remembered; still toggles */
+    }
+  }, []);
   const insetDragRef = useRef(false);
   const insetMove = useCallback((ev: React.PointerEvent<HTMLCanvasElement>) => {
     const xf = insetXformRef.current;
@@ -2065,14 +2111,14 @@ export function WorldMap() {
     /** Zoomed all the way out, the entire world fits on screen, phone or desktop (lib/camera). */
     const minZoom = () => {
       const { w, h } = origin();
-      return zoomRange(worldBox(), w, h, { nominalMin: NOMINAL_MIN_ZOOM, max: MAX_ZOOM }).min;
+      return zoomRangeTilted(worldBox(), w, h, depthRef.current.k, { nominalMin: NOMINAL_MIN_ZOOM, max: MAX_ZOOM }).min;
     };
 
     /** The world may be dragged to the edge of the viewport, never past it (lib/camera). */
     const clampPan = () => {
       const v = viewRef.current;
       const { w, h } = origin();
-      const next = clampPanView(v, worldBox(), w, h, PAN_MARGIN);
+      const next = clampPanTilted(v, worldBox(), w, h, PAN_MARGIN, depthRef.current.k);
       v.px = next.px;
       v.py = next.py;
     };
@@ -2118,14 +2164,12 @@ export function WorldMap() {
       glideRef.current = { tx: 0, ty: 0, zoom: 1, start: performance.now(), fit: true };
     };
 
-    /** Screen → tile. The exact inverse of how a tile is drawn. */
+    /** Screen → tile. The exact inverse of how a tile is drawn (Depth view's tilt included, lib/depth). */
     const tileFromClient = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
-      const { ox, oy } = origin();
-      const v = viewRef.current;
-      const wx = (clientX - rect.left - v.px) / v.zoom - ox;
-      const wy = (clientY - rect.top - v.py) / v.zoom - oy;
-      const { tx, ty } = unIso(wx, wy);
+      const { ox, oy, w, h } = origin();
+      const l = fromScreen(viewRef.current, w, h, depthRef.current.k, clientX - rect.left, clientY - rect.top);
+      const { tx, ty } = unIso(l.x - ox, l.y - oy);
       return { tx: Math.round(tx), ty: Math.round(ty) };
     };
 
@@ -2166,7 +2210,8 @@ export function WorldMap() {
           const at = lastPosRef.current.get(a.id);
           if (!at) return [];
           const q = iso(at.x, at.y);
-          return [{ id: a.id, x: (ox + q.x) * v.zoom + v.px, y: (oy + q.y) * v.zoom + v.py }];
+          const s = toScreen(v, w, h, depthRef.current.k, ox + q.x, oy + q.y);
+          return [{ id: a.id, x: s.x, y: s.y }];
         });
         return nearestToCentre(points, w / 2, h / 2, 72)?.id ?? null;
       },
@@ -2527,6 +2572,42 @@ export function WorldMap() {
         return sprite;
       };
 
+      /* ---- Depth view's atmosphere, baked ------------------------------
+       * The soft shadow is a radial blob rendered once per theme and stamped
+       * stretched; the haze is one gradient per theme and viewport height.
+       * ---------------------------------------------------------------- */
+      const SHADOW_R = 32;
+      const HAZE_SHARE = 0.42;
+      const shadowSprites = new Map<string, HTMLCanvasElement>();
+      const shadowFor = (theme: Theme): HTMLCanvasElement => {
+        let sprite = shadowSprites.get(theme.id);
+        if (sprite) return sprite;
+        sprite = document.createElement("canvas");
+        sprite.width = SHADOW_R * 2;
+        sprite.height = SHADOW_R * 2;
+        const g = sprite.getContext("2d");
+        if (g) {
+          const grad = g.createRadialGradient(SHADOW_R, SHADOW_R, 0, SHADOW_R, SHADOW_R, SHADOW_R);
+          grad.addColorStop(0, theme.palette.depth.shadow);
+          grad.addColorStop(0.55, withAlpha(theme.palette.depth.shadow, 0.3));
+          grad.addColorStop(1, withAlpha(theme.palette.depth.shadow, 0));
+          g.fillStyle = grad;
+          g.fillRect(0, 0, SHADOW_R * 2, SHADOW_R * 2);
+        }
+        shadowSprites.set(theme.id, sprite);
+        return sprite;
+      };
+      let haze: { key: string; fill: CanvasGradient } | null = null;
+      const hazeFor = (theme: Theme, h: number): CanvasGradient => {
+        const key = `${theme.id}|${h}`;
+        if (haze && haze.key === key) return haze.fill;
+        const fill = ctx.createLinearGradient(0, 0, 0, h * HAZE_SHARE);
+        fill.addColorStop(0, theme.palette.depth.haze);
+        fill.addColorStop(1, withAlpha(theme.palette.depth.haze, 0));
+        haze = { key, fill };
+        return fill;
+      };
+
       /** Where a body is this frame, in (fractional) tile coords, and what it is doing about its errand. */
       const bodyAt = (id: string, seat: Seat) =>
         replay.view.active
@@ -2567,15 +2648,40 @@ export function WorldMap() {
         const pal = theme.palette;
         art.backdrop(ctx, cssW, cssH, t);
 
+        // Depth view (#46, lib/depth): the tilt eases toward the preference and
+        // is settled before the camera is clamped, because the tilted world is
+        // a different height on screen.
+        const depth = depthRef.current;
+        const depthDt = depth.lastT ? Math.min(100, Math.max(0, t - depth.lastT)) : 16;
+        depth.lastT = t;
+        depth.k = easeTilt(depth.k, depth.on ? tiltFor(DEPTH_ANGLE) : 1, depthDt, reduceMotion.matches);
+        const k = depth.k;
+        const deep = depth.on;
+
         // Re-clamp every frame: the viewport (and the world) can change size
         // underneath a view that was legal when it was set.
         const v = viewRef.current;
         v.zoom = clamp(v.zoom, minZoom(), MAX_ZOOM);
         clampPan();
         const z = v.zoom;
-        // Everything below is drawn in layout space; the canvas transform is the
-        // single place pan/zoom is applied, so drawing and hit-testing agree.
-        ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * v.px, dpr * v.py);
+        // The ground trails a pan by a few px and settles; never under reduced motion.
+        const focus = focusOf(v, cssW, cssH);
+        depth.lag =
+          deep && depth.lastF
+            ? stepParallax(depth.lag, { x: (focus.fx - depth.lastF.fx) * z, y: (focus.fy - depth.lastF.fy) * z }, depthDt, reduceMotion.matches)
+            : { x: 0, y: 0 };
+        depth.lastF = focus;
+        /** A layout y placed on the (tilted) ground. Identity when Depth view is off. */
+        const T = (y: number) => tiltY(y, focus.fy, k);
+        // Everything below is drawn in layout space. Two transforms, both from
+        // lib/depth: the GROUND (terrain, fog, plot tints, fences) is drawn raw
+        // and tilted by the canvas; the UPRIGHT layer (buildings, bodies, props,
+        // signs) is drawn at T()-placed anchors with the plain pan/zoom, so art
+        // keeps its height. Flat, the two are the same single transform, and
+        // hit-testing (fromScreen) is the exact inverse of the upright layer.
+        const ground = groundTransform(v, cssW, cssH, k, depth.lag);
+        ctx.setTransform(dpr * ground[0], 0, 0, dpr * ground[3], dpr * ground[4], dpr * ground[5]);
+        const upright = () => ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * v.px, dpr * v.py);
 
         const { ox, oy } = origin();
         const radius = radiusRef.current;
@@ -2583,11 +2689,14 @@ export function WorldMap() {
         // Only tiles inside the viewport are candidates: this is what keeps the
         // per-frame cost flat as the world grows and as people zoom out.
         const corners = [
-          unIso((0 - v.px) / z - ox, (0 - v.py) / z - oy),
-          unIso((cssW - v.px) / z - ox, (0 - v.py) / z - oy),
-          unIso((0 - v.px) / z - ox, (cssH - v.py) / z - oy),
-          unIso((cssW - v.px) / z - ox, (cssH - v.py) / z - oy),
-        ];
+          [0, 0],
+          [cssW, 0],
+          [0, cssH],
+          [cssW, cssH],
+        ].map(([sx, sy]) => {
+          const l = fromScreen(v, cssW, cssH, k, sx!, sy!);
+          return unIso(l.x - ox, l.y - oy);
+        });
         const bounds = worldBounds(plotsRef.current);
         const vx0 = Math.max(bounds.x0, Math.floor(Math.min(...corners.map((c) => c.tx))) - 2);
         const vx1 = Math.min(bounds.x1, Math.ceil(Math.max(...corners.map((c) => c.tx))) + 2);
@@ -2595,7 +2704,7 @@ export function WorldMap() {
         const vy1 = Math.min(bounds.y1, Math.ceil(Math.max(...corners.map((c) => c.ty))) + 2);
         // The horizon widens with the visible area rather than being switched
         // off when zoomed out, so distant land appears instead of a hard edge.
-        const horizon = HORIZON + Math.ceil(Math.max(cssW / z / TW, cssH / z / TH));
+        const horizon = HORIZON + Math.ceil(Math.max(cssW / z / TW, cssH / (z * Math.min(1, k)) / TH));
         const claimed = claimedBlocksRef.current;
 
         for (let ty = vy0; ty <= vy1; ty++) {
@@ -2680,8 +2789,17 @@ export function WorldMap() {
          * its length is bounded by what is on screen rather than by how big
          * the world has grown: a few dozen entries, sorted once.
          * ------------------------------------------------------------- */
-        type Scene = { s: number; draw: () => void };
+        /** `ax`/`ay`: the ground anchor, for Depth view's far-art shrink. */
+        type Scene = { s: number; draw: () => void; ax?: number; ay?: number };
         const scene: Scene[] = [];
+        /** Depth view's soft ground shadows, painted on the ground before the depth list. */
+        const shadows: Array<{ x: number; y: number; rx: number; ry: number; dx: number; dy: number; alpha: number }> = [];
+        const shadowAt = (tx: number, ty: number, fp: { fw: number; fh: number }, layer: LayerHeight) => {
+          // Far out, a prop's shadow is a smudge under a smudge: buildings and bodies keep theirs.
+          if (!deep || (layer === "prop" && z < LOD_LABELS)) return;
+          const c = iso(tx + fp.fw / 2, ty + fp.fh / 2);
+          shadows.push({ x: ox + c.x, y: T(oy + c.y), ...shadowSpec(fp, layer, k, { w: TW, h: TH }) });
+        };
         /** Generous margin: a 328px Library pokes into view from ~7 tiles off. */
         const near = (tx: number, ty: number, fw: number, fh: number) =>
           tx + fw - 1 >= vx0 - 8 && tx <= vx1 + 8 && ty + fh - 1 >= vy0 - 8 && ty <= vy1 + 8;
@@ -2692,11 +2810,16 @@ export function WorldMap() {
           ty: number,
           a: { fw: number; fh: number },
           alpha = 1,
+          layer: LayerHeight | null = null,
         ) => {
           const q = iso(tx, ty);
           const px = ox + q.x;
-          const py = oy + q.y;
+          const py = T(oy + q.y);
+          if (layer) shadowAt(tx, ty, a, layer);
+          const foot = deep ? iso(tx + a.fw / 2, ty + a.fh / 2) : null;
           scene.push({
+            ax: foot ? ox + foot.x : undefined,
+            ay: foot ? T(oy + foot.y) : undefined,
             s: tx + a.fw - 1 + (ty + a.fh - 1),
             draw: () => {
               if (alpha === 1) {
@@ -2743,7 +2866,7 @@ export function WorldMap() {
           // map, without a badge to hover or a legend to learn. The tint stays
           // underneath as the machine-readable half.
           if (anyExplored && z >= LOD_PLOTS) {
-            anchored((px, py) => art.building(ctx, access, px, py), rect.x0 + 2, rect.y0 + 1, BUILDING, 0.96);
+            anchored((px, py) => art.building(ctx, access, px, py), rect.x0 + 2, rect.y0 + 1, BUILDING, 0.96, "building");
             // Decor (#45): world art under the bodies, cut away round any body it would cover.
             for (const d of plot.decor) {
               const at = decorSlotTile(rect, d.slot);
@@ -2753,6 +2876,8 @@ export function WorldMap() {
                 at.x,
                 at.y,
                 PROP_FOOTPRINT,
+                1,
+                "prop",
               );
             }
           }
@@ -2795,7 +2920,7 @@ export function WorldMap() {
           // screen space after the sky, with the other things you read.
           if (!anyExplored || !signboardVisible(z)) continue;
           const front = iso(rect.x0 + 3.5, rect.y0 + 2.5);
-          signs.push({ plot, x: ox + front.x, y: oy + front.y + 18 });
+          signs.push({ plot, x: ox + front.x, y: T(oy + front.y) + 18 });
         }
 
         // Estates (#37): one continuous fence round the joined land, and one
@@ -2822,8 +2947,10 @@ export function WorldMap() {
           const at = estateSignTile(estate.plotIndices, plotForIndex);
           if (!revealed(at.x, at.y, radius, claimed)) continue;
           const q = iso(at.x, at.y);
-          estateSigns.push({ estate, x: ox + q.x, y: oy + q.y });
+          estateSigns.push({ estate, x: ox + q.x, y: T(oy + q.y) });
         }
+        // The ground is down; everything from here stands on it.
+        upright();
 
         const actors = actorsRef.current;
         // Bodies that have left the world stop walking. The last-seen positions
@@ -2876,7 +3003,7 @@ export function WorldMap() {
           if (!near(c.tx, c.ty, a.fw, a.fh)) continue;
           if (!tileExplored(c.tx + 1, c.ty + 1, radius)) continue;
           const room = c.room;
-          anchored((px, py) => art.landmark(ctx, room, px, py), c.tx, c.ty, a);
+          anchored((px, py) => art.landmark(ctx, room, px, py), c.tx, c.ty, a, 1, "building");
         }
 
         // Furniture. Fixed list, computed once from the tile grid, so the same
@@ -2886,7 +3013,7 @@ export function WorldMap() {
             if (!near(p.tx, p.ty, 1, 1)) continue;
             if (!tileExplored(p.tx, p.ty, radius)) continue;
             const key = p.key;
-            anchored((px, py) => art.prop(ctx, key, px, py), p.tx, p.ty, PROP_FOOTPRINT);
+            anchored((px, py) => art.prop(ctx, key, px, py), p.tx, p.ty, PROP_FOOTPRINT, 1, "prop");
           }
         }
 
@@ -2904,7 +3031,7 @@ export function WorldMap() {
               const ty = table[i + 1]!;
               if (!near(tx, ty, 1, 1) || !tileExplored(tx, ty, radius)) continue;
               const q = iso(tx, ty);
-              lamps.push({ x: ox + q.x, y: oy + q.y - table[i + 2]!, r: table[i + 3]! });
+              lamps.push({ x: ox + q.x, y: T(oy + q.y) - table[i + 2]!, r: table[i + 3]! });
             }
           };
           takeLamps(CIVIC_LAMPS);
@@ -2921,11 +3048,13 @@ export function WorldMap() {
             if (!near(htx, hty, 1, 1) || !tileExplored(htx, hty, radius)) continue;
             const q = iso(f.x, f.y);
             const sx = ox + q.x;
-            const sy = oy + q.y - 18;
+            const sy = T(oy + q.y) - 18;
             const flip = f.flip;
             const pose = AMBIENT_POSE[f.pose];
             scene.push({
               s: f.x + f.y - 0.5,
+              ax: sx,
+              ay: sy + 18,
               // The ambient critter: a sheep in aoe, whatever idles in the theme.
               draw: () => art.ambient(ctx, pose, sx, sy, flip, t),
             });
@@ -2949,7 +3078,14 @@ export function WorldMap() {
             ? 0
             : Math.sin(t / (active ? 160 : 400) + seat.y) * (active ? 2.5 : a.verb === "offline" ? 0 : 1.2);
           const x = ox + p.x + walk;
-          const y = oy + p.y - 18 + bob;
+          const feet = T(oy + p.y);
+          const y = feet - 18 + bob;
+          if (deep) {
+            // A body's shadow stays on the ground as it bobs: it shrinks a touch as the body lifts.
+            const sh = shadowSpec(PROP_FOOTPRINT, "body", k, { w: TW, h: TH });
+            const lift = 1 + Math.min(0, bob) * 0.04;
+            shadows.push({ x: ox + p.x + walk, y: feet, rx: sh.rx * lift, ry: sh.ry * lift, dx: sh.dx, dy: sh.dy, alpha: sh.alpha });
+          }
           /* --- idle, asleep, and going --------------------------------
            * The ladder used to stop at "asleep": 1.0 awake, 0.72 idle, 0.4
            * offline, and then the body was simply not in the next poll. The
@@ -2989,7 +3125,7 @@ export function WorldMap() {
             const sx = seat.x - 3;
             const sy = seat.y - 3;
             if (near(sx, sy, SCAFFOLD.fw, SCAFFOLD.fh))
-              anchored((px, py) => art.scaffold(ctx, stage, px, py), sx, sy, SCAFFOLD, 0.92);
+              anchored((px, py) => art.scaffold(ctx, stage, px, py), sx, sy, SCAFFOLD, 0.92, "building");
           }
           const workSpan = at.span;
           const mark = at.mark;
@@ -3000,6 +3136,8 @@ export function WorldMap() {
             // the whole diamond, so a body on tile T is half a tile north of a
             // prop on tile T and must sort just ahead of it.
             s: at.x + at.y - 0.5,
+            ax: x,
+            ay: feet,
             draw: () => {
               ctx.save();
               ctx.globalAlpha = alpha;
@@ -3084,10 +3222,13 @@ export function WorldMap() {
             if (!near(tx, ty, 1, 1) || !tileExplored(tx, ty, radius)) continue;
             const q = iso(tx, ty);
             const x = ox + q.x;
-            const y = oy + q.y - 18;
+            const y = T(oy + q.y) - 18;
             bodyBoxes.push(bodyScreenRect(x, y, z, v.px, v.py));
+            if (deep) shadows.push({ x, y: y + 18, ...shadowSpec(PROP_FOOTPRINT, "body", k, { w: TW, h: TH }) });
             scene.push({
               s: tx + ty - 0.5,
+              ax: x,
+              ay: y + 18,
               draw: () => {
                 ctx.save();
                 ctx.globalAlpha = AWAY_ALPHA;
@@ -3143,7 +3284,7 @@ export function WorldMap() {
           // Reduced motion keeps the fade and drops the rise: dissolving in
           // place is what says "gone"; the drift upward is only decoration.
           const gx = ox + q.x;
-          const gy = oy + q.y - 18 - (reduceMotion.matches ? 0 : 10 * pr);
+          const gy = T(oy + q.y) - 18 - (reduceMotion.matches ? 0 : 10 * pr);
           const startAlpha = gone.alpha;
           scene.push({
             s: gone.x + gone.y - 0.5,
@@ -3168,7 +3309,42 @@ export function WorldMap() {
         // pushes above run landmarks first and bodies last: on the same tile,
         // the living thing is in front.
         scene.sort((p, q) => p.s - q.s);
-        for (const item of scene) item.draw();
+        // Depth view: shadows lie on the ground, under everything that stands.
+        // One baked sprite per theme, stamped (THEMES rule 7).
+        if (shadows.length) {
+          ctx.save();
+          ctx.imageSmoothingEnabled = true;
+          const sprite = shadowFor(theme);
+          for (const sh of shadows) {
+            ctx.globalAlpha = sh.alpha;
+            ctx.drawImage(sprite, sh.x + sh.dx - sh.rx, sh.y + sh.dy - sh.ry, sh.rx * 2, sh.ry * 2);
+          }
+          ctx.restore();
+        }
+        if (deep) {
+          for (const item of scene) {
+            // Far upright art is drawn a touch smaller, about its own ground
+            // anchor. Never larger than 1, so the #52 body boxes and decor
+            // cut-aways (computed unscaled) still contain it.
+            const sc = item.ay === undefined ? 1 : perspectiveScale(item.ay * z + v.py, cssH, 1);
+            if (sc > 0.999) {
+              item.draw();
+              continue;
+            }
+            const ax = item.ax ?? 0;
+            const ay = item.ay ?? 0;
+            ctx.setTransform(dpr * z * sc, 0, 0, dpr * z * sc, dpr * (ax * z * (1 - sc) + v.px), dpr * (ay * z * (1 - sc) + v.py));
+            item.draw();
+            upright();
+          }
+          // A faint haze toward the far edge: one fill over the top of the view, gradient cached.
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.fillStyle = hazeFor(theme, cssH);
+          ctx.fillRect(0, 0, cssW, cssH * HAZE_SHARE);
+          upright();
+        } else {
+          for (const item of scene) item.draw();
+        }
 
         /* ---- the hour -------------------------------------------------
          * The wash goes down over the terrain, the buildings and the bodies —
@@ -3258,7 +3434,7 @@ export function WorldMap() {
             for (const a of ringLabelAnchors(d.ring)) {
               const q = iso(a.tx, a.ty);
               const sx = (ox + q.x) * z + v.px;
-              const sy = (oy + q.y + TH / 2) * z + v.py;
+              const sy = T(oy + q.y + TH / 2) * z + v.py;
               if (sx < -120 || sx > cssW + 120 || sy < -30 || sy > cssH + 30) continue;
               ctx.globalAlpha = revealed(Math.floor(a.tx), Math.floor(a.ty), radius, claimed) ? 0.62 : 0.4;
               ctx.font = `600 12px ${family}`;
@@ -3456,7 +3632,7 @@ export function WorldMap() {
           costCarryRef.current.draw(
             ctx,
             (lx, ly) => ({ x: lx * z + v.px, y: ly * z + v.py }),
-            { x: ox + bank.x, y: oy + bank.y },
+            { x: ox + bank.x, y: T(oy + bank.y) },
             reduceMotion.matches,
             resourceTerms(theme),
           );
@@ -3539,7 +3715,7 @@ export function WorldMap() {
             // The middle of what an open drawer leaves visible (#52).
             const c = clearCentre({ w: cssW, h: cssH }, coverRectsRef.current);
             const wantX = c.x - (ox + q.x) * v.zoom;
-            const wantY = c.y - (oy + q.y) * v.zoom;
+            const wantY = aimScreenY(c.y, cssH, k) - (oy + q.y) * v.zoom;
             v.px += (wantX - v.px) * followEase;
             v.py += (wantY - v.py) * followEase;
             clampPan();
@@ -3648,7 +3824,7 @@ export function WorldMap() {
             const c = worldCentre(wb);
             glide.tx = c.tx;
             glide.ty = c.ty;
-            glide.zoom = clamp(fitZoom(worldBox(), cssW, cssH), minZoom(), MAX_ZOOM);
+            glide.zoom = clamp(fitZoomTilted(worldBox(), cssW, cssH, depthRef.current.k), minZoom(), MAX_ZOOM);
           } else {
             const at = clampTile(glide, wb);
             glide.tx = at.tx;
@@ -3659,7 +3835,7 @@ export function WorldMap() {
           v.zoom = clamp(v.zoom + (glide.zoom - v.zoom) * k, minZoom(), MAX_ZOOM);
           const gc = glide.fit ? { x: cssW / 2, y: cssH / 2 } : clearCentre({ w: cssW, h: cssH }, coverRectsRef.current);
           const wantX = gc.x - (ox + q.x) * v.zoom;
-          const wantY = gc.y - (oy + q.y) * v.zoom;
+          const wantY = aimScreenY(gc.y, cssH, k) - (oy + q.y) * v.zoom;
           v.px += (wantX - v.px) * k;
           v.py += (wantY - v.py) * k;
           clampPan();
@@ -3689,7 +3865,7 @@ export function WorldMap() {
           // Never over the body it describes (#52): another corner when it would be.
           const drawn = lastPosRef.current.get(hover.id);
           const hq = drawn ? iso(drawn.x, drawn.y) : null;
-          const spot = hoverCardSpot(hq ? bodyScreenRect(ox + hq.x, oy + hq.y - 18, z, v.px, v.py) : null, { w: boxW, h: boxH }, { w: cssW, h: cssH });
+          const spot = hoverCardSpot(hq ? bodyScreenRect(ox + hq.x, T(oy + hq.y) - 18, z, v.px, v.py) : null, { w: boxW, h: boxH }, { w: cssW, h: cssH });
           ctx.fillStyle = pal.card.bg;
           ctx.fillRect(spot.x, spot.y, boxW, boxH);
           ctx.textAlign = "left";
@@ -3768,7 +3944,7 @@ export function WorldMap() {
             g.stroke();
           }
         }
-        const vb = viewportBox(viewRef.current, cw, ch);
+        const vb = viewportBoxTilted(viewRef.current, cw, ch, depthRef.current.k);
         const a = xf.toInset(vb.minX, vb.minY);
         const b = xf.toInset(vb.maxX, vb.maxY);
         const x0 = Math.max(1, a.x);
@@ -4216,7 +4392,7 @@ export function WorldMap() {
                 </>
               )}
             </MapMenu>
-            <MapMenu label={<span aria-label="More">⋯</span>} title="Postcard, theme, reset view, keyboard, legend" align="right">
+            <MapMenu label={<span aria-label="More">⋯</span>} title="Postcard, theme, reset view, depth view, keyboard, legend" align="right">
               {(close) => (
                 <>
                   {signedIn ? (
@@ -4245,6 +4421,17 @@ export function WorldMap() {
                   >
                     {lex.controls.resetView}
                   </MenuItem>
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={depthOn}
+                    title="Tilts the map for a sense of depth: layered height, soft shadows and a haze toward the far edge. A view preference for this browser; with reduced motion, tilt only."
+                    onClick={toggleDepth}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
+                  >
+                    <span>Depth view</span>
+                    <span className={`text-xs ${depthOn ? "text-lantern-300" : "text-white/45"}`}>{depthOn ? "on" : "off"}</span>
+                  </button>
                   <MenuItem
                     onSelect={() => {
                       close();

@@ -379,6 +379,7 @@ export const AOE_PALETTE: ThemePalette = {
   placeholder: { human: "#e8b86d", agent: "#7c3aed" },
   glow: ["rgba(255,206,132,0.9)", "rgba(255,174,86,0.34)", "rgba(255,146,56,0)"],
   daylight: "rgb(150,164,186)",
+  depth: { shadow: "rgba(6,4,14,0.55)", haze: "rgba(24,20,48,0.34)" },
   card: { bg: "rgba(7,8,20,0.94)", title: "#f4d19a", text: "rgba(236,231,221,0.78)" },
   chrome: {
     dusk950: "7 8 20",

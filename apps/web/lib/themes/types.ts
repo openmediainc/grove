@@ -307,6 +307,12 @@ export interface ThemePalette {
   glow: readonly [string, string, string];
   /** The colour daylight lifts the world toward, as a `screen` fill. */
   daylight: string;
+  /**
+   * Depth view (#46): the soft ground shadow's core colour (baked once into a
+   * sprite) and the haze toward the far edge. Both are atmosphere only: never a
+   * hazard colour, never the only carrier of anything.
+   */
+  depth: { shadow: string; haze: string };
   /** Hover card. */
   card: { bg: string; title: string; text: string };
   /**

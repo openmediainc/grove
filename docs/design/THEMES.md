@@ -40,6 +40,26 @@ declared `satisfies Theme`, so leaving one out fails `pnpm -r typecheck`
 | `room(piece, x, y, w, h)` + `RoomStyle` | **the pixel room** (#58): the inside of a room as the room drawer's pixel mode draws it, SCREEN space in its own canvas. `floor` stamped per cell, `wall` along the strip above the first row, `lamp` at the wall's ends, `seat` under each body, `table` on every other empty cell of the last row; the room's name (lexicon) on a placard on the wall in the display face. The SHAPE of each of the 5 pieces is shared in `themes/room.ts`; the theme supplies materials. Bodies are the theme's `body()` sprites scaled to the cell, speech is the theme's `speech()`. Never the hazard colours, never a permission | planks, boarded walls, stools, tables, hanging lanterns | deck plates, bulkheads with a lit strip, seat modules, consoles, beacons | stone tiles, brick, café chairs + tables, street lamps | lit grid, scanlined panels, hover seats, holo tables, neon pylons |
 | `speechFont?` | font family the layout measures speech with | sans | sans | sans | mono |
 
+## Depth view (#46): palette `depth`
+
+⋯ **Depth view** (off by default, remembered in this browser) is the map's adapted 3D,
+still Canvas 2D isometric (`apps/web/lib/depth.ts`, pure and tested). The ground is tilted
+about the viewport's centre to a 26° camera elevation (flat is 30°; the module allows
+26°–40°); upright art (buildings, bodies, props, signs) is placed on the tilted ground but
+keeps its height; far upright art is drawn up to 6% smaller; the ground trails a pan by at
+most 10 px and settles (never under reduced motion: tilt only). Height cues are a soft
+ground shadow by layer height (prop < body < building) and a haze over the top of the view.
+It is a viewer preference: shots, sequences, links and camera keys are mode-free (the
+centre tile is the same flat or tilted), and hit-testing, the minimap rectangle and the
+camera clamp/fit use the tilted inverse. A theme supplies only `palette.depth`:
+
+| | aoe | space | city | scifi |
+|---|---|---|---|---|
+| `shadow` (baked soft blob core) | violet-black | deep-space black | cool asphalt | indigo-black |
+| `haze` (far-edge fade) | dusk violet | navy | smog grey | purple |
+
+Never a hazard colour; shadows and haze are atmosphere and carry nothing.
+
 ## Optional slot: `sound` (#43)
 
 `Theme.sound?: Partial<SoundPreset>` (`apps/web/lib/sound/presets.ts`) is the

@@ -816,6 +816,7 @@ export const SCIFI_PALETTE: ThemePalette = {
   placeholder: { human: AMBER, agent: VIOLET },
   glow: ["rgba(165,243,252,0.85)", "rgba(45,226,230,0.3)", "rgba(168,85,247,0)"],
   daylight: "rgb(80,70,120)",
+  depth: { shadow: "rgba(4,2,12,0.6)", haze: "rgba(22,12,48,0.36)" },
   card: { bg: "rgba(5,4,11,0.95)", title: TEAL, text: "rgba(207,250,254,0.8)" },
   chrome: {
     dusk950: "6 5 14",

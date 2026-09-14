@@ -752,6 +752,7 @@ export const CITY_PALETTE: ThemePalette = {
   placeholder: { human: "#d97706", agent: "#7c3aed" },
   glow: ["rgba(254,240,200,0.9)", "rgba(253,224,150,0.32)", "rgba(250,204,120,0)"],
   daylight: "rgb(170,178,190)",
+  depth: { shadow: "rgba(8,10,16,0.5)", haze: "rgba(40,46,60,0.3)" },
   card: { bg: "rgba(17,17,20,0.94)", title: "#fef08a", text: "rgba(245,245,244,0.8)" },
   chrome: {
     dusk950: "14 15 19",

@@ -770,6 +770,7 @@ export const SPACE_PALETTE: ThemePalette = {
   placeholder: { human: "#f59e0b", agent: "#8b5cf6" },
   glow: ["rgba(207,250,254,0.85)", "rgba(103,232,249,0.3)", "rgba(34,211,238,0)"],
   daylight: "rgb(96,110,140)",
+  depth: { shadow: "rgba(0,0,8,0.6)", haze: "rgba(8,14,34,0.4)" },
   card: { bg: "rgba(2,6,23,0.95)", title: "#a5f3fc", text: "rgba(224,242,254,0.8)" },
   chrome: {
     dusk950: "2 4 12",
