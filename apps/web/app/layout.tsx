@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { SkipLink } from "@/components/a11y";
 import { SearchPalette } from "@/components/SearchPalette";
 import { VisitBeacon } from "@/components/VisitBeacon";
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
+        <SkipLink />
         <Nav />
         {children}
         <SearchPalette />

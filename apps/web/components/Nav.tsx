@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { signOut } from "@/lib/session";
 import { GuestPass } from "./GuestPass";
+import { onMenuKeyDown, useMenuButton } from "./a11y";
 import { SEARCH_EVENT } from "@/lib/search";
 import {
   INBOX_SEEN_EVENT,
@@ -53,7 +54,7 @@ function SearchButton({ className }: { className: string }) {
       className={className}
     >
       <span aria-hidden>⌕</span>
-      <span aria-hidden className="hidden text-xs text-white/40 sm:inline">/</span>
+      <span aria-hidden className="hidden text-xs text-white/55 sm:inline">/</span>
       <span className="sr-only">Search agents, people, spaces and rooms</span>
     </button>
   );
@@ -144,6 +145,9 @@ function YouMenu({ viewer, unread }: { viewer: Viewer; unread: number }) {
   const [open, setOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const onButtonKey = useMenuButton(open, setOpen, ref, buttonRef, menuRef);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -161,36 +165,44 @@ function YouMenu({ viewer, unread }: { viewer: Viewer; unread: number }) {
   }, [open]);
   const profile = profileHref(viewer);
   return (
-    <div ref={ref} className="relative hidden sm:block" onClick={(e) => e.stopPropagation()}>
+    <div ref={ref} data-menu-root className="relative hidden sm:block" onClick={(e) => e.stopPropagation()}>
       <button
+        ref={buttonRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-controls={open ? "grove-you-menu" : undefined}
         onClick={() => setOpen((o) => !o)}
+        onKeyDown={onButtonKey}
         className="flex items-center gap-1.5 rounded-full border border-lantern-400/40 px-3 py-1 text-lantern-300"
       >
         You
         <Badge total={unread} />
-        <span aria-hidden className="text-[10px] text-lantern-300/60">
+        <span aria-hidden className="text-[10px] text-lantern-300/70">
           ▾
         </span>
         {unread > 0 ? <span className="sr-only">, {inboxLabel(unread)}</span> : null}
       </button>
       {open ? (
         <div
+          ref={menuRef}
+          id="grove-you-menu"
           role="menu"
+          aria-label="You"
+          onKeyDown={onMenuKeyDown}
           className="absolute right-0 top-full z-30 mt-2 flex w-48 flex-col rounded-xl border border-white/10 bg-dusk-900/95 p-1 text-sm shadow-xl backdrop-blur-md"
         >
-          <Link role="menuitem" href="/me" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 hover:bg-white/5">
+          <Link role="menuitem" tabIndex={-1} href="/me" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 hover:bg-white/5">
             You
           </Link>
           {profile ? (
-            <Link role="menuitem" href={profile} onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 hover:bg-white/5">
+            <Link role="menuitem" tabIndex={-1} href={profile} onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 hover:bg-white/5">
               Your page
             </Link>
           ) : null}
           <Link
             role="menuitem"
+            tabIndex={-1}
             href="/inbox"
             aria-label={inboxLabel(unread)}
             onClick={() => setOpen(false)}
@@ -201,6 +213,7 @@ function YouMenu({ viewer, unread }: { viewer: Viewer; unread: number }) {
           </Link>
           <button
             role="menuitem"
+            tabIndex={-1}
             type="button"
             disabled={leaving}
             onClick={() => {
@@ -263,6 +276,7 @@ export function Nav() {
 
       <nav
         id="grove-sections"
+        aria-label="Sections"
         onClick={close}
         className={`${
           open ? "flex" : "hidden"
@@ -299,7 +313,7 @@ export function Nav() {
         {signedIn ? <YouMenu viewer={viewer} unread={unread} /> : null}
         {signedIn ? (
           <div className="mt-1 flex flex-col gap-0.5 border-t border-white/10 pt-1 sm:hidden">
-            <span className="px-3 pt-2 text-[11px] uppercase tracking-widest text-white/35">You</span>
+            <span className="px-3 pt-2 text-[11px] uppercase tracking-widest text-white/50">You</span>
             <Link href="/me" className={ITEM}>
               Your agents and spaces
             </Link>

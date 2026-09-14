@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "./a11y";
 import { gp } from "@/lib/base";
 import { buildDeepLink } from "@/lib/deep-link";
 import { spaceHref } from "@/lib/space-page";
@@ -158,11 +159,19 @@ export function SpectatorPeek({
   /** Open a room's drawer on this map rather than loading the map again. */
   onOpenRoom?: (slug: string) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDialogFocus(ref, { onEscape: onClose });
   return (
     /* On a phone this is a sheet the thumb can reach, sitting above the map
        controls rather than floating over the middle of the world with a close
        target the size of a full stop. From sm up it is the card it always was. */
-    <aside className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 max-h-[72svh] overflow-auto rounded-t-2xl border-t border-lantern-400/25 bg-dusk-950/[0.97] p-4 pb-6 text-sm shadow-2xl sm:inset-x-auto sm:bottom-auto sm:left-6 sm:top-56 sm:z-10 sm:max-h-[55vh] sm:w-[330px] sm:max-w-[calc(100vw-3rem)] sm:rounded-2xl sm:border sm:border-lantern-400/20 sm:pb-4 sm:shadow-xl">
+    <div
+      ref={ref}
+      data-a11y-dialog
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="grove-peek-title"
+      className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 max-h-[72svh] overflow-auto rounded-t-2xl border-t border-lantern-400/25 bg-dusk-950/[0.97] p-4 pb-6 text-sm shadow-2xl sm:inset-x-auto sm:bottom-auto sm:left-6 sm:top-56 sm:z-10 sm:max-h-[55vh] sm:w-[330px] sm:max-w-[calc(100vw-3rem)] sm:rounded-2xl sm:border sm:border-lantern-400/20 sm:pb-4 sm:shadow-xl">
       <span aria-hidden className="mx-auto mb-3 block h-1 w-10 rounded-full bg-white/20 sm:hidden" />
       <div className="flex items-start justify-between gap-3">
         <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/70">
@@ -172,7 +181,7 @@ export function SpectatorPeek({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="-mr-2 -mt-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/50 hover:text-white/80 sm:-mr-1 sm:-mt-1 sm:h-8 sm:w-8 sm:text-base sm:text-white/40"
+          className="-mr-2 -mt-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/50 hover:text-white/80 sm:-mr-1 sm:-mt-1 sm:h-8 sm:w-8 sm:text-base sm:text-white/55"
         >
           ×
         </button>
@@ -186,7 +195,7 @@ export function SpectatorPeek({
           <CopyLink share={peek.share} />
         </>
       ) : null}
-    </aside>
+    </div>
   );
 }
 
@@ -255,12 +264,12 @@ function BodyPeek({
   const { card } = useCard(peek.card);
   return (
     <>
-      <h2 className="font-display mt-1 text-2xl text-lantern-300">{peek.title}</h2>
+      <h2 id="grove-peek-title" className="font-display mt-1 text-2xl text-lantern-300">{peek.title}</h2>
       <p className="mt-1 text-white/70">{peek.subtitle}</p>
-      <p className="mt-1 text-xs text-white/40">in the {peek.region}</p>
+      <p className="mt-1 text-xs text-white/55">in the {peek.region}</p>
       {peek.org ? (
         <p className="mt-2">
-          <Chip org={peek.org} /> <span className="text-[11px] text-white/35">— its colours on this map</span>
+          <Chip org={peek.org} /> <span className="text-[11px] text-white/50">— its colours on this map</span>
         </p>
       ) : null}
       {peek.facts.length ? (
@@ -270,7 +279,7 @@ function BodyPeek({
           ))}
         </ul>
       ) : null}
-      {peek.url ? <p className="mt-2 break-all text-xs text-white/35">{peek.url}</p> : null}
+      {peek.url ? <p className="mt-2 break-all text-xs text-white/50">{peek.url}</p> : null}
       {peek.card ? <CardFields card={card} lex={lex} compact /> : null}
       <CardActions
         walk={peek.speakable ? { kind: "body", room: peek.room, what: peek.region } : null}
@@ -298,7 +307,7 @@ function BodyPeek({
           {peek.speakable ? `Sign in to speak to ${peek.title}` : "Sign in to get a body of your own"}
         </a>
       )}
-      <p className="mt-2 text-center text-[11px] text-white/35">Watching costs nothing — this is all public.</p>
+      <p className="mt-2 text-center text-[11px] text-white/50">Watching costs nothing — this is all public.</p>
     </>
   );
 }
@@ -319,22 +328,22 @@ function SpacePeek({
   const { card } = useCard(peek.slug ? { subject: "space", ref: peek.slug } : null);
   return (
     <>
-      <h2 className="font-display mt-1 text-2xl text-lantern-300">{redacted ? "Held plot" : peek.name}</h2>
+      <h2 id="grove-peek-title" className="font-display mt-1 text-2xl text-lantern-300">{redacted ? "Held plot" : peek.name}</h2>
       <p className="mt-1 text-white/70">{peek.accessBlurb}</p>
-      <p className="mt-2 text-xs text-white/40">
+      <p className="mt-2 text-xs text-white/55">
         plot {peek.plotIndex} · {peek.district} · {peek.access} ·{" "}
         {peek.occupancy === 1 ? "1 body inside" : `${peek.occupancy} bodies inside`}
       </p>
       {redacted ? (
         <>
-          <p className="mt-2 text-xs text-white/40">
+          <p className="mt-2 text-xs text-white/55">
             Somebody claimed this ground. That much is public; its name, owner, orgs and card are not.
           </p>
           <CopyLink share={peek.share} />
         </>
       ) : (
         <>
-          <p className="mt-2 text-xs text-white/40">{peek.ownerHandle ? `held by @${peek.ownerHandle}` : "unowned"}</p>
+          <p className="mt-2 text-xs text-white/55">{peek.ownerHandle ? `held by @${peek.ownerHandle}` : "unowned"}</p>
           {peek.orgs.length ? (
             <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
               {peek.orgs.map((o) => (
@@ -344,7 +353,7 @@ function SpacePeek({
           ) : null}
           {peek.marks.length ? (
             <div className="mt-2">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/60">{peek.marksHeading}</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">{peek.marksHeading}</p>
               <ul className="mt-1 space-y-0.5 text-xs text-white/60">
                 {peek.marks.map((m) => (
                   <li key={m}>{m}</li>
@@ -389,7 +398,7 @@ function RegionPeek({
 }) {
   return (
     <>
-      <h2 className="font-display mt-1 text-2xl text-lantern-300">{peek.title}</h2>
+      <h2 id="grove-peek-title" className="font-display mt-1 text-2xl text-lantern-300">{peek.title}</h2>
       <p className="mt-1 text-white/70">
         {peek.here.length === 0
           ? "Nobody is standing here right now."
@@ -404,12 +413,12 @@ function RegionPeek({
               <span className="text-white/80">{b.name}</span> · {b.detail}
             </li>
           ))}
-          {peek.here.length > 8 ? <li className="text-white/35">and {peek.here.length - 8} more</li> : null}
+          {peek.here.length > 8 ? <li className="text-white/50">and {peek.here.length - 8} more</li> : null}
         </ul>
       ) : null}
       {peek.recent.length ? (
         <div className="mt-3 border-t border-white/10 pt-3">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/60">Heard recently</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">Heard recently</p>
           <ul className="mt-2 space-y-1 text-xs text-white/55">
             {peek.recent.map((l) => (
               <li key={`${l.who}:${l.body}`}>
@@ -427,7 +436,7 @@ function RegionPeek({
           >
             Sign in to enter the {peek.title}
           </a>
-          <p className="mt-2 text-center text-[11px] text-white/35">
+          <p className="mt-2 text-center text-[11px] text-white/50">
             You can keep watching without one. Speaking needs a body.
           </p>
         </>

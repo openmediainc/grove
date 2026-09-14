@@ -20,6 +20,7 @@ import {
   type WireBoardPost,
 } from "@/lib/board";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { useDialogFocus } from "@/components/a11y";
 
 /**
  * The artifact board on a space's About tab (queue #36): images, link cards
@@ -53,10 +54,10 @@ export function BoardSection({ worldId, signedIn }: { worldId: string; signedIn:
   return (
     <section className="mt-10">
       <h2 className="font-display text-2xl text-lantern-300">Board</h2>
-      <p className="mt-1 text-sm text-white/45">What this space and its agents have made, posted for anyone who can see the space.</p>
+      <p className="mt-1 text-sm text-white/55">What this space and its agents have made, posted for anyone who can see the space.</p>
       {board.can_post ? <Composer worldId={worldId} onPosted={(p) => setBoard({ ...board, posts: [p, ...posts] })} /> : null}
       {posts.length === 0 ? (
-        <p className="mt-3 text-white/40">
+        <p className="mt-3 text-white/55">
           {board.can_post ? "Nothing on the board yet. Post a screenshot, a link or a note." : "Nothing on the board yet."}
         </p>
       ) : (
@@ -82,7 +83,7 @@ function AuthorLine({ post }: { post: WireBoardPost }) {
   const href = authorHref(post.author);
   const name = <span className="truncate font-semibold text-white/80">{post.author.name}</span>;
   return (
-    <span className="flex min-w-0 items-center gap-1.5 text-xs text-white/45">
+    <span className="flex min-w-0 items-center gap-1.5 text-xs text-white/55">
       {href ? (
         <Link href={href} className="min-w-0 truncate hover:text-lantern-300">
           {name}
@@ -159,7 +160,7 @@ function PostCard({
         <div className="px-4 pt-3">
           {href ? (
             <a href={href} target="_blank" rel="noopener noreferrer nofollow ugc" className="group block min-w-0">
-              <span className="block truncate text-xs text-white/40">{preview?.host || new URL(href).hostname}</span>
+              <span className="block truncate text-xs text-white/55">{preview?.host || new URL(href).hostname}</span>
               <span className="mt-0.5 block break-words font-semibold text-lantern-300 group-hover:underline">
                 {preview?.title ?? href}
               </span>
@@ -179,14 +180,14 @@ function PostCard({
         <AuthorLine post={post} />
         <span className="flex shrink-0 gap-3 text-xs">
           {post.deletable ? (
-            <button type="button" onClick={() => void remove()} disabled={busy} className="min-h-11 text-white/45 hover:text-red-300 sm:min-h-0">
+            <button type="button" onClick={() => void remove()} disabled={busy} className="min-h-11 text-white/55 hover:text-red-300 sm:min-h-0">
               Delete
             </button>
           ) : signedIn ? (
             <button
               type="button"
               onClick={() => setReporting((v) => !v)}
-              className="min-h-11 text-white/45 hover:text-lantern-300 sm:min-h-0"
+              className="min-h-11 text-white/55 hover:text-lantern-300 sm:min-h-0"
               aria-expanded={reporting}
             >
               Report
@@ -378,7 +379,7 @@ function Composer({ worldId, onPosted }: { worldId: string; onPosted: (post: Wir
         />
       </label>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <span className={`text-xs ${left < 0 ? "text-red-300" : "text-white/35"}`}>{left} characters left</span>
+        <span className={`text-xs ${left < 0 ? "text-red-300" : "text-white/50"}`}>{left} characters left</span>
         <button
           type="button"
           onClick={() => void post()}
@@ -396,6 +397,9 @@ function Composer({ worldId, onPosted }: { worldId: string; onPosted: (post: Wir
 
 function Lightbox({ post, onClose }: { post: WireBoardPost; onClose: () => void }) {
   const close = useRef<HTMLButtonElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  // Modal: Tab stays on the lightbox; focus returns to the thumbnail on close.
+  useDialogFocus(dialog, { modal: true, autoFocus: false });
   useEffect(() => {
     close.current?.focus();
     const onKey = (e: KeyboardEvent) => {
@@ -407,6 +411,8 @@ function Lightbox({ post, onClose }: { post: WireBoardPost; onClose: () => void 
   if (!post.image) return null;
   return (
     <div
+      ref={dialog}
+      data-a11y-dialog
       role="dialog"
       aria-modal="true"
       aria-label={post.caption ?? "Image"}
@@ -430,7 +436,7 @@ function Lightbox({ post, onClose }: { post: WireBoardPost; onClose: () => void 
       />
       <div className="mt-3 max-w-2xl text-center" onClick={(e) => e.stopPropagation()}>
         {post.caption ? <p className="whitespace-pre-line break-words text-white/85">{post.caption}</p> : null}
-        <p className="mt-1 text-xs text-white/45">
+        <p className="mt-1 text-xs text-white/55">
           {post.author.name}
           {post.author.kind === "agent" ? " (agent)" : ""} · {postedAgo(post.created_at)}
         </p>

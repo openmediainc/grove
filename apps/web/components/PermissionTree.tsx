@@ -149,7 +149,7 @@ function Chip({ tone, children }: { tone: "on" | "off" | "blocked" | "locked"; c
         ? "border-sky-300/50 text-sky-200"
         : tone === "locked"
           ? "border-lantern-400/50 text-lantern-300"
-          : "border-white/15 text-white/45";
+          : "border-white/15 text-white/55";
   return (
     <span
       className={`shrink-0 rounded-full border px-2 py-[1px] text-[10px] uppercase tracking-[0.12em] ${cls}`}
@@ -219,12 +219,12 @@ function TechNode({
       ) : null}
       <dl className="mt-3 space-y-1 border-t border-white/10 pt-2 text-[11px] leading-snug">
         <div className="flex gap-2">
-          <dt className="w-12 shrink-0 uppercase tracking-[0.1em] text-white/35">unlocks</dt>
+          <dt className="w-12 shrink-0 uppercase tracking-[0.1em] text-white/50">unlocks</dt>
           <dd className="text-white/55">{node.unlocks}</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="w-12 shrink-0 uppercase tracking-[0.1em] text-white/35">cost</dt>
-          <dd className="text-white/45">{node.cost}</dd>
+          <dt className="w-12 shrink-0 uppercase tracking-[0.1em] text-white/50">cost</dt>
+          <dd className="text-white/55">{node.cost}</dd>
         </div>
       </dl>
     </button>
@@ -280,7 +280,7 @@ export function PermissionTree(props: {
             Four grants, sixteen legal combinations. Press any node; the tiers below it change with it.
           </p>
         </div>
-        <div className="text-left text-xs text-white/40 sm:text-right">
+        <div className="text-left text-xs text-white/55 sm:text-right">
           <div>
             state <span className="text-white/70">{stateOrdinal(granted)}</span> of {POLICY_STATE_TOTAL}
           </div>
@@ -314,13 +314,13 @@ export function PermissionTree(props: {
       {/* The ceiling. Drawn before the tree because it changes what the tree means. */}
       <div className="mt-5 rounded-2xl border border-white/10 bg-dusk-900/50 p-3 sm:p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="text-xs uppercase tracking-[0.16em] text-white/40">Standing in</div>
+          <div className="text-xs uppercase tracking-[0.16em] text-white/55">Standing in</div>
           {blocked.length ? (
             <div className="text-xs text-sky-200">
               {blocked.length} grant{blocked.length > 1 ? "s" : ""} do not apply here
             </div>
           ) : (
-            <div className="text-xs text-white/35">this space narrows nothing</div>
+            <div className="text-xs text-white/50">this space narrows nothing</div>
           )}
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -347,7 +347,7 @@ export function PermissionTree(props: {
             );
           })}
         </div>
-        <p className="mt-2 text-[11px] leading-snug text-white/40">
+        <p className="mt-2 text-[11px] leading-snug text-white/55">
           What actually happens is your grant AND the space&apos;s own access level. A space can only
           ever narrow an agent, never widen one — and a member of a space sits at the full ceiling.
         </p>
@@ -363,7 +363,7 @@ export function PermissionTree(props: {
             <Chip tone="locked">always open</Chip>
           </div>
           <p className="mt-2 text-sm text-white/70">{OWNER_CHANNEL_NODE.line}</p>
-          <p className="mt-1 text-[11px] text-white/45">{OWNER_CHANNEL_NODE.detail}</p>
+          <p className="mt-1 text-[11px] text-white/55">{OWNER_CHANNEL_NODE.detail}</p>
         </div>
 
         <Fork />
@@ -390,7 +390,7 @@ export function PermissionTree(props: {
                   <div className={`text-xs uppercase tracking-[0.16em] ${LANE_STYLE[lane].chip}`}>
                     {LANE_COPY[lane].title}
                   </div>
-                  <div className="text-[11px] text-white/35">{LANE_COPY[lane].blurb}</div>
+                  <div className="text-[11px] text-white/50">{LANE_COPY[lane].blurb}</div>
                 </div>
                 <TechNode
                   node={ear}
@@ -435,7 +435,7 @@ export function PermissionTree(props: {
             {publicSpeech ? PUBLIC_SPEECH_NODE.open : PUBLIC_SPEECH_NODE.shut}
           </p>
           {publicSpeech ? (
-            <p className="mt-1 text-[11px] text-white/40">{PUBLIC_SPEECH_NODE.cost}</p>
+            <p className="mt-1 text-[11px] text-white/55">{PUBLIC_SPEECH_NODE.cost}</p>
           ) : null}
         </div>
 
@@ -451,12 +451,12 @@ export function PermissionTree(props: {
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className={`text-sm font-semibold ${lit ? "text-white/85" : "text-white/45"}`}>
+                  <div className={`text-sm font-semibold ${lit ? "text-white/85" : "text-white/55"}`}>
                     {u.label}
                   </div>
                   <Chip tone={lit ? "on" : "off"}>{lit ? "unlocked" : "locked"}</Chip>
                 </div>
-                <p className={`mt-1 text-xs ${lit ? "text-white/60" : "text-white/40"}`}>
+                <p className={`mt-1 text-xs ${lit ? "text-white/60" : "text-white/55"}`}>
                   {lit ? u.lit : u.dark}
                 </p>
               </div>
@@ -468,7 +468,7 @@ export function PermissionTree(props: {
       {/* ---- what the world sees ---- */}
       <div className="mt-5 rounded-2xl border border-white/10 bg-dusk-900/50 p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-xs uppercase tracking-[0.16em] text-white/40">
+          <div className="text-xs uppercase tracking-[0.16em] text-white/55">
             In {spaceLabel}, right now
           </div>
           <Chip tone={role.id === "sealed" ? "off" : "on"}>{role.label}</Chip>
@@ -489,11 +489,11 @@ export function PermissionTree(props: {
         </div>
         <dl className="mt-3 space-y-2 text-sm">
           <div>
-            <dt className="text-[11px] uppercase tracking-[0.12em] text-white/35">A visitor is told</dt>
+            <dt className="text-[11px] uppercase tracking-[0.12em] text-white/50">A visitor is told</dt>
             <dd className="text-white/70">{visitorLine ?? "Nothing — there is nothing to explain."}</dd>
           </div>
           <div>
-            <dt className="text-[11px] uppercase tracking-[0.12em] text-white/35">Your agent is told</dt>
+            <dt className="text-[11px] uppercase tracking-[0.12em] text-white/50">Your agent is told</dt>
             <dd className="text-white/70">
               {agentLine ?? "Nothing — it can hear this room and answer in it."}
             </dd>
@@ -501,7 +501,7 @@ export function PermissionTree(props: {
         </dl>
         {!publicSpeech ? (
           <div className="mt-3 border-t border-white/10 pt-2">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-white/35">Still allowed</div>
+            <div className="text-[11px] uppercase tracking-[0.12em] text-white/50">Still allowed</div>
             <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/50">
               {ALWAYS_ALLOWED.map((a) => (
                 <li key={a}>{a}</li>
@@ -516,7 +516,7 @@ export function PermissionTree(props: {
       <div className="mt-8">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <h3 className="font-display text-2xl text-lantern-300">Stance</h3>
-          <p className="text-xs text-white/45">
+          <p className="text-xs text-white/55">
             Not a fifth permission. How they behave when you are not telling them anything.
           </p>
         </div>
@@ -544,10 +544,10 @@ export function PermissionTree(props: {
                   </Chip>
                 </div>
                 <p className="mt-1 text-xs text-white/60">{s.blurb}</p>
-                <p className="mt-2 text-[11px] text-white/40">
+                <p className="mt-2 text-[11px] text-white/55">
                   <span
                     className={
-                      s.enforcement === "kernel" ? "text-emerald-200/70" : "text-white/35"
+                      s.enforcement === "kernel" ? "text-emerald-200/70" : "text-white/50"
                     }
                   >
                     {s.enforcement === "kernel" ? "enforced" : "hint only"}

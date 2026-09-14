@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { REACTION_GLYPH, REACTION_KEYS, REACTION_LABEL, type ReactionKey } from "@grove/protocol";
 import { api } from "@/lib/api";
 import { GUEST_EVENT } from "@/lib/guest";
+import { onMenuKeyDown } from "./a11y";
 import {
   applyReaction,
   reactionChips,
@@ -92,14 +93,25 @@ export function Reactions({
             type="button"
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
+            aria-haspopup="menu"
             aria-label="Add a reaction"
-            className="rounded-full border border-white/10 px-1.5 py-px text-white/35 hover:text-white/70"
+            className="rounded-full border border-white/10 px-1.5 py-px text-white/50 hover:text-white/70"
           >
             +
           </button>
           {open ? (
             <span
               role="menu"
+              aria-label="Reactions"
+              aria-orientation="horizontal"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setOpen(false);
+                  return;
+                }
+                onMenuKeyDown(e);
+              }}
               className="absolute left-0 top-full z-20 mt-1 flex gap-0.5 rounded-full border border-white/15 bg-dusk-900 px-1 py-0.5 shadow-lg"
             >
               {REACTION_KEYS.map((key) => (
@@ -120,11 +132,11 @@ export function Reactions({
         </span>
       ) : null}
       {canReact && asGuest && (open || (state?.mine.length ?? 0) > 0) ? (
-        <span className="text-white/30" title="Signed out: kept in this browser. Sign in and it moves to your account.">
+        <span className="text-white/50" title="Signed out: kept in this browser. Sign in and it moves to your account.">
           as a guest
         </span>
       ) : null}
-      {note ? <span className="text-white/40">{note}</span> : null}
+      {note ? <span className="text-white/55">{note}</span> : null}
     </span>
   );
 }

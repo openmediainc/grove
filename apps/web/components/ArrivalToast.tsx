@@ -55,7 +55,7 @@ export function ArrivalToast({
             <button
               onClick={onDismiss}
               aria-label="Dismiss"
-              className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/40 hover:text-white/80 sm:-mr-1 sm:-mt-1 sm:h-8 sm:w-8 sm:text-base"
+              className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/55 hover:text-white/80 sm:-mr-1 sm:-mt-1 sm:h-8 sm:w-8 sm:text-base"
             >
               ×
             </button>

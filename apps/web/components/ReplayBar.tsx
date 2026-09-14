@@ -216,7 +216,7 @@ export function ReplayBar({ controller }: { controller: ReplayController }) {
           ))}
         </div>
         <span className="tabular-nums text-amber-200">{replayClock(view.playhead)}</span>
-        <span className="text-white/35">
+        <span className="text-white/50">
           {replayWindowLabel(view.since, view.until)} UTC
         </span>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -274,7 +274,7 @@ export function ReplayBar({ controller }: { controller: ReplayController }) {
           </div>
         ) : null}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-white/45">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-white/55">
         <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm" style={{ background: MARKER_COLOUR.fault }} />faults</span>
         <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm" style={{ background: MARKER_COLOUR.arrival }} />arrivals</span>
         <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm" style={{ background: MARKER_COLOUR.span }} />work spans</span>

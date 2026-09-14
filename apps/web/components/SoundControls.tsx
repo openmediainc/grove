@@ -23,7 +23,7 @@ export function SoundMenuSection({ sound }: { sound: SoundControls }) {
         className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
       >
         <span>Mute all sound</span>
-        <span className={`text-xs ${sound.muted ? "text-lantern-300" : "text-white/45"}`}>{sound.muted ? "on" : "off"}</span>
+        <span className={`text-xs ${sound.muted ? "text-lantern-300" : "text-white/55"}`}>{sound.muted ? "on" : "off"}</span>
       </button>
       {sound.supported ? <AmbientRows sound={sound} pct={pct} /> : null}
     </div>
@@ -46,12 +46,12 @@ function AmbientRows({ sound, pct }: { sound: SoundControls; pct: number }) {
         className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
       >
         <span>Ambient sound</span>
-        <span className={`text-xs ${sound.enabled ? "text-lantern-300" : "text-white/45"}`}>
+        <span className={`text-xs ${sound.enabled ? "text-lantern-300" : "text-white/55"}`}>
           {sound.enabled ? (sound.muted ? "on · muted" : sound.needsGesture ? "on · tap to start" : "on") : "off"}
         </span>
       </button>
-      <label className="flex items-center gap-3 px-3 py-2 text-white/70">
-        <span className="shrink-0 text-xs">Volume</span>
+      <div role="group" aria-label="Volume" className="flex items-center gap-3 px-3 py-2 text-white/70">
+        <span aria-hidden className="shrink-0 text-xs">Volume</span>
         <input
           type="range"
           min={0}
@@ -64,7 +64,7 @@ function AmbientRows({ sound, pct }: { sound: SoundControls; pct: number }) {
           disabled={!sound.enabled}
           className="min-w-0 flex-1 accent-lantern-400 disabled:opacity-40"
         />
-      </label>
+      </div>
       <button
         type="button"
         role="menuitemcheckbox"
@@ -75,7 +75,7 @@ function AmbientRows({ sound, pct }: { sound: SoundControls; pct: number }) {
         className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 disabled:opacity-40 sm:py-2"
       >
         <span>Reduce sound (bed only)</span>
-        <span className={`text-xs ${sound.bedOnly ? "text-lantern-300" : "text-white/45"}`}>{sound.bedOnly ? "on" : "off"}</span>
+        <span className={`text-xs ${sound.bedOnly ? "text-lantern-300" : "text-white/55"}`}>{sound.bedOnly ? "on" : "off"}</span>
       </button>
     </>
   );

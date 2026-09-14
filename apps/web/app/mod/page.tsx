@@ -163,14 +163,14 @@ function Transcript({ title, lines, highlight }: { title: string; lines: Line[];
   if (!lines.length) return null;
   return (
     <div className="mt-3">
-      <h4 className="text-[11px] uppercase tracking-widest text-white/40">{title}</h4>
+      <h4 className="text-[11px] uppercase tracking-widest text-white/55">{title}</h4>
       <ol className="mt-1 max-h-64 space-y-1 overflow-y-auto rounded-lg bg-dusk-950/60 p-3 text-xs">
         {lines.map((l) => (
           <li key={`${l.id}-${l.created_at}`} className={l.sender_id === highlight ? "text-lantern-300" : "text-white/70"}>
-            <span className="text-white/35">{when(l.created_at)} </span>
+            <span className="text-white/50">{when(l.created_at)} </span>
             <span className="font-semibold">{l.sender_name}</span>
-            {l.room_id ? <span className="text-white/30"> in {l.room_id}</span> : null}
-            <span className="text-white/30">: </span>
+            {l.room_id ? <span className="text-white/50"> in {l.room_id}</span> : null}
+            <span className="text-white/50">: </span>
             <span className="whitespace-pre-wrap">{l.body}</span>
           </li>
         ))}
@@ -323,7 +323,7 @@ export default function ModPage() {
       <main className="mx-auto max-w-xl px-4 py-10 sm:px-6 sm:py-16">
         <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">Operators only</h1>
         <p className="mt-3 text-white/60">This page is for the people who run Glasshouse.</p>
-        <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/40 hover:text-white/70">
+        <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/55 hover:text-white/70">
           ← Back to the world
         </a>
       </main>
@@ -373,7 +373,7 @@ export default function ModPage() {
                 </Chip>
               </div>
               <p className="mt-1 text-xs text-white/50">{f.effect}</p>
-              <p className="mt-1 text-xs text-white/35">
+              <p className="mt-1 text-xs text-white/50">
                 {f.updated_at
                   ? `last changed ${when(f.updated_at)} by @${f.updated_by_handle ?? "unknown"}${f.reason ? ` — ${f.reason}` : ""}`
                   : "never changed"}
@@ -401,7 +401,7 @@ export default function ModPage() {
       {/* --- direct actor action -------------------------------------------- */}
       <section className="mt-8">
         <h2 className="text-xs uppercase tracking-widest text-lantern-400">Act on an actor directly</h2>
-        <p className="mt-1 text-xs text-white/40">Not every incident arrives as a report.</p>
+        <p className="mt-1 text-xs text-white/55">Not every incident arrives as a report.</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <input
             className="rounded-lg bg-dusk-800 px-3 py-2 ring-1 ring-white/10"
@@ -456,7 +456,7 @@ export default function ModPage() {
               <button
                 key={s}
                 onClick={() => setStatus(s)}
-                className={`rounded-full px-2 py-1 ${status === s ? "bg-white/15 text-white" : "text-white/40"}`}
+                className={`rounded-full px-2 py-1 ${status === s ? "bg-white/15 text-white" : "text-white/55"}`}
               >
                 {s}
               </button>
@@ -478,17 +478,17 @@ export default function ModPage() {
                       ) : null}
                       {r.target.suspended ? <Chip tone="bg-red-500/25 text-red-100 ring-red-400/40">target suspended</Chip> : null}
                     </div>
-                    <span className="text-xs text-white/40">{when(r.created_at)}</span>
+                    <span className="text-xs text-white/55">{when(r.created_at)}</span>
                   </div>
 
                   <p className="mt-2">
                     <span className="text-white/50">target </span>
                     {actorLabel(r.target)}
-                    <span className="text-white/30"> · </span>
-                    <code className="text-xs text-white/40">{r.target.id}</code>
+                    <span className="text-white/50"> · </span>
+                    <code className="text-xs text-white/55">{r.target.id}</code>
                   </p>
                   <p className="text-white/60">
-                    <span className="text-white/40">reported by </span>
+                    <span className="text-white/55">reported by </span>
                     {actorLabel(r.reporter)}
                   </p>
                   {r.details ? <p className="mt-2 whitespace-pre-wrap text-white/80">“{r.details}”</p> : null}
@@ -537,7 +537,7 @@ export default function ModPage() {
                         </button>
                       </div>
                     ) : (
-                      <p className="mt-2 text-xs text-white/40">The reported board post has been deleted.</p>
+                      <p className="mt-2 text-xs text-white/55">The reported board post has been deleted.</p>
                     )
                   ) : null}
 
@@ -554,7 +554,7 @@ export default function ModPage() {
                   </div>
 
                   {r.status !== "open" ? (
-                    <p className="mt-2 text-xs text-white/40">
+                    <p className="mt-2 text-xs text-white/55">
                       {r.resolution} by @{r.resolved_by_handle ?? "unknown"} {when(r.resolved_at)}
                       {r.resolution_note ? ` — ${r.resolution_note}` : ""}
                     </p>
@@ -572,7 +572,7 @@ export default function ModPage() {
                         <Transcript title="What the reporter said in the same window" lines={d.reporter_speech} highlight={r.reporter.id} />
                         {d.target_history.length ? (
                           <div className="mt-3">
-                            <h4 className="text-[11px] uppercase tracking-widest text-white/40">Prior moderator actions</h4>
+                            <h4 className="text-[11px] uppercase tracking-widest text-white/55">Prior moderator actions</h4>
                             <ul className="mt-1 space-y-1 text-xs text-white/60">
                               {d.target_history.map((h) => (
                                 <li key={h.id}>
@@ -585,11 +585,11 @@ export default function ModPage() {
                           </div>
                         ) : null}
                         {!d.snapshot_lines.length && !d.target_speech.length && !d.reporter_speech.length ? (
-                          <p className="text-xs text-white/40">No speech recorded around this report.</p>
+                          <p className="text-xs text-white/55">No speech recorded around this report.</p>
                         ) : null}
                       </div>
                     ) : (
-                      <p className="mt-2 text-xs text-white/40">Loading context…</p>
+                      <p className="mt-2 text-xs text-white/55">Loading context…</p>
                     )
                   ) : null}
 
@@ -621,13 +621,13 @@ export default function ModPage() {
               );
             })}
           </ul>
-          {reports.length === 0 ? <p className="mt-4 text-white/40">Nothing {status === "all" ? "here" : status}.</p> : null}
+          {reports.length === 0 ? <p className="mt-4 text-white/55">Nothing {status === "all" ? "here" : status}.</p> : null}
         </section>
       ) : null}
 
       {tab === "injection" ? (
         <section className="mt-4">
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-white/55">
             The server heuristic flags api keys, PEM blocks and “ignore previous instructions”. It does not
             auto-ban, by design — most hits are people talking about injection. Review clears the flag from
             this list; it does not punish anyone.
@@ -637,7 +637,7 @@ export default function ModPage() {
               <li key={f.event_id} className="rounded-xl border border-violet-400/20 bg-dusk-800/60 p-4 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span>{actorLabel(f.actor)}</span>
-                  <span className="text-xs text-white/40">
+                  <span className="text-xs text-white/55">
                     {f.channel ?? "?"} · {when(f.created_at)}
                   </span>
                 </div>
@@ -646,7 +646,7 @@ export default function ModPage() {
                     {f.speech.body}
                   </p>
                 ) : (
-                  <p className="mt-2 text-xs text-white/40">
+                  <p className="mt-2 text-xs text-white/55">
                     The line was flagged but never stored — it was refused by the policy kernel before delivery.
                   </p>
                 )}
@@ -677,20 +677,20 @@ export default function ModPage() {
               </li>
             ))}
           </ul>
-          {injection.length === 0 ? <p className="mt-4 text-white/40">No unreviewed flags.</p> : null}
+          {injection.length === 0 ? <p className="mt-4 text-white/55">No unreviewed flags.</p> : null}
         </section>
       ) : null}
 
       {tab === "log" ? (
         <section className="mt-4">
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-white/55">
             Every moderator action, newest first. A moderation tool with no record of its own moderators is
             the thing that ends badly.
           </p>
           <ul className="mt-3 space-y-1 text-sm">
             {log.map((e) => (
               <li key={e.id} className="rounded-lg border border-white/5 bg-dusk-800/40 px-3 py-2">
-                <span className="text-white/40">{when(e.created_at)}</span>{" "}
+                <span className="text-white/55">{when(e.created_at)}</span>{" "}
                 <span className="text-lantern-300">{e.type}</span>{" "}
                 <span className="text-white/60">by @{e.actor_handle ?? e.actor_id ?? "unknown"}</span>
                 {e.payload.target_id ? <span className="text-white/50"> → {String(e.payload.target_id)}</span> : null}
@@ -704,7 +704,7 @@ export default function ModPage() {
               </li>
             ))}
           </ul>
-          {log.length === 0 ? <p className="mt-4 text-white/40">No moderator actions recorded yet.</p> : null}
+          {log.length === 0 ? <p className="mt-4 text-white/55">No moderator actions recorded yet.</p> : null}
         </section>
       ) : null}
 

@@ -59,7 +59,7 @@ function Confirm({ slug, value, onChange, id }: { slug: string; value: string; o
         onChange={(e) => onChange(e.target.value)}
         autoComplete="off"
         spellCheck={false}
-        className="mt-1 block w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 font-mono text-sm text-white outline-none focus:border-lantern-400/50"
+        className="mt-1 block w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 font-mono text-sm text-white outline-none focus:border-lantern-400"
       />
     </label>
   );
@@ -122,7 +122,7 @@ export function TransferPanel({ space, reload }: { space: Space; reload: () => P
   return (
     <div>
       <h3 className="font-display text-xl text-lantern-300">Transfer ownership</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         Hand this space to one of its members, or to an org bound to it. They have 7 days to accept. The name, card,
         branding, marks, rooms and plot stay with the space; you stay a member unless you choose to leave.
       </p>
@@ -191,14 +191,14 @@ export function TransferPanel({ space, reload }: { space: Space; reload: () => P
             </button>
           </div>
         ) : (
-          <p className="mt-3 text-sm text-white/40">
+          <p className="mt-3 text-sm text-white/55">
             Nobody to hand it to yet. Admit a member or bind an org someone else owns first.
           </p>
         )
       ) : null}
 
       {!pending && state?.last ? (
-        <p className="mt-3 text-xs text-white/40">
+        <p className="mt-3 text-xs text-white/55">
           Last offer, to {recipientLabel(state.last)}: {STATUS_LINE[state.last.status]}.
         </p>
       ) : null}
@@ -302,12 +302,12 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
   return (
     <div>
       <h3 className="font-display text-xl text-lantern-300">Move to another plot</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         The space keeps everything; only its place on the map changes, and the old plot is freed. A space can move once a
         week. Plots next to your other plots come first.
       </p>
       <MiniPlots plan={plan} target={target} />
-      <p className="mt-1 text-[11px] text-white/35">
+      <p className="mt-1 text-[11px] text-white/50">
         Now on plot {plan.current}
         {plan.anchors.length ? " · gold: your other plots" : ""} · blue: free plots on offer
       </p>
@@ -347,7 +347,7 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
           ) : null}
         </>
       ) : (
-        <p className="mt-3 text-sm text-white/40">No free plot to move to right now.</p>
+        <p className="mt-3 text-sm text-white/55">No free plot to move to right now.</p>
       )}
       {done ? <p className="mt-2 text-sm text-lantern-300">{done}</p> : null}
       <ErrorNotice error={err} className="mt-2" />
@@ -389,7 +389,7 @@ export function TransferOffers({ onChange }: { onChange?: () => void }) {
   return (
     <section className="mt-10">
       <h2 className="font-display text-2xl text-lantern-300">
-        Transfer offers <span className="text-white/40">({offers.length})</span>
+        Transfer offers <span className="text-white/55">({offers.length})</span>
       </h2>
       <ul className="mt-3 space-y-3">
         {offers.map((t) => (
@@ -397,12 +397,12 @@ export function TransferOffers({ onChange }: { onChange?: () => void }) {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 text-sm">
                 <span className="font-semibold">{t.from.display_name}</span>
-                <span className="ml-1 text-xs text-white/40">@{t.from.handle}</span> offers you{" "}
+                <span className="ml-1 text-xs text-white/55">@{t.from.handle}</span> offers you{" "}
                 <Link href={spaceHref(t.world_slug)} className="font-semibold text-lantern-300">
                   {t.world_name}
                 </Link>
                 {t.to_org ? <> for your org {t.to_org.name}</> : null}.
-                <div className="mt-1 text-xs text-white/40">
+                <div className="mt-1 text-xs text-white/55">
                   plot {t.plot_index ?? "—"} · {timeLeft(t.expires_at)} left to answer
                   {t.from_leaves ? ` · @${t.from.handle} leaves when you accept` : ` · @${t.from.handle} stays a member`}
                 </div>

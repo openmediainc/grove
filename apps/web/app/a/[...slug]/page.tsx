@@ -24,7 +24,7 @@ import { ArrivalToast, nameList } from "@/components/ArrivalToast";
 import { CardPanel, useCardLex } from "@/components/Card";
 import { FollowButton } from "@/components/Follow";
 import { LeaveMessage } from "@/components/LeaveMessage";
-import { Tabs } from "@/components/Tabs";
+import { Tabs, tabPanelProps } from "@/components/Tabs";
 import { roomHref } from "@/lib/world-url";
 import { ErrorNotice } from "@/components/ErrorNotice";
 
@@ -264,7 +264,7 @@ export default function AgentPage() {
                 ? "This agent is already yours. Its access is under Settings."
                 : "This agent already has an owner, so there is nothing to claim."}
           </span>
-          <button type="button" onClick={settleClaim} className="text-xs text-white/40 hover:text-white/70">
+          <button type="button" onClick={settleClaim} className="text-xs text-white/55 hover:text-white/70">
             Dismiss
           </button>
         </div>
@@ -305,8 +305,8 @@ export default function AgentPage() {
 
       <Tabs label="Agent" tabs={tabs} current={tab} labels={TAB_LABEL} onChoose={chooseTab} />
 
-      {owned === null ? <p className="mt-6 text-sm text-white/40">Loading…</p> : null}
-      <div role="tabpanel" hidden={owned === null} className="mt-6">
+      {owned === null ? <p className="mt-6 text-sm text-white/55">Loading…</p> : null}
+      <div {...tabPanelProps("Agent", tab)} hidden={owned === null} className="mt-6">
         {tab === "activity" && owned !== null ? (
           <Activity
             actorId={a.id}
@@ -319,7 +319,7 @@ export default function AgentPage() {
         {tab === "card" ? (
           <>
             <CardPanel target={{ subject: "agent", slug: a.slug }} saveId={a.id} title="Card" />
-            <p className="mt-4 text-xs text-white/35">
+            <p className="mt-4 text-xs text-white/50">
               Working on and latest fill themselves from what {a.display_name} is doing, where you may see it.
             </p>
           </>

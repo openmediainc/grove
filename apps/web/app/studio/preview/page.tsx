@@ -101,8 +101,8 @@ export default function TreePreview() {
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-white/35">#{stateOrdinal(p)}</span>
-                  <span className="font-mono text-[10px] text-white/45">
+                  <span className="text-white/50">#{stateOrdinal(p)}</span>
+                  <span className="font-mono text-[10px] text-white/55">
                     {p.listenToHumans ? "LH" : "··"} {p.listenToAgents ? "LA" : "··"}{" "}
                     {p.speakToHumans ? "SH" : "··"} {p.speakToAgents ? "SA" : "··"}
                   </span>

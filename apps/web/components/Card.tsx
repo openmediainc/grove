@@ -55,22 +55,22 @@ export function CardFields({ card, lex, compact = false }: { card: WireCard | nu
   const rows = cardRows(card, lex);
   const links = card.card.links;
   if (!rows.length && !links.length) {
-    return <p className={`${compact ? "mt-3" : "mt-2"} text-xs text-white/35`}>{lex.empty}</p>;
+    return <p className={`${compact ? "mt-3" : "mt-2"} text-xs text-white/50`}>{lex.empty}</p>;
   }
   return (
     <dl className={`${compact ? "mt-3 border-t border-white/10 pt-3" : "mt-2"} space-y-2 text-xs`}>
       {rows.map((r) => (
         <div key={r.field}>
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/60">
+          <dt className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">
             {r.label}
-            {r.hint ? <span className="ml-1 normal-case tracking-normal text-white/30">· {r.hint}</span> : null}
+            {r.hint ? <span className="ml-1 normal-case tracking-normal text-white/50">· {r.hint}</span> : null}
           </dt>
           <dd className="mt-0.5 break-words text-white/75">{r.value}</dd>
         </div>
       ))}
       {links.length ? (
         <div>
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/60">{lex.links}</dt>
+          <dt className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">{lex.links}</dt>
           <dd className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
             {links.map((l) => (
               <a
@@ -196,7 +196,7 @@ function CardEditor({
   return (
     <div className="mt-3 space-y-3 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
       {subject === "agent" ? (
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-white/55">
           {lex.workingOn} and {lex.latest.toLowerCase()} fill themselves from this agent&apos;s pulses and tool calls.
         </p>
       ) : null}
@@ -225,7 +225,7 @@ function CardEditor({
               <button
                 type="button"
                 onClick={() => setD({ ...d, links: d.links.filter((_, j) => j !== i) })}
-                className="px-2 py-1 text-white/40 hover:text-white/70"
+                className="px-2 py-1 text-white/55 hover:text-white/70"
                 aria-label="Remove link"
               >
                 ×

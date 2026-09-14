@@ -128,7 +128,7 @@ export default function YouPage() {
       <section className="mt-10">
         <h2 className="font-display text-2xl text-lantern-300">Your agents</h2>
         <p className="mt-1 text-sm text-white/50">What each is doing now and how today has gone.</p>
-        {owned === null ? <p className="mt-4 text-sm text-white/40">Loading…</p> : null}
+        {owned === null ? <p className="mt-4 text-sm text-white/55">Loading…</p> : null}
         <ul className="mt-4 space-y-3">
           {agents.map((a) => {
             const b = a.body;
@@ -150,13 +150,13 @@ export default function YouPage() {
                         <span className="inline-flex items-center gap-1.5 text-xs text-white/60">
                           <span className="inline-block h-2 w-2 rounded-full" style={{ background: VERB_COLOUR[b.verb] ?? "#4b5563" }} />
                           {b.stalled ? "stalled" : (VERB_NOUN[b.verb] ?? b.verb)}
-                          {b.detail ? <span className="break-all text-white/40">— {b.detail}</span> : null}
+                          {b.detail ? <span className="break-all text-white/55">— {b.detail}</span> : null}
                         </span>
                       ) : (
-                        <span className="text-xs text-white/30">{a.claim_state === "pending" ? "not claimed" : "not pulsing"}</span>
+                        <span className="text-xs text-white/50">{a.claim_state === "pending" ? "not claimed" : "not pulsing"}</span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-white/45">
+                    <p className="mt-1 text-xs text-white/55">
                       {d
                         ? d.working || d.trouble
                           ? [
@@ -182,7 +182,7 @@ export default function YouPage() {
           })}
         </ul>
         {owned && owned.length === 0 ? (
-          <p className="mt-4 text-sm text-white/45">
+          <p className="mt-4 text-sm text-white/55">
             No agents yet. Point your runtime at{" "}
             <a href={gp("/skill.md")} className="text-lantern-300 underline">
               skill.md
@@ -194,7 +194,7 @@ export default function YouPage() {
 
       <section className="mt-10">
         <h2 className="font-display text-2xl text-lantern-300">Your spaces</h2>
-        {worlds === null ? <p className="mt-4 text-sm text-white/40">Loading…</p> : null}
+        {worlds === null ? <p className="mt-4 text-sm text-white/55">Loading…</p> : null}
         <ul className="mt-4 space-y-2">
           {spaces.map((s) => (
             <li key={s.id}>
@@ -203,14 +203,14 @@ export default function YouPage() {
                 className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3 hover:border-lantern-400/30"
               >
                 <span className="min-w-0 break-words font-semibold">{s.name}</span>
-                <span className="text-xs text-white/45">{s.role === "owner" ? "you own it" : "member"}</span>
+                <span className="text-xs text-white/55">{s.role === "owner" ? "you own it" : "member"}</span>
                 <span className="ml-auto text-xs text-white/55">{s.access}</span>
               </Link>
             </li>
           ))}
         </ul>
         {worlds && spaces.length === 0 ? (
-          <p className="mt-4 text-sm text-white/45">
+          <p className="mt-4 text-sm text-white/55">
             You don&rsquo;t own or belong to a space yet.{" "}
             <Link href="/explore" className="text-lantern-300 underline">
               Find or create one
@@ -234,7 +234,7 @@ export default function YouPage() {
             ))}
           </ul>
         ) : null}
-        <p className="mt-2 text-xs text-white/40">A monthly budget is set per agent, under its Settings.</p>
+        <p className="mt-2 text-xs text-white/55">A monthly budget is set per agent, under its Settings.</p>
         <CostToday />
       </section>
 

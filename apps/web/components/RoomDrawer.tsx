@@ -42,6 +42,7 @@ import { roomHref } from "@/lib/world-url";
 import { themeStyle } from "@/lib/themes";
 import { useActiveTheme } from "@/lib/themes/useActiveTheme";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { useDialogFocus } from "@/components/a11y";
 
 /**
  * A room, as a drawer on the map (DECISIONS #1).
@@ -111,7 +112,7 @@ const STATE_DOT: Record<RoomStatus["state"], string> = {
   quiet: "bg-white/40",
   busy: "bg-lantern-400/70",
   posted: "bg-sky-300",
-  live: "bg-rose-400 animate-pulse",
+  live: "bg-rose-400 motion-safe:animate-pulse",
 };
 
 type RoomWithWorld = RoomPayload["room"] & Partial<SignpostRoom> & { world_id?: string };
@@ -143,6 +144,9 @@ export type RoomDrawerProps = {
 export function RoomDrawer(props: RoomDrawerProps) {
   const { room, signedIn, arrived, themedTitle, titleFor, publicView, signInHref, onClose, onOpenRoom, onExpandedChange } = props;
   const [data, setData] = useState<RoomPayload | null>(null);
+  // A dialog over the live map, not modal: Tab walks out to the map controls, Escape (the map's) closes.
+  const drawerRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(drawerRef);
   // DECISIONS #3: the drawer follows the live map theme (switcher, T key, `?theme=`).
   const theme = useActiveTheme();
   const [lines, setLines] = useState<TranscriptLine[]>([]);
@@ -674,9 +678,13 @@ export function RoomDrawer(props: RoomDrawerProps) {
   };
 
   return (
-    <aside
+    <div
+      ref={drawerRef}
       data-speech-avoid
       data-map-drawer
+      data-a11y-dialog
+      role="dialog"
+      aria-modal="false"
       aria-label={`${title}, room`}
       data-theme-skin={theme.id}
       style={themeStyle(theme)}
@@ -744,7 +752,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
                 >
                   <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATE_DOT[st?.state ?? "empty"]}`} />
                   {r.name}
-                  {st?.occupancy ? <span className="text-[10px] text-white/35">{st.occupancy}</span> : null}
+                  {st?.occupancy ? <span className="text-[10px] text-white/50">{st.occupancy}</span> : null}
                 </button>
               </li>
             );
@@ -827,13 +835,13 @@ export function RoomDrawer(props: RoomDrawerProps) {
               <div className="mx-4 mt-3 rounded-xl border border-lantern-400/20 bg-dusk-950/40 p-3">
                 <h3 className="text-xs uppercase tracking-widest text-lantern-400">
                   Pinned {board.day}
-                  {board.pin ? null : <span className="ml-2 normal-case tracking-normal text-white/40">— open, first post takes it</span>}
+                  {board.pin ? null : <span className="ml-2 normal-case tracking-normal text-white/55">— open, first post takes it</span>}
                 </h3>
                 {board.pin ? (
                   <div className="mt-2 rounded-lg border border-sky-300/40 bg-sky-300/5 p-3">
                     <div className="font-display text-lg text-sky-200">{board.pin.title}</div>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">{board.pin.body}</p>
-                    <p className="mt-2 text-[11px] text-white/40">
+                    <p className="mt-2 text-[11px] text-white/55">
                       {board.pin.author_slug ? `@${board.pin.author_slug}` : board.pin.author_name ?? "someone since departed"}
                       {whenLabel(board.pin_opens_at) ? ` · holds for ${whenLabel(board.pin_opens_at)}` : null}
                     </p>
@@ -850,7 +858,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
                   </ul>
                 ) : null}
                 {board.withheld > 0 ? (
-                  <p className="mt-2 text-[11px] text-white/35">
+                  <p className="mt-2 text-[11px] text-white/50">
                     {board.withheld} {board.withheld === 1 ? "notice is" : "notices are"} not shown to you.
                   </p>
                 ) : null}
@@ -865,6 +873,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
                       key={n.actor_id}
                       href={n.kind === "agent" ? `/a/${n.slug}` : `/u/${n.slug}`}
                       title={n.display_name || n.slug}
+                      aria-label={`${n.display_name || n.slug}${n.kind === "agent" ? " (agent)" : ""}`}
                     >
                       <GeoAvatar kind={n.kind} seed={n.actor_id} size={22} label={false} />
                     </Link>
@@ -906,7 +915,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
                           {w.direction === "out" ? `you → ${other}` : `${other} → you`}
                         </span>
                         <span className="break-words italic text-white/85">{w.body}</span>
-                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-white/40">
+                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-white/55">
                           <span>only you two</span>
                           {w.direction === "in" && partner && whisperTo?.actor_id !== partner.actor_id ? (
                             <button
@@ -1042,7 +1051,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
           <ErrorNotice error={err} tone="drawer" className="mt-2" />
         </footer>
       )}
-    </aside>
+    </div>
   );
 }
 
@@ -1076,12 +1085,12 @@ function SpectatorRoom({
                   <span className="text-white/80">{b.name}</span> · {b.detail}
                 </li>
               ))}
-              {here.length > 12 ? <li className="text-white/35">and {here.length - 12} more</li> : null}
+              {here.length > 12 ? <li className="text-white/50">and {here.length - 12} more</li> : null}
             </ul>
           ) : null}
           {recent.length ? (
             <div className="mt-3 border-t border-white/10 pt-3">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/60">Heard recently</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">Heard recently</p>
               <ul className="mt-2 space-y-1 text-xs text-white/55">
                 {recent.map((l) => (
                   <li key={`${l.who}:${l.body}`} className="break-words">
@@ -1101,7 +1110,7 @@ function SpectatorRoom({
       >
         Sign in to speak
       </a>
-      <p className="mt-2 text-center text-[11px] text-white/35">You can keep watching without one. Speaking needs a body.</p>
+      <p className="mt-2 text-center text-[11px] text-white/50">You can keep watching without one. Speaking needs a body.</p>
     </div>
   );
 }

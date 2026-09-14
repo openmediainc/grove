@@ -102,7 +102,7 @@ export function BrandingPanel({
   return (
     <section>
       <h3 className="font-display text-xl text-lantern-300">Branding</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         A colour, a short line and an emblem for this space&apos;s sign and fence on the map, in every theme.
       </p>
 
@@ -135,7 +135,7 @@ export function BrandingPanel({
               {suggesting ? "Reading…" : "Suggest"}
             </button>
           </form>
-          <p className="mt-1 text-[11px] text-white/35">
+          <p className="mt-1 text-[11px] text-white/50">
             Glasshouse reads only the site&apos;s name, theme colour and icon colour. Nothing is saved until you apply and save.
           </p>
           <ErrorNotice error={suggestErr} size="xs" className="mt-2" />
@@ -150,11 +150,11 @@ export function BrandingPanel({
                 </p>
               ) : null}
               {suggestion.notes.map((n) => (
-                <p key={n} className="text-white/45">
+                <p key={n} className="text-white/55">
                   {n}
                 </p>
               ))}
-              <p className="text-white/45">The preview below shows the suggestion.</p>
+              <p className="text-white/55">The preview below shows the suggestion.</p>
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
@@ -227,7 +227,7 @@ export function BrandingPanel({
             placeholder="Open late on Fridays"
             className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white/85"
           />
-          <span className={`mt-1 block ${check.signTextCount > SIGN_TEXT_MAX ? "text-red-300" : "text-white/35"}`}>
+          <span className={`mt-1 block ${check.signTextCount > SIGN_TEXT_MAX ? "text-red-300" : "text-white/50"}`}>
             {check.signTextError ?? `${check.signTextCount}/${SIGN_TEXT_MAX}`}
           </span>
         </label>
@@ -262,7 +262,7 @@ export function BrandingPanel({
         <div>
           <p className="text-xs text-white/50">{suggestion ? "Preview of the website suggestion" : "Preview"}</p>
           {space.policy_preset === "private" ? (
-            <p className="mt-1 text-xs text-white/40">
+            <p className="mt-1 text-xs text-white/55">
               This space is Private, so the map shows a held sign with none of this on it. This is how it will look once it is Watch only or Open.
             </p>
           ) : null}
@@ -339,7 +339,7 @@ export function SignPreview({ themeId, plot }: { themeId: (typeof THEME_IDS)[num
   return (
     <figure className="overflow-hidden rounded-lg border border-white/10">
       <canvas ref={ref} style={{ width: W, maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }} aria-label={`${theme.lexicon.name} sign preview`} />
-      <figcaption className="border-t border-white/10 px-2 py-1 text-[11px] text-white/45">{theme.lexicon.name}</figcaption>
+      <figcaption className="border-t border-white/10 px-2 py-1 text-[11px] text-white/55">{theme.lexicon.name}</figcaption>
     </figure>
   );
 }

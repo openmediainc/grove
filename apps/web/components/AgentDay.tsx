@@ -90,7 +90,7 @@ export function AgentDay({
   return (
     <div className="mt-6 space-y-6">
       <section className="rounded-2xl border border-white/10 bg-dusk-800/60 p-4 sm:p-5">
-        <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/35">Right now</h3>
+        <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/50">Right now</h3>
         <p
           className={`mt-2 break-words text-base sm:text-lg ${
             body?.stalled || (body?.verb && TROUBLE.has(body.verb)) ? "text-red-200" : "text-white/85"
@@ -119,10 +119,10 @@ export function AgentDay({
                   {line}
                 </p>
               ))
-            : <p className="text-sm text-white/40">Adding up the day…</p>}
+            : <p className="text-sm text-white/55">Adding up the day…</p>}
         </div>
         {truncated ? (
-          <p className="mt-2 text-xs text-white/35">
+          <p className="mt-2 text-xs text-white/50">
             This window is busier than one read can hold; the totals cover the whole window, the
             breakdown the most recent {entries.length} entries.
           </p>
@@ -131,7 +131,7 @@ export function AgentDay({
 
       {account.byVerb.length ? (
         <section>
-          <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/35">Where the time went</h3>
+          <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/50">Where the time went</h3>
           <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full border border-white/10">
             {account.byVerb.map((v) => (
               <span
@@ -152,7 +152,7 @@ export function AgentDay({
                   {VERB_NOUN[v.verb] ?? v.verb}
                 </span>
                 <span className="w-16 shrink-0 tabular-nums text-white/85">{humanDuration(v.seconds)}</span>
-                <span className="text-white/35">
+                <span className="text-white/50">
                   {Math.round((v.seconds / Math.max(1, account.accountedSeconds)) * 100)}% · {v.stretches}{" "}
                   {v.stretches === 1 ? "stretch" : "stretches"}
                 </span>
@@ -163,7 +163,7 @@ export function AgentDay({
       ) : null}
 
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/35">Needs you</h3>
+        <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/50">Needs you</h3>
         {account.trouble.length || account.alarming.length ? (
           <ul className="mt-3 space-y-2">
             {account.trouble.map((p) => (
@@ -174,7 +174,7 @@ export function AgentDay({
                     : p.verb === "blocked"
                       ? `Blocked for ${humanDuration(p.seconds)}`
                       : `Claimed ${VERB_NOUN[p.verb] ?? p.verb} for ${humanDuration(p.seconds)}, then went silent`}
-                  <span className="ml-2 font-mono text-[11px] text-white/35">
+                  <span className="ml-2 font-mono text-[11px] text-white/50">
                     {clock(p.startedAt)}–{clock(p.endedAt)}
                   </span>
                 </p>
@@ -188,7 +188,7 @@ export function AgentDay({
               <li key={`a-${e.id}`} className="rounded-xl border border-red-400/25 bg-red-400/5 p-3">
                 <p className="text-sm text-red-200">
                   {e.summary}
-                  <span className="ml-2 font-mono text-[11px] text-white/35">{clock(e.created_at)}</span>
+                  <span className="ml-2 font-mono text-[11px] text-white/50">{clock(e.created_at)}</span>
                 </p>
               </li>
             ))}
@@ -202,11 +202,11 @@ export function AgentDay({
 
       {account.instructions.length ? (
         <section>
-          <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/35">What you told it</h3>
+          <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/50">What you told it</h3>
           <ul className="mt-3 space-y-1">
             {account.instructions.map((e) => (
               <li key={e.id} className="flex gap-3 text-sm text-white/70">
-                <span className="w-12 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/30">{clock(e.created_at)}</span>
+                <span className="w-12 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/50">{clock(e.created_at)}</span>
                 <span className="min-w-0 break-words">{e.summary}</span>
               </li>
             ))}
@@ -214,7 +214,7 @@ export function AgentDay({
         </section>
       ) : null}
 
-      <h3 className="pt-2 text-[11px] uppercase tracking-[0.18em] text-white/35">Everything, newest first</h3>
+      <h3 className="pt-2 text-[11px] uppercase tracking-[0.18em] text-white/50">Everything, newest first</h3>
     </div>
   );
 }

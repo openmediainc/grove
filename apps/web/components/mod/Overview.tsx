@@ -140,7 +140,7 @@ export function OverviewPanel() {
   }, [load]);
 
   if (err && !data) return <ErrorNotice error={err} onRetry={() => void load()} className="mt-4" />;
-  if (!data) return <p className="mt-4 text-white/40">Loading…</p>;
+  if (!data) return <p className="mt-4 text-white/55">Loading…</p>;
 
   const { health, schema, cost, email } = data;
   const up = health.postgres.ok && health.redis.ok;
@@ -148,7 +148,7 @@ export function OverviewPanel() {
   return (
     <section className="mt-4 space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-white/55">
           Last 24 hours against the 24 hours before and the week&apos;s median · updated{" "}
           {new Date(data.generated_at).toLocaleTimeString()}
         </p>
@@ -187,7 +187,7 @@ export function OverviewPanel() {
             Postgres {health.postgres.ok ? `up · ${health.postgres.ms}ms` : `DOWN — ${health.postgres.error ?? "no answer"}`}
           </p>
           <p>Redis {health.redis.ok ? `up · ${health.redis.ms}ms` : `DOWN — ${health.redis.error ?? "no answer"}`}</p>
-          <p className="mt-1 text-xs text-white/40">{health.public_deploy ? "Public deploy" : "Local / test deploy"}</p>
+          <p className="mt-1 text-xs text-white/55">{health.public_deploy ? "Public deploy" : "Local / test deploy"}</p>
         </Card>
 
         <Card title="Schema" tone={failed(schema) ? "bad" : schema.ok ? "ok" : "bad"}>
@@ -220,7 +220,7 @@ export function OverviewPanel() {
               <p>
                 Today {money(cost.today_micros)} · yesterday {money(cost.yesterday_micros)} · month {money(cost.month_micros)}
               </p>
-              <p className="text-xs text-white/40">
+              <p className="text-xs text-white/55">
                 {cost.today_reports} report(s) today
                 {cost.today_uncosted_reports ? `, ${cost.today_uncosted_reports} without a price` : ""}
               </p>
@@ -228,7 +228,7 @@ export function OverviewPanel() {
                 <ul className="mt-2 space-y-0.5 text-xs">
                   {cost.top_agents.map((a) => (
                     <li key={a.agent_id}>
-                      {a.display_name} <span className="text-white/40">@{a.slug}</span> — {money(a.cost_micros)}
+                      {a.display_name} <span className="text-white/55">@{a.slug}</span> — {money(a.cost_micros)}
                     </li>
                   ))}
                 </ul>
@@ -248,7 +248,7 @@ export function OverviewPanel() {
               <p>
                 Magic links: {email.status} · <code>{email.transport}</code>
               </p>
-              <p className="text-xs text-white/40">
+              <p className="text-xs text-white/55">
                 24h: {email.day.attempts} issued, {email.day.accepted} accepted, {email.day.rejected + email.day.errored} failed,{" "}
                 {email.day.redeemed} used
               </p>
@@ -258,7 +258,7 @@ export function OverviewPanel() {
                 </p>
               ))}
               {email.dmarc ? <p className="mt-1 text-xs text-white/50">{dmarcApplied(email.dmarc)}</p> : null}
-              <p className="mt-1 text-xs text-white/40">Details in the Email tab.</p>
+              <p className="mt-1 text-xs text-white/55">Details in the Email tab.</p>
             </>
           )}
         </Card>
@@ -273,7 +273,7 @@ export function OverviewPanel() {
           <h3 className="text-xs uppercase tracking-widest text-lantern-400">Pulse and traffic</h3>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-sm">
-              <thead className="text-xs text-white/40">
+              <thead className="text-xs text-white/55">
                 <tr>
                   <th className="py-1 pr-3 font-normal">Metric</th>
                   <th className="py-1 pr-3 font-normal">Last 24h</th>
@@ -305,7 +305,7 @@ export function OverviewPanel() {
 
       {err ? (
         <div>
-          <p className="text-xs text-white/45">Last refresh failed; these numbers are from the one before.</p>
+          <p className="text-xs text-white/55">Last refresh failed; these numbers are from the one before.</p>
           <ErrorNotice error={err} live="polite" size="xs" onRetry={() => void load()} className="mt-1" />
         </div>
       ) : null}
@@ -329,7 +329,7 @@ function FunnelCard({ a }: { a: Analytics | Failed }) {
   const weeks = Math.max(1, ...a.cohorts.map((c) => c.active.length));
   return (
     <Card title="Visitors & funnel">
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-white/55">
         UTC day {a.day} so far, against yesterday and the median of the 7 days before. People only, no IPs or identities
         stored, DNT/GPC honoured, kept {a.retention_days} days ·{" "}
         <a
@@ -343,7 +343,7 @@ function FunnelCard({ a }: { a: Analytics | Failed }) {
       </p>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[360px] text-left text-sm">
-          <thead className="text-xs text-white/40">
+          <thead className="text-xs text-white/55">
             <tr>
               <th className="py-1 pr-3 font-normal"> </th>
               <th className="py-1 pr-3 font-normal">Today</th>
@@ -365,12 +365,12 @@ function FunnelCard({ a }: { a: Analytics | Failed }) {
       </div>
 
       <h4 className="mt-4 text-xs uppercase tracking-widest text-white/50">Weekly retention (signed-in people)</h4>
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-white/55">
         Rows: the week people first signed in. Columns: share of them active in week N (0 = that week).
       </p>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[420px] text-left text-xs">
-          <thead className="text-white/40">
+          <thead className="text-white/55">
             <tr>
               <th className="py-1 pr-2 font-normal">Cohort</th>
               <th className="py-1 pr-2 font-normal">People</th>

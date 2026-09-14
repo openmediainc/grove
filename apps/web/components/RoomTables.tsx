@@ -158,7 +158,7 @@ export function RoomTables({
     <section aria-label={`Tables in ${roomTitle}`} className="mx-4 mt-3 rounded-xl border border-white/10 bg-dusk-950/40 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-[10px] uppercase tracking-widest text-lantern-400">
-          Tables{list.length ? <span className="ml-1 text-white/40">{list.length}</span> : null}
+          Tables{list.length ? <span className="ml-1 text-white/55">{list.length}</span> : null}
         </h3>
         {signedIn === true ? (
           <button
@@ -198,7 +198,7 @@ export function RoomTables({
           <button type="submit" disabled={busy} className="rounded-full bg-lantern-400 px-3 py-1.5 font-semibold text-dusk-950 disabled:opacity-60">
             Sit down
           </button>
-          <p className="basis-full text-[11px] text-white/40">
+          <p className="basis-full text-[11px] text-white/55">
             Everyone who can watch {roomTitle} can watch the game. You move first; run out of time and you lose.
           </p>
         </form>
@@ -220,19 +220,19 @@ export function RoomTables({
               >
                 <span className="text-white/85">
                   {gameName(t.game)}
-                  <span className="text-white/45">
+                  <span className="text-white/55">
                     {" "}
                     · {playerAt(t, 0)?.display_name ?? "?"}
                     {playerAt(t, 1) ? ` vs ${playerAt(t, 1)!.display_name}` : ""}
                   </span>
                 </span>
-                <span className="text-[11px] text-white/45">{tableLine(t, now)}</span>
+                <span className="text-[11px] text-white/55">{tableLine(t, now)}</span>
               </button>
             </li>
           ))}
         </ul>
       ) : signedIn === true && !composing ? (
-        <p className="mt-1 text-[11px] text-white/40">No games here yet. Open a table and someone can sit down.</p>
+        <p className="mt-1 text-[11px] text-white/55">No games here yet. Open a table and someone can sit down.</p>
       ) : null}
 
       {open ? (
@@ -301,14 +301,14 @@ function TableBoard({
                   p.display_name
                 )
               ) : (
-                <em className="text-white/35">empty seat</em>
+                <em className="text-white/50">empty seat</em>
               )}
-              {p?.kind === "agent" ? <span className="text-white/35"> (agent)</span> : null}
+              {p?.kind === "agent" ? <span className="text-white/50"> (agent)</span> : null}
             </span>
           );
         })}
       </p>
-      <p className="mt-1 text-[11px] text-white/45" aria-live="polite">
+      <p className="mt-1 text-[11px] text-white/55" aria-live="polite">
         {tableLine(table, now)}
         {myTurn ? <strong className="ml-1 text-lantern-300">Your move.</strong> : null}
       </p>
@@ -373,7 +373,7 @@ function TableBoard({
             </button>
           </>
         ) : null}
-        {signedIn === false && table.status === "waiting" ? <span className="text-white/40">Sign in to sit down.</span> : null}
+        {signedIn === false && table.status === "waiting" ? <span className="text-white/55">Sign in to sit down.</span> : null}
       </div>
 
       {table.status === "ended" && table.ended_event_id ? (
@@ -387,7 +387,7 @@ function TableBoard({
 
       {table.moves?.length ? (
         <details className="mt-2" open={table.game === "chess"}>
-          <summary className="cursor-pointer text-[11px] uppercase tracking-widest text-white/40">Moves</summary>
+          <summary className="cursor-pointer text-[11px] uppercase tracking-widest text-white/55">Moves</summary>
           <ol className="mt-1 max-h-32 overflow-y-auto font-mono text-[11px] leading-5 text-white/70">
             {moveListLines(table.game, table.moves).map((line, i) => (
               <li key={i}>{line}</li>

@@ -142,7 +142,7 @@ export function FollowButton({
     >
       <Heart on={state?.following ?? false} />
       <span aria-live="polite">{heartLabel(state, lex)}</span>
-      {asGuest && state?.following ? <span className="text-[10px] text-white/35">as a guest</span> : null}
+      {asGuest && state?.following ? <span className="text-[10px] text-white/50">as a guest</span> : null}
     </button>
   );
 }

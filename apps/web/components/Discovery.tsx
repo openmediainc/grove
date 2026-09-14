@@ -104,8 +104,8 @@ function Shelf({
         {title}
       </h2>
       <p className="mt-1 text-sm text-white/50">{line}</p>
-      {items === null ? <p className="mt-3 text-sm text-white/40">Looking around…</p> : null}
-      {items && items.length === 0 ? <p className="mt-3 text-sm text-white/40">{empty}</p> : null}
+      {items === null ? <p className="mt-3 text-sm text-white/55">Looking around…</p> : null}
+      {items && items.length === 0 ? <p className="mt-3 text-sm text-white/55">{empty}</p> : null}
       {shown.length ? (
         <ul className="mt-3 grid gap-3 sm:grid-cols-2">
           {shown.map((item) => (
@@ -161,7 +161,7 @@ function ShelfCard({
           <Link href={visitHref(item)} className="block truncate font-semibold hover:text-lantern-300">
             {item.name}
           </Link>
-          <div className="truncate text-xs text-white/45">
+          <div className="truncate text-xs text-white/55">
             {item.kind === "space" ? (signText ? `${signText} · ` : "space · ") : "agent · "}
             {item.owner_handle ? `@${item.owner_handle}` : item.kind === "agent" ? "unclaimed" : "unowned"}
           </div>
@@ -176,7 +176,7 @@ function ShelfCard({
         <p className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs text-lantern-300/80">
           {words.map((w, i) => (
             <span key={w}>
-              {i > 0 ? <span aria-hidden className="mr-2 text-white/25">·</span> : null}
+              {i > 0 ? <span aria-hidden className="mr-2 text-white/50">·</span> : null}
               {w}
             </span>
           ))}

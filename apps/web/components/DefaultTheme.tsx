@@ -59,7 +59,7 @@ export function DefaultThemePanel({
   return (
     <section>
       <h3 className="font-display text-xl text-lantern-300">Default theme</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         How your plot looks to people who arrive through this space&apos;s links or zoom in on it. Anyone who has picked a
         theme of their own keeps theirs, and the map goes back to their usual look when they move on.
       </p>

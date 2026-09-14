@@ -101,7 +101,7 @@ export default function RedeemInvite() {
         </div>
       ) : null}
 
-      <Link href="/explore" className="mt-10 block py-2 text-sm text-white/40">
+      <Link href="/explore" className="mt-10 block py-2 text-sm text-white/55">
         ← Explore
       </Link>
     </main>

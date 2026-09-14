@@ -115,7 +115,7 @@ export function SequenceRecorder(props: {
           ))}
         </ol>
       ) : null}
-      <p className="mb-2 tabular-nums text-white/45">
+      <p className="mb-2 tabular-nums text-white/55">
         {formatRunTime(total)} of {formatRunTime(SEQUENCE_MAX_TOTAL_MS)} · {draft.shots.length} of {SEQUENCE_MAX_SHOTS} shots
       </p>
       <label className="mb-2 block">
@@ -126,7 +126,7 @@ export function SequenceRecorder(props: {
           maxLength={SEQUENCE_TITLE_MAX}
           placeholder="Title (optional)"
           onChange={(e) => props.onTitle(e.target.value)}
-          className="h-10 w-full rounded-lg border border-white/15 bg-dusk-950 px-2 text-xs text-white/85 placeholder:text-white/35 sm:h-8"
+          className="h-10 w-full rounded-lg border border-white/15 bg-dusk-950 px-2 text-xs text-white/85 placeholder:text-white/50 sm:h-8"
         />
       </label>
       <div className="flex gap-1.5">
@@ -183,10 +183,10 @@ export function CinemaBars(props: {
         <div className="flex flex-wrap items-center gap-2 text-xs text-white/75">
           <span className="min-w-0 flex-1 truncate">
             {props.title ? <span className="text-lantern-200">{props.title}</span> : <span className="text-white/50">A sequence</span>}
-            <span className="ml-2 tabular-nums text-white/40">
+            <span className="ml-2 tabular-nums text-white/55">
               {formatRunTime(props.elapsed)} / {formatRunTime(props.total)}
             </span>
-            {props.holding ? <span className="ml-2 text-white/40">· holding (that body is not on the public map)</span> : null}
+            {props.holding ? <span className="ml-2 text-white/55">· holding (that body is not on the public map)</span> : null}
           </span>
           <button type="button" onClick={props.onPostcard} className={BUTTON} title="Save this frame as a postcard, captioned with the sequence title">
             Postcard

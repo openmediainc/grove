@@ -39,7 +39,7 @@ import { brandingDraft, checkDraft } from "@/lib/branding";
 import { RelocatePanel, TransferPanel } from "@/components/SpaceMoves";
 import { FollowButton } from "@/components/Follow";
 import { BoardSection } from "@/components/Board";
-import { Tabs } from "@/components/Tabs";
+import { Tabs, tabPanelProps } from "@/components/Tabs";
 import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
@@ -192,7 +192,7 @@ export default function SpacePage() {
       </main>
     );
   }
-  if (!d) return <main className="mx-auto max-w-3xl px-4 py-8 text-white/40 sm:px-6 sm:py-12">Loading…</main>;
+  if (!d) return <main className="mx-auto max-w-3xl px-4 py-8 text-white/55 sm:px-6 sm:py-12">Loading…</main>;
 
   const copy = accessCopy(d.world.policy_preset);
   // A non-member walks in as a visitor through an open door: the plaza when it
@@ -203,7 +203,7 @@ export default function SpacePage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href={EXPLORE_PATH} className="inline-block py-2 text-sm text-white/40">
+      <Link href={EXPLORE_PATH} className="inline-block py-2 text-sm text-white/55">
         ← Explore
       </Link>
 
@@ -213,14 +213,14 @@ export default function SpacePage() {
           <p className="mt-2 flex flex-wrap items-center gap-2 text-white/60">
             <span className={`rounded-full border px-2 py-0.5 text-xs ${accessTint(d.world.policy_preset)}`}>{copy.word}</span>
             {d.world.plot_index != null ? (
-              <span className="text-sm text-white/40">plot {d.world.plot_index}</span>
+              <span className="text-sm text-white/55">plot {d.world.plot_index}</span>
             ) : (
-              <span className="text-sm text-white/40">the civic core</span>
+              <span className="text-sm text-white/55">the civic core</span>
             )}
             {d.holder_org ? <span className="text-sm text-white/50">held for {d.holder_org.name}</span> : null}
             {isOwner ? <span className="text-sm text-lantern-300/80">yours</span> : d.is_member ? <span className="text-sm text-white/50">member</span> : null}
           </p>
-          <p className="mt-1 text-sm text-white/40">{copy.line}</p>
+          <p className="mt-1 text-sm text-white/55">{copy.line}</p>
           <OrgChips orgs={d.orgs} mode={d.org_render_mode} />
         </div>
         <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
@@ -261,7 +261,7 @@ export default function SpacePage() {
 
       <Tabs label="Space" tabs={tabs} current={tab} labels={SPACE_TAB_LABEL} onChoose={chooseTab} />
 
-      <div role="tabpanel" className="mt-6">
+      <div {...tabPanelProps("Space", tab)} className="mt-6">
         {tab === "about" ? <About detail={d} signedIn={signedIn} /> : null}
         {tab === "activity" ? (
           <Activity worldId={d.world.id} emptyText={`Nothing in ${d.world.name} that you can see in this window.`} />
@@ -297,7 +297,7 @@ function About({ detail: d, signedIn }: { detail: Detail; signedIn: boolean | nu
         </section>
       ) : null}
       {loaded && card && !hasCard && card.editable.length > 0 ? (
-        <p className="text-sm text-white/45">
+        <p className="text-sm text-white/55">
           No card yet. Say what this space is working on under <em>Manage</em>.
         </p>
       ) : null}
@@ -311,7 +311,7 @@ function About({ detail: d, signedIn }: { detail: Detail; signedIn: boolean | nu
             <li key={r.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
               <div className="min-w-0">
                 <div className="truncate font-semibold">{r.name}</div>
-                <div className="text-xs text-white/40">
+                <div className="text-xs text-white/55">
                   {r.kind} ·{" "}
                   <span className={accessTint(r.room_preset ?? spacePreset).split(" ").pop()}>
                     {roomDoorWord(r.room_preset, spacePreset)}
@@ -324,7 +324,7 @@ function About({ detail: d, signedIn }: { detail: Detail; signedIn: boolean | nu
             </li>
           ))}
         </ul>
-        {d.rooms.length === 0 ? <p className="mt-3 text-white/40">No rooms here yet.</p> : null}
+        {d.rooms.length === 0 ? <p className="mt-3 text-white/55">No rooms here yet.</p> : null}
       </section>
 
       <section className="mt-10">
@@ -338,7 +338,7 @@ function About({ detail: d, signedIn }: { detail: Detail; signedIn: boolean | nu
                   <Link href={`/u/${encodeURIComponent(m.handle)}`} className="flex min-w-0 flex-wrap items-center gap-x-2">
                     {tint ? <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tint.colour }} /> : null}
                     <span className="truncate font-semibold">{m.display_name}</span>
-                    <span className="truncate text-xs text-white/40">@{m.handle}</span>
+                    <span className="truncate text-xs text-white/55">@{m.handle}</span>
                   </Link>
                   {m.is_owner ? (
                     <span className="rounded-full bg-lantern-400/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-lantern-300">
@@ -350,7 +350,7 @@ function About({ detail: d, signedIn }: { detail: Detail; signedIn: boolean | nu
             })}
           </ul>
         ) : (
-          <p className="mt-3 text-white/40">Who is inside is for members. The access above is public; the roster is not.</p>
+          <p className="mt-3 text-white/55">Who is inside is for members. The access above is public; the roster is not.</p>
         )}
       </section>
     </>
@@ -381,7 +381,7 @@ function Manage({ detail, reload }: { detail: Detail; reload: () => Promise<void
           <span aria-hidden>→</span>
         </Link>
       ) : (
-        <p className="text-sm text-white/40">
+        <p className="text-sm text-white/55">
           Nobody is waiting to join. Asks land in your{" "}
           <Link href="/inbox" className="text-lantern-300 underline">
             Inbox
@@ -439,7 +439,7 @@ function AccessPicker({ detail, reload }: { detail: Detail; reload: () => Promis
   return (
     <section>
       <h3 className="font-display text-xl text-lantern-300">Access</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         Who may come in, listen and speak across the whole space. A room door below can differ.
       </p>
       <div className="mt-3 space-y-2">
@@ -459,7 +459,7 @@ function AccessPicker({ detail, reload }: { detail: Detail; reload: () => Promis
             >
               <strong>{c.word}</strong>
               {current ? <span className="ml-2 text-xs text-lantern-300">current</span> : null}
-              {saving === p ? <span className="ml-2 text-xs text-white/40">saving…</span> : null}
+              {saving === p ? <span className="ml-2 text-xs text-white/55">saving…</span> : null}
               <span className="block text-sm text-white/50">{c.line}</span>
             </button>
           );
@@ -499,7 +499,7 @@ function AdmitByHandle({ detail, reload }: { detail: Detail; reload: () => Promi
           value={handle}
           onChange={(e) => setHandle(e.target.value)}
           placeholder="@handle"
-          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 outline-none focus:border-lantern-400/50"
+          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 outline-none focus:border-lantern-400"
         />
         <button
           type="button"
@@ -519,7 +519,7 @@ function AdmitByHandle({ detail, reload }: { detail: Detail; reload: () => Promi
 function OrgChips({ orgs, mode }: { orgs: Org[]; mode: "shared" | "dedicated" }) {
   if (!orgs.length) return null;
   return (
-    <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/40">
+    <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/55">
       {mode === "dedicated" ? "home of" : "shared by"}
       {orgs.map((o) => (
         <span
@@ -579,7 +579,7 @@ function AskToJoin({ worldId }: { worldId: string }) {
             rows={2}
             maxLength={280}
             placeholder="Optional: say who you are."
-            className="w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm outline-none focus:border-lantern-400/50"
+            className="w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm outline-none focus:border-lantern-400"
           />
           <button
             onClick={() => void ask()}
@@ -659,7 +659,7 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
   return (
     <div>
       <h3 className="font-display text-xl text-lantern-300">Room doors</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         A room can differ from the space. Open one as a lobby and only that room is listed publicly; the rest of the
         space stays behind the door. Members are never held below visitors in the same room.
       </p>
@@ -699,7 +699,7 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
                     {roomDoorWord(r.room_preset, spacePreset)}
                   </span>
                   {view.isLobby ? <span className="text-[11px] text-lantern-300/80">lobby</span> : null}
-                  {!r.room_preset && !r.member_policy ? <span className="text-[11px] text-white/35">same as the space</span> : null}
+                  {!r.room_preset && !r.member_policy ? <span className="text-[11px] text-white/50">same as the space</span> : null}
                 </span>
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -744,19 +744,19 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
               {/* The preview: what each audience gets, in the kernel's own terms. */}
               <div className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
                 <p className="text-white/70">
-                  <span className="text-white/40">A member sees: </span>
+                  <span className="text-white/55">A member sees: </span>
                   {view.member.line}
-                  {view.member.decidedBy === "room" ? <span className="text-white/35"> (this room)</span> : null}
+                  {view.member.decidedBy === "room" ? <span className="text-white/50"> (this room)</span> : null}
                 </p>
                 <p className="text-white/70">
-                  <span className="text-white/40">A non-member sees: </span>
+                  <span className="text-white/55">A non-member sees: </span>
                   {view.visitor.line}
                   {view.isLobby && spacePreset === "private" ? (
-                    <span className="block text-white/35">On the map: this room only, never the space's name or other rooms.</span>
+                    <span className="block text-white/50">On the map: this room only, never the space's name or other rooms.</span>
                   ) : null}
                 </p>
               </div>
-              {busy === r.id ? <p className="mt-1 text-xs text-white/40">saving…</p> : null}
+              {busy === r.id ? <p className="mt-1 text-xs text-white/55">saving…</p> : null}
             </li>
           );
         })}
@@ -819,7 +819,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
   return (
     <div>
       <h3 className="font-display text-xl text-lantern-300">Invite links</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         A link admits whoever holds it. Every link expires; revoking one stops it immediately.
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -835,7 +835,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
             max={720}
             value={hours}
             onChange={(e) => setHours(Number(e.target.value))}
-            className="w-20 rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1 text-sm outline-none focus:border-lantern-400/50"
+            className="w-20 rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1 text-sm outline-none focus:border-lantern-400"
           />
           hours
         </label>
@@ -857,7 +857,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
             >
               <div className="min-w-0">
                 <div className="truncate font-mono text-xs text-white/60">{linkFor(i.code)}</div>
-                <div className="text-xs text-white/35">
+                <div className="text-xs text-white/50">
                   {i.revoked_at
                     ? "revoked"
                     : !i.active
@@ -936,7 +936,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
   return (
     <div>
       <h3 className="font-display text-xl text-lantern-300">Orgs</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         Bring several projects into one space, or keep a space per org. Same control either way — the mode
         below decides how bodies are tinted.
       </p>
@@ -951,7 +951,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
               <span className="flex min-w-0 flex-wrap items-center gap-x-2">
                 <span aria-hidden className="h-3 w-3 rounded-full" style={{ background: o.colour }} />
                 <span className="truncate font-semibold">{o.name}</span>
-                <span className="truncate text-xs text-white/35">@{o.slug}</span>
+                <span className="truncate text-xs text-white/50">@{o.slug}</span>
               </span>
               <button
                 disabled={busy}
@@ -970,7 +970,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-white/40">No org is bound here.</p>
+        <p className="mt-2 text-sm text-white/55">No org is bound here.</p>
       )}
 
       {bindable.length ? (
@@ -978,7 +978,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
           <select
             value={pick}
             onChange={(e) => setPick(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm outline-none focus:border-lantern-400/50"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm outline-none focus:border-lantern-400"
           >
             <option value="">Bind one of your orgs…</option>
             {bindable.map((o) => (
@@ -1009,7 +1009,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           placeholder="New org name"
-          className="min-w-0 flex-1 basis-40 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm outline-none focus:border-lantern-400/50"
+          className="min-w-0 flex-1 basis-40 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm outline-none focus:border-lantern-400"
         />
         <input
           type="color"

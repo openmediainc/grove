@@ -30,7 +30,7 @@ export function EstatePanel({ orgs }: { orgs: ReadonlyArray<{ id: string; name: 
   return (
     <section>
       <h3 className="font-display text-xl text-lantern-300">Estate</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         Plots of yours (or of one org) that sit next to each other on the map join as one estate, with a fence round
         the whole and one shared sign. Each plot keeps its own access and its own sign. Private plots never join.
       </p>
@@ -113,7 +113,7 @@ function NameField({
         />
       </label>
       <div className="mt-1 flex flex-wrap items-center gap-3">
-        <span className={`text-xs ${count > ESTATE_NAME_MAX ? "text-red-300" : "text-white/35"}`}>
+        <span className={`text-xs ${count > ESTATE_NAME_MAX ? "text-red-300" : "text-white/50"}`}>
           {count}/{ESTATE_NAME_MAX}
         </span>
         <button
@@ -124,7 +124,7 @@ function NameField({
         >
           {busy ? "Saving…" : "Save"}
         </button>
-        {saved ? <span className="text-xs text-white/40">Saved.</span> : null}
+        {saved ? <span className="text-xs text-white/55">Saved.</span> : null}
         {!check.ok ? <span className="text-xs text-red-300">{check.message}</span> : null}
         <ErrorNotice error={err} inline />
       </div>

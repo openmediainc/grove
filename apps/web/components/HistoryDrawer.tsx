@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useDialogFocus } from "@/components/a11y";
 import { Activity } from "@/components/Activity";
 import { MAX_WINDOW_MS, previousVisit, replayClock, type ReplayController } from "@/lib/replay/controller";
 
@@ -28,6 +29,9 @@ export function HistoryDrawer({
     () => controller.view,
   );
   const [lastVisit, setLastVisit] = useState<number | null>(null);
+  // Not modal: the replay bar on the map stays reachable; Escape (the map's) closes.
+  const drawerRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(drawerRef);
   useEffect(() => setLastVisit(previousVisit()), []);
   const visitUsable = lastVisit !== null && Date.now() - lastVisit > 60_000;
 
@@ -45,10 +49,14 @@ export function HistoryDrawer({
   const BTN = "rounded-full border border-white/15 px-3 py-2 text-xs text-white/75 hover:border-amber-300/50 disabled:opacity-35 sm:py-1";
 
   return (
-    <aside
+    <div
+      ref={drawerRef}
       data-speech-avoid
       data-map-drawer
-      aria-label="History"
+      data-a11y-dialog
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="grove-history-title"
       className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex h-[86%] flex-col overflow-hidden rounded-t-2xl border-t border-lantern-400/25 bg-dusk-950/[0.97] text-sm shadow-2xl sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-0 sm:h-auto sm:w-[420px] sm:rounded-none sm:border-l sm:border-t-0"
     >
       <header className="shrink-0 border-b border-white/10 px-4 pb-3 pt-2 sm:pt-4">
@@ -56,7 +64,9 @@ export function HistoryDrawer({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/70">What happened</p>
-            <h2 className="font-display text-2xl text-lantern-300">History</h2>
+            <h2 id="grove-history-title" className="font-display text-2xl text-lantern-300">
+              History
+            </h2>
           </div>
           <button
             type="button"
@@ -109,6 +119,6 @@ export function HistoryDrawer({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
         <Activity inPanel defaultWindow="24h" emptyText="Nothing in this window. The world was asleep too." />
       </div>
-    </aside>
+    </div>
   );
 }

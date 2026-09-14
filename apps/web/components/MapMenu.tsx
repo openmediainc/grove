@@ -1,21 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { onMenuKeyDown, useDialogFocus, useMenuButton } from "./a11y";
 
 /**
  * The map's consolidated controls: Go to ▾, Watch ▾ and ⋯ are each one of
  * these. A button and a list that opens upward (the controls live at the
  * bottom of the screen), closed by a pick, a click elsewhere, or Escape.
+ *
+ * Keyboard (#67, the APG menu button): Enter, Space or ArrowDown on the button
+ * opens with focus on the first item; arrows, Home/End and a typed letter move
+ * (roving tabindex); Escape or a pick closes and focus returns to the button;
+ * Tab leaves and closes. A control inside that is not an item (theme select,
+ * volume) is reached with Tab and keeps its own arrows.
  */
 export function MapMenu({
   label,
+  ariaLabel,
   title,
   align = "right",
   children,
   className = "",
 }: {
   label: ReactNode;
+  /** The button's accessible name when the label is a glyph (⋯). */
+  ariaLabel?: string;
   title: string;
   /** Which edge the list lines up with, so it never runs off the screen. */
   align?: "left" | "right";
@@ -24,6 +34,10 @@ export function MapMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const onButtonKey = useMenuButton(open, setOpen, ref, buttonRef, menuRef);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
@@ -43,13 +57,17 @@ export function MapMenu({
     };
   }, [open]);
   return (
-    <div ref={ref} className={`pointer-events-auto relative ${className}`}>
+    <div ref={ref} data-menu-root className={`pointer-events-auto relative ${className}`}>
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        aria-label={ariaLabel}
         title={title}
         onClick={() => setOpen((o) => !o)}
+        onKeyDown={onButtonKey}
         className={`flex h-11 items-center gap-1 rounded-full border px-4 text-xs uppercase tracking-widest sm:h-9 ${
           open ? "border-lantern-400/60 bg-dusk-900/95 text-lantern-300" : "border-white/15 bg-dusk-950/80 text-white/80"
         }`}
@@ -58,7 +76,11 @@ export function MapMenu({
       </button>
       {open ? (
         <div
+          ref={menuRef}
+          id={menuId}
           role="menu"
+          aria-label={ariaLabel ?? title}
+          onKeyDown={onMenuKeyDown}
           className={`absolute bottom-full mb-2 max-h-[60svh] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-white/15 bg-dusk-950/[0.97] p-1.5 text-sm normal-case tracking-normal shadow-2xl ${
             align === "right" ? "right-0" : "left-0"
           }`}
@@ -85,10 +107,10 @@ export function MenuItem({
   title?: string;
 }) {
   return (
-    <button type="button" role="menuitem" onClick={onSelect} title={title} className={ITEM}>
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onSelect} title={title} className={ITEM}>
       <span className="min-w-0 truncate">{children}</span>
       {hint ? (
-        <kbd className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-sans text-[10px] uppercase leading-none text-white/45">
+        <kbd className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-sans text-[10px] uppercase leading-none text-white/55">
           {hint}
         </kbd>
       ) : null}
@@ -98,27 +120,38 @@ export function MenuItem({
 
 export function MenuLink({ href, children, onSelect }: { href: string; children: ReactNode; onSelect: () => void }) {
   return (
-    <Link role="menuitem" href={href} onClick={onSelect} className={ITEM}>
+    <Link role="menuitem" tabIndex={-1} href={href} onClick={onSelect} className={ITEM}>
       {children}
     </Link>
   );
 }
 
 export function MenuHeading({ children }: { children: ReactNode }) {
-  return <p className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-[0.2em] text-white/35 first:pt-1">{children}</p>;
+  return (
+    <p role="presentation" className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-[0.2em] text-white/50 first:pt-1">
+      {children}
+    </p>
+  );
 }
 
 /** A small panel over the map (keyboard help, legend), with its own close. */
 export function MapPanel({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useDialogFocus(ref, { onEscape: onClose });
   return (
     <div
+      ref={ref}
+      data-a11y-dialog
       role="dialog"
-      aria-label={title}
+      aria-labelledby={titleId}
       data-speech-avoid
       className="pointer-events-auto absolute inset-x-4 bottom-24 z-30 max-h-[60svh] overflow-y-auto rounded-2xl border border-white/15 bg-dusk-950/[0.97] p-4 text-sm shadow-2xl sm:inset-x-auto sm:left-6 sm:w-80"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/80">{title}</h2>
+        <h2 id={titleId} className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/80">
+          {title}
+        </h2>
         <button
           type="button"
           onClick={onClose}

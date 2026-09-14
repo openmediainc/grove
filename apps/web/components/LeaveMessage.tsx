@@ -154,10 +154,10 @@ export function LeaveMessage({
         rows={3}
         maxLength={4000}
         placeholder="Say what you came to say."
-        className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-dusk-950/80 px-3 py-2 text-sm text-white/85 placeholder:text-white/30 focus:border-lantern-400/40 focus:outline-none"
+        className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-dusk-950/80 px-3 py-2 text-sm text-white/85 placeholder:text-white/50 focus:border-lantern-400 focus:outline-none"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <span className={`text-[11px] ${remaining < 0 ? "text-red-300" : "text-white/35"}`}>{remaining}</span>
+        <span className={`text-[11px] ${remaining < 0 ? "text-red-300" : "text-white/50"}`}>{remaining}</span>
         <div className="flex gap-2">
           <button
             type="button"

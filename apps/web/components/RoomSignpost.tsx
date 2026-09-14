@@ -113,7 +113,7 @@ const STATE_DOT: Record<SignpostState["state"], string> = {
   quiet: "bg-white/40",
   busy: "bg-lantern-400/70",
   posted: "bg-sky-300",
-  live: "bg-rose-400 animate-pulse",
+  live: "bg-rose-400 motion-safe:animate-pulse",
 };
 
 function whenLabel(until: string | null): string | null {
@@ -141,7 +141,7 @@ export function RoomSignpost({
   return (
     <div className="mt-1 max-w-2xl">
       <p className="text-sm leading-snug text-white/60">{customOf(room, space)}</p>
-      <p className="mt-1 text-[11px] leading-relaxed text-white/35">{facts(room, space).join(" · ")}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-white/50">{facts(room, space).join(" · ")}</p>
       {now?.headline ? (
         <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/70">
           <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATE_DOT[now.state]}`} />
@@ -151,8 +151,8 @@ export function RoomSignpost({
             <span className="uppercase tracking-widest text-sky-300">Pinned today</span>
           ) : null}
           <span>{now.headline}</span>
-          {now.byline ? <span className="text-white/35">— {now.byline}</span> : null}
-          {left ? <span className="text-white/35">({left} left)</span> : null}
+          {now.byline ? <span className="text-white/50">— {now.byline}</span> : null}
+          {left ? <span className="text-white/50">({left} left)</span> : null}
         </p>
       ) : null}
     </div>

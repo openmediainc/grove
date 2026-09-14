@@ -111,21 +111,21 @@ function when(iso: string | null): string {
 function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-dusk-800/60 px-3 py-2">
-      <p className="text-[11px] uppercase tracking-wider text-white/40">{label}</p>
+      <p className="text-[11px] uppercase tracking-wider text-white/55">{label}</p>
       <p className="mt-0.5 text-lg text-white/90">{value}</p>
-      {hint ? <p className="text-[11px] text-white/35">{hint}</p> : null}
+      {hint ? <p className="text-[11px] text-white/50">{hint}</p> : null}
     </div>
   );
 }
 
 function DnsLine({ label, check }: { label: string; check: { present: boolean | null; name?: string; record?: string | null; note?: string } }) {
-  const tone = check.present === true ? "text-emerald-300" : check.present === false ? "text-red-300" : "text-white/40";
+  const tone = check.present === true ? "text-emerald-300" : check.present === false ? "text-red-300" : "text-white/55";
   return (
     <li className="flex flex-wrap gap-x-2 text-sm">
       <span className={`w-14 font-semibold ${tone}`}>{label}</span>
       <span className={tone}>{check.present === true ? "found" : check.present === false ? "missing" : "unchecked"}</span>
-      <span className="break-all text-white/40">{check.name ?? check.note}</span>
-      {check.record ? <code className="break-all text-xs text-white/35">{check.record}</code> : null}
+      <span className="break-all text-white/55">{check.name ?? check.note}</span>
+      {check.record ? <code className="break-all text-xs text-white/50">{check.record}</code> : null}
     </li>
   );
 }
@@ -166,7 +166,7 @@ export function EmailHealthPanel() {
   }, [load]);
 
   if (err) return <ErrorNotice error={err} onRetry={() => void load()} className="mt-4" />;
-  if (!health) return <p className="mt-4 text-white/40">Loading…</p>;
+  if (!health) return <p className="mt-4 text-white/55">Loading…</p>;
   const day = health.windows.day;
   const week = health.windows.week;
 
@@ -209,7 +209,7 @@ export function EmailHealthPanel() {
           <Stat label="Links still live" value={day.awaiting} hint={`${day.expired_unredeemed} expired unused`} />
           <Stat label="Time to redeem" value={secs(day.redeem_seconds_p50)} hint={`p90 ${secs(day.redeem_seconds_p90)}`} />
         </div>
-        <p className="mt-2 text-xs text-white/40">
+        <p className="mt-2 text-xs text-white/55">
           Last accepted send {when(day.last_accepted_at ?? week.last_accepted_at)} · last sign-in via link{" "}
           {when(day.last_redeemed_at ?? week.last_redeemed_at)}
         </p>
@@ -219,7 +219,7 @@ export function EmailHealthPanel() {
         <h3 className="text-xs uppercase tracking-widest text-lantern-400">Sender DNS</h3>
         {health.dns ? (
           <>
-            <p className="mt-1 text-xs text-white/40">
+            <p className="mt-1 text-xs text-white/55">
               {health.dns.domain} · checked {when(health.dns.checked_at)}
               {health.dns.error ? ` · ${health.dns.error}` : ""}
             </p>
@@ -228,10 +228,10 @@ export function EmailHealthPanel() {
               <DnsLine label="DKIM" check={health.dns.dkim} />
               <DnsLine label="DMARC" check={{ ...health.dns.dmarc, record: health.dns.dmarc.record }} />
             </ul>
-            <p className="mt-1 text-xs text-white/40">{dmarcApplied(health.dns.dmarc)}</p>
+            <p className="mt-1 text-xs text-white/55">{dmarcApplied(health.dns.dmarc)}</p>
           </>
         ) : (
-          <p className="mt-1 text-sm text-white/40">No real sending domain configured, so there is nothing to check.</p>
+          <p className="mt-1 text-sm text-white/55">No real sending domain configured, so there is nothing to check.</p>
         )}
       </div>
 
@@ -239,7 +239,7 @@ export function EmailHealthPanel() {
         <h3 className="text-xs uppercase tracking-widest text-lantern-400">Recent sends</h3>
         <div className="mt-2 overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="text-xs text-white/40">
+            <thead className="text-xs text-white/55">
               <tr>
                 <th className="py-1 pr-3 font-normal">When</th>
                 <th className="py-1 pr-3 font-normal">To</th>
@@ -255,7 +255,7 @@ export function EmailHealthPanel() {
                   <td className="py-1 pr-3">{r.recipient_hint}</td>
                   <td className={`py-1 pr-3 ${r.send_status === "rejected" || r.send_status === "error" ? "text-red-300" : "text-white/70"}`}>
                     {r.send_status}
-                    {r.send_ms != null ? <span className="text-white/30"> {r.send_ms}ms</span> : null}
+                    {r.send_ms != null ? <span className="text-white/50"> {r.send_ms}ms</span> : null}
                     {r.send_error ? <p className="text-xs text-red-200/70">{r.send_error}</p> : null}
                   </td>
                   <td className={`py-1 pr-3 ${r.delivery_status === "bounced" || r.delivery_status === "complained" || r.delivery_status === "failed" ? "text-red-300" : "text-white/70"}`}>
@@ -267,7 +267,7 @@ export function EmailHealthPanel() {
             </tbody>
           </table>
         </div>
-        {recent.length === 0 ? <p className="mt-2 text-white/40">No magic links requested since tracking began.</p> : null}
+        {recent.length === 0 ? <p className="mt-2 text-white/55">No magic links requested since tracking began.</p> : null}
       </div>
     </section>
   );

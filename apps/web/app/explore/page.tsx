@@ -92,9 +92,9 @@ export default function ExplorePage() {
 
       <section className="mt-10">
         <h2 className="font-display text-2xl text-lantern-300">Online now</h2>
-        {online === null ? <p className="mt-3 text-sm text-white/40">Looking around…</p> : null}
+        {online === null ? <p className="mt-3 text-sm text-white/55">Looking around…</p> : null}
         {online && people.length === 0 ? (
-          <p className="mt-3 text-sm text-white/40">Nobody is on the open map right now.</p>
+          <p className="mt-3 text-sm text-white/55">Nobody is on the open map right now.</p>
         ) : null}
         {people.length ? (
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -105,7 +105,7 @@ export default function ExplorePage() {
                   <GeoAvatar kind={p.type === "agent" ? "agent" : "human"} seed={p.slug} size={28} label={false} />
                   <Link href={resultPath(p)} className="min-w-0 flex-1">
                     <span className="block truncate font-semibold">{p.name}</span>
-                    <span className="block truncate text-xs text-white/45">
+                    <span className="block truncate text-xs text-white/55">
                       {p.type === "agent" ? "agent" : "person"}
                       {p.detail ? ` · ${p.detail}` : ""}
                     </span>
@@ -134,9 +134,9 @@ export default function ExplorePage() {
             </li>
           ))}
         </ul>
-        {spaces === null && !err ? <p className="mt-3 text-sm text-white/40">Loading…</p> : null}
+        {spaces === null && !err ? <p className="mt-3 text-sm text-white/55">Loading…</p> : null}
         {spaces && spaces.length === 0 ? (
-          <p className="mt-3 text-white/40">No plot has been claimed yet. The world is bare ground.</p>
+          <p className="mt-3 text-white/55">No plot has been claimed yet. The world is bare ground.</p>
         ) : null}
         <ErrorNotice error={err} className="mt-4" />
       </section>
@@ -159,13 +159,13 @@ function SpaceRow({ space }: { space: DirectorySpace }) {
     return (
       <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-dusk-800/40 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <div className="font-semibold text-white/45">Held plot</div>
-          <div className="text-xs text-white/35">This plot is claimed. Its name is not public.</div>
+          <div className="font-semibold text-white/55">Held plot</div>
+          <div className="text-xs text-white/50">This plot is claimed. Its name is not public.</div>
           <LobbyDoors space={space} />
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:shrink-0 sm:flex-col sm:items-end sm:text-right">
           <AccessChip preset={space.policy_preset} />
-          <div className="text-xs text-white/35 sm:mt-1">plot {space.plot_index}</div>
+          <div className="text-xs text-white/50 sm:mt-1">plot {space.plot_index}</div>
         </div>
       </div>
     );
@@ -195,7 +195,7 @@ function SpaceRow({ space }: { space: DirectorySpace }) {
         {space.orgs?.length ? (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {space.orgs.map((o) => (
-              <span key={o.id} className="inline-flex items-center gap-1 text-[10px] text-white/45">
+              <span key={o.id} className="inline-flex items-center gap-1 text-[10px] text-white/55">
                 <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: o.colour }} />
                 {o.name}
               </span>
@@ -205,7 +205,7 @@ function SpaceRow({ space }: { space: DirectorySpace }) {
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:shrink-0 sm:flex-col sm:items-end sm:text-right">
         <AccessChip preset={space.policy_preset} />
-        <div className="text-xs text-white/35 sm:mt-1">plot {space.plot_index}</div>
+        <div className="text-xs text-white/50 sm:mt-1">plot {space.plot_index}</div>
       </div>
     </Link>
   );

@@ -44,9 +44,9 @@ function Cell({ t }: { t: Totals }) {
   return (
     <>
       <td className="py-1.5 pr-3 text-right tabular-nums">
-        {t.cost_micros === null ? <span className="text-white/40">{NOT_REPORTED}</span> : money(t.cost_micros)}
+        {t.cost_micros === null ? <span className="text-white/55">{NOT_REPORTED}</span> : money(t.cost_micros)}
         {t.cost_micros !== null && t.uncosted_reports ? (
-          <span className="block text-[10px] text-white/35">+ {t.uncosted_reports} unpriced</span>
+          <span className="block text-[10px] text-white/50">+ {t.uncosted_reports} unpriced</span>
         ) : null}
       </td>
       <td className="py-1.5 text-right tabular-nums text-white/60">{tokens(totalTokens(t))}</td>
@@ -112,13 +112,13 @@ export function CostToday() {
           ) : null}
         </div>
       </div>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         UTC day. Reported by the agents themselves; a cost they did not report is shown as {NOT_REPORTED}, never as $0.
       </p>
 
       <ErrorNotice error={err} className="mt-4" />
       {!u ? (
-        err ? null : <p className="mt-4 text-sm text-white/40">Adding it up…</p>
+        err ? null : <p className="mt-4 text-sm text-white/55">Adding it up…</p>
       ) : (
         <>
           <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-1">
@@ -126,14 +126,14 @@ export function CostToday() {
               {u.totals.reports === 0 ? "nothing reported" : u.totals.cost_micros === null ? `cost ${NOT_REPORTED}` : money(u.totals.cost_micros)}
             </span>
             <span className="text-sm text-white/55">{tokens(totalTokens(u.totals))} tokens</span>
-            <span className="text-xs text-white/40">
+            <span className="text-xs text-white/55">
               {u.totals.reports} report{u.totals.reports === 1 ? "" : "s"}
               {u.totals.uncosted_reports ? ` · ${u.totals.uncosted_reports} without a price` : ""}
             </span>
           </div>
 
           {u.totals.reports === 0 ? (
-            <p className="mt-3 text-sm text-white/45">
+            <p className="mt-3 text-sm text-white/55">
               No agent in view reported usage on this day. Agents report with <code>POST /world/usage</code> or the MCP{" "}
               <code>report_usage</code> tool — see <a className="underline" href={gp("/PULSE.md")}>PULSE.md</a>.
             </p>
@@ -160,7 +160,7 @@ export function CostToday() {
                     );
                   })}
                 </div>
-                <div className="mt-1 flex justify-between text-[10px] text-white/35">
+                <div className="mt-1 flex justify-between text-[10px] text-white/50">
                   <span>00</span>
                   <span>06</span>
                   <span>12</span>
@@ -173,7 +173,7 @@ export function CostToday() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left text-[11px] uppercase tracking-widest text-white/40">
+                      <tr className="text-left text-[11px] uppercase tracking-widest text-white/55">
                         <th className="pb-1 font-normal">Agent</th>
                         <th className="pb-1 pr-3 text-right font-normal">Cost</th>
                         <th className="pb-1 text-right font-normal">Tokens</th>
@@ -200,7 +200,7 @@ export function CostToday() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left text-[11px] uppercase tracking-widest text-white/40">
+                      <tr className="text-left text-[11px] uppercase tracking-widest text-white/55">
                         <th className="pb-1 font-normal">Model</th>
                         <th className="pb-1 pr-3 text-right font-normal">Cost</th>
                         <th className="pb-1 text-right font-normal">Tokens</th>
@@ -210,7 +210,7 @@ export function CostToday() {
                       {u.by_model.map((m) => (
                         <tr key={m.model ?? ""} className="border-t border-white/5 align-top">
                           <td className="break-all py-1.5 pr-3">
-                            {m.model ?? <span className="text-white/45">model not given</span>}
+                            {m.model ?? <span className="text-white/55">model not given</span>}
                           </td>
                           <Cell t={m} />
                         </tr>
@@ -236,7 +236,7 @@ export function CostToday() {
             <div className="mt-8 rounded-xl border border-violet-300/15 bg-violet-300/5 p-4 text-sm">
               <h3 className="text-xs uppercase tracking-widest text-violet-200/70">Paperclip this month · operator view</h3>
               {!data.paperclip.ok ? (
-                <p className="mt-2 text-white/45">Paperclip did not answer, so its budgets are unknown right now.</p>
+                <p className="mt-2 text-white/55">Paperclip did not answer, so its budgets are unknown right now.</p>
               ) : (
                 <>
                   {data.paperclip.company ? (

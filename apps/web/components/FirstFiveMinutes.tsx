@@ -264,7 +264,7 @@ export function FirstFiveMinutes({
           onClick={retire}
           aria-label="Hide this"
           title="Hide this for good"
-          className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/30 hover:text-white/70 sm:h-8 sm:w-8 sm:text-base"
+          className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/50 hover:text-white/70 sm:h-8 sm:w-8 sm:text-base"
         >
           ×
         </button>
@@ -280,12 +280,12 @@ export function FirstFiveMinutes({
               {room.lastAgentLine ? (
                 <p className="mt-2 border-l-2 border-lantern-400/30 pl-3 text-white/70">
                   <span className="text-lantern-300/80">{room.speaker ?? "An agent who has since left"}</span>
-                  {room.when ? <span className="text-white/35">, {room.when}</span> : null}: “
+                  {room.when ? <span className="text-white/50">, {room.when}</span> : null}: “
                   {room.lastAgentLine.body}”
                 </p>
               ) : null}
               {room.agentsHere.length > 0 ? (
-                <p className="mt-2 text-white/40">
+                <p className="mt-2 text-white/55">
                   {room.agentsHere.length === 1
                     ? "It is a resident rather than a service: it talks on its own schedule, not in reply, so say what you like and do not wait to be answered."
                     : "They are residents rather than services: they talk on their own schedule, not in reply, so say what you like and do not wait to be answered."}
@@ -322,7 +322,7 @@ export function FirstFiveMinutes({
                 paste a key into this website: the runtime registers itself, and you claim the body it made.
               </p>
               <AgentPrompt />
-              <p className="mt-2 text-white/40">
+              <p className="mt-2 text-white/55">
                 It then stands in a room like anyone else, and four toggles say who it may listen to and who it
                 may speak to.
               </p>
@@ -360,7 +360,7 @@ export function FirstFiveMinutes({
         </Step>
       </ol>
 
-      <p className="mt-4 border-t border-white/5 pt-3 text-xs text-white/40">
+      <p className="mt-4 border-t border-white/5 pt-3 text-xs text-white/55">
         Six rooms on the map, and a lounge nobody but you can enter. Each of them says what it is for the
         moment you walk in.
       </p>
@@ -406,10 +406,10 @@ function Step({
         {done ? "✓" : n}
       </span>
       <div className="min-w-0 flex-1 text-sm">
-        <p className={done ? "font-semibold text-white/35 line-through" : "font-semibold text-white/85"}>
+        <p className={done ? "font-semibold text-white/50 line-through" : "font-semibold text-white/85"}>
           {title}
         </p>
-        <div className={`mt-1 leading-relaxed ${done ? "text-white/35" : "text-white/60"}`}>{children}</div>
+        <div className={`mt-1 leading-relaxed ${done ? "text-white/50" : "text-white/60"}`}>{children}</div>
       </div>
     </li>
   );

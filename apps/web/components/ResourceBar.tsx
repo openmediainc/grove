@@ -86,7 +86,7 @@ export function ResourceBar({ signedIn }: { signedIn: boolean | null }) {
         {tokens(totalTokens(t))} tokens
       </span>
       {t.uncosted_reports > 0 && t.cost_micros !== null ? (
-        <span className="text-[10px] text-white/40" title="Reports that carried tokens but no price">
+        <span className="text-[10px] text-white/55" title="Reports that carried tokens but no price">
           + {t.uncosted_reports} unpriced
         </span>
       ) : null}

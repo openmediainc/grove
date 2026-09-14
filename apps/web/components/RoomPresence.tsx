@@ -105,7 +105,7 @@ export function RoomPresence({
   whisperTargetId?: string | null;
 }) {
   if (nearby.length === 0) {
-    return <p className="mt-3 text-sm text-white/40">Nobody is here.</p>;
+    return <p className="mt-3 text-sm text-white/55">Nobody is here.</p>;
   }
   return (
     <ul className="mt-3 space-y-3 text-sm">

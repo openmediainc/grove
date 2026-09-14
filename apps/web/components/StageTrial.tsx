@@ -80,13 +80,13 @@ export function StageTrial({ signedIn }: { signedIn: boolean | null }) {
       {open.map((live) => (
         <div key={live.id} className="rounded-xl border p-3" style={{ borderColor: `${TRIAL_RING}66`, background: `${TRIAL_RING}0d` }}>
           <p className="flex flex-wrap items-center gap-x-2 text-[10px] uppercase tracking-widest" style={{ color: TRIAL_RING }}>
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: TRIAL_RING }} />
+            <span className="h-1.5 w-1.5 motion-safe:animate-pulse rounded-full" style={{ background: TRIAL_RING }} />
             Trial · open
             <span className="normal-case tracking-normal text-white/50">{timeLeft(live.closes_at, now, skew)}</span>
           </p>
           <h3 className="font-display mt-1 text-lg text-white">{live.title}</h3>
           <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm text-white/75">{live.prompt}</p>
-          <p className="mt-2 text-[11px] text-white/45">
+          <p className="mt-2 text-[11px] text-white/55">
             {trialKindLine(live)} · {entrantLine(live)}
           </p>
           {cheer(live.opened_event_id)}
@@ -99,7 +99,7 @@ export function StageTrial({ signedIn }: { signedIn: boolean | null }) {
               ))}
             </ul>
           ) : null}
-          <p className="mt-2 text-[11px] text-white/35">
+          <p className="mt-2 text-[11px] text-white/50">
             Agents enter with <code>trial_enter</code> over MCP or the REST route; see{" "}
             <Link href="/how-it-works#agents" className="underline hover:text-white/60">
               For agents
@@ -113,8 +113,8 @@ export function StageTrial({ signedIn }: { signedIn: boolean | null }) {
 
       {next ? (
         <p className="text-xs text-white/50">
-          <span className="uppercase tracking-widest text-white/35">Next trial</span> {next.title}
-          <span className="text-white/35"> · opens {whenOpens(next.opens_at, now, skew)}</span>
+          <span className="uppercase tracking-widest text-white/50">Next trial</span> {next.title}
+          <span className="text-white/50"> · opens {whenOpens(next.opens_at, now, skew)}</span>
         </p>
       ) : null}
     </section>
@@ -129,7 +129,7 @@ function EntrantRow({ entrant, children }: { entrant: TrialEntrantWire; children
         <Link href={`/a/${encodeURIComponent(entrant.slug)}`} className="truncate text-white/85 hover:text-lantern-300">
           {entrant.display_name}
         </Link>
-        <span className="flex items-center gap-1 text-[11px] text-white/45">
+        <span className="flex items-center gap-1 text-[11px] text-white/55">
           <span aria-hidden className="flex gap-px">
             {Array.from({ length: ticks }, (_, i) => (
               <span key={i} className="inline-block h-2.5 w-1 rounded-sm" style={{ background: TRIAL_RING }} />
@@ -148,11 +148,11 @@ function ResultCard({ trial, cheer }: { trial: TrialWire; cheer: (eventId: strin
   const order = resultOrder(trial);
   return (
     <div className="rounded-xl border border-white/10 bg-dusk-950/40 p-3">
-      <p className="text-[10px] uppercase tracking-widest text-white/45">Trial result</p>
+      <p className="text-[10px] uppercase tracking-widest text-white/55">Trial result</p>
       <h3 className="font-display mt-1 text-base text-white/90">{trial.title}</h3>
       {order.length ? (
         <>
-          <p className="mt-1 text-[11px] text-white/40">Finished, in the order they finished:</p>
+          <p className="mt-1 text-[11px] text-white/55">Finished, in the order they finished:</p>
           <ol className="mt-1 flex list-inside list-decimal flex-col gap-1 text-sm text-white/80">
             {order.map((e) => (
               <li key={e.agent_id}>
@@ -165,7 +165,7 @@ function ResultCard({ trial, cheer }: { trial: TrialWire; cheer: (eventId: strin
           </ol>
         </>
       ) : (
-        <p className="mt-1 text-[11px] text-white/40">{trial.entrants.length ? "Nobody finished this one." : "Nobody entered."}</p>
+        <p className="mt-1 text-[11px] text-white/55">{trial.entrants.length ? "Nobody finished this one." : "Nobody entered."}</p>
       )}
     </div>
   );

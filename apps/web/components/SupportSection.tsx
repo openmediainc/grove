@@ -57,7 +57,7 @@ export function SupportSection() {
             {busy ? "Opening checkout…" : "Become a supporter"}
           </button>
           {state.price ? <span className="text-sm text-white/55">{state.price}</span> : null}
-          <span className="text-xs text-white/35">Payment is handled by Stripe.</span>
+          <span className="text-xs text-white/50">Payment is handled by Stripe.</span>
         </div>
       ) : (
         <p className={`mt-4 text-sm ${state.kind === "attention" ? "text-amber-300/90" : "text-white/70"}`}>{state.line}</p>

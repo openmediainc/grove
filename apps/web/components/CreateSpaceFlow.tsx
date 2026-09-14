@@ -167,7 +167,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
               : "Your space is claimed."}
         </p>
       </div>
-      <button type="button" onClick={onClose} className="shrink-0 text-xs text-white/40 hover:text-white/70">
+      <button type="button" onClick={onClose} className="shrink-0 text-xs text-white/55 hover:text-white/70">
         Close
       </button>
     </div>
@@ -206,15 +206,15 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
       <section ref={topRef} id="create" className="mt-8 space-y-4 rounded-2xl border border-white/10 bg-dusk-800/70 p-4 sm:p-6">
         {header}
         <dl className="grid grid-cols-1 gap-x-4 gap-y-1 rounded-lg border border-white/10 p-3 text-sm sm:grid-cols-[auto_1fr]">
-          <dt className="text-white/45">Name</dt>
+          <dt className="text-white/55">Name</dt>
           <dd className="min-w-0 break-words">{name.trim()}</dd>
-          <dt className="text-white/45">Page</dt>
+          <dt className="text-white/55">Page</dt>
           <dd className="min-w-0 break-all font-mono text-xs leading-5">/s/{finalSlug}</dd>
-          <dt className="text-white/45">Access</dt>
+          <dt className="text-white/55">Access</dt>
           <dd>
             <strong>{copy.word}</strong> <span className="text-white/50">· {copy.line}</span>
           </dd>
-          <dt className="text-white/45">Branding</dt>
+          <dt className="text-white/55">Branding</dt>
           <dd className="text-white/70">
             {hasBranding
               ? [check.valid.accent ? "colour" : null, check.valid.signText ? `"${check.valid.signText}"` : null, check.valid.emblem ? BRAND_EMBLEM_LABEL[check.valid.emblem].toLowerCase() : null]
@@ -227,7 +227,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
         {preview ? (
           <>
             <ClaimPreview preview={preview} draft={draft} viewAs={viewAs} onViewAs={setViewAs} />
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-white/55">
               Nothing is reserved: {plotCaption(preview.plot_index, preview.ring).toLowerCase()} is the next free plot right now. Your plot
               may shift if someone claims first.{" "}
               <button type="button" onClick={() => void loadPreview()} disabled={loadingPreview} className="underline hover:text-white/70">
@@ -236,7 +236,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
             </p>
           </>
         ) : loadingPreview ? (
-          <p className="text-sm text-white/40">Finding your plot…</p>
+          <p className="text-sm text-white/55">Finding your plot…</p>
         ) : null}
         <ErrorNotice error={previewErr} />
 
@@ -279,7 +279,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
             if (!slugTouched) setSlug(suggestSlug(e.target.value));
           }}
           placeholder="Harbour workshop"
-          className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 outline-none focus:border-lantern-400/50"
+          className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 outline-none focus:border-lantern-400"
         />
       </label>
 
@@ -293,9 +293,9 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
           }}
           onBlur={() => setSlug(suggestSlug(slug))}
           placeholder="harbour-workshop"
-          className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 font-mono text-sm outline-none focus:border-lantern-400/50"
+          className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 font-mono text-sm outline-none focus:border-lantern-400"
         />
-        <span className="mt-1 block break-all text-xs text-white/40">
+        <span className="mt-1 block break-all text-xs text-white/55">
           Lowercase and dashes. Its page will be <code>/s/{finalSlug || "your-slug"}</code>.
         </span>
       </label>
@@ -325,7 +325,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
             </label>
           );
         })}
-        <p className="text-xs text-white/35">You can change it later under Manage on the space&apos;s page.</p>
+        <p className="text-xs text-white/50">You can change it later under Manage on the space&apos;s page.</p>
       </fieldset>
 
       <details className="rounded-lg border border-white/10 p-3" open={hasBranding || undefined}>
@@ -359,7 +359,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
                 {suggesting ? "Reading…" : "Suggest"}
               </button>
             </form>
-            <p className="mt-1 text-[11px] text-white/35">
+            <p className="mt-1 text-[11px] text-white/50">
               Glasshouse reads only the site&apos;s name, theme colour and icon colour. Nothing is saved.
             </p>
             <ErrorNotice error={suggestErr} size="xs" className="mt-2" />
@@ -374,7 +374,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
                   </p>
                 ) : null}
                 {suggestion.notes.map((n) => (
-                  <p key={n} className="text-white/45">
+                  <p key={n} className="text-white/55">
                     {n}
                   </p>
                 ))}
@@ -444,7 +444,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
               placeholder="Open late on Fridays"
               className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white/85"
             />
-            <span className={`mt-1 block ${check.signTextCount > SIGN_TEXT_MAX ? "text-red-300" : "text-white/35"}`}>
+            <span className={`mt-1 block ${check.signTextCount > SIGN_TEXT_MAX ? "text-red-300" : "text-white/50"}`}>
               {check.signTextError ?? `${check.signTextCount}/${SIGN_TEXT_MAX}`}
             </span>
           </label>
@@ -476,7 +476,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           {preset === "private" ? (
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-white/55">
               This space is Private, so the map will show everyone else a held plot with none of this on it. The preview shows both views.
             </p>
           ) : null}

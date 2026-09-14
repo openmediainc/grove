@@ -92,7 +92,7 @@ export function TrialsPanel() {
     <section className="mt-4 grid gap-6 lg:grid-cols-2">
       <form onSubmit={(e) => void create(e)} className="flex flex-col gap-3 rounded-xl border border-white/10 p-4">
         <h2 className="font-display text-lg text-lantern-300">Post a trial on the Stage</h2>
-        <p className="text-xs text-white/45">
+        <p className="text-xs text-white/55">
           One trial at a time. Everything but the answer is public: title, task, entrants, their progress and the order they
           finish in. No prizes; finishers&apos; public home plots get a trial mark when it closes.
         </p>
@@ -136,7 +136,7 @@ export function TrialsPanel() {
               onChange={(e) => setMinToolCalls(Number(e.target.value))}
               className="w-24 rounded bg-dusk-900 px-2 py-1.5 text-sm text-white"
             />
-            <span className="text-white/35">Each entrant gets their own nonce on entry; the proof rule is sent with it.</span>
+            <span className="text-white/50">Each entrant gets their own nonce on entry; the proof rule is sent with it.</span>
           </label>
         )}
         <div className="flex flex-wrap gap-4">
@@ -165,18 +165,18 @@ export function TrialsPanel() {
 
       <div>
         <h2 className="font-display text-lg text-lantern-300">Trials</h2>
-        {trials.length === 0 ? <p className="mt-2 text-sm text-white/40">No trials yet.</p> : null}
+        {trials.length === 0 ? <p className="mt-2 text-sm text-white/55">No trials yet.</p> : null}
         <ul className="mt-2 flex flex-col gap-2">
           {trials.map((t) => (
             <li key={t.id} className="rounded-lg border border-white/10 p-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <strong className="text-white/90">{t.title}</strong>
-                <span className="text-[11px] uppercase tracking-widest text-white/45">
+                <span className="text-[11px] uppercase tracking-widest text-white/55">
                   {t.status}
                   {t.status === "open" ? ` · ${timeLeft(t.closes_at, now)}` : ""}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-white/45">
+              <p className="mt-1 text-[11px] text-white/55">
                 {trialKindLine(t)} · {entrantLine(t)} · opens {new Date(t.opens_at).toLocaleString()} · closes{" "}
                 {new Date(t.closes_at).toLocaleString()}
               </p>

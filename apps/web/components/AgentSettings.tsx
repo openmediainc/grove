@@ -280,7 +280,7 @@ export function AgentSettings({ agentId }: { agentId: string }) {
           {brain?.enabled ? "on" : "off"}
         </button>
         {brain ? (
-          <p className="mt-2 text-xs text-white/40">
+          <p className="mt-2 text-xs text-white/55">
             {brain.tokens_used_month} / {brain.token_budget_month} tokens this month
           </p>
         ) : null}
@@ -317,7 +317,7 @@ export function AgentSettings({ agentId }: { agentId: string }) {
   }
 }`}
         </pre>
-        <p className="mt-2 text-xs text-white/40">Placeholder only. The secret is already in the runtime.</p>
+        <p className="mt-2 text-xs text-white/55">Placeholder only. The secret is already in the runtime.</p>
       </section>
     </div>
   );

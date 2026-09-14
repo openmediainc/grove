@@ -181,7 +181,7 @@ export function MuteToggle({ muted, setMuted }: { muted: boolean; setMuted: (m: 
       type="button"
       onClick={() => setMuted(!muted)}
       aria-pressed={muted}
-      aria-label={muted ? "Unmute all sound" : "Mute all sound"}
+      aria-label="Mute all sound"
       title={muted ? "Sound is muted site-wide. Tap to unmute." : "Mute all sound: read aloud and the map soundscape"}
       className={`inline-flex h-8 w-8 items-center justify-center rounded-full sm:h-7 sm:w-7 ${
         muted ? "bg-white/10 text-white/70" : "border border-white/15 text-white/50 hover:text-white/80"
@@ -244,7 +244,7 @@ export function ReadAloudControl({ state }: { state: ReadAloudState }) {
               ))}
             </select>
           </label>
-          <span className="w-full text-white/35">
+          <span className="w-full text-white/50">
             {muted
               ? "Sound is muted site-wide, so nothing is read out."
               : "New lines only. Spoken by your browser; nothing leaves this device."}

@@ -2553,7 +2553,7 @@ export function WorldMap() {
 
     const onKey = (ev: KeyboardEvent) => {
       const el = ev.target as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
       // Escape is the way out of whatever the map has put you in, innermost
       // first: release a follow before you leave kiosk mode, so one key does
       // not throw away two states at once.
@@ -4230,8 +4230,16 @@ export function WorldMap() {
         ref={canvasRef}
         className="absolute inset-0 h-full w-full"
         style={{ imageRendering: "pixelated", touchAction: "none" }}
+        role="img"
         aria-label="Glasshouse world map"
+        aria-describedby="grove-map-desc"
       />
+      <p id="grove-map-desc" className="sr-only">
+        A live picture of the world: people and agents, the rooms they are in and what agents are doing. Everything said on the
+        map is also read out below as text. Use Go to for rooms, the attention bell for bodies that want a human, and Watch for
+        History. Keys: 1 to 6 go to a room, plus and minus zoom, full stop goes to the next body that wants attention, slash
+        searches, Escape closes.
+      </p>
       {/* Replay frames the whole map in amber, so even a screenshot says it. */}
       {replaying ? (
         <div aria-hidden className="pointer-events-none absolute inset-0 z-10 border-4 border-amber-400/70" />
@@ -4272,7 +4280,7 @@ export function WorldMap() {
             {sky ? (
               <>
                 {" · "}
-                {sky.clock} <span className="text-white/45">{sky.label}</span>
+                {sky.clock} <span className="text-white/55">{sky.label}</span>
               </>
             ) : null}
           </span>
@@ -4309,7 +4317,8 @@ export function WorldMap() {
                 height={INSET_H}
                 style={{ width: INSET_W, height: INSET_H, touchAction: "none" }}
                 className="block cursor-crosshair"
-                aria-label="Minimap: press or drag to move the camera"
+                role="img"
+                aria-label="Minimap of the whole world. Press or drag to move the camera; with a keyboard, use Go to or the zoom keys."
                 onPointerDown={(ev) => {
                   ev.currentTarget.setPointerCapture?.(ev.pointerId);
                   insetDragRef.current = true;
@@ -4331,9 +4340,9 @@ export function WorldMap() {
                 aria-expanded
                 aria-label="Hide minimap"
                 title="Hide the minimap"
-                className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center text-sm text-white/50 hover:text-white/85"
+                className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center text-sm text-white/60 hover:text-white/85"
               >
-                ×
+                <span aria-hidden>×</span>
               </button>
             </div>
           )}
@@ -4407,7 +4416,7 @@ export function WorldMap() {
                       {o.name}
                     </span>
                   ))}
-                  <span className="text-white/35">
+                  <span className="text-white/50">
                     {hud.orgMode === "dedicated" ? "· everyone here flies it" : "· by membership"}
                   </span>
                 </p>
@@ -4417,8 +4426,8 @@ export function WorldMap() {
                 {hud.world ? ` · ${lex.hud.world} ${hud.world}` : ""}
                 {hud.spaces ? ` · ${hud.spaces} ${lex.hud.claimed}` : ""}
               </p>
-              <p className="text-white/45">{status}</p>
-              <p className="break-words text-white/45">{hud.lastHeard || lex.hud.quiet}</p>
+              <p className="text-white/55">{status}</p>
+              <p className="break-words text-white/55">{hud.lastHeard || lex.hud.quiet}</p>
             </div>
           )}
         </MapPanel>
@@ -4468,7 +4477,7 @@ export function WorldMap() {
             ) : null}
           </div>
           <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
-            <MapMenu label={<>{lex.controls.goTo} ▾</>} title="Move the camera to a room, the busiest room or your own ground" align="right">
+            <MapMenu label={<>{lex.controls.goTo} <span aria-hidden>▾</span></>} title="Move the camera to a room, the busiest room or your own ground" align="right">
               {(close) => (
                 <>
                   <MenuHeading>Rooms</MenuHeading>
@@ -4526,7 +4535,7 @@ export function WorldMap() {
               )}
             </MapMenu>
             <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} />
-            <MapMenu label={<>Watch ▾</>} title="TV, kiosk, the History with replay, and recorded sequences" align="right">
+            <MapMenu label={<>Watch <span aria-hidden>▾</span></>} title="TV, kiosk, the History with replay, and recorded sequences" align="right">
               {(close) => (
                 <>
                   <MenuItem
@@ -4572,7 +4581,7 @@ export function WorldMap() {
                 </>
               )}
             </MapMenu>
-            <MapMenu label={<span aria-label="More">⋯</span>} title="Postcard, theme, reset view, depth view, keyboard, legend" align="right">
+            <MapMenu label={<span aria-hidden>⋯</span>} ariaLabel="More" title="Postcard, theme, reset view, depth view, keyboard, legend" align="right">
               {(close) => (
                 <>
                   {signedIn ? (
@@ -4589,9 +4598,7 @@ export function WorldMap() {
                   >
                     {lex.postcard.button}
                   </MenuItem>
-                  <div className="px-1 py-1">
-                    <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />
-                  </div>
+                  <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />
                   <MenuItem
                     hint="0"
                     onSelect={() => {
@@ -4610,7 +4617,7 @@ export function WorldMap() {
                     className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
                   >
                     <span>Depth view</span>
-                    <span className={`text-xs ${depthOn ? "text-lantern-300" : "text-white/45"}`}>{depthOn ? "on" : "off"}</span>
+                    <span className={`text-xs ${depthOn ? "text-lantern-300" : "text-white/55"}`}>{depthOn ? "on" : "off"}</span>
                   </button>
                   <MenuItem
                     onSelect={() => {
@@ -4654,7 +4661,7 @@ export function WorldMap() {
           and how many bodies are up, in the corner, at the weight of a clock on
           a wall rather than of a heading on a page. */}
       {kiosk && sky ? (
-        <div className="pointer-events-none absolute bottom-4 left-4 text-[11px] tabular-nums tracking-wide text-white/35">
+        <div className="pointer-events-none absolute bottom-4 left-4 text-[11px] tabular-nums tracking-wide text-white/50">
           {sky.clock} UTC · {sky.label} · {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep}
           {hud.live ? ` · ${formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, lex.hud)}` : ""}
         </div>

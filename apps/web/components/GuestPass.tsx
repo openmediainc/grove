@@ -89,13 +89,13 @@ export function GuestPass() {
       >
         <span aria-hidden>♥</span>
         {guestChipLabel(follows.length)}
-        <span aria-hidden className="text-[10px] text-white/35">
+        <span aria-hidden className="text-[10px] text-white/50">
           ▾
         </span>
       </button>
       {open ? (
         <div className="z-30 mt-1 flex w-full flex-col gap-1 rounded-xl border border-white/10 bg-dusk-900/95 p-2 text-sm shadow-xl backdrop-blur-md sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-64">
-          <span className="px-2 pt-1 text-[11px] uppercase tracking-widest text-white/35">From what you follow</span>
+          <span className="px-2 pt-1 text-[11px] uppercase tracking-widest text-white/50">From what you follow</span>
           {follows.length ? (
             <ul className="flex flex-col">
               {follows.map((f) => (
@@ -106,7 +106,7 @@ export function GuestPass() {
                     className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-white/80 hover:bg-white/5"
                   >
                     <span className="truncate">{f.name}</span>
-                    <span className="shrink-0 text-[10px] text-white/35">{f.subject}</span>
+                    <span className="shrink-0 text-[10px] text-white/50">{f.subject}</span>
                   </Link>
                 </li>
               ))}
@@ -122,7 +122,7 @@ export function GuestPass() {
               disabled={busy}
               onClick={() => void forget()}
               title="Delete this browser's guest reactions and follows"
-              className="text-[11px] text-white/35 hover:text-white/70 disabled:opacity-50"
+              className="text-[11px] text-white/50 hover:text-white/70 disabled:opacity-50"
             >
               Forget this browser
             </button>

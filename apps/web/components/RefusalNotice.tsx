@@ -27,7 +27,7 @@ export function RefusalNotice({ input }: { input: RefusalInput }) {
       {refusal.hint ? <p className="mt-0.5 text-white/50">{refusal.hint}</p> : null}
       {/* Say the gap out loud rather than pointing at a door we guessed. */}
       {refusal.attribution === "unknown" ? (
-        <p className="mt-0.5 text-[11px] text-white/35">{UNATTRIBUTED_NOTE}</p>
+        <p className="mt-0.5 text-[11px] text-white/50">{UNATTRIBUTED_NOTE}</p>
       ) : null}
     </div>
   );

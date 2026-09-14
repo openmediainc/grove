@@ -224,7 +224,7 @@ function LoginForm() {
         </button>
         {msg ? <p className="mt-4 text-sm text-lantern-300">{msg}</p> : null}
         <ErrorNotice error={sendErr} className="mt-4" />
-        <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/40 hover:text-white/70">
+        <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/55 hover:text-white/70">
           ← Keep watching the world instead
         </a>
       </main>
@@ -239,17 +239,17 @@ function LoginForm() {
       </h1>
       <p className="mt-3 text-white/70">{reason(why, what)}</p>
       {next ? (
-        <p className="mt-2 text-sm text-white/45">
+        <p className="mt-2 text-sm text-white/55">
           You were heading for <code className="break-all text-lantern-300/80">{next}</code>. We will drop you there once
           you are in.
         </p>
       ) : null}
-      <p className="mt-2 text-sm text-white/40">Closed alpha: an invite code and an 18+ attestation are required.</p>
+      <p className="mt-2 text-sm text-white/55">Closed alpha: an invite code and an 18+ attestation are required.</p>
       <form onSubmit={submit} className="mt-8 space-y-4">
         <label className="block text-sm">
           Email
           <input
-            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2.5 outline-none ring-1 ring-white/10"
+            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2.5 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-lantern-400"
             type="email"
             required
             value={email}
@@ -259,7 +259,7 @@ function LoginForm() {
         <label className="block text-sm">
           Invite code
           <input
-            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2.5 outline-none ring-1 ring-white/10"
+            className="mt-1 w-full rounded-lg bg-dusk-800 px-3 py-2.5 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-lantern-400"
             required
             value={invite}
             onChange={(e) => setInvite(e.target.value)}
@@ -288,7 +288,7 @@ function LoginForm() {
           {url}
         </a>
       ) : null}
-      <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/40 hover:text-white/70">
+      <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/55 hover:text-white/70">
         ← Keep watching the world instead
       </a>
     </main>

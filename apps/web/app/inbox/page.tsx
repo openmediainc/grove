@@ -152,7 +152,7 @@ export default function InboxPage() {
       {requests.length ? (
         <section className="mt-10">
           <h2 className="font-display text-2xl text-lantern-300">
-            People asking to join <span className="text-white/40">({waiting})</span>
+            People asking to join <span className="text-white/55">({waiting})</span>
           </h2>
           <ul className="mt-3 space-y-3">
             {requests.map((r) => (
@@ -160,7 +160,7 @@ export default function InboxPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <span className="font-semibold">{r.display_name}</span>
-                    <span className="ml-2 text-xs text-white/40">@{r.handle}</span>
+                    <span className="ml-2 text-xs text-white/55">@{r.handle}</span>
                     <div className="mt-0.5 truncate text-xs text-white/50">
                       wants into{" "}
                       <Link href={spaceHref(r.world_slug)} className="text-lantern-300">
@@ -227,7 +227,7 @@ export default function InboxPage() {
                         )}
                       </p>
                     )}
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/35">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/50">
                       <span className={`rounded-full border px-2 py-0.5 ${accessTint(a.policy_preset)}`}>
                         {accessWord(a.policy_preset)}
                       </span>
@@ -256,7 +256,7 @@ export default function InboxPage() {
         <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <h2 className="font-display text-2xl text-lantern-300">
-              Messages {messages.unread ? <span className="text-white/40">({messages.unread} new)</span> : null}
+              Messages {messages.unread ? <span className="text-white/55">({messages.unread} new)</span> : null}
             </h2>
           </div>
           {messages.received.length ? (
@@ -272,7 +272,7 @@ export default function InboxPage() {
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-white/40">Nothing left for you yet.</p>
+            <p className="mt-3 text-sm text-white/55">Nothing left for you yet.</p>
           )}
           {messages.sent.length ? (
             <details className="mt-4">
@@ -280,7 +280,7 @@ export default function InboxPage() {
               <ul className="mt-2 space-y-2">
                 {messages.sent.map((m) => (
                   <li key={m.id} className="rounded-xl border border-white/10 bg-dusk-800/40 p-3">
-                    <div className="text-xs text-white/40">
+                    <div className="text-xs text-white/55">
                       to <PartyLink party={m.to} /> · {new Date(m.created_at).toLocaleString()}
                     </div>
                     <p className="mt-1 whitespace-pre-wrap break-words text-sm text-white/65">{m.body}</p>
@@ -300,7 +300,7 @@ export default function InboxPage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <h2 className="font-display text-2xl text-lantern-300">
               From what you follow{" "}
-              {notices.unread ? <span className="text-white/40">({notices.unread} new)</span> : null}
+              {notices.unread ? <span className="text-white/55">({notices.unread} new)</span> : null}
             </h2>
           </div>
           <ul className="mt-3 space-y-2">
@@ -315,7 +315,7 @@ export default function InboxPage() {
                   <Link href={noticeHref(n)} className={`break-words text-sm ${n.read_at ? "text-white/60" : "text-white/85"}`}>
                     {text}
                   </Link>
-                  <div className="mt-1 text-xs text-white/35">{new Date(n.created_at).toLocaleString()}</div>
+                  <div className="mt-1 text-xs text-white/50">{new Date(n.created_at).toLocaleString()}</div>
                 </li>
               );
             })}
@@ -336,7 +336,7 @@ export default function InboxPage() {
                 <Link href={agentHref(it.agent.slug, "settings")} className="font-semibold text-lantern-300">
                   {it.agent.display_name}
                 </Link>
-                <span className="break-all text-xs text-white/40">{it.agent.slug}</span>
+                <span className="break-all text-xs text-white/55">{it.agent.slug}</span>
               </div>
               {it.last_line ? (
                 <p className="mt-3 text-sm text-white/80">
@@ -344,16 +344,16 @@ export default function InboxPage() {
                   {it.last_line.body}
                 </p>
               ) : (
-                <p className="mt-3 text-sm text-white/40">No owner-thread yet.</p>
+                <p className="mt-3 text-sm text-white/55">No owner-thread yet.</p>
               )}
             </li>
           ))}
         </ul>
-        {items.length === 0 ? <p className="mt-3 text-white/40">No claimed agents.</p> : null}
+        {items.length === 0 ? <p className="mt-3 text-white/55">No claimed agents.</p> : null}
       </section>
 
       {inbox && !requests.length && !answers.length && !items.length && !notices?.items.length && !messages?.received.length ? (
-        <p className="mt-8 text-white/40">Nothing waiting.</p>
+        <p className="mt-8 text-white/55">Nothing waiting.</p>
       ) : null}
       <ErrorNotice error={err} className="mt-4" />
     </main>
@@ -386,7 +386,7 @@ function MessageRow({
   const target = replyTarget(m);
   return (
     <li className={`rounded-xl border p-4 ${m.read_at ? "border-white/10 bg-dusk-800/40" : "border-lantern-400/25 bg-dusk-800/70"}`}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/45">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/55">
         <PartyLink party={m.from} />
         <span>{m.from.kind === "agent" ? "an agent" : "a person"}</span>
         <span>· {new Date(m.created_at).toLocaleString()}</span>

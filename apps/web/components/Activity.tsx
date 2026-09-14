@@ -84,7 +84,7 @@ function Row({
   const chips = detailChips(entry);
   return (
     <li className="flex gap-3 py-2">
-      <span className="w-12 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-white/30">
+      <span className="w-12 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-white/50">
         {clock(entry.created_at)}
       </span>
       <span className="shrink-0 pt-0.5">
@@ -103,7 +103,7 @@ function Row({
               type="button"
               onClick={() => onActor(actorRef(entry.actor) ?? entry.actor!.id)}
               title="Only this actor"
-              className="ml-2 text-[11px] text-white/25 hover:text-lantern-300"
+              className="ml-2 text-[11px] text-white/50 hover:text-lantern-300"
             >
               only this
             </button>
@@ -113,7 +113,7 @@ function Row({
           <p className="mt-1 break-words border-l-2 border-lantern-400/30 pl-3 text-sm text-white/70">{entry.body}</p>
         ) : null}
         {entry.body_withheld ? (
-          <p className="mt-1 border-l-2 border-white/10 pl-3 text-xs italic text-white/30">
+          <p className="mt-1 border-l-2 border-white/10 pl-3 text-xs italic text-white/50">
             You were not among the recipients, so the line is not yours to read.
           </p>
         ) : null}
@@ -121,7 +121,7 @@ function Row({
           <Reactions target={entry.reaction_target} summary={entry.reactions} canReact asGuest={!signedIn} />
         ) : null}
         {chips.length ? (
-          <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-white/35">
+          <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-white/50">
             {chips.map((c) => (
               <span key={c} className="break-all">
                 {c}
@@ -231,14 +231,14 @@ export function Activity({
             className={`rounded-full border px-3 py-1.5 text-xs sm:py-1 ${
               filters.win === w.key
                 ? "border-lantern-400/60 bg-lantern-400/10 text-lantern-300"
-                : "border-white/10 text-white/45 hover:text-white/70"
+                : "border-white/10 text-white/55 hover:text-white/70"
             }`}
           >
             {w.label}
           </button>
         ))}
         {meta ? (
-          <span className="ml-auto text-xs text-white/40">
+          <span className="ml-auto text-xs text-white/55">
             {totals.events} {totals.events === 1 ? "event" : "events"}
           </span>
         ) : null}
@@ -254,16 +254,16 @@ export function Activity({
                 type="button"
                 onClick={() => toggleKind(k)}
                 className={`rounded-full border px-3 py-1.5 text-xs sm:py-1 ${
-                  on ? `bg-white/5 ${kindCopy(k).tint}` : "border-white/10 text-white/40 hover:text-white/70"
+                  on ? `bg-white/5 ${kindCopy(k).tint}` : "border-white/10 text-white/55 hover:text-white/70"
                 }`}
               >
                 {kindCopy(k).label}
-                <span className="ml-1.5 text-white/30">{totals.by_kind[k] ?? 0}</span>
+                <span className="ml-1.5 text-white/50">{totals.by_kind[k] ?? 0}</span>
               </button>
             );
           })}
           {filters.kinds.length ? (
-            <button type="button" onClick={() => update({ ...filters, kinds: [] })} className="text-xs text-white/30 hover:text-white/60">
+            <button type="button" onClick={() => update({ ...filters, kinds: [] })} className="text-xs text-white/50 hover:text-white/60">
               clear
             </button>
           ) : null}
@@ -271,7 +271,7 @@ export function Activity({
       ) : null}
 
       {!actorId && filters.actor ? (
-        <p className="mt-3 text-xs text-white/45">
+        <p className="mt-3 text-xs text-white/55">
           Showing only <code className="break-all text-white/60">{filters.actor}</code>.{" "}
           <button type="button" onClick={() => update({ ...filters, actor: null })} className="text-lantern-300">
             show everyone
@@ -295,13 +295,15 @@ export function Activity({
       <section className="mt-6">
         {blocks.map((b) => {
           if (b.block === "day") {
+            // Under the drawer's h2 a day is an h3; on a page (under the h1) an h2.
+            const DayHeading = inPanel ? "h3" : "h2";
             return (
-              <h3
+              <DayHeading
                 key={b.key}
                 className={`sticky ${inPanel ? "top-0" : "top-14"} z-10 -mx-2 mb-1 mt-8 bg-dusk-950/80 px-2 py-1 font-display text-lg text-lantern-300/80 backdrop-blur first:mt-0`}
               >
                 {b.label}
-              </h3>
+              </DayHeading>
             );
           }
           if (b.block === "run") {
@@ -316,7 +318,7 @@ export function Activity({
                   onClick={() => setExpanded((p) => ({ ...p, [b.key]: !open }))}
                   className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 py-1.5 text-left"
                 >
-                  <span className="w-12 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/25">
+                  <span className="w-12 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/50">
                     {first ? clock(first.created_at) : ""}
                   </span>
                   <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${copy.tint}`}>
@@ -328,7 +330,7 @@ export function Activity({
                       ? ` between ${clock(first.created_at)} and ${clock(last.created_at)}`
                       : ""}
                   </span>
-                  <span className="text-[11px] text-white/30">{open ? "hide" : "show"}</span>
+                  <span className="text-[11px] text-white/50">{open ? "hide" : "show"}</span>
                 </button>
                 {open ? (
                   <ul className="pl-2">
@@ -348,7 +350,7 @@ export function Activity({
         })}
       </section>
 
-      {!loading && urlRead && !entries.length && !err ? <p className="mt-6 text-sm text-white/40">{emptyText}</p> : null}
+      {!loading && urlRead && !entries.length && !err ? <p className="mt-6 text-sm text-white/55">{emptyText}</p> : null}
 
       <div className="mt-6 flex items-center gap-4">
         {cursor ? (
@@ -361,7 +363,7 @@ export function Activity({
             {loading ? "Reading…" : "Older"}
           </button>
         ) : null}
-        {loading && !entries.length ? <span className="text-sm text-white/40">Reading the record…</span> : null}
+        {loading && !entries.length ? <span className="text-sm text-white/55">Reading the record…</span> : null}
       </div>
 
       <ErrorNotice error={err} className="mt-4" />

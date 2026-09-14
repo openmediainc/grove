@@ -79,7 +79,7 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
   return (
     <section>
       <h3 className="font-display text-xl text-lantern-300">Decor</h3>
-      <p className="mt-1 text-xs text-white/40">
+      <p className="mt-1 text-xs text-white/55">
         Small things round your building on the map. Every plot starts with three; each mark this space earns from real
         work unlocks two more. Up to {wire.max_items} items, on the marked spots, which never block the door. Nothing here
         is for sale.
@@ -102,7 +102,7 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
                 return <div key={key} className="h-9 rounded-sm bg-white/15" aria-hidden title="Building" />;
               if (cell.kind === "door")
                 return (
-                  <div key={key} className="flex h-9 items-center justify-center rounded-sm bg-white/5 text-[9px] text-white/40" title="Door (kept clear)">
+                  <div key={key} className="flex h-9 items-center justify-center rounded-sm bg-white/5 text-[9px] text-white/55" title="Door (kept clear)">
                     door
                   </div>
                 );
@@ -120,7 +120,7 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
                     selected ? "border-lantern-300 bg-lantern-400/20" : "border-dashed border-lantern-400/40 bg-transparent"
                   }`}
                 >
-                  {item ? <DecorThumb preset={item.preset} themeId={themeId} size={34} /> : <span className="text-xs text-white/30">+</span>}
+                  {item ? <DecorThumb preset={item.preset} themeId={themeId} size={34} /> : <span className="text-xs text-white/50">+</span>}
                 </button>
               );
             }),
@@ -129,7 +129,7 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
 
         <div className="min-w-0 flex-1 basis-60">
           {slot === null ? (
-            <p className="text-xs text-white/45">Pick a dashed spot on the plot to place something there.</p>
+            <p className="text-xs text-white/55">Pick a dashed spot on the plot to place something there.</p>
           ) : (
             <>
               <p className="text-xs text-white/55">
@@ -148,7 +148,7 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
                           ? "border-lantern-300 text-lantern-200"
                           : e.unlocked
                             ? "border-white/10 text-white/80"
-                            : "border-white/5 text-white/35"
+                            : "border-white/5 text-white/50"
                       } disabled:cursor-not-allowed`}
                     >
                       <span className={e.unlocked ? "" : "opacity-40 grayscale"}>
@@ -156,7 +156,7 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate">{e.label}</span>
-                        {e.hint ? <span className="block truncate text-[10px] text-white/35">{e.hint}</span> : null}
+                        {e.hint ? <span className="block truncate text-[10px] text-white/50">{e.hint}</span> : null}
                       </span>
                     </button>
                   </li>
@@ -181,9 +181,9 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
         >
           {busy ? "Saving…" : "Save decor"}
         </button>
-        {saved ? <span className="text-xs text-white/40">Saved.</span> : null}
+        {saved ? <span className="text-xs text-white/55">Saved.</span> : null}
         {draft.some((d) => !unlocked.has(d.preset)) ? (
-          <span className="text-xs text-white/45">Some placed decor is no longer unlocked; clear it to save.</span>
+          <span className="text-xs text-white/55">Some placed decor is no longer unlocked; clear it to save.</span>
         ) : null}
         <ErrorNotice error={err} inline />
       </div>

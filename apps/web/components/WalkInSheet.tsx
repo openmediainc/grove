@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/components/a11y";
 import { api, type RoomPayload } from "@/lib/api";
 import { describeArrival, perceptionFromMe } from "@/lib/walk-in";
 import { ErrorNotice } from "@/components/ErrorNotice";
@@ -29,6 +30,8 @@ export function WalkInSheet({
   placeName: string;
 }) {
   const [lurk, setLurk] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(sheetRef, { onEscape: onClose });
   const [overhear, setOverhear] = useState(true);
   const [meId, setMeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,6 +70,8 @@ export function WalkInSheet({
 
   return (
     <div
+      ref={sheetRef}
+      data-a11y-dialog
       role="dialog"
       aria-modal="false"
       aria-labelledby="walk-in-title"

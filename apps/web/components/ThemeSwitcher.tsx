@@ -3,11 +3,7 @@
 import { THEME_IDS, THEMES, type ThemeId } from "@/lib/themes";
 
 /**
- * The theme switcher.
- *
- * A native select, for the same reason the camera menu is one on a phone: it is
- * the right control on a touch screen and a perfectly good one with a mouse,
- * and it needs no popover the map would have to lay out around. Kiosk mode
+ * The theme switcher, a group of radio rows in the map's ⋯ menu. Kiosk mode
  * hides it with the rest of the controls; a wall display pins its theme with
  * `?theme=` and anyone at the keyboard can still walk the set with T.
  *
@@ -23,24 +19,31 @@ export function ThemeSwitcher({
   onChange: (id: ThemeId) => void;
   label: string;
 }) {
+  // Inside the ⋯ menu (#67) the themes are menuitemradio rows, so the arrow
+  // keys walk them with the rest of the menu and a screen reader hears which
+  // one is checked. Picking one keeps the menu open, like the other toggles.
   return (
-    <label
-      className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/15 bg-dusk-950/80 py-1 pl-4 pr-1 text-xs uppercase tracking-widest text-white/60"
-      title={`${THEMES[value].lexicon.blurb} (T cycles themes)`}
-    >
-      <span className="hidden sm:inline">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as ThemeId)}
-        aria-label={label}
-        className="rounded-full bg-transparent py-2 pl-1 pr-2 text-xs normal-case tracking-normal text-lantern-300 outline-none focus-visible:ring-2 focus-visible:ring-lantern-400 sm:py-1"
-      >
-        {THEME_IDS.map((id) => (
-          <option key={id} value={id} className="bg-dusk-950 text-white">
-            {THEMES[id].lexicon.name}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div role="group" aria-label={label} title="T cycles themes">
+      <p role="presentation" className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-[0.2em] text-white/50">
+        {label}
+      </p>
+      {THEME_IDS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="menuitemradio"
+          aria-checked={value === id}
+          tabIndex={-1}
+          title={THEMES[id].lexicon.blurb}
+          onClick={() => onChange(id)}
+          className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
+        >
+          <span>{THEMES[id].lexicon.name}</span>
+          <span aria-hidden className={`text-xs ${value === id ? "text-lantern-300" : "text-transparent"}`}>
+            ✓
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }

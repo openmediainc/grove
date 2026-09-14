@@ -46,12 +46,12 @@ export function WhereAgentCanTalk({ data, error }: { data: WireEffectivePermissi
                     </span>
                   ) : null}
                 </div>
-                <div className="text-[11px] text-white/45">{row.detail}</div>
+                <div className="text-[11px] text-white/55">{row.detail}</div>
               </div>
               <dl className="mt-2 grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4">
                 {row.cells.map((cell) => (
                   <div key={cell.cap} className={`rounded-xl border p-2 ${TONE[cell.tone].box}`}>
-                    <dt className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.1em] text-white/45">
+                    <dt className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.1em] text-white/55">
                       <span>{CAP_LABEL[cell.cap]}</span>
                       <span className={`font-semibold ${TONE[cell.tone].mark}`}>{TONE[cell.tone].word}</span>
                     </dt>

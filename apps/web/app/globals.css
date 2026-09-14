@@ -4,6 +4,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Accessibility (#67, docs/ACCESSIBILITY.md). In the base layer so a component's
+   own focus style (a ring, a border) still wins; everything else gets this. The
+   ring is the theme's lantern-400 token, >= 3:1 on every dusk surface in all four
+   themes (test/a11y.test.ts). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid rgb(var(--g-lantern-400, 232 184 109));
+    outline-offset: 2px;
+  }
+  /* Programmatic focus targets (a dialog's container, <main> after Skip to
+     content) carry a name, not an action: no ring round the whole panel. */
+  [data-a11y-dialog]:focus,
+  main:focus {
+    outline: none;
+  }
+}
+
 :root {
   color-scheme: dark;
 }
@@ -134,4 +151,14 @@ body {
 .seat-empty {
   border: 1px dashed rgba(244, 209, 154, 0.15);
   border-radius: 10px;
+}
+
+/* Reduced motion (#67): after every animated rule above, so it wins. */
+@media (prefers-reduced-motion: reduce) {
+  .lantern {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
 }
