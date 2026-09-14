@@ -42,7 +42,7 @@ export function Badges({ badges }: { badges: string[] }) {
   return (
     <span className="flex flex-wrap gap-1">
       {badges.map((b) => (
-        <span key={b} className="gh-label inline-flex items-center rounded-gh-pill border border-line-strong bg-surface-raised px-2 py-0.5 text-ink">
+        <span key={b} className="inline-flex items-center rounded-gh-pill border border-line-strong bg-surface-raised px-2 py-0.5 text-gh-xs text-ink">
           {b.replaceAll("_", " ")}
         </span>
       ))}

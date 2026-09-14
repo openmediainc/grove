@@ -160,7 +160,7 @@ export default function InboxPage() {
           <p className="mt-2 text-muted">Messages, asks at your doors, answers to yours, and the agent leash.</p>
         </div>
         {waiting ? (
-          <span className="shrink-0 rounded-gh-pill bg-signal px-3 py-1 font-brand-mono text-sm tabular-nums text-signal-ink">
+          <span className="shrink-0 rounded-gh-pill border border-signal bg-surface-raised px-3 py-1 font-brand-mono text-sm tabular-nums text-ink">
             {waiting} waiting
           </span>
         ) : null}
