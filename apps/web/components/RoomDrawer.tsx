@@ -145,10 +145,12 @@ export type RoomDrawerProps = {
   onOpenRoom: (slug: string) => void;
   /** Tell the map the pixel room widened the drawer, so it can move its controls. */
   onExpandedChange?: (expanded: boolean) => void;
+  /** Speakers whose lines a tapped crowd bubble on the map folded away (#64): marked, and the newest scrolled to. */
+  focusSpeakers?: readonly string[];
 };
 
 export function RoomDrawer(props: RoomDrawerProps) {
-  const { room, signedIn, arrived, themedTitle, titleFor, publicView, signInHref, onClose, onOpenRoom, onExpandedChange } = props;
+  const { room, signedIn, arrived, themedTitle, titleFor, publicView, signInHref, onClose, onOpenRoom, onExpandedChange, focusSpeakers } = props;
   const [data, setData] = useState<RoomPayload | null>(null);
   // A dialog over the live map, not modal: Tab walks out to the map controls, Escape (the map's) closes.
   const drawerRef = useRef<HTMLDivElement>(null);
@@ -170,6 +172,8 @@ export function RoomDrawer(props: RoomDrawerProps) {
   const [stepping, setStepping] = useState(false);
   const [copied, setCopied] = useState(false);
   const composeRef = useRef<HTMLInputElement>(null);
+  /** The focus list already scrolled to, so a live line does not yank the log back (#64). */
+  const focusScrolled = useRef<readonly string[] | null>(null);
   const focusedFor = useRef<string | null>(null);
   const [whisperTo, setWhisperTo] = useState<Nearby | null>(null);
   const [whisperCheck, setWhisperCheck] = useState<WhisperCheckState>({ status: "checking" });
@@ -571,6 +575,25 @@ export function RoomDrawer(props: RoomDrawerProps) {
     return out.sort((a, b) => a.at - b.at || a.order - b.order);
   }, [lines, whispers]);
 
+  // The lines a crowd bubble on the map folded away: each focused speaker's
+  // newest line, since that is the one the map was holding (#64).
+  const focusIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!focusSpeakers?.length) return ids;
+    const latest = new Map<string, string>();
+    for (const e of log) if (e.kind === "say" && focusSpeakers.includes(e.line.sender_id)) latest.set(e.line.sender_id, e.line.id);
+    for (const id of latest.values()) ids.add(id);
+    return ids;
+  }, [log, focusSpeakers]);
+  useEffect(() => {
+    if (!focusIds.size || focusScrolled.current === focusSpeakers) return;
+    const marked = drawerRef.current?.querySelectorAll<HTMLElement>('[data-speech-focus="true"]');
+    const last = marked?.[marked.length - 1];
+    if (!last) return;
+    focusScrolled.current = focusSpeakers ?? null;
+    last.scrollIntoView({ block: "nearest" });
+  }, [focusIds, focusSpeakers]);
+
   const heard = useMemo<HeardEntry[]>(
     () =>
       log.map((e) =>
@@ -943,11 +966,13 @@ export function RoomDrawer(props: RoomDrawerProps) {
                     );
                   }
                   const l = entry.line;
+                  const focused = focusIds.has(l.id);
                   return (
                     <li
                       key={l.id}
                       data-speaking={readAloud.speakingKey === `say:${l.id}` ? "true" : undefined}
-                      className={`break-words${speakingClass(`say:${l.id}`)}`}
+                      data-speech-focus={focused ? "true" : undefined}
+                      className={`break-words${focused ? " -mx-1.5 rounded-gh-sm border-l-2 border-signal bg-signal/5 px-1.5" : ""}${speakingClass(`say:${l.id}`)}`}
                     >
                       <span
                         data-identity={identityOf(l.sender_kind)}

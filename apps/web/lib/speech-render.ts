@@ -29,12 +29,13 @@ const FAMILY = "ui-sans-serif, system-ui, sans-serif";
 export type SpeechPainter = {
   tier: SpeechTier | undefined;
   slots: Map<string, number>;
+  crowds: Map<string, string>;
   widths: Map<string, number>;
   last: SpeechLayout | null;
 };
 
 export function speechPainter(): SpeechPainter {
-  return { tier: undefined, slots: new Map(), widths: new Map(), last: null };
+  return { tier: undefined, slots: new Map(), crowds: new Map(), widths: new Map(), last: null };
 }
 
 /**
@@ -53,12 +54,20 @@ export function paintSpeech(
     obstacles?: readonly Rect[];
     zoom?: number;
     tier?: SpeechTier;
+    /** SCREEN px of a tile's width now: caps leader lines and sizes crowds (#64). */
+    tilePx?: number;
     t: number;
     metrics?: SpeechMetrics;
   },
 ): SpeechLayout {
   const m = input.metrics ?? DEFAULT_SPEECH_METRICS;
   const tier = input.tier ?? speechTier(input.zoom ?? 1, painter.tier);
+  if (tier !== painter.tier) {
+    // A new tier is a new picture (a cluster at mid is individuals up close):
+    // start its slot memory fresh rather than holding lines folded.
+    painter.slots = new Map();
+    painter.crowds = new Map();
+  }
   painter.tier = tier;
   // measureText is the expensive half of a bubble and the same few lines are
   // measured every frame; cache by font and text, bounded.
@@ -81,11 +90,16 @@ export function paintSpeech(
     obstacles: input.obstacles,
     measure,
     previous: painter.slots,
+    previousCrowds: painter.crowds,
+    tilePx: input.tilePx,
     metrics: m,
   });
   painter.slots = out.slots;
+  painter.crowds = out.crowds;
   painter.last = out;
   const art = theme.art;
+  // No easing between frames, so there is nothing to switch off for reduced
+  // motion: a bubble that has to move jumps, it never slides.
   for (const p of out.pips) art.speechPip(ctx, p.x, p.y, p.whisper, input.t);
   for (const b of out.bubbles) {
     art.speech(
@@ -105,6 +119,7 @@ export function paintSpeech(
         whisper: b.whisper,
         leader: b.leader,
         overflow: b.overflow,
+        cluster: b.cluster ? (b.cluster.count ? "count" : "lines") : undefined,
       },
       input.t,
     );

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { asPermissionBadges, consequenceOf, STANCES, type Rect, type Speaker } from "@grove/ui";
+import { asPermissionBadges, clusterUnder, consequenceOf, STANCES, type Rect, type Speaker } from "@grove/ui";
 import { AWAY_ALPHA, decorSlotTile, describeToolCall, facingFromWire, normaliseMarks, type DecorItem, type SpaceBranding, type SpaceMark, type ToolCallView } from "@grove/protocol";
 import { paintDecorClear, plotDecor } from "@/lib/decor";
 import { api } from "@/lib/api";
@@ -923,6 +923,8 @@ export function WorldMap() {
   const signedInRef = useRef<boolean | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [peek, setPeek] = useState<Peek | null>(null);
+  /** Speakers a tapped cluster bubble folded away: the room drawer marks their lines (#64). */
+  const [speechFocus, setSpeechFocus] = useState<{ room: string; speakers: readonly string[] } | null>(null);
   const [following, setFollowing] = useState<string | null>(null);
   const followRef = useRef<string | null>(null);
   /** Bodies that want a human, hazards first. Rebuilt on every poll. */
@@ -2464,7 +2466,9 @@ export function WorldMap() {
       const { tx, ty } = tileFromClient(ev.clientX, ev.clientY);
       const actors = actorsRef.current;
       hoverRef.current = actors.find((a) => standsOn(a, tx, ty)) ?? null;
-      canvas.style.cursor = regionAt(tx, ty) !== "wild" ? "pointer" : "grab";
+      const cr = canvas.getBoundingClientRect();
+      const overCluster = clusterUnder(speechPaintRef.current.last, ev.clientX - cr.left, ev.clientY - cr.top);
+      canvas.style.cursor = overCluster || regionAt(tx, ty) !== "wild" ? "pointer" : "grab";
     };
 
     const releasePointer = (ev: PointerEvent) => {
@@ -2578,6 +2582,27 @@ export function WorldMap() {
       releasePointer(ev);
       // A pan that happened to end over a region must not navigate into it.
       if (!wasDragging || moved > 6) return;
+      // A crowd's cluster bubble (#64) stands for lines the map folded away: a
+      // tap opens that room's transcript with those speakers' lines marked.
+      if (!kioskRef.current) {
+        const rect = canvas.getBoundingClientRect();
+        const hit = clusterUnder(speechPaintRef.current.last, ev.clientX - rect.left, ev.clientY - rect.top);
+        if (hit?.cluster) {
+          const tally = new Map<string, number>();
+          for (const id of hit.cluster.members) {
+            const body = actorsRef.current.find((a) => a.id === id);
+            if (body && body.region !== "wild") tally.set(body.region, (tally.get(body.region) ?? 0) + 1);
+          }
+          let room: string | null = null;
+          let most = 0;
+          for (const [region, n] of tally) if (n > most) [room, most] = [region, n];
+          if (room) {
+            setSpeechFocus({ room, speakers: hit.cluster.members });
+            openRoomRef.current(room);
+            return;
+          }
+        }
+      }
       const { tx, ty } = tileFromClient(ev.clientX, ev.clientY);
       const target = peekAt(tx, ty);
       // A room opens as a drawer over the running map, for everyone: a body
@@ -3886,6 +3911,8 @@ export function WorldMap() {
             viewport: { w: cssW, h: cssH },
             obstacles,
             zoom: z,
+            // Leaders are capped in tiles, so the cap shrinks and grows with the zoom (#64).
+            tilePx: TW * z,
             t,
           });
         }
@@ -4475,6 +4502,7 @@ export function WorldMap() {
           onClose={closeDrawer}
           onOpenRoom={(slug) => openRoom(slug)}
           onExpandedChange={setRoomExpanded}
+          focusSpeakers={speechFocus?.room === worldUrl.room ? speechFocus.speakers : undefined}
         />
       ) : null}
       {!bare && worldUrl.history ? <HistoryDrawer controller={replay} onClose={closeDrawer} /> : null}

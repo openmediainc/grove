@@ -96,8 +96,8 @@ describe("layoutSpeech", () => {
     const out = layoutSpeech({ tier: "mid", speakers: crowd, viewport: VIEW, measure });
     for (let i = 0; i < out.bubbles.length; i++)
       for (let j = i + 1; j < out.bubbles.length; j++) expect(overlap(out.bubbles[i]!, out.bubbles[j]!)).toBe(false);
-    // Every speaker is accounted for: a bubble or a pip, never neither.
-    expect(out.bubbles.length + out.pips.length).toBe(crowd.length);
+    // Every speaker is accounted for: a bubble of its own or a pip, never neither.
+    expect(out.bubbles.filter((b) => !b.cluster).length + out.pips.length).toBe(crowd.length);
   });
 
   it("never covers an obstacle (a hazard outranks speech)", () => {
@@ -125,13 +125,24 @@ describe("layoutSpeech", () => {
     expect(out.bubbles.find((b) => b.id === "old")?.leader).toBe(true);
   });
 
-  it("keeps the newest when the budget runs out, and counts the rest as +N", () => {
+  it("keeps the newest when the budget runs out, and folds the rest into the crowd's cluster", () => {
     const metrics = { ...DEFAULT_SPEECH_METRICS, budget: { mid: 2, near: 2 } };
     const crowd = [speaker("a", 600, 400, 1), speaker("b", 610, 402, 2), speaker("c", 620, 404, 3), speaker("d", 630, 406, 4)];
-    const out = layoutSpeech({ tier: "mid", speakers: crowd, viewport: VIEW, measure, metrics });
-    expect(out.bubbles.map((b) => b.id).sort()).toEqual(["c", "d"]);
+    const out = layoutSpeech({ tier: "near", speakers: crowd, viewport: VIEW, measure, metrics });
+    expect(out.bubbles.filter((b) => !b.cluster).map((b) => b.id).sort()).toEqual(["c", "d"]);
+    const cluster = out.bubbles.find((b) => b.cluster);
+    expect(cluster?.cluster?.members).toEqual(["b", "a"]);
+    expect(cluster?.lines.at(-1)).toBe("+1 more");
     expect(out.pips.map((p) => p.id).sort()).toEqual(["a", "b"]);
-    expect(out.bubbles.reduce((n, b) => n + b.overflow, 0)).toBe(2);
+  });
+
+  it("counts a lone squeezed-out line as +N on the nearest bubble", () => {
+    const metrics = { ...DEFAULT_SPEECH_METRICS, budget: { mid: 2, near: 2 } };
+    const crowd = [speaker("a", 600, 400, 1), speaker("b", 610, 402, 2), speaker("c", 620, 404, 3)];
+    const out = layoutSpeech({ tier: "near", speakers: crowd, viewport: VIEW, measure, metrics });
+    expect(out.bubbles.map((b) => b.id).sort()).toEqual(["b", "c"]);
+    expect(out.pips.map((p) => p.id)).toEqual(["a"]);
+    expect(out.bubbles.reduce((n, b) => n + b.overflow, 0)).toBe(1);
   });
 
   it("does not count a far-away squeeze into an unrelated bubble", () => {

@@ -281,6 +281,12 @@ export type SpeechBubble = {
   leader: boolean;
   /** Lines nearby that did not fit, shown as "+N". */
   overflow: number;
+  /**
+   * A crowd's cluster bubble (#64): "lines" is the newest line then "+N more"
+   * as its last line; "count" is the far-zoom number of lines in the crowd.
+   * Drawn as a stack so it never reads as one person's sentence.
+   */
+  cluster?: "lines" | "count";
 };
 
 /* ------------------------------------------------------------------ *

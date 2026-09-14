@@ -323,6 +323,8 @@ export function PixelRoom({
           viewport: { w: g.w, h: g.h },
           obstacles: names,
           tier: "near",
+          // One cell is this room's tile: leaders stay within 2.5 cells (#64).
+          tilePx: g.cell,
           t,
           metrics,
         });

@@ -150,6 +150,15 @@ export function drawSpeechBubble(
     ctx.arc(b.ax, b.ay, 1.5, 0, Math.PI * 2);
     ctx.fill();
   }
+  if (b.cluster) {
+    // A stack: a second sheet peeking out behind, so a cluster reads as many lines.
+    ctx.fillStyle = border ?? bg;
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.roundRect(x0 + 3, y0 - 3, w, h, radius);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
   ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.roundRect(x0, y0, w, h, radius);
@@ -175,7 +184,17 @@ export function drawSpeechBubble(
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   b.lines.forEach((line, i) => {
-    ctx.fillText(line, x0 + b.padX, y0 + b.padY + b.lineH * (i + 0.5), w - b.padX * 2 + 1);
+    // A cluster's last line is its "+N more": quieter than what was said.
+    const more = b.cluster === "lines" && i === b.lines.length - 1 && b.lines.length > 1;
+    if (more) ctx.globalAlpha = 0.72;
+    if (b.cluster === "count") {
+      ctx.font = `600 ${b.fontPx}px ${family}`;
+      ctx.textAlign = "center";
+      ctx.fillText(line, x0 + w / 2, y0 + b.padY + b.lineH * (i + 0.5), w);
+    } else {
+      ctx.fillText(line, x0 + b.padX, y0 + b.padY + b.lineH * (i + 0.5), w - b.padX * 2 + 1);
+    }
+    if (more) ctx.globalAlpha = 1;
   });
   if (b.overflow > 0) {
     const label = `+${b.overflow}`;
