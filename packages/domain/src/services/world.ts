@@ -1,4 +1,4 @@
-import { EMOTE_ENUM, normaliseMarks, publicEstates, readStoredBranding, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
+import { EMOTE_ENUM, normaliseMarks, publishedDecor, publicEstates, readStoredBranding, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
 import type { SupporterService } from "./supporters.js";
 import type { GroveStore } from "../store.js";
 import { visibleOccupancySql } from "../visibility.js";
@@ -320,6 +320,8 @@ export class WorldService {
               (SELECT array_agg(sm.mark) FROM space_marks sm WHERE sm.world_id = w.id) AS marks,
               -- 035: the owner's accent, sign text and emblem.
               w.branding,
+              -- #45: the owner's placed decor; re-checked against unlocks below.
+              w.decor,
               -- #37 estates: the chosen names, and the primary org by id. Used
               -- to group and name estates here; never published per plot.
               h.estate_name AS owner_estate_name,
@@ -358,6 +360,11 @@ export class WorldService {
         // Supporter trim for the signboard (TODO art after #33). Redacted on a
         // private plot like the owner it describes. Never a permission.
         supporter: open && supporterOwners.has(String(r.owner_human_id)),
+        // #45 decor: never for a private plot (held land shows nothing); items
+        // whose unlock (a mark, the owner's supporter perk) is gone are dropped.
+        decor: open
+          ? publishedDecor(preset, r.decor, { marks: r.marks as unknown[] | null, supporter: supporterOwners.has(String(r.owner_human_id)) })
+          : [],
       };
     });
 

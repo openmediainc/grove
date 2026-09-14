@@ -13,7 +13,7 @@
  * flight, never because the renderer thought it would look busy.
  */
 import type { AgentVerb } from "./agent-verbs.js";
-import { hash32, REGION_RECTS, type MapRegion, type PlotRect } from "./map-layout.js";
+import { hash32, isDecorSlotOffset, REGION_RECTS, type MapRegion, type PlotRect } from "./map-layout.js";
 
 export type Tile = { x: number; y: number };
 
@@ -515,6 +515,8 @@ export function plotRestTiles(rect: PlotRect): Tile[] {
   for (let y = rect.y0; y <= rect.y1; y++) {
     for (let x = rect.x0; x <= rect.x1; x++) {
       if (x >= bx0 && x <= bx1 && y >= by0 && y <= by1) continue;
+      // #45: decor slots stay clear of bodies whether or not decor is placed.
+      if (isDecorSlotOffset(x - rect.x0, y - rect.y0)) continue;
       out.push({ x, y });
     }
   }

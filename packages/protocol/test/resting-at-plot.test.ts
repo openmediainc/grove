@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { plotForIndex } from "../src/map-layout.js";
+import { PLOT_DECOR_SLOTS, plotForIndex } from "../src/map-layout.js";
 import {
   AWAY_ALPHA,
   MOTION_TIMING,
@@ -27,7 +27,7 @@ function ctx(now: number): MotionContext {
 describe("resting at plot", () => {
   it("lies only on the plot, never on the building", () => {
     const tiles = plotRestTiles(rect);
-    expect(tiles).toHaveLength(8 * 6 - PLOT_BUILDING.w * PLOT_BUILDING.h);
+    expect(tiles).toHaveLength(8 * 6 - PLOT_BUILDING.w * PLOT_BUILDING.h - PLOT_DECOR_SLOTS.length);
     for (const t of tiles) {
       expect(t.x >= rect.x0 && t.x <= rect.x1 && t.y >= rect.y0 && t.y <= rect.y1).toBe(true);
       const onBuilding =

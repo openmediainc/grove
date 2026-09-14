@@ -57,6 +57,7 @@ import {
   type EstateStyle,
   type SignStyle,
 } from "./kit";
+import { makeDecorArt, type DecorStyle } from "./decor";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 const TEAL = "#2de2e6";
@@ -579,6 +580,22 @@ export const SIGN_STYLE: SignStyle = {
  * An estate: a compound. A brace-mounted holo panel and a dashed light wall of
  * pylons round the joined nodes. Teal and violet only, never neon pink.
  */
+export const DECOR_STYLE: DecorStyle = {
+  material: "holo",
+  wood: "#1e293b",
+  metal: "#475569",
+  stone: "#0f172a",
+  leaf: "#34d399",
+  bloom: "#c4b5fd",
+  water: "#2de2e6",
+  light: "#2de2e6",
+  lightGlow: "rgba(45,226,230,0.55)",
+  cloth: "#312e81",
+  trim: "#2de2e6",
+  paper: "#a5f3fc",
+  spine: "#6366f1",
+};
+
 export const ESTATE_STYLE: EstateStyle = {
   frame: "rgba(8,20,26,0.9)",
   frameEdge: "rgba(45,226,230,0.6)",
@@ -705,6 +722,7 @@ const art: ThemeArt = {
   estateFence(ctx, segments, accent) {
     drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
   },
+  decor: makeDecorArt(DECOR_STYLE),
 };
 
 export const SCIFI_LEXICON: ThemeLexicon = {

@@ -102,6 +102,7 @@ export type { SiteFetchOptions, ResolvedAddress } from "./site-fetch.js";
 export { suggestBrandingFromSite, readLinkPreview, extractPageFacts, decodePng, decodeIco, dominantColour, parseCssColour } from "./site-branding.js";
 export type { SiteBrandingSuggestion } from "./site-branding.js";
 export { EstateService, type EstateNames } from "./services/estates.js";
+export { DecorService, type DecorView } from "./services/decor.js";
 export { SequenceService } from "./services/sequences.js";
 // Supporter plumbing (036): cosmetic, env-gated, off until the owner adds Stripe keys.
 export {
@@ -304,6 +305,7 @@ import { GuestService } from "./services/guests.js";
 import { CardService } from "./services/cards.js";
 import { BrandingService } from "./services/branding.js";
 import { EstateService } from "./services/estates.js";
+import { DecorService } from "./services/decor.js";
 import { SequenceService } from "./services/sequences.js";
 import { SpaceMoveService } from "./services/space-moves.js";
 import { BoardService } from "./services/board.js";
@@ -355,6 +357,8 @@ export class GroveApp {
   board: BoardService;
   /** Cosmetic supporter tier via Stripe Checkout; inert unless all four env vars are set (036). */
   supporters: SupporterService;
+  /** Plot decor (044): owner-placed cosmetic presets unlocked by marks. */
+  decor: DecorService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
   follows: FollowService;
   /** `/` search across bodies, spaces and rooms, plus who is online (no private results). */
@@ -424,6 +428,7 @@ export class GroveApp {
     this.messages = new MessageService(this.store, this.identity, this.speech, this.mailbox, this.quota, this.flags);
     this.guests = new GuestService(this.store);
     this.supporters = new SupporterService(this.store);
+    this.decor = new DecorService(this.store, this.campus, this.toolCalls.marks, this.supporters);
     this.reactions = new ReactionService(
       this.store,
       this.chronicle,

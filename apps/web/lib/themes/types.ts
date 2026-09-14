@@ -21,7 +21,7 @@
 
 import type { AgentVerb } from "@/lib/agent-verbs";
 import type { SoundPreset } from "@/lib/sound/presets";
-import type { BrandEmblem, SpaceMark } from "@grove/protocol";
+import type { BrandEmblem, DecorPreset, SpaceMark } from "@grove/protocol";
 import type {
   AccessLevel,
   CharKey,
@@ -121,6 +121,15 @@ export interface ThemeArt {
    * wellstone = water feature / fountain, rubble = debris.
    */
   prop(ctx: Ctx, key: PropKey, px: number, py: number): void;
+  /**
+   * Plot decor (#45): a cosmetic preset an owner placed on one of their plot's
+   * decor slots, unlocked by real work. Anchored, 1x1, LAYOUT space, in the
+   * world art pass under the bodies (the renderer cuts it away round any body
+   * it would cover, lib/decor). Shape per preset is shared (themes/decor.ts);
+   * a theme picks its materials. Never on a private plot, never a permission,
+   * never in the hazard colours.
+   */
+  decor(ctx: Ctx, preset: DecorPreset, px: number, py: number): void;
 
   /** A body. Returns false if not drawable yet (the renderer draws a placeholder). */
   body(ctx: Ctx, sprite: BodySprite, x: number, y: number): boolean;

@@ -42,6 +42,7 @@ import {
   type ScatterKey,
 } from "@/lib/art";
 import { drawEstateFence, drawEstateSign, drawHazardTriangle, drawPennantFlag, drawSignboard, drawSpeechBubble, drawSpeechPip, drawVerbGlyph, type EstateStyle, type SignStyle } from "./kit";
+import { makeDecorArt, type DecorStyle } from "./decor";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 /** Lantern text on night stone; a whisper in the violet the whisper UI rings bodies with. */
@@ -128,6 +129,22 @@ export const SIGN_STYLE: SignStyle = {
  * An estate: a heavier timber mount behind the board with a gable crest, and a
  * split-rail fence of oak posts round the joined land.
  */
+export const DECOR_STYLE: DecorStyle = {
+  material: "timber",
+  wood: "#8a5a2b",
+  metal: "#3f3a33",
+  stone: "#8f8577",
+  leaf: "#4d7c3a",
+  bloom: "#facc15",
+  water: "#5fa8c8",
+  light: "#fde68a",
+  lightGlow: "rgba(253,230,138,0.7)",
+  cloth: "#2f5d8a",
+  trim: "#f4d19a",
+  paper: "#efe3c4",
+  spine: "#7c2d12",
+};
+
 export const ESTATE_STYLE: EstateStyle = {
   frame: "#3b2610",
   frameEdge: "#1a1006",
@@ -267,6 +284,7 @@ const art: ThemeArt = {
   estateFence(ctx, segments, accent) {
     drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
   },
+  decor: makeDecorArt(DECOR_STYLE),
 };
 
 export const AOE_LEXICON: ThemeLexicon = {

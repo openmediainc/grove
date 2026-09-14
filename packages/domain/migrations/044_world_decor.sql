@@ -1,0 +1,19 @@
+-- Plot decor (queue #45): the cosmetic props an owner places round their plot.
+--
+-- One nullable JSONB on worlds: a list of at most 6 `{ preset, slot }` items,
+-- shaped and checked by validateDecor() in @grove/protocol (decor.ts). `preset`
+-- is a key from the built-in catalogue (drawn in code per theme, no uploads);
+-- `slot` indexes PLOT_DECOR_SLOTS, fixed tiles that never block the building's
+-- door or a resting body. NULL = no decor.
+--
+-- Unlocks are not stored: base presets for every plot, two more per
+-- achievement mark (space_marks), two more while the owner is an active
+-- supporter (#47). Writes are checked against them; readers re-check shape and
+-- unlocks, so a preset whose unlock has lapsed simply stops drawing.
+--
+-- Privacy: a private plot publishes no decor in the minimap (held land shows
+-- nothing), like its name, marks and branding.
+--
+-- Additive and re-runnable. Grants-not-RLS: grove_runtime already holds its
+-- grants on worlds.
+ALTER TABLE worlds ADD COLUMN IF NOT EXISTS decor JSONB;

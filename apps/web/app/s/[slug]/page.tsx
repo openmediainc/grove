@@ -32,6 +32,7 @@ import { Activity } from "@/components/Activity";
 import { CardFields, CardPanel, useCard, useCardLex } from "@/components/Card";
 import { BrandingPanel, type WireBranding } from "@/components/Branding";
 import { EstatePanel } from "@/components/EstateName";
+import { DecorPanel } from "@/components/Decor";
 import { RelocatePanel, TransferPanel } from "@/components/SpaceMoves";
 import { FollowButton } from "@/components/Follow";
 import { BoardSection } from "@/components/Board";
@@ -391,6 +392,7 @@ function Manage({ detail, reload }: { detail: Detail; reload: () => Promise<void
       <OrgBindings detail={detail} reload={reload} />
       <BrandingPanel worldId={detail.world.id} space={detail.world} orgs={detail.orgs} branding={detail.branding ?? null} reload={reload} />
       <EstatePanel orgs={detail.orgs} />
+      {detail.world.plot_index != null ? <DecorPanel worldId={detail.world.id} /> : null}
       <CardPanel target={{ subject: "space", ref: detail.world.id }} saveId={detail.world.id} title="Card" />
       {detail.is_holder && detail.world.plot_index != null ? (
         <>

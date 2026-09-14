@@ -3,7 +3,8 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { asPermissionBadges, consequenceOf, STANCES, type Rect, type Speaker } from "@grove/ui";
-import { AWAY_ALPHA, describeToolCall, normaliseMarks, type SpaceBranding, type SpaceMark, type ToolCallView } from "@grove/protocol";
+import { AWAY_ALPHA, decorSlotTile, describeToolCall, normaliseMarks, type DecorItem, type SpaceBranding, type SpaceMark, type ToolCallView } from "@grove/protocol";
+import { paintDecorClear, plotDecor } from "@/lib/decor";
 import { api } from "@/lib/api";
 import {
   BUILDING,
@@ -341,6 +342,8 @@ type SpaceView = {
   marks?: string[];
   /** Owner branding (035). Null for a redacted row. */
   branding?: unknown;
+  /** Placed plot decor (#45). Empty for a redacted row. */
+  decor?: unknown;
 };
 
 type Plot = {
@@ -359,6 +362,8 @@ type Plot = {
   branding: SpaceBranding | null;
   /** The estate (#37) this plot has joined, or null. Never set on a private plot (lib/estates). */
   estateId: string | null;
+  /** Owner-placed decor (#45) on the plot's decor slots. Always empty on a private plot (lib/decor). */
+  decor: DecorItem[];
 };
 
 /*
@@ -1782,6 +1787,7 @@ export function WorldMap() {
             marks: (sp.policy_preset ?? sp.policyPreset) === "private" ? [] : normaliseMarks(sp.marks),
             branding: plotBranding(sp.policy_preset ?? sp.policyPreset, sp.branding),
             estateId: null,
+            decor: plotDecor(sp.policy_preset ?? sp.policyPreset, sp.decor),
           };
         });
         const estates = readEstates(data.estates, plots);
@@ -2738,6 +2744,17 @@ export function WorldMap() {
           // underneath as the machine-readable half.
           if (anyExplored && z >= LOD_PLOTS) {
             anchored((px, py) => art.building(ctx, access, px, py), rect.x0 + 2, rect.y0 + 1, BUILDING, 0.96);
+            // Decor (#45): world art under the bodies, cut away round any body it would cover.
+            for (const d of plot.decor) {
+              const at = decorSlotTile(rect, d.slot);
+              if (!at || !revealed(at.x, at.y, radius, claimed)) continue;
+              anchored(
+                (px, py) => paintDecorClear(ctx, () => art.decor(ctx, d.preset, px, py), px, py, bodyBoxes, { zoom: z, px: v.px, py: v.py, dpr }),
+                at.x,
+                at.y,
+                PROP_FOOTPRINT,
+              );
+            }
           }
 
           // Bound orgs colour the FENCE, not the ground: the fill already says

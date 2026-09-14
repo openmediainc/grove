@@ -54,6 +54,7 @@ import {
   type EstateStyle,
   type SignStyle,
 } from "./kit";
+import { makeDecorArt, type DecorStyle } from "./decor";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 const HULL = "#8a94a8";
@@ -573,6 +574,22 @@ export const SIGN_STYLE: SignStyle = {
  * An estate: a station, modules docked together. A hull mount with a mission
  * banner crest; a lit perimeter walkway of beacons.
  */
+export const DECOR_STYLE: DecorStyle = {
+  material: "hull",
+  wood: "#64748b",
+  metal: "#94a3b8",
+  stone: "#475569",
+  leaf: "#22c55e",
+  bloom: "#a5f3fc",
+  water: "#0ea5e9",
+  light: "#e0f2fe",
+  lightGlow: "rgba(186,230,253,0.75)",
+  cloth: "#1e3a8a",
+  trim: "#f59e0b",
+  paper: "#67e8f9",
+  spine: "#334155",
+};
+
 export const ESTATE_STYLE: EstateStyle = {
   frame: "rgba(30,41,59,0.96)",
   frameEdge: "rgba(103,232,249,0.7)",
@@ -659,6 +676,7 @@ const art: ThemeArt = {
   estateFence(ctx, segments, accent) {
     drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
   },
+  decor: makeDecorArt(DECOR_STYLE),
 };
 
 export const SPACE_LEXICON: ThemeLexicon = {

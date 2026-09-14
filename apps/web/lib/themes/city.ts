@@ -55,6 +55,7 @@ import {
   type EstateStyle,
   type SignStyle,
 } from "./kit";
+import { makeDecorArt, type DecorStyle } from "./decor";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 const TAXI = "#facc15";
@@ -557,6 +558,22 @@ export const SIGN_STYLE: SignStyle = {
  * An estate: a city block. A civic plaque mount with a domed crest; a kerbed
  * pavement with bollards round the block.
  */
+export const DECOR_STYLE: DecorStyle = {
+  material: "civic",
+  wood: "#166534",
+  metal: "#27272a",
+  stone: "#a8a29e",
+  leaf: "#15803d",
+  bloom: "#fde047",
+  water: "#38bdf8",
+  light: "#fef3c7",
+  lightGlow: "rgba(254,243,199,0.7)",
+  cloth: "#1d4ed8",
+  trim: "#fafaf9",
+  paper: "#fafaf9",
+  spine: "#0f3d22",
+};
+
 export const ESTATE_STYLE: EstateStyle = {
   frame: "#0f3d22",
   frameEdge: "rgba(250,250,249,0.9)",
@@ -641,6 +658,7 @@ const art: ThemeArt = {
   estateFence(ctx, segments, accent) {
     drawEstateFence(ctx, segments, accent, ESTATE_STYLE);
   },
+  decor: makeDecorArt(DECOR_STYLE),
 };
 
 export const CITY_LEXICON: ThemeLexicon = {

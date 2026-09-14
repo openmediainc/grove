@@ -167,6 +167,50 @@ export function worldBounds(plots: number): PlotRect {
   };
 }
 
+/**
+ * Plot decor slots (#45): the only tiles of an 8x6 plot where an owner's decor
+ * may stand, as offsets from the plot's north corner. Numbered; a placement
+ * names a slot by its index, never by a coordinate.
+ *
+ * The plot building sits at (2..4, 1..3) with its door on the south face at
+ * (3, 4). Every slot is off the building, off the door tile and the tiles either
+ * side of it, and off the column running south from the door, so the way in is
+ * always clear. Resting agents never lie on a slot (motion.ts plotRestTiles),
+ * whether or not anything is placed there: where a body rests never depends on
+ * the decor. Pinned by protocol decor.test.ts.
+ *
+ *     dx: 0 1 2 3 4 5 6 7
+ *   dy0   . 0 . . . . 1 .
+ *   dy1   . . B B B . 2 .
+ *   dy2   3 . B B B . . 4
+ *   dy3   . . B B B . 5 .
+ *   dy4   . 6 . D . . . .
+ *   dy5   7 . . . . 8 . 9
+ */
+export const PLOT_DECOR_SLOTS: ReadonlyArray<{ readonly dx: number; readonly dy: number }> = [
+  { dx: 1, dy: 0 },
+  { dx: 6, dy: 0 },
+  { dx: 6, dy: 1 },
+  { dx: 0, dy: 2 },
+  { dx: 7, dy: 2 },
+  { dx: 6, dy: 3 },
+  { dx: 1, dy: 4 },
+  { dx: 0, dy: 5 },
+  { dx: 5, dy: 5 },
+  { dx: 7, dy: 5 },
+];
+
+/** The absolute tile of decor slot `slot` on a plot, or null for no such slot. */
+export function decorSlotTile(rect: PlotRect, slot: number): { x: number; y: number } | null {
+  const s = Number.isInteger(slot) ? PLOT_DECOR_SLOTS[slot] : undefined;
+  return s ? { x: rect.x0 + s.dx, y: rect.y0 + s.dy } : null;
+}
+
+/** True when a plot-relative offset is one of the decor slots. */
+export function isDecorSlotOffset(dx: number, dy: number): boolean {
+  return PLOT_DECOR_SLOTS.some((s) => s.dx === dx && s.dy === dy);
+}
+
 /** True when the tile belongs to the fixed civic core rather than a plot. */
 export function isCoreTile(tx: number, ty: number): boolean {
   return tx >= 0 && tx < MAP_COLS && ty >= 0 && ty < MAP_ROWS;
