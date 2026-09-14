@@ -75,7 +75,7 @@ muted, lines and accents, and type ×1.25.
 | surface-raised | #FFFFFF | #1B1E3A | #171A33 |
 | tint | #DCE6EE | #232748 | #20244A |
 | frost | rgb(246 249 251 / .94) | rgb(16 18 31 / .94) | rgb(10 11 22 / .96) |
-| frost-blur | rgb(246 249 251 / .8) | rgb(16 18 31 / .8) | rgb(10 11 22 / .86) |
+| frost-blur | rgb(246 249 251 / .88) | rgb(16 18 31 / .88) | rgb(10 11 22 / .86) |
 | ink | #0E1B2B | #E4E2F0 | #F4F3FA |
 | muted | #4A5A6C | #A9A6C0 | #C4C1DA |
 | line | #C9D4DD | #2A2E52 | #3A3F6A |
@@ -101,7 +101,7 @@ every day surface, so a chip may use them as text, not only as a tick.
 ### Contrast
 
 Every pair the chrome may use, worst case. Text needs **4.5:1**, marks and control borders **3:1**.
-Translucent `frost` is composited over both pure black and pure white (the map under it can be either)
+Translucent `frost` and `frost-blur` are composited over both pure black and pure white (the map under them can be either; blur does not lighten it)
 and the lower ratio is shown. `packages/ui/test/tokens-contrast.test.ts` fails the build if any pair
 drops below its minimum, and this table is regenerated from the same code (a test keeps it current).
 If a pair you need isn't listed, add it to `CONTRAST_PAIRS` and make it pass before using it.
@@ -117,36 +117,43 @@ notices use `danger-ink` for text and border, and hazard triangles carry their o
 | ink text on surface-raised | text | 4.5 | 17.35 | 12.71 | 15.46 |
 | ink text on tint | text | 4.5 | 13.71 | 11.29 | 13.48 |
 | ink text on frost | text | 4.5 | 14.36 | 12.66 | 16.47 |
+| ink text on frost-blur | text | 4.5 | 12.47 | 10.51 | 12.39 |
 | muted text on ground | text | 4.5 | 6.51 | 8.31 | 11.55 |
 | muted text on surface | text | 4.5 | 6.88 | 7.68 | 10.74 |
 | muted text on surface-raised | text | 4.5 | 7.07 | 6.88 | 9.73 |
 | muted text on tint | text | 4.5 | 5.59 | 6.12 | 8.49 |
 | muted text on frost | text | 4.5 | 5.85 | 6.86 | 10.36 |
+| muted text on frost-blur | text | 4.5 | 5.08 | 5.69 | 7.80 |
 | signal-text text on ground | text | 4.5 | 5.98 | 7.12 | 8.38 |
 | signal-text text on surface | text | 4.5 | 6.31 | 6.58 | 7.80 |
 | signal-text text on surface-raised | text | 4.5 | 6.49 | 5.89 | 7.06 |
 | signal-text text on tint | text | 4.5 | 5.13 | 5.24 | 6.16 |
 | signal-text text on frost | text | 4.5 | 5.37 | 5.87 | 7.52 |
+| signal-text text on frost-blur | text | 4.5 | 4.66 | 4.88 | 5.66 |
 | human text on ground | text | 4.5 | 5.89 | 11.09 | 12.93 |
 | human text on surface | text | 4.5 | 6.22 | 10.24 | 12.03 |
 | human text on surface-raised | text | 4.5 | 6.39 | 9.18 | 10.90 |
 | human text on tint | text | 4.5 | 5.05 | 8.16 | 9.50 |
 | human text on frost | text | 4.5 | 5.29 | 9.14 | 11.61 |
+| human text on frost-blur | text | 4.5 | 4.59 | 7.59 | 8.73 |
 | agent text on ground | text | 4.5 | 6.00 | 11.38 | 13.26 |
 | agent text on surface | text | 4.5 | 6.34 | 10.51 | 12.34 |
 | agent text on surface-raised | text | 4.5 | 6.51 | 9.42 | 11.18 |
 | agent text on tint | text | 4.5 | 5.15 | 8.38 | 9.75 |
 | agent text on frost | text | 4.5 | 5.39 | 9.39 | 11.90 |
+| agent text on frost-blur | text | 4.5 | 4.68 | 7.80 | 8.95 |
 | danger-ink text on ground | text | 4.5 | 6.06 | 7.09 | 8.86 |
 | danger-ink text on surface | text | 4.5 | 6.40 | 6.55 | 8.24 |
 | danger-ink text on surface-raised | text | 4.5 | 6.57 | 5.87 | 7.46 |
 | danger-ink text on tint | text | 4.5 | 5.20 | 5.22 | 6.51 |
 | danger-ink text on frost | text | 4.5 | 5.44 | 5.85 | 7.95 |
+| danger-ink text on frost-blur | text | 4.5 | 4.73 | 4.86 | 5.98 |
 | success text on ground | text | 4.5 | 5.99 | 10.74 | 12.50 |
 | success text on surface | text | 4.5 | 6.33 | 9.92 | 11.63 |
 | success text on surface-raised | text | 4.5 | 6.51 | 8.89 | 10.54 |
 | success text on tint | text | 4.5 | 5.14 | 7.90 | 9.19 |
 | success text on frost | text | 4.5 | 5.38 | 8.86 | 11.22 |
+| success text on frost-blur | text | 4.5 | 4.68 | 7.36 | 8.44 |
 | primary button label | text | 4.5 | 4.57 | 5.17 | 5.33 |
 | tooltip / inverted chip | text | 4.5 | 17.35 | 12.71 | 15.46 |
 | signal mark/border on ground | ui | 3 | 3.49 | 5.17 | 5.33 |

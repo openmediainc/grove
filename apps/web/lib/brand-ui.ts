@@ -23,7 +23,7 @@ const BUTTON_KIND: Record<ButtonKind, string> = {
   ghost:
     "border-transparent bg-transparent text-ink hover:bg-tint data-[force=hover]:bg-tint active:bg-line data-[force=active]:bg-line",
   danger:
-    "border-danger-ink bg-transparent text-danger-ink hover:bg-danger-ink/10 data-[force=hover]:bg-danger-ink/10 active:bg-danger-ink/20 data-[force=active]:bg-danger-ink/20",
+    "border-danger-ink bg-transparent text-danger-ink hover:bg-danger-ink/10 data-[force=hover]:bg-danger-ink/10 active:bg-danger-ink/15 data-[force=active]:bg-danger-ink/15",
 };
 
 const BUTTON_SIZE: Record<ButtonSize, string> = {

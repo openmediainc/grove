@@ -44,7 +44,7 @@
   --gh-tint: #DCE6EE;
   --gh-tint-rgb: 220 230 238;
   --gh-frost: rgb(246 249 251 / 0.94);
-  --gh-frost-blur: rgb(246 249 251 / 0.8);
+  --gh-frost-blur: rgb(246 249 251 / 0.88);
   --gh-ink: #0E1B2B;
   --gh-ink-rgb: 14 27 43;
   --gh-muted: #4A5A6C;
@@ -92,7 +92,7 @@
     --gh-tint: #232748;
     --gh-tint-rgb: 35 39 72;
     --gh-frost: rgb(16 18 31 / 0.94);
-    --gh-frost-blur: rgb(16 18 31 / 0.8);
+    --gh-frost-blur: rgb(16 18 31 / 0.88);
     --gh-ink: #E4E2F0;
     --gh-ink-rgb: 228 226 240;
     --gh-muted: #A9A6C0;
@@ -140,7 +140,7 @@
   --gh-tint: #DCE6EE;
   --gh-tint-rgb: 220 230 238;
   --gh-frost: rgb(246 249 251 / 0.94);
-  --gh-frost-blur: rgb(246 249 251 / 0.8);
+  --gh-frost-blur: rgb(246 249 251 / 0.88);
   --gh-ink: #0E1B2B;
   --gh-ink-rgb: 14 27 43;
   --gh-muted: #4A5A6C;
@@ -186,7 +186,7 @@
   --gh-tint: #232748;
   --gh-tint-rgb: 35 39 72;
   --gh-frost: rgb(16 18 31 / 0.94);
-  --gh-frost-blur: rgb(16 18 31 / 0.8);
+  --gh-frost-blur: rgb(16 18 31 / 0.88);
   --gh-ink: #E4E2F0;
   --gh-ink-rgb: 228 226 240;
   --gh-muted: #A9A6C0;
@@ -281,7 +281,7 @@
   --gh-tint: #232748;
   --gh-tint-rgb: 35 39 72;
   --gh-frost: rgb(16 18 31 / 0.94);
-  --gh-frost-blur: rgb(16 18 31 / 0.8);
+  --gh-frost-blur: rgb(16 18 31 / 0.88);
   --gh-ink: #E4E2F0;
   --gh-ink-rgb: 228 226 240;
   --gh-muted: #A9A6C0;

@@ -45,14 +45,14 @@ export const PAIR_MINIMUM: Readonly<Record<PairKind, number>> = { text: 4.5, ui:
 
 export type ContrastPair = { fg: ColorRole; bg: ColorRole; kind: PairKind; use: string };
 
-const TEXT_BGS: ColorRole[] = ["ground", "surface", "surface-raised", "tint", "frost"];
+const TEXT_BGS: ColorRole[] = ["ground", "surface", "surface-raised", "tint", "frost", "frost-blur"];
 const UI_BGS: ColorRole[] = ["ground", "surface", "surface-raised"];
 
 /**
  * Every foreground/background pair the chrome is allowed to use. If a pair
- * isn't listed, don't use it (DESIGN.md "Contrast"). `frost` is checked as
- * composited over pure black AND pure white, because the map under it can be
- * either.
+ * isn't listed, don't use it (DESIGN.md "Contrast"). `frost` and `frost-blur`
+ * are checked as composited over pure black AND pure white, because the map
+ * under them can be either (blur softens the map but does not lighten it).
  */
 export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   ...(["ink", "muted", "signal-text", "human", "agent", "danger-ink", "success"] as ColorRole[]).flatMap((fg) =>
