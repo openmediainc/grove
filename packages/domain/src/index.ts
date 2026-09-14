@@ -124,6 +124,22 @@ export {
   type SearchResults,
 } from "./services/search.js";
 export { MessageService, type MessageActor } from "./services/messages.js";
+export {
+  DiscoveryService,
+  DISCOVERY_CACHE_KEY,
+  DISCOVERY_CACHE_SECONDS,
+  DISCOVERY_SHELF_MAX,
+  DISCOVERY_SHELF_VISIBLE,
+  orderShelf,
+  orderArrivals,
+  plotScore,
+  watchScore,
+  plotCentre,
+  type Discovery,
+  type BusyPlot,
+  type WatchedAgent,
+  type ArrivalItem,
+} from "./services/discovery.js";
 export { AudienceService, AUDIENCE_CAP, AUDIENCE_BUCKET_SECONDS, isWatchToken } from "./services/audience.js";
 export {
   FlagService,
@@ -286,6 +302,7 @@ import { BoardService } from "./services/board.js";
 import { SupporterService } from "./services/supporters.js";
 import { FollowService } from "./services/follows.js";
 import { SearchService } from "./services/search.js";
+import { DiscoveryService } from "./services/discovery.js";
 import { MessageService } from "./services/messages.js";
 import { AudienceService } from "./services/audience.js";
 import { ReplayService } from "./services/replay.js";
@@ -333,6 +350,8 @@ export class GroveApp {
   follows: FollowService;
   /** `/` search across bodies, spaces and rooms, plus who is online (no private results). */
   search: SearchService;
+  /** Explore's shelves: busiest plots, most-watched agents, just arrived. Public listing, 60s kv cache. */
+  discovery: DiscoveryService;
   /** Agent trials on the Stage (040): posted tasks, entries, finish order, plot marks. */
   trials: TrialService;
   /** Stored cinematic sequences (042): public, unlisted, immutable camera paths. */
@@ -426,5 +445,6 @@ export class GroveApp {
     this.brains = new HostedBrainService(this.store, this.observe, this.speech, this.identity);
     this.usage = new UsageService(this.store);
     this.search = new SearchService(this.store, this.campus, () => this.world.minimap());
+    this.discovery = new DiscoveryService(this.store);
   }
 }

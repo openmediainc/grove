@@ -9,10 +9,13 @@ import { groupResults, jumpHref, resultPath, searchApiPath, type WireSearch } fr
 import { exploreOrder, spaceHref, suggestSlug, type DirectorySpace } from "@/lib/space-page";
 import { hasSignedInHint } from "@/lib/unread";
 import { GeoAvatar } from "@/components/Avatar";
+import { DiscoveryShelves } from "@/components/Discovery";
 import { roomHref } from "@/lib/world-url";
 
 /**
- * Explore: every space on the world, who is online right now, and Create space.
+ * Explore: the discovery shelves (Busiest plots, Most-watched agents, Just
+ * arrived; queue #40), every space on the world, who is online right now, and
+ * Create space.
  *
  * The directory is public and redacted by the server (listDirectory): a private
  * plot you are not inside comes back with no slug, name, owner or orgs, and is
@@ -82,6 +85,8 @@ export default function ExplorePage() {
       </div>
 
       {creating && signedIn ? <CreateSpace onClose={() => setCreating(false)} /> : null}
+
+      <DiscoveryShelves online={online} signedIn={signedIn} />
 
       <section className="mt-10">
         <h2 className="font-display text-2xl text-lantern-300">Online now</h2>

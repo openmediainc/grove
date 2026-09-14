@@ -131,6 +131,7 @@ export const REGISTER_IPS = {
   trialsRoutes: "10.99.19.2",
   board: "10.99.20.1",
   boardRoutes: "10.99.20.2",
+  discovery: "10.99.21.1",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */
