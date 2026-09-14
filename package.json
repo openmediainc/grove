@@ -18,6 +18,7 @@
     "test:soak": "bash infra/soak.sh",
     "test:units": "pnpm -r --filter './packages/**' test",
     "test:inhabitants": "python3 -m unittest discover -s infra/inhabitants -p 'test_*.py'",
-    "test:e2e": "pnpm --filter @grove/e2e test:e2e"
+    "test:e2e": "pnpm --filter @grove/e2e test:e2e",
+    "styleguide:shots": "pnpm --filter @grove/e2e styleguide:shots"
   }
 }

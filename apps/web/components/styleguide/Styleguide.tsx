@@ -44,6 +44,7 @@ import {
   type ButtonKind,
 } from "@/lib/brand-ui";
 import { TableFrame } from "@/components/ui";
+import { GALLERY_SHOTS } from "./gallery-shots";
 
 const MODE_LABEL: Record<Mode, string> = { light: "Light", night: "Night", tv: "TV" };
 
@@ -84,6 +85,7 @@ const SECTIONS = [
   ["map", "Over the map"],
   ["mark", "Mark"],
   ["phone", "390px"],
+  ["gallery", "Gallery"],
 ] as const;
 
 function Svg({ svg, className = "", label }: { svg: string; className?: string; label?: string }) {
@@ -688,6 +690,38 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
               </figure>
             ))}
           </div>
+        </Section>
+        <Section id="gallery" title="Gallery">
+          <p className="max-w-prose text-muted">
+            The live product, signed out, in light, night and TV at desktop and 390px. Map themes change the world art
+            only; every frame around it is brand chrome. Regenerate with{" "}
+            <code className="font-brand-mono text-gh-xs">pnpm styleguide:shots</code>.
+          </p>
+          {(
+            [
+              ["Desktop", "grid-cols-1 md:grid-cols-2", GALLERY_SHOTS.filter((s) => s.width >= 600)],
+              ["390px", "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4", GALLERY_SHOTS.filter((s) => s.width < 600)],
+            ] as const
+          ).map(([label, cols, shots]) => (
+            <div key={label} className="mt-6">
+              <h3 className={SECTION_TITLE_CLASS}>{label}</h3>
+              <ul className={`mt-3 grid gap-5 ${cols}`}>
+                {shots.map((shot) => (
+                  <li key={shot.src}>
+                    <figure className="grid gap-2">
+                      <a
+                        href={gp(shot.src)}
+                        className="block overflow-hidden rounded-gh-lg border border-line bg-surface-raised shadow-gh-1 focus-visible:outline-none focus-visible:shadow-gh-ring"
+                      >
+                        <img src={gp(shot.src)} alt={shot.alt} width={shot.width} height={shot.height} loading="lazy" decoding="async" className="h-auto w-full" />
+                      </a>
+                      <figcaption className={`${LABEL_CLASS} break-words`}>{shot.caption}</figcaption>
+                    </figure>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </Section>
       </div>
     </div>

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:e2e": "playwright test",
+    "styleguide:shots": "node scripts/styleguide-shots.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
