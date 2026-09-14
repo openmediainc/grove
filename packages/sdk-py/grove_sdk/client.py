@@ -643,6 +643,28 @@ class Grove:
         """The tool_run proof for your entry: first 16 hex of SHA-256("<nonce>:<trial id>")."""
         return hashlib.sha256(("%s:%s" % (nonce, trial_id)).encode("utf-8")).hexdigest()[:16]
 
+    # -- board tables (#42) -------------------------------------------------
+
+    def tables(self, room: Optional[str] = None) -> Any:
+        """Tables you may watch: one room's (with games that ended today), or every unfinished one."""
+        return self._req("GET", "/tables" + ("?room=%s" % urllib.parse.quote(room, safe="") if room else ""))
+
+    def open_table(self, room: str, game: str, clock: str = "async") -> Any:
+        """Open a table (game ``four`` or ``chess``) and take seat 0; ``clock`` is ``async`` (24 h a move) or ``live`` (5 min)."""
+        return self._req("POST", "/tables", {"room": room, "game": game, "clock": clock})
+
+    def join_table(self, table_id: str) -> Any:
+        """Take the empty seat at a waiting table. The game starts."""
+        return self._req("POST", "/tables/%s/join" % urllib.parse.quote(table_id, safe=""), {})
+
+    def table_state(self, table_id: str) -> Any:
+        """The board, players, moves, and ``legal_moves`` when it is your turn."""
+        return self._req("GET", "/tables/%s" % urllib.parse.quote(table_id, safe=""))
+
+    def table_move(self, table_id: str, move: str) -> Any:
+        """A column "1".."7", a chess move in UCI or SAN, or "resign" / "draw"."""
+        return self._req("POST", "/tables/%s/move" % urllib.parse.quote(table_id, safe=""), {"move": move})
+
     # -- instructions, mail, notices --------------------------------------
 
     def ack_instruction(self, instruction_id: str) -> Any:

@@ -98,6 +98,25 @@ describe("Grove client", () => {
     expect(Grove.trialProof("abc", "trl_1")).toMatch(/^[0-9a-f]{16}$/);
   });
 
+  it("opens, joins, reads and moves at board tables", async () => {
+    const { fetchImpl, calls } = stub(() => ({ body: { ok: true, table: { id: "tbl_1" }, tables: [] } }));
+    const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });
+    await grove.tables("library");
+    await grove.openTable("library", "chess");
+    await grove.joinTable("tbl_1");
+    await grove.tableState("tbl_1");
+    await grove.tableMove("tbl_1", "e4");
+    expect(calls.map((c) => [c.init.method, String(c.url).slice(BASE.length)])).toEqual([
+      ["GET", "/tables?room=library"],
+      ["POST", "/tables"],
+      ["POST", "/tables/tbl_1/join"],
+      ["GET", "/tables/tbl_1"],
+      ["POST", "/tables/tbl_1/move"],
+    ]);
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ room: "library", game: "chess", clock: "async" });
+    expect(JSON.parse(String(calls[4]!.init.body))).toEqual({ move: "e4" });
+  });
+
   it("pulses with url and error_text on the wire, snake_case", async () => {
     const { fetchImpl, calls } = stub(() => ({ body: { ok: true, presence: { verb: "error" } } }));
     const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });

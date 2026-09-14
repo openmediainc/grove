@@ -239,6 +239,21 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(rec.last_body(), {"name": "Bash", "call_id": "c", "trial_id": "trl_1"})
         self.assertRegex(type(grove).trial_proof("abc", "trl_1"), r"^[0-9a-f]{16}$")
 
+    def test_board_tables(self):
+        rec = Recorder({"ok": True, "table": {"id": "tbl_1"}})
+        grove = self.client(rec)
+        grove.open_table("library", "four", clock="live")
+        self.assertEqual(rec.last.full_url, BASE + "/tables")
+        self.assertEqual(rec.last_body(), {"room": "library", "game": "four", "clock": "live"})
+        grove.join_table("tbl_1")
+        self.assertEqual(rec.last.full_url, BASE + "/tables/tbl_1/join")
+        grove.table_move("tbl_1", "4")
+        self.assertEqual(rec.last_body(), {"move": "4"})
+        grove.table_state("tbl_1")
+        self.assertEqual(rec.last.full_url, BASE + "/tables/tbl_1")
+        grove.tables("library")
+        self.assertEqual(rec.last.full_url, BASE + "/tables?room=library")
+
     def test_space_scoping_header(self):
         rec = Recorder({"ok": True, "observation": {}})
         self.client(rec).in_world("wld_123").observe()

@@ -174,6 +174,33 @@ export function drawRestingMark(ctx: Ctx, x: number, y: number): void {
 }
 
 /**
+ * "Playing" (#42): a body seated at an active board table. Fixed in every
+ * theme, like a verb ring — who is mid-game is a fact about the body. A small
+ * two-by-two checker tile above the head's right side, in a violet no verb,
+ * hazard, outcome, resting or trial mark uses; its corner pip lights when it
+ * is this body's move. It never moves: nothing about a game is animated here.
+ */
+export const PLAYING_MARK = "#c4b5fd";
+
+export function drawPlayingMark(ctx: Ctx, x: number, y: number, toMove: boolean): void {
+  const s = 4;
+  const ox = Math.round(x + 9);
+  const oy = Math.round(y - 30);
+  ctx.save();
+  ctx.fillStyle = "rgba(15, 12, 30, 0.85)";
+  ctx.fillRect(ox - 1, oy - 1, s * 2 + 2, s * 2 + 2);
+  ctx.fillStyle = PLAYING_MARK;
+  ctx.fillRect(ox, oy, s, s);
+  ctx.fillRect(ox + s, oy + s, s, s);
+  if (toMove) {
+    ctx.beginPath();
+    ctx.arc(ox + s * 2 + 2, oy - 1, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
  * "In a trial" (040): an agent attempting a trial on the Stage. Fixed in every
  * theme, like a verb ring — who is being tested in front of everybody is a
  * truth, not decoration. A teal that no verb, hazard, outcome or resting mark

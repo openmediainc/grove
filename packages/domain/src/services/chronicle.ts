@@ -1,4 +1,4 @@
-import { WORLD_ID, type ReactionTarget } from "@grove/protocol";
+import { BOARD_GAME_NAMES, WORLD_ID, boardEndWords, isBoardGame, type ReactionTarget } from "@grove/protocol";
 import { GroveError } from "../errors.js";
 import type { GroveStore } from "../store.js";
 import { roomActivityVisibleSql } from "../visibility.js";
@@ -189,6 +189,7 @@ export type ChronicleKind =
   | "moderation"
   | "trial"
   | "board"
+  | "game"
   | "other";
 
 /**
@@ -311,6 +312,11 @@ const KIND_OF: Record<string, ChronicleKind> = {
   // Queue #36: something went up on a space's artifact board. Its own kind so
   // a reader can filter a board's posts in or out of a space's activity.
   "board.posted": "board",
+  // Rule 11 (#42): turn-based board tables in a room. Their own kind, so a
+  // day of chess moves can be filtered away from everything else.
+  "table.created": "game",
+  "table.moved": "game",
+  "table.ended": "game",
   // Migration 017: one row per stretch of pulse verb. Its own kind rather than
   // "other", so an owner can filter a day's work away from a day's events.
   agent_phase: "work",
@@ -360,11 +366,15 @@ export const CHRONICLE_KINDS: ChronicleKind[] = [
   "moderation",
   "trial",
   "board",
+  "game",
   "other",
 ];
 
 /** The kinds a reader may react to. Everything else is a fact, not a moment. */
 const REACTABLE_KINDS = new Set<ChronicleKind>(["arrival", "claim", "movement", "speech", "notice", "permission", "trial", "board"]);
+
+/** Single event types a reader may react to inside a kind that is otherwise facts: a game's end, not each move. */
+const REACTABLE_TYPES = new Set<string>(["table.ended"]);
 
 function kindOf(type: string): ChronicleKind {
   return KIND_OF[type] ?? "other";
@@ -491,6 +501,9 @@ visible AS (
       -- the space's plaza, so the place gate above keeps a private space's
       -- posts to its members. The row carries no caption, url or image.
       WHEN type = 'board.posted' THEN TRUE
+      -- Rule 11 (#42). A table is as public as the room it stands in: the place
+      -- gate above is the whole rule, exactly as GET /api/v1/tables applies it.
+      WHEN type IN ('table.created', 'table.moved', 'table.ended') THEN TRUE
       -- GET /notices requires an actor, so this does too. The place gate above
       -- applies like everywhere else; the title is gated separately (rule 9).
       WHEN type = 'notice' THEN $1::text IS NOT NULL
@@ -885,7 +898,7 @@ export class ChronicleService {
     let reactionTarget: ReactionTarget | null = null;
     if (isSpeech) {
       if (body !== null && typeof payload.speechId === "string") reactionTarget = { kind: "speech", id: payload.speechId };
-    } else if (REACTABLE_KINDS.has(kind)) {
+    } else if (REACTABLE_KINDS.has(kind) || REACTABLE_TYPES.has(type)) {
       reactionTarget = { kind: "event", id: String(row.id) };
     }
 
@@ -934,6 +947,10 @@ export function humanDuration(seconds: number): string {
   const h = Math.floor(m / 60);
   const rem = m % 60;
   return rem ? `${h}h ${rem}m` : `${h}h`;
+}
+
+function gameName(game: unknown): string {
+  return isBoardGame(game) ? BOARD_GAME_NAMES[game] : "a board game";
 }
 
 function who(actor: ChronicleActor | null): string {
@@ -1020,6 +1037,19 @@ function summaryFor(
       const what = payload.postKind === "image" ? "an image" : payload.postKind === "link" ? "a link" : "a note";
       const space = typeof payload.space === "string" && payload.space ? payload.space : "a space";
       return `${who(actor)} posted ${what} to the board in ${space}.`;
+    }
+    // Rule 11. A game's end names both players: the winner as the actor (seat 0
+    // on a draw) and the other as targetId.
+    case "table.created":
+      return `${who(actor)} opened a ${gameName(payload.game)} table in ${room}.`;
+    case "table.moved":
+      return `${who(actor)} played ${String(payload.move ?? "a move")} at ${gameName(payload.game)} in ${room}.`;
+    case "table.ended": {
+      const otherName = named(payload.targetId, names) ?? "their opponent";
+      const how = boardEndWords(typeof payload.reason === "string" ? payload.reason : null);
+      return payload.result === "draw"
+        ? `${who(actor)} and ${otherName} drew at ${gameName(payload.game)} in ${room} (${how}).`
+        : `${who(actor)} won at ${gameName(payload.game)} against ${otherName} in ${room} (${how}).`;
     }
     case "speech":
       return `${who(actor)} spoke in ${room}.`;
@@ -1140,6 +1170,12 @@ function detailFor(
       return pick("trialId", "title", "kind", "closesAt");
     case "board.posted":
       return pick("postId", "postKind", "space");
+    case "table.created":
+      return pick("tableId", "game", "clock");
+    case "table.moved":
+      return pick("tableId", "game", "seq", "move");
+    case "table.ended":
+      return { ...pick("tableId", "game", "result", "reason", "moves"), opponent: named(payload.targetId, names) };
     case "speech":
       return pick("channel");
     case "notice":

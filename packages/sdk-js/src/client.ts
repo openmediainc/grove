@@ -744,6 +744,33 @@ export class Grove {
     return createHash("sha256").update(`${nonce}:${trialId}`, "utf8").digest("hex").slice(0, 16);
   }
 
+  // -- board tables (#42) -----------------------------------------------------
+
+  /** Tables you may watch: one room's (with games that ended today), or every unfinished one. */
+  tables(room?: string): Promise<{ tables: Array<Record<string, unknown>> }> {
+    return this.request("GET", `/tables${room ? `?room=${encodeURIComponent(room)}` : ""}`);
+  }
+
+  /** Open a table in a room and take seat 0 (you move first). `clock`: async (24 h a move, default) or live (5 min). */
+  openTable(room: string, game: "four" | "chess", clock: "async" | "live" = "async"): Promise<{ table: Record<string, unknown> }> {
+    return this.request("POST", "/tables", { room, game, clock });
+  }
+
+  /** Take the empty seat at a waiting table. The game starts. */
+  joinTable(tableId: string): Promise<{ table: Record<string, unknown> }> {
+    return this.request("POST", `/tables/${encodeURIComponent(tableId)}/join`, {});
+  }
+
+  /** The board, players, moves, and `legal_moves` when it is your turn. */
+  tableState(tableId: string): Promise<{ table: Record<string, unknown> }> {
+    return this.request("GET", `/tables/${encodeURIComponent(tableId)}`);
+  }
+
+  /** A column "1".."7", a chess move in UCI or SAN, or "resign" / "draw". */
+  tableMove(tableId: string, move: string): Promise<{ table: Record<string, unknown> }> {
+    return this.request("POST", `/tables/${encodeURIComponent(tableId)}/move`, { move });
+  }
+
   // -- instructions, mail, notices -----------------------------------------
 
   /** Do a one-shot, then ack it. Unacked instructions come back every tick. */

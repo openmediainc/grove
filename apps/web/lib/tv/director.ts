@@ -19,7 +19,7 @@
  */
 import { describeToolCall, type ToolCallView } from "@grove/protocol";
 
-export type TvShotKind = "hazard" | "trial" | "burst" | "conversation" | "arrival" | "stage" | "working" | "idle" | "wide";
+export type TvShotKind = "hazard" | "trial" | "burst" | "conversation" | "arrival" | "stage" | "game" | "working" | "idle" | "wide";
 
 export type TvHazard = "flag" | "fault" | "stall" | null;
 
@@ -48,12 +48,28 @@ export interface TvWords {
   regionTitle: (region: string) => string;
   /** The theme's phrase for an agent attempting a trial ("in a trial on the Stage"). */
   inTrial?: string;
+  /** The theme's phrase for where a board game is played ("at a tavern table"). */
+  atTable?: string;
 }
 
 /** The open trial on the Stage (040): its title, and progress per entrant id. */
 export interface TvTrial {
   title: string;
   entrants: ReadonlyMap<string, { ticks: number; finished: boolean }>;
+}
+
+/**
+ * A moment at a board table (#42): a check, or a game's end, in the last
+ * minute. Low priority: worth a look when nothing louder is going on.
+ */
+export interface TvGame {
+  key: string;
+  /** The body to follow: who just gave check, or the winner (seat 0 on a draw). */
+  actorId: string;
+  otherId: string | null;
+  gameName: string;
+  /** "gave check (Qh5+)", "won (checkmate)", "drew (stalemate)". */
+  words: string;
 }
 
 export interface TvShot {
@@ -99,6 +115,8 @@ const SCORE = {
   arrival: 45,
   stage: 40,
   line: 35,
+  /** A check or a game's end at a board table: below talk, above quiet work. */
+  game: 30,
   working: 20,
   pondering: 14,
   fading: 10,
@@ -168,7 +186,14 @@ export class TvDirector {
   }
 
   /** Everything worth a look right now, best first. Always ends with the wide shot. */
-  candidates(actors: readonly TvActor[], stage: TvStage | null, words: TvWords, now: number, trial: TvTrial | null = null): TvShot[] {
+  candidates(
+    actors: readonly TvActor[],
+    stage: TvStage | null,
+    words: TvWords,
+    now: number,
+    trial: TvTrial | null = null,
+    games: readonly TvGame[] = [],
+  ): TvShot[] {
     const out: TvShot[] = [];
     const byId = new Map(actors.map((a) => [a.id, a]));
     const where = (a: TvActor) => words.regionTitle(a.region);
@@ -288,6 +313,14 @@ export class TvDirector {
       });
     }
 
+    // Board tables (#42): only bodies on the map, so a caption never names someone the map does not show.
+    for (const g of games) {
+      const a = byId.get(g.actorId);
+      if (!a) continue;
+      const other = g.otherId ? byId.get(g.otherId) : undefined;
+      out.push(shot(g.key, "game", a, `${a.name} ${g.words} at ${g.gameName}${other ? ` against ${other.name}` : ""}, ${words.atTable ?? "at a table"} in ${where(a)}`, SCORE.game));
+    }
+
     const awake = actors.filter((a) => !a.fading && a.verb !== "idle" && a.verb !== "offline").length;
     out.push({
       key: "wide",
@@ -314,10 +347,11 @@ export class TvDirector {
     words: TvWords;
     holdScale?: number;
     trial?: TvTrial | null;
+    games?: readonly TvGame[];
   }): TvShot {
     const { now } = input;
     const scale = input.holdScale ?? 1;
-    const cands = this.candidates(input.actors, input.stage, input.words, now, input.trial ?? null);
+    const cands = this.candidates(input.actors, input.stage, input.words, now, input.trial ?? null, input.games ?? []);
     const cur = this.current;
     const live = cur ? cands.find((c) => c.key === cur.key) : undefined;
     const eligible = cands.filter((c) => c.key !== cur?.key && !((this.cooldown.get(c.key) ?? 0) > now));

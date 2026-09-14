@@ -132,6 +132,8 @@ export const REGISTER_IPS = {
   board: "10.99.20.1",
   boardRoutes: "10.99.20.2",
   discovery: "10.99.21.1",
+  tables: "10.99.22.1",
+  tablesRoutes: "10.99.22.2",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */
@@ -354,6 +356,13 @@ function cleanupSteps(s: SweepScope): Array<[string, unknown[]]> {
     [`DELETE FROM world_events WHERE type LIKE 'trial.%'
         AND payload->>'trialId' IN (SELECT id FROM trials WHERE created_by = ANY($1::text[]))`, [humanIds]],
     [`DELETE FROM trials WHERE created_by = ANY($1::text[])`, [humanIds]],
+    // Board tables (#42) opened or played by these actors, or standing in their
+    // rooms, with their ledger rows (moves cascade from the table).
+    [`DELETE FROM world_events WHERE type LIKE 'table.%'
+        AND payload->>'tableId' IN (SELECT id FROM board_tables WHERE created_by = ANY($1::text[])
+          OR seat0_id = ANY($1::text[]) OR seat1_id = ANY($1::text[]) OR room_id = ANY($2::text[]))`, [actorIds, roomIds]],
+    [`DELETE FROM board_tables WHERE created_by = ANY($1::text[]) OR seat0_id = ANY($1::text[])
+        OR seat1_id = ANY($1::text[]) OR room_id = ANY($2::text[])`, [actorIds, roomIds]],
     [`UPDATE invite_codes SET redeemed_by = NULL, redeemed_at = NULL WHERE redeemed_by = ANY($1::text[])`, [humanIds]],
     [`DELETE FROM agents WHERE id = ANY($1::text[])`, [agentIds]],
     [`DELETE FROM stage_events WHERE world_id = ANY($1::text[]) OR room_id = ANY($2::text[])`, [worldIds, roomIds]],

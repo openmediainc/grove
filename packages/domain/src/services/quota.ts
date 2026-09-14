@@ -302,6 +302,21 @@ export class QuotaService {
   }
 
   /**
+   * Board moves (#42): moves, resignations and draw offers at tables. 30 a
+   * minute per actor across every table — a live game needs a handful, and a
+   * loop hammering a board stops here. Its own bucket: playing never charges
+   * room_say, so a move never silences a line.
+   */
+  async consumeTableMove(actorId: string): Promise<void> {
+    const limit = 30;
+    const key = `ratelimit:${actorId}:table_move:min`;
+    const n = await this.limiter.incr(key, 60);
+    if (n > limit) {
+      await this.refuse("table_move", key, limit, n, 60_000, "Table move limiter exhausted (30 a minute).");
+    }
+  }
+
+  /**
    * Usage reports (migration 024). A runtime reports once per turn, or once
    * per model per turn when it batches; 30 requests a minute is a busy agent
    * with room to spare, and refuses only a loop reporting per token.

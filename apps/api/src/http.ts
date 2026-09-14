@@ -166,6 +166,7 @@ async function deriveTable(): Promise<RateLimitTable> {
   const usage = await probe((quota) => quota.consumeUsage(PROBE_ACTOR));
   const trialSubmit = await probe((quota) => quota.consumeTrialSubmission(PROBE_ACTOR, "trl_probe"));
   const boardPost = await probe((quota) => quota.consumeBoardPost(PROBE_ACTOR, "wld_probe"));
+  const tableMove = await probe((quota) => quota.consumeTableMove(PROBE_ACTOR));
 
   const bucket = (
     name: string,
@@ -218,6 +219,7 @@ async function deriveTable(): Promise<RateLimitTable> {
       boardPost.gapSeconds,
       "POST /spaces/:id/board, MCP board_post (per poster, and per space across every poster)",
     ),
+    bucket("table_move", tableMove.windows, tableMove.gapSeconds, "POST /tables/:id/move|resign|draw, MCP table_move (per actor, all tables)"),
     bucket("register", register.windows, register.gapSeconds, "POST /agents/register, per IP"),
     bucket("join_request", joinRequest.windows, joinRequest.gapSeconds, "POST /worlds/:id/join-requests"),
     bucket(
@@ -266,6 +268,12 @@ const ROUTE_BUCKETS: Record<string, string[]> = {
   "POST /api/v1/trials/:id/submit": ["trial_submit"],
   // Entering charges the write limiter, once per new entry.
   "POST /api/v1/trials/:id/enter": ["write", "write_new"],
+  "POST /api/v1/tables/:id/move": ["table_move"],
+  "POST /api/v1/tables/:id/resign": ["table_move"],
+  "POST /api/v1/tables/:id/draw": ["table_move"],
+  // Opening a table and taking a seat charge the write limiter.
+  "POST /api/v1/tables": ["write", "write_new"],
+  "POST /api/v1/tables/:id/join": ["write", "write_new"],
   "POST /api/v1/world/join": ["move"],
   "POST /api/v1/world/enter": ["enter"],
   "POST /api/v1/rooms/:slug/enter": ["move"],

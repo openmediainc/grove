@@ -136,7 +136,8 @@ describe("signboard marks", () => {
       expect(lex.marks.week_streak).toBeTruthy();
       expect(lex.marks.trial).toBeTruthy();
       expect(lex.inTrial).toBeTruthy();
-      expect(`${lex.marks.heading} ${lex.marks.thousand_calls} ${lex.marks.week_streak} ${lex.marks.trial} ${lex.inTrial}`).not.toMatch(/points|rank|score|level|prize|winner/i);
+      expect(lex.atTable).toBeTruthy();
+      expect(`${lex.marks.heading} ${lex.marks.thousand_calls} ${lex.marks.week_streak} ${lex.marks.trial} ${lex.inTrial} ${lex.atTable}`).not.toMatch(/points|rank|score|level|prize|winner/i);
     }
   });
 });

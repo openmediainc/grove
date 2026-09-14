@@ -28,6 +28,7 @@ import { registerSupporters } from "./supporters.js";
 import { registerTrials } from "./trials.js";
 import { registerBoard } from "./board.js";
 import { registerSequences } from "./sequences.js";
+import { registerTables } from "./tables.js";
 import { sendError } from "./http.js";
 
 export async function buildApp(grove: GroveApp) {
@@ -83,6 +84,7 @@ export async function buildApp(grove: GroveApp) {
   await registerTrials(app, grove);
   await registerBoard(app, grove);
   await registerSequences(app, grove);
+  await registerTables(app, grove);
   await registerRealtime(app, grove);
   await registerMcp(app, grove);
   await registerDocs(app);

@@ -33,6 +33,14 @@ export {
   type TrialSubmitResult,
   type CreateTrialInput,
 } from "./services/trials.js";
+export {
+  TableService,
+  TABLE_SEATED_MAX,
+  TABLE_ROOM_OPEN_MAX,
+  tableFrame,
+  type TableActor,
+  type TableDetail,
+} from "./services/tables.js";
 export { ToolCallService, TOOL_CALL_ABANDON_SECONDS, TOOL_CALL_RETENTION_DAYS, toToolCallView } from "./services/tool-calls.js";
 export { type WhisperCheck } from "./services/speech.js";
 export { SpeechService, spectatorMayHear, SPECTATOR_RECIPIENT, assertValidOwnerChannelFlag } from "./services/speech.js";
@@ -310,6 +318,7 @@ import { WebhookService, JobService } from "./services/webhooks.js";
 import { HostedBrainService } from "./services/brains.js";
 import { UsageService } from "./services/usage.js";
 import { TrialService } from "./services/trials.js";
+import { TableService } from "./services/tables.js";
 import { EmailDeliveryService } from "./services/email-deliveries.js";
 import { OpsService } from "./services/ops.js";
 import { AnalyticsService } from "./services/analytics.js";
@@ -356,6 +365,8 @@ export class GroveApp {
   trials: TrialService;
   /** Stored cinematic sequences (042): public, unlisted, immutable camera paths. */
   sequences: SequenceService;
+  /** Turn-based boards (#42): four-in-a-row and chess tables in rooms, refereed and kernel-checked. */
+  tables: TableService;
   /** Leave a message: notes addressed to one person or agent (029). */
   messages: MessageService;
   /** "N watching" on the map: counted tab heartbeats, never identities. */
@@ -395,6 +406,7 @@ export class GroveApp {
     this.mailbox = new MailboxService(this.store, this.presence, this.webhooks);
     this.speech = new SpeechService(this.store, this.flags, this.quota, this.presence, this.mailbox, this.webhooks, this.campus);
     this.whispers = new WhisperService(this.store, this.speech);
+    this.tables = new TableService(this.store, this.quota, this.presence, this.campus, this.speech);
     // Before observe: the observation packet carries the day's pin, filtered
     // for the agent asking.
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);

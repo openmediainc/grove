@@ -690,6 +690,7 @@ export const SPACE_LEXICON: ThemeLexicon = {
   resting: "docked, powered down",
   estate: { label: "Station", plots: "modules" },
   inTrial: "on a trial run at the Comms Array",
+  atTable: "at the rec-deck board",
   district: { heading: "Sectors", names: ["Inner Orbit", "Dock Ring", "Habitat Ring", "Relay Ring", "Cargo Belt", "Outer Belt", "Deep Reach"] },
   construction: "fabricating",
   bell: { faulted: "faulted", stalled: "stalled", fading: "losing signal", idle: "idle crew", allBusy: "all crew at stations" },

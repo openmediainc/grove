@@ -17,6 +17,7 @@ import {
 import { RefusalNotice, toRefusalInput } from "@/components/RefusalNotice";
 import { RoomSignpost, type SignpostRoom } from "@/components/RoomSignpost";
 import { StageTrial } from "@/components/StageTrial";
+import { RoomTables } from "@/components/RoomTables";
 import {
   CIVIC_CORE_WORLD_ID,
   RoomPresence,
@@ -156,6 +157,8 @@ export function RoomDrawer(props: RoomDrawerProps) {
   const [whispers, setWhispers] = useState<WhisperLine[]>([]);
   const [sending, setSending] = useState(false);
   const [socketLive, setSocketLive] = useState(false);
+  /** Bumped by a `table_update` frame on the room socket: the tables section re-reads (#42). */
+  const [tableTick, setTableTick] = useState(0);
 
   const asSpectator = signedIn === false || spectator;
 
@@ -268,6 +271,10 @@ export function RoomDrawer(props: RoomDrawerProps) {
         ws.onmessage = (ev) => {
           try {
             const msg = JSON.parse(String(ev.data)) as { type?: string; body?: string; sender_id?: string; sender_kind?: string; speech_id?: string; room_id?: string };
+            if (msg.type === "table_update") {
+              setTableTick((n) => n + 1);
+              return;
+            }
             if (msg.type === "reaction_counts") {
               const f = msg as { target_kind?: string; target_id?: string; counts?: unknown };
               if (f.target_kind !== "speech" || !f.target_id) return;
@@ -698,6 +705,9 @@ export function RoomDrawer(props: RoomDrawerProps) {
           <RoomSignpost room={signpostRoom} now={here} />
         </div>
         {slug === "stage" ? <StageTrial signedIn={signedIn} /> : null}
+        {data?.room.kind === "owner_lounge" || slug.startsWith("lounge") ? null : (
+          <RoomTables roomKey={data?.room.id ?? slug} roomTitle={title} signedIn={signedIn} meId={me?.id ?? null} tick={tableTick} />
+        )}
 
         {asSpectator ? (
           <SpectatorRoom title={title} publicView={publicView} signInHref={signInHref} />

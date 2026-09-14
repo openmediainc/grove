@@ -24,3 +24,5 @@ export * from "./trials.js";
 export * from "./districts.js";
 export * from "./board.js";
 export * from "./sequences.js";
+export * from "./chess.js";
+export * from "./boards.js";

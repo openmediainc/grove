@@ -31,8 +31,9 @@ import { gp } from "@/lib/base";
 import { themedAccess } from "@/lib/access";
 import { MotionDirector, mergeSpan, spanFromWire, OUTCOME_MARK_MS, type BodyFrame } from "@/lib/motion/director";
 import { bodyScreenRect, clearCentre, holeRuns, hoverCardSpot, type Rect as LayerRect } from "@/lib/layering";
-import { drawOutcomeMark, drawRestingMark, drawStanceMark, drawTrialRing, drawWorkBar, RESTING_MARK_COLOUR, scaffoldStageFor } from "@/lib/motion/marks";
+import { drawOutcomeMark, drawPlayingMark, drawRestingMark, drawStanceMark, drawTrialRing, drawWorkBar, RESTING_MARK_COLOUR, scaffoldStageFor } from "@/lib/motion/marks";
 import { useTrialStage } from "@/components/useTrialStage";
+import { usePlayingTables } from "@/components/usePlayingTables";
 import { restingBodies, type RestingBody, type RestingWire } from "@/lib/resting";
 import { SpeechBook, markRect, paintSpeech, speechPainter } from "@/lib/speech-render";
 import {
@@ -938,6 +939,8 @@ export function WorldMap() {
   const tvStageRef = useRef<TvStage | null>(null);
   /** The open trial on the Stage (040): trial rings on entrants, and a TV shot. */
   const trialRef = useTrialStage();
+  /** Bodies at board tables (#42): the "playing" glyph, and TV's game moments. */
+  const playingRef = usePlayingTables();
   /** The shot the camera was last pointed at; null = point it again (after a person let go). */
   const tvAppliedRef = useRef<string | null>(null);
   const tvLastStepRef = useRef(0);
@@ -2818,6 +2821,8 @@ export function WorldMap() {
           x: number;
           y: number;
           alpha: number;
+          /** At an active board table (#42): the fixed checker tile, lit when it is this body's move. */
+          playing?: { toMove: boolean } | null;
           verb: Actor["verb"] | null;
           workSpan: BodyFrame["span"];
           mark: BodyFrame["mark"];
@@ -3014,7 +3019,8 @@ export function WorldMap() {
               // The verb glyph and the motion marks are things you READ, so
               // they leave the depth list for the top pass (#52): a building
               // in front, the hour's grade and a signboard never cover them.
-              marks.push({ x, y, alpha, verb: held ? null : a.verb, workSpan, mark, stance: stance ?? null });
+              const playing = replay.view.active ? null : playingRef.current.marks.get(a.id) ?? null;
+              marks.push({ x, y, alpha, verb: held ? null : a.verb, workSpan, mark, stance: stance ?? null, playing });
             },
           });
           // Speech leaves the depth list. It used to be painted inside the
@@ -3304,6 +3310,7 @@ export function WorldMap() {
             if (m.workSpan && z >= LOD_DRESSING) drawWorkBar(ctx, m.workSpan, m.x, m.y, t, reduceMotion.matches);
             if (m.mark) drawOutcomeMark(ctx, m.mark.outcome, m.x, m.y, (markNow - m.mark.at) / OUTCOME_MARK_MS, reduceMotion.matches);
             if (m.stance && z >= LOD_LABELS) drawStanceMark(ctx, m.stance, m.x, m.y);
+            if (m.playing && z >= LOD_LABELS) drawPlayingMark(ctx, m.x, m.y, m.playing.toMove);
             ctx.restore();
           }
         }
@@ -3553,9 +3560,10 @@ export function WorldMap() {
             now: nowMs,
             actors: tvActors,
             stage: tvStageRef.current,
-            words: { regionTitle: (r) => regionTitle(chosenRef.current, r), inTrial: chosenRef.current.lexicon.inTrial },
+            words: { regionTitle: (r) => regionTitle(chosenRef.current, r), inTrial: chosenRef.current.lexicon.inTrial, atTable: chosenRef.current.lexicon.atTable },
             holdScale: reduceMotion.matches ? 2 : 1,
             trial: trialRef.current.tv,
+            games: playingRef.current.games(nowMs),
           });
           const paused = nowMs <= kioskYieldRef.current;
           if (paused) {

@@ -358,6 +358,11 @@ export interface ThemeLexicon {
    */
   inTrial: string;
   /**
+   * Where a board game (#42) is played, for the TV caption ("at a tavern
+   * table"). The "playing" glyph over a seated body is fixed, like a verb ring.
+   */
+  atTable: string;
+  /**
    * Districts (#38): the rings of the plot spiral, inside out. `names` has 6–8
    * entries; beyond the end they cycle with a numeral ("Hearth Ring II", see
    * `@grove/protocol` districts.ts). `heading` titles them in Go to ▾.

@@ -41,6 +41,8 @@ export const ID_PREFIX = {
   boardPost: "bpo_",
   /** A stored camera sequence (042). Public, unlisted, immutable. */
   sequence: "seq_",
+  /** A turn-based board table in a room (#42). */
+  table: "tbl_",
 } as const;
 
 export function isHumanId(id: string): id is HumanId {

@@ -97,6 +97,7 @@ export const KIND_ORDER = [
   "moderation",
   "trial",
   "board",
+  "game",
   "other",
 ];
 
@@ -118,6 +119,8 @@ const KIND_COPY: Record<string, KindCopy> = {
   trial: { label: "trials", plural: (n) => `${n} trial moments on the Stage`, tint: "border-teal-400/40 text-teal-200" },
   // The artifact board on a space's page (041).
   board: { label: "board", plural: (n) => `${n} board posts`, tint: "border-sky-400/40 text-sky-200" },
+  // Board tables (#42): moves and game ends, as public as the room the table stands in.
+  game: { label: "games", plural: (n) => `${n} board game moments`, tint: "border-violet-300/40 text-violet-200" },
   other: { label: "other", plural: (n) => `${n} other events`, tint: "border-white/15 text-white/50" },
 };
 

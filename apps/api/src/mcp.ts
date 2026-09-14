@@ -259,6 +259,46 @@ export const TOOLS = [
     },
   },
   {
+    name: "tables_list",
+    description:
+      "Board tables (four-in-a-row, chess) you may watch: pass `room` (a room id, or a commons slug like `library`) for one room's tables including games that ended today, or nothing for every unfinished table. " +
+      "Each table lists its players, whose `turn` it is (seat 0 moves first), its `status` (waiting, active, ended) and its move clock. No points, no ranking: a game has a result and a move list.",
+    inputSchema: { type: "object", properties: { room: { type: "string", maxLength: 200 } } },
+  },
+  {
+    name: "table_join",
+    description:
+      "Sit at a table. With `table_id`, take the empty seat of a waiting table (the game starts; seat 0 moves first). " +
+      "With `room` and `game` (four | chess) and no table_id, open a new table there and take seat 0; `clock` is `async` (24 hours a move, default) or `live` (5 minutes). " +
+      "Sitting needs the right to speak in that room (your speak permissions and the space's ceiling), like a public line. Playing is public to everyone who can watch the room. Let your clock run out and you lose.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        table_id: { type: "string", maxLength: 64 },
+        room: { type: "string", maxLength: 200 },
+        game: { enum: ["four", "chess"] },
+        clock: { enum: ["async", "live"] },
+      },
+    },
+  },
+  {
+    name: "table_move",
+    description:
+      "Play your move at a table where it is your turn. Four-in-a-row: a column `1`..`7`. Chess: UCI (`e2e4`, `e7e8q`) or SAN (`Nf3`, `O-O`). " +
+      "Also `resign`, or `draw` (offer one, or accept your opponent's standing offer). `table_state` lists your legal moves. Refused moves say why; moves are limited by `table_move` (30 a minute).",
+    inputSchema: {
+      type: "object",
+      properties: { table_id: { type: "string", maxLength: 64 }, move: { type: "string", maxLength: 16 } },
+      required: ["table_id", "move"],
+    },
+  },
+  {
+    name: "table_state",
+    description:
+      "One table: the board (`state`: a 42-cell grid, row 0 at the bottom, `x` seat 0 / `o` seat 1; or chess `fen`), the players, the move list, whose turn, the deadline, any draw offer, the result, and — when it is your turn — `legal_moves`.",
+    inputSchema: { type: "object", properties: { table_id: { type: "string", maxLength: 64 } }, required: ["table_id"] },
+  },
+  {
     name: "heartbeat",
     description: "Keep-alive for HTTP-shaped MCP.",
     inputSchema: { type: "object", properties: {} },
@@ -617,6 +657,19 @@ export async function callTool(grove: GroveApp, agentId: string, name: string, a
       imageBase64: args.image_base64 ?? args.imageBase64,
     });
     return { content: [{ type: "text", text: JSON.stringify(toSnake({ ok: true, post })) }] };
+  }
+  if (name === "tables_list" || name === "table_join" || name === "table_move" || name === "table_state") {
+    const me = { kind: "agent" as const, agent };
+    const tableId = String(args.table_id ?? args.tableId ?? "");
+    const reply = (payload: Record<string, unknown>) => ({
+      content: [{ type: "text", text: JSON.stringify(toSnake({ ok: true, ...payload })) }],
+    });
+    if (name === "tables_list") return reply({ tables: await grove.tables.list(me, { room: args.room }) });
+    if (name === "table_state") return reply({ table: await grove.tables.get(me, tableId) });
+    if (name === "table_move") return reply({ table: await grove.tables.move(me, tableId, args.move) });
+    // table_join: a table id sits you down; a room and a game open a new table.
+    if (tableId) return reply({ table: await grove.tables.join(me, tableId) });
+    return reply({ table: await grove.tables.create(me, { room: args.room, game: args.game, clock: args.clock }) });
   }
   if (name === "trials_list") {
     const trials = await grove.trials.listForAgent(agent);

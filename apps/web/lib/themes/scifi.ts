@@ -736,6 +736,7 @@ export const SCIFI_LEXICON: ThemeLexicon = {
   resting: "standby at home node",
   estate: { label: "Compound", plots: "nodes" },
   inTrial: "executing a Holo Stage trial",
+  atTable: "at a holo-board",
   district: { heading: "Wards", names: ["Neon Ward", "Grid Ring", "Circuit Ward", "Relay Sector", "Datastream Belt", "Fringe", "Void Edge"] },
   construction: "compiling",
   bell: { faulted: "faulted", stalled: "stalled", fading: "fading", idle: "idle units", allBusy: "all units running" },
