@@ -219,13 +219,15 @@ describe.skipIf(!hasDb)("MCP parity tools", () => {
     expect(board.body).toMatchObject({ ok: true, posts: [], can_post: true, space: { id: study.id } });
     expect((await tool(me.key, "board_list", { space: vault.id })).body.error.code).toBe("NOT_FOUND");
 
-    // search reads as the owner: the owner's space is found, a stranger's private one never.
+    // search reads as the owner: the owner's private space is found, a stranger's private one never.
     await clearActorLimiters(redis, me.id);
-    const found = await tool(me.key, "search", { q: `Study ${t}` });
+    const den = await space(owner, "Den", "private");
+    const found = await tool(me.key, "search", { q: `Den ${t}` });
     expect(found.isError).toBe(false);
-    expect(found.text).toContain(study.id);
+    expect(found.body.spaces).toEqual([expect.objectContaining({ slug: den.slug, is_member: true })]);
     const hidden = await tool(me.key, "search", { q: `Vault ${t}` });
-    expect(hidden.text).not.toContain(vault.id);
+    expect(hidden.body.spaces).toEqual([]);
+    expect(hidden.text).not.toContain(vault.slug);
 
     const explore = await tool(me.key, "explore");
     expect(explore.isError).toBe(false);
