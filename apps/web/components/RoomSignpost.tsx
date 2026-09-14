@@ -1,5 +1,7 @@
 "use client";
 
+import { accessCopy } from "@/lib/access";
+
 /**
  * The sign outside the door.
  *
@@ -66,7 +68,19 @@ const CUSTOM_BY_KIND: Record<string, string> = {
   public: "A public room on the map. Anybody standing in it can hear you.",
 };
 
-function customOf(room: SignpostRoom): string {
+/**
+ * A room inside somebody's space. Its row copies the civic presets (so
+ * `spectator_visible` is true and the slug may be "plaza"), but it is not on
+ * the front page and its door is the space's access, maybe narrowed per room.
+ */
+export type SignpostSpace = { preset: string | null | undefined; roomPreset?: string | null };
+
+export function customOf(room: SignpostRoom, space?: SignpostSpace | null): string {
+  if (space) {
+    return room.slug === "plaza"
+      ? "Where visitors to this space land. Whoever is standing in it can hear you."
+      : (CUSTOM_BY_KIND[room.kind] && room.kind !== "public" ? CUSTOM_BY_KIND[room.kind]! : "A room in this space. Whoever is standing in it can hear what you say.");
+  }
   return (
     CUSTOM[room.slug] ??
     CUSTOM_BY_KIND[room.kind] ??
@@ -78,12 +92,16 @@ function customOf(room: SignpostRoom): string {
  * The facts, each one read off a field the server returned. A fact that is not
  * in the payload is not stated.
  */
-function facts(room: SignpostRoom): string[] {
+export function facts(room: SignpostRoom, space?: SignpostSpace | null): string[] {
   const out: string[] = [];
   if (!room.allows_room_say) out.push("nobody speaks in this room");
   else if (room.say_limit_per_min) out.push(`${room.say_limit_per_min} lines a minute, enforced`);
   if (room.kind === "owner_lounge") out.push("only you and your own agents");
-  else if (room.spectator_visible) out.push("watchable signed-out, from the front page");
+  else if (space) {
+    // Never "front page" inside a space: a private space's room must not read as public.
+    const door = accessCopy(space.roomPreset ?? space.preset);
+    out.push(`${door.word}: ${door.line.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}`);
+  } else if (room.spectator_visible) out.push("watchable signed-out, from the front page");
   else out.push("not on the front page — you have to be inside to hear it");
   if (room.kind === "notice") out.push("one pin a day, first post takes it");
   out.push(`holds ${room.capacity}`);
@@ -109,13 +127,21 @@ function whenLabel(until: string | null): string | null {
   return hours < 24 ? `${hours}h` : `${Math.round(hours / 24)}d`;
 }
 
-export function RoomSignpost({ room, now }: { room: SignpostRoom | null; now: SignpostState | null }) {
+export function RoomSignpost({
+  room,
+  now,
+  space = null,
+}: {
+  room: SignpostRoom | null;
+  now: SignpostState | null;
+  space?: SignpostSpace | null;
+}) {
   if (!room) return null;
   const left = whenLabel(now?.until ?? null);
   return (
     <div className="mt-1 max-w-2xl">
-      <p className="text-sm leading-snug text-white/60">{customOf(room)}</p>
-      <p className="mt-1 text-[11px] leading-relaxed text-white/35">{facts(room).join(" · ")}</p>
+      <p className="text-sm leading-snug text-white/60">{customOf(room, space)}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-white/35">{facts(room, space).join(" · ")}</p>
       {now?.headline ? (
         <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/70">
           <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATE_DOT[now.state]}`} />

@@ -754,7 +754,18 @@ export function RoomDrawer(props: RoomDrawerProps) {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
         <div className="px-4 pt-3">
-          <RoomSignpost room={signpostRoom} now={here} />
+          <RoomSignpost
+            room={signpostRoom}
+            now={here}
+            space={
+              inSpace
+                ? {
+                    preset: space?.world.policy_preset,
+                    roomPreset: (data?.room as { room_preset?: string | null } | undefined)?.room_preset ?? null,
+                  }
+                : null
+            }
+          />
         </div>
         {slug === "stage" ? <StageTrial signedIn={signedIn} /> : null}
         {data?.room.kind === "owner_lounge" || slug.startsWith("lounge") ? null : (
