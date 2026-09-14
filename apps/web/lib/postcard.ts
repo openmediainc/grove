@@ -39,6 +39,8 @@ export interface PostcardInput {
    * rather than printed.
    */
   privateNames?: readonly string[];
+  /** The title of the cinematic sequence playing (#39), when there is one. The author's own one line. */
+  sequenceTitle?: string | null;
 }
 
 export interface PostcardCaption {
@@ -77,7 +79,8 @@ function cleanDetail(detail: string | null | undefined, verbLabel: string, priva
 export function postcardCaption(input: PostcardInput): PostcardCaption {
   const { lex, at, subject } = input;
   const words = lex.postcard;
-  const title = `${words.greeting} ${words.world}`;
+  const seqTitle = (input.sequenceTitle ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+  const title = seqTitle ? `“${seqTitle}” · ${words.world}` : `${words.greeting} ${words.world}`;
   const when = `${input.replay ? `${words.replay} · ` : ""}${postcardClock(at)} · ${skyAt(at).label} ${lex.skyPlace}`;
   if (!subject) return { title, when, subject: null };
 

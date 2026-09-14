@@ -29,6 +29,12 @@ describe("postcard caption", () => {
     expect(c.subject).toBeNull();
   });
 
+  it("titles a frame from a cinematic sequence with the sequence's title (#39)", () => {
+    const c = postcardCaption({ lex: aoe, at: AT, sequenceTitle: "  Round the   Plaza " });
+    expect(c.title).toBe("“Round the Plaza” · Glasshouse");
+    expect(postcardCaption({ lex: aoe, at: AT, sequenceTitle: "" }).title).toBe("Greetings from Glasshouse");
+  });
+
   it("says what the followed body is doing, and where", () => {
     const c = postcardCaption({ lex: aoe, at: AT, subject: scout });
     expect(c.subject).toBe("Following Scout · An agent · tool: Bash: pnpm test · Workshop");

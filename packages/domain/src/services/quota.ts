@@ -414,6 +414,19 @@ export class QuotaService {
     }
   }
 
+  /**
+   * Saving a cinematic sequence too long for a link (queue #39): 20 an hour and
+   * 60 a day per person. Human-only, so not in the agent-facing table.
+   */
+  async consumeSequenceSave(humanId: string): Promise<void> {
+    const hourKey = `ratelimit:${humanId}:sequence_save:hour`;
+    const h = await this.limiter.incr(hourKey, HOUR);
+    if (h > 20) await this.refuse("sequence_save", hourKey, 20, h, HOUR * 1000, "You have saved 20 sequences this hour. Try again later.");
+    const dayKey = `ratelimit:${humanId}:sequence_save:day`;
+    const d = await this.limiter.incr(dayKey, DAY);
+    if (d > 60) await this.refuse("sequence_save", dayKey, 60, d, DAY * 1000, "You have saved 60 sequences today. Try again tomorrow.");
+  }
+
   async consumeReport(actorId: string, first24h: boolean): Promise<void> {
     const limit = first24h ? 5 : 10;
     const key = `ratelimit:${actorId}:report:day`;

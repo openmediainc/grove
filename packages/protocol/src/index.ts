@@ -23,3 +23,4 @@ export * from "./space-moves.js";
 export * from "./trials.js";
 export * from "./districts.js";
 export * from "./board.js";
+export * from "./sequences.js";

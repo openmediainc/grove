@@ -110,6 +110,21 @@ import { ReplayMotion } from "@/lib/replay/motion";
 import { ResourceBar } from "./ResourceBar";
 import { composePostcard, downloadBlob, nearestToCentre, postcardCaption, postcardFilename } from "@/lib/postcard";
 import { CostCarry } from "./costCarry";
+import { CinemaBars, SequenceRecorder } from "./CinemaChrome";
+import { SEQUENCE_QUERY, parseSequenceRef, toCamel, validateSequence, type CameraKey, type Sequence, type SequenceShotKind } from "@grove/protocol";
+import {
+  addShot,
+  buildTimeline,
+  cameraAt,
+  clampCamera,
+  draftSequence,
+  emptyDraft,
+  inlineSequenceLink,
+  removeLastShot,
+  storedSequenceLink,
+  type Draft,
+  type Timeline,
+} from "@/lib/sequence";
 import { resourceTerms } from "@/lib/cost";
 import { skyAt, type Sky } from "./skyClock";
 import {
@@ -888,6 +903,8 @@ export function WorldMap() {
     centreLayout: (x: number, y: number) => void;
     /** The body drawn nearest the middle of the frame, if one is close. */
     centred: () => string | null;
+    /** The camera as a tile framing: the tile under the middle of the view, and the zoom (#39). */
+    cameraKey: () => CameraKey;
   } | null>(null);
   /** The world's own stall threshold, straight off the minimap. */
   const stallSecondsRef = useRef(DEFAULT_STALL_SECONDS);
@@ -929,6 +946,33 @@ export function WorldMap() {
   /** Public lines already handed to the director, so a poll never re-tells one. Null until the first poll. */
   const tvSpeechSeenRef = useRef<Set<string> | null>(null);
   const tvModeRef = useRef<(on: boolean) => void>(() => {});
+  /* --- cinematic sequences (#39, lib/sequence) ------------------------ *
+   * A playing sequence owns the camera outright, the way TV does, and hides
+   * the chrome. Its clock is advanced by the draw loop: wall time live, and
+   * only while the replay plays when a replay is on.
+   * ------------------------------------------------------------------ */
+  const cinemaRef = useRef<{
+    seq: Sequence;
+    tl: Timeline;
+    elapsed: number;
+    lastT: number | null;
+    last: CameraKey | null;
+    done: boolean;
+    holding: boolean;
+    shownAt: number;
+  } | null>(null);
+  const [cinema, setCinema] = useState<{ title: string | null; total: number; done: boolean; preview: boolean; holding: boolean } | null>(null);
+  const [cinemaElapsed, setCinemaElapsed] = useState(0);
+  /** A sequence from the link, waiting for the first poll to say how big the world is. */
+  const pendingSeqRef = useRef<Sequence | null>(null);
+  const startCinemaRef = useRef<(seq: Sequence, preview: boolean) => void>(() => {});
+  const stopCinemaRef = useRef<() => void>(() => {});
+  const [recorder, setRecorder] = useState<Draft | null>(null);
+  const [recKind, setRecKind] = useState<SequenceShotKind>("path");
+  const [recSeconds, setRecSeconds] = useState(5);
+  const [recNote, setRecNote] = useState<string | null>(null);
+  const [recLink, setRecLink] = useState<string | null>(null);
+  const [recBusy, setRecBusy] = useState(false);
   /**
    * A shareable deep link read on load (lib/deep-link), waiting for what it
    * needs: `at` for the camera controls, `follow` for the body to be on the
@@ -1126,6 +1170,7 @@ export function WorldMap() {
         ? { name: a.name, kind: a.kind, region: a.region, verb: a.verb, detail: a.detail, followed: a.id === followRef.current }
         : null,
       privateNames: plotRef.current.filter((p) => p.preset === "private" && p.name).map((p) => p.name!),
+      sequenceTitle: cinemaRef.current?.seq.title ?? null,
     });
     const blob = await composePostcard(canvas, caption, themeRef.current.palette);
     if (blob) downloadBlob(blob, postcardFilename(at));
@@ -1240,6 +1285,122 @@ export function WorldMap() {
     tvModeRef.current = setTvMode;
   }, [setKioskMode, setTvMode]);
 
+  /** Play a sequence (#39). Takes the camera from TV, kiosk and any follow; hides the chrome. */
+  const startCinema = useCallback(
+    (seq: Sequence, preview: boolean) => {
+      if (kioskRef.current) setKioskMode(false);
+      followRef.current = null;
+      setFollowing(null);
+      setAttnPos(null);
+      glideRef.current = null;
+      setPeek(null);
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const tl = buildTimeline(seq, { reduced });
+      cinemaRef.current = { seq, tl, elapsed: 0, lastT: null, last: null, done: false, holding: false, shownAt: 0 };
+      // Over a replay, the sequence runs on the replay's clock: start it playing.
+      if (replay.view.active && !replay.view.playing) replay.play();
+      setCinemaElapsed(0);
+      setCinema({ title: seq.title, total: tl.total, done: false, preview, holding: false });
+      try {
+        document.documentElement.setAttribute(KIOSK_ATTR, "1");
+      } catch {
+        /* the sequence still plays */
+      }
+    },
+    [replay, setKioskMode],
+  );
+  const stopCinema = useCallback(() => {
+    cinemaRef.current = null;
+    setCinema(null);
+    try {
+      if (!kioskRef.current) document.documentElement.removeAttribute(KIOSK_ATTR);
+      // Leaving strips ?seq=, so a reload opens the map rather than the film.
+      const url = new URL(window.location.href);
+      if (url.searchParams.has(SEQUENCE_QUERY)) {
+        url.searchParams.delete(SEQUENCE_QUERY);
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const againCinema = useCallback(() => {
+    const run = cinemaRef.current;
+    if (!run) return;
+    run.elapsed = 0;
+    run.lastT = null;
+    run.done = false;
+    if (replay.view.active && !replay.view.playing) replay.play();
+    setCinemaElapsed(0);
+    setCinema((c) => (c ? { ...c, done: false } : c));
+  }, [replay]);
+  useEffect(() => {
+    startCinemaRef.current = startCinema;
+    stopCinemaRef.current = stopCinema;
+  }, [startCinema, stopCinema]);
+
+  /* The recorder: shots from the viewer's own camera moves. */
+  const openRecorder = useCallback(() => {
+    if (kioskRef.current) setKioskMode(false);
+    setRecorder((d) => d ?? emptyDraft(controlsRef.current?.cameraKey() ?? null));
+    setRecNote(null);
+    setRecLink(null);
+  }, [setKioskMode]);
+  const followedSlug = useCallback((): string | null => {
+    const id = followRef.current;
+    const a = id ? actorsRef.current.find((x) => x.id === id) : undefined;
+    return a?.slug ?? null;
+  }, []);
+  const recordShot = useCallback(() => {
+    const cam = controlsRef.current?.cameraKey();
+    if (!cam) return;
+    setRecorder((d) => (d ? addShot(d, cam, recKind, recSeconds * 1000, followedSlug()) : d));
+    setRecLink(null);
+    setRecNote(null);
+  }, [recKind, recSeconds, followedSlug]);
+  const previewDraft = useCallback(() => {
+    if (!recorder) return;
+    const r = draftSequence(recorder);
+    if (!r.ok) {
+      setRecNote(r.message);
+      return;
+    }
+    startCinema(r.sequence, true);
+  }, [recorder, startCinema]);
+  const copyDraftLink = useCallback(async () => {
+    if (!recorder) return;
+    const r = draftSequence(recorder);
+    if (!r.ok) {
+      setRecNote(r.message);
+      return;
+    }
+    let link = inlineSequenceLink(window.location.href, r.sequence);
+    if (!link) {
+      // Too long for a link: store it (signed in), link its id.
+      if (!signedIn) {
+        setRecNote("Too long for a link. Sign in to save it, or take out a shot or shorten the title.");
+        return;
+      }
+      setRecBusy(true);
+      try {
+        const res = await api<{ id: string }>("/api/v1/sequences", { method: "POST", body: JSON.stringify({ sequence: r.sequence }) });
+        link = storedSequenceLink(window.location.href, res.id);
+      } catch (err) {
+        setRecNote((err as Error).message || "Could not save the sequence.");
+        return;
+      } finally {
+        setRecBusy(false);
+      }
+    }
+    setRecLink(link);
+    try {
+      await navigator.clipboard.writeText(link);
+      setRecNote("Link copied.");
+    } catch {
+      setRecNote("Copy the link above.");
+    }
+  }, [recorder, signedIn]);
+
   useEffect(() => {
     let wanted = false;
     let wantTv = false;
@@ -1250,6 +1411,19 @@ export function WorldMap() {
       wantTv = on(params.get("tv"));
       const link = parseDeepLink(params);
       if (deepLinkApplies(params) && (link.follow || link.at)) deepLinkRef.current = { ...link, tries: 0 };
+      // ?seq=: a sequence inline, or a stored one by id (#39). Plays after the first poll.
+      const ref = parseSequenceRef(params.get(SEQUENCE_QUERY));
+      if (ref?.kind === "inline") pendingSeqRef.current = ref.sequence;
+      else if (ref?.kind === "id") {
+        void api<{ sequence?: unknown }>(`/api/v1/sequences/${ref.id}`)
+          .then((res) => {
+            const r = validateSequence(toCamel(res.sequence ?? null));
+            if (r.ok) pendingSeqRef.current = r.sequence;
+          })
+          .catch(() => {
+            /* a stored sequence that is gone: the map simply opens */
+          });
+      }
     } catch {
       wanted = false;
     }
@@ -1710,6 +1884,12 @@ export function WorldMap() {
           } else if (++link.tries >= 3) link.follow = null;
           if (!link.follow && !link.at) deepLinkRef.current = null;
         }
+        // A sequence from the link, now the world has a size (#39).
+        if (pendingSeqRef.current && controlsRef.current) {
+          const seq = pendingSeqRef.current;
+          pendingSeqRef.current = null;
+          startCinemaRef.current(seq, false);
+        }
         // Replay syncs its own director on historical ticks (lib/replay/motion).
         if (!replaying) motionRef.current?.sync(actors, seatsRef.current, Date.now());
         const claimed = data.claimed_agents ?? data.claimedAgents ?? 0;
@@ -1973,6 +2153,12 @@ export function WorldMap() {
         });
         return nearestToCentre(points, w / 2, h / 2, 72)?.id ?? null;
       },
+      cameraKey: () => {
+        const { ox, oy, w, h } = origin();
+        const v = viewRef.current;
+        const { tx, ty } = unIso((w / 2 - v.px) / v.zoom - ox, (h / 2 - v.py) / v.zoom - oy);
+        return { tx, ty, zoom: v.zoom };
+      },
     };
 
 
@@ -2219,6 +2405,14 @@ export function WorldMap() {
       // Escape is the way out of whatever the map has put you in, innermost
       // first: release a follow before you leave kiosk mode, so one key does
       // not throw away two states at once.
+      // A playing sequence is the innermost thing of all, and owns the keys.
+      if (cinemaRef.current) {
+        if (ev.key === "Escape") {
+          stopCinemaRef.current();
+          ev.preventDefault();
+        }
+        return;
+      }
       if (ev.key === "Escape") {
         // In TV the follow is the director's, not the viewer's: Escape leaves TV.
         if (tvRef.current) {
@@ -3244,6 +3438,55 @@ export function WorldMap() {
           if (sx < -20 || sx > cssW + 20 || sy < -20 || sy > cssH + 20) continue;
           drawHealthMark(ctx, sx, sy, m.drift, t, !reduceMotion.matches);
         }
+        /* ---- a cinematic sequence (#39) ----------------------------------
+         * Owns the camera while it plays: no follow, no glide, no director.
+         * The framing is pure (lib/sequence cameraAt), pulled onto the world
+         * and into the zoom range, and set outright — the easing is in the
+         * shot, not in a chase. A follow target is looked up in the bodies on
+         * this map (the public minimap, or the replay's snapshot of it); one
+         * that is not there holds the camera where it was.
+         * ---------------------------------------------------------------- */
+        const run = cinemaRef.current;
+        if (run) {
+          followRef.current = null;
+          glideRef.current = null;
+          const dt = run.lastT === null ? 0 : Math.min(250, Math.max(0, t - run.lastT));
+          run.lastT = t;
+          const rv = replay.view;
+          const advancing = !rv.active || (!rv.loading && (rv.playing || rv.playhead >= rv.until));
+          if (!run.done && advancing) run.elapsed += dt;
+          const frame = cameraAt(
+            run.tl,
+            run.elapsed,
+            (slug) => {
+              const body = actors.find((a) => a.slug === slug);
+              if (!body) return null;
+              const seat = seatsRef.current.get(body.id) ?? seatInRegion(body.id, body.region);
+              const at = bodyAt(body.id, seat);
+              return { tx: at.x, ty: at.y };
+            },
+            run.last,
+          );
+          const cam = clampCamera(frame.camera, worldBounds(plotsRef.current), { min: minZoom(), max: MAX_ZOOM });
+          run.last = cam;
+          const q = iso(cam.tx, cam.ty);
+          v.zoom = cam.zoom;
+          v.px = cssW / 2 - (ox + q.x) * v.zoom;
+          v.py = cssH / 2 - (oy + q.y) * v.zoom;
+          clampPan();
+          if ((frame.done && !run.done) || frame.lostFollow !== run.holding) {
+            run.done = run.done || frame.done;
+            run.holding = frame.lostFollow;
+            const done = run.done;
+            const holding = run.holding;
+            setCinema((c) => (c ? { ...c, done, holding } : c));
+          }
+          if (t - run.shownAt >= 250 || run.done) {
+            run.shownAt = t;
+            setCinemaElapsed(Math.min(run.elapsed, run.tl.total));
+          }
+        }
+
         // Follow-cam. Runs after the bodies are placed so it can use the same
         // interpolated position they were drawn at, and eases rather than snaps.
         const followId = followRef.current;
@@ -3552,13 +3795,15 @@ export function WorldMap() {
     [regionsLex],
   );
   const drawerWidth = worldUrl.history ? "420px" : roomExpanded ? "min(880px, calc(100% - 2rem))" : "420px";
+  /** Kiosk, TV and a playing sequence all take the chrome away. */
+  const bare = kiosk || Boolean(cinema);
 
   return (
     <section
       data-grove-theme={theme.id}
       style={themeStyle(theme)}
       className={`relative overflow-hidden bg-dusk-950 ${
-        kiosk ? "min-h-[100svh]" : "min-h-[calc(100svh-56px)]"
+        bare ? "min-h-[100svh]" : "min-h-[calc(100svh-56px)]"
       }`}
     >
       <KioskChrome
@@ -3615,7 +3860,7 @@ export function WorldMap() {
       <h1 className="sr-only">{lex.headline}</h1>
       <div
         className={`pointer-events-none absolute left-0 top-0 z-10 flex max-w-full flex-col items-start gap-2 p-3 sm:p-5 ${
-          kiosk ? "hidden sm:hidden" : "flex"
+          bare ? "hidden sm:hidden" : "flex"
         }`}
       >
         <div
@@ -3642,7 +3887,7 @@ export function WorldMap() {
       {/* The minimap (#38): top right, clear of the HUD pill (top left) and the
           controls (bottom). Never in kiosk or TV; out of the way of an open
           drawer — beside it on a wide screen, gone under it on a phone. */}
-      {!kiosk ? (
+      {!bare ? (
         <div
           className={`pointer-events-none absolute right-0 top-0 z-10 p-3 sm:p-5 ${drawerOpen ? "max-sm:hidden sm:right-[var(--drawer-w)]" : ""}`}
           style={{ "--drawer-w": drawerWidth } as React.CSSProperties}
@@ -3699,7 +3944,7 @@ export function WorldMap() {
           )}
         </div>
       ) : null}
-      {peek ? (
+      {peek && !cinema ? (
         <SpectatorPeek
           peek={peek}
           signedIn={signedIn}
@@ -3708,7 +3953,7 @@ export function WorldMap() {
           onOpenRoom={(slug) => openRoom(slug)}
         />
       ) : null}
-      {!kiosk && worldUrl.room ? (
+      {!bare && worldUrl.room ? (
         <RoomDrawer
           key="room-drawer"
           room={worldUrl.room}
@@ -3727,8 +3972,8 @@ export function WorldMap() {
           onExpandedChange={setRoomExpanded}
         />
       ) : null}
-      {!kiosk && worldUrl.history ? <HistoryDrawer controller={replay} onClose={closeDrawer} /> : null}
-      {walkIn && !kiosk ? (
+      {!bare && worldUrl.history ? <HistoryDrawer controller={replay} onClose={closeDrawer} /> : null}
+      {walkIn && !bare ? (
         <WalkInSheet
           placeName={lex.regions.plaza.title}
           onClose={() => setWalkIn(false)}
@@ -3741,7 +3986,7 @@ export function WorldMap() {
         />
       ) : null}
       {arrival ? <ArrivalToast title={arrival.title} line={arrival.line} onDismiss={() => setArrival(null)} /> : null}
-      {panel && !kiosk ? (
+      {panel && !bare ? (
         <MapPanel title={panel === "keys" ? "Keyboard" : "Legend"} onClose={() => setPanel(null)}>
           {panel === "keys" ? (
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
@@ -3792,7 +4037,7 @@ export function WorldMap() {
           kiosk ? "pb-16 sm:pb-20" : ""
         } ${drawerOpen && !kiosk ? "sm:pr-[calc(var(--drawer-w)+1.25rem)]" : ""} ${
           drawerOpen && !kiosk ? "max-sm:hidden" : ""
-        }`}
+        } ${cinema ? "hidden" : ""}`}
         style={{ "--drawer-w": drawerWidth } as React.CSSProperties}
       >
         {kiosk ? <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} /> : null}
@@ -3886,7 +4131,7 @@ export function WorldMap() {
               )}
             </MapMenu>
             <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} />
-            <MapMenu label={<>Watch ▾</>} title="TV, kiosk, and the History with replay" align="right">
+            <MapMenu label={<>Watch ▾</>} title="TV, kiosk, the History with replay, and recorded sequences" align="right">
               {(close) => (
                 <>
                   <MenuItem
@@ -3918,6 +4163,16 @@ export function WorldMap() {
                     }}
                   >
                     History &amp; replay
+                  </MenuItem>
+                  <MenuHeading>Sequences</MenuHeading>
+                  <MenuItem
+                    title="Record a camera path from your own moves — push, path, orbit, hold, up to a minute — and share it as a link. Plays over live or over a replay."
+                    onSelect={() => {
+                      close();
+                      openRecorder();
+                    }}
+                  >
+                    Record a shot
                   </MenuItem>
                 </>
               )}
@@ -3996,6 +4251,44 @@ export function WorldMap() {
           {sky.clock} UTC · {sky.label} · {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep}
           {hud.live ? ` · ${formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, lex.hud)}` : ""}
         </div>
+      ) : null}
+      {recorder && !bare ? (
+        <SequenceRecorder
+          draft={recorder}
+          kind={recKind}
+          seconds={recSeconds}
+          followingName={following}
+          note={recNote}
+          link={recLink}
+          busy={recBusy}
+          onKind={setRecKind}
+          onSeconds={setRecSeconds}
+          onTitle={(title) => {
+            setRecorder((d) => (d ? { ...d, title } : d));
+            setRecLink(null);
+          }}
+          onAdd={recordShot}
+          onUndo={() => {
+            setRecorder((d) => (d ? removeLastShot(d) : d));
+            setRecLink(null);
+          }}
+          onPreview={previewDraft}
+          onCopy={() => void copyDraftLink()}
+          onClose={() => setRecorder(null)}
+        />
+      ) : null}
+      {cinema ? (
+        <CinemaBars
+          title={cinema.title}
+          elapsed={cinemaElapsed}
+          total={cinema.total}
+          done={cinema.done}
+          preview={cinema.preview}
+          holding={cinema.holding}
+          onPostcard={() => void savePostcard()}
+          onAgain={againCinema}
+          onExit={stopCinema}
+        />
       ) : null}
       <Suspense fallback={null}>
         <WorldUrlSync onChange={onUrl} />

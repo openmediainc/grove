@@ -59,3 +59,15 @@ describe("board post rate limit (#36)", () => {
     await q.consumeBoardPost("hum_d", "wld_2");
   });
 });
+
+describe("sequence save rate limit (#39)", () => {
+  it("allows 20 an hour per person, then names the limiter", async () => {
+    const q = new QuotaService(new MemoryRateLimiter());
+    for (let i = 0; i < 20; i++) await q.consumeSequenceSave("hum_seq");
+    await expect(q.consumeSequenceSave("hum_seq")).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      details: { limiter: "sequence_save" },
+    });
+    await q.consumeSequenceSave("hum_other");
+  });
+});

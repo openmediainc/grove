@@ -39,6 +39,8 @@ export const ID_PREFIX = {
   trial: "trl_",
   /** A post on a space's artifact board (041). */
   boardPost: "bpo_",
+  /** A stored camera sequence (042). Public, unlisted, immutable. */
+  sequence: "seq_",
 } as const;
 
 export function isHumanId(id: string): id is HumanId {

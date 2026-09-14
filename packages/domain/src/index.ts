@@ -85,6 +85,7 @@ export type { SiteFetchOptions, ResolvedAddress } from "./site-fetch.js";
 export { suggestBrandingFromSite, readLinkPreview, extractPageFacts, decodePng, decodeIco, dominantColour, parseCssColour } from "./site-branding.js";
 export type { SiteBrandingSuggestion } from "./site-branding.js";
 export { EstateService, type EstateNames } from "./services/estates.js";
+export { SequenceService } from "./services/sequences.js";
 // Supporter plumbing (036): cosmetic, env-gated, off until the owner adds Stripe keys.
 export {
   SupporterService,
@@ -270,6 +271,7 @@ import { GuestService } from "./services/guests.js";
 import { CardService } from "./services/cards.js";
 import { BrandingService } from "./services/branding.js";
 import { EstateService } from "./services/estates.js";
+import { SequenceService } from "./services/sequences.js";
 import { SpaceMoveService } from "./services/space-moves.js";
 import { BoardService } from "./services/board.js";
 import { SupporterService } from "./services/supporters.js";
@@ -324,6 +326,8 @@ export class GroveApp {
   search: SearchService;
   /** Agent trials on the Stage (040): posted tasks, entries, finish order, plot marks. */
   trials: TrialService;
+  /** Stored cinematic sequences (042): public, unlisted, immutable camera paths. */
+  sequences: SequenceService;
   /** Leave a message: notes addressed to one person or agent (029). */
   messages: MessageService;
   /** "N watching" on the map: counted tab heartbeats, never identities. */
@@ -353,6 +357,7 @@ export class GroveApp {
     this.presence = new PresenceService(this.store, this.flags, this.quota, this.identity);
     this.toolCalls = new ToolCallService(this.store, this.quota, this.presence);
     this.trials = new TrialService(this.store, this.quota);
+    this.sequences = new SequenceService(this.store, this.quota);
     this.toolCalls.trials = this.trials;
     this.campus = new CampusService(this.store);
     this.chronicle = new ChronicleService(this.store);
