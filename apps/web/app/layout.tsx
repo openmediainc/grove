@@ -6,6 +6,7 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { PageFrame } from "@/components/PageFrame";
 import { SkipLink } from "@/components/a11y";
+import { KeyboardInset } from "@/components/KeyboardInset";
 import { SearchPalette } from "@/components/SearchPalette";
 import { VisitBeacon } from "@/components/VisitBeacon";
 import { siteOrigin } from "@/lib/og/public-data";
@@ -55,7 +56,13 @@ export const metadata: Metadata = {
 };
 
 // Browser chrome follows the page ground in each scheme (Clear Pane / Nightwatch).
+// `resizes-content`: where the browser supports it (Chrome on Android), the
+// keyboard shrinks the layout, so sheets sized in svh/% stay above it. Elsewhere
+// (iOS Safari) KeyboardInset's `--kb` does the same job. #70, docs/MOBILE.md.
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: COLORS.light.ground },
     { media: "(prefers-color-scheme: dark)", color: COLORS.night.ground },
@@ -75,6 +82,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <PageFrame>{children}</PageFrame>
         <SearchPalette />
         <VisitBeacon />
+        <KeyboardInset />
       </body>
     </html>
   );

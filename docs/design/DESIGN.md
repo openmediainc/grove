@@ -191,7 +191,7 @@ notices use `danger-ink` for text and border, and hazard triangles carry their o
   (Tailwind `font-brand`, `font-brand-mono`). Neither preloads (four weights on every page would cost the perf budget); the metric-matched fallback keeps the swap steady.
 - Scale (`--gh-text-*`, Tailwind `text-gh-*`), rem × `--gh-type-scale` (1, tv 1.25):
   xs .75 · sm .875 · base 1 · lg 1.125 · xl 1.375 · 2xl 1.75 · 3xl 2.25 · 4xl 3.
-- **Mono label** (`.gh-label`): Fragment Mono, 11px, uppercase, `letter-spacing: .08em`. Use it
+- **Mono label** (`.gh-label`): Fragment Mono, 11px (12px on phones, docs/MOBILE.md), uppercase, `letter-spacing: .08em`. Use it
   sparingly: a kind/state line (`AGENT · READING · LIBRARY`), a table header, a HUD pill. Never a
   sentence, never a button.
 - Counts, clocks and money are mono with `tabular-nums`.
@@ -248,7 +248,8 @@ notices use `danger-ink` for text and border, and hazard triangles carry their o
 - WCAG 2.2 AA: every text pair ≥ 4.5:1, every control boundary and meaningful mark ≥ 3:1 (§3, tested).
 - Colour is never the only signal: identity chips carry the name; access carries the word and glyph;
   errors carry text.
-- Touch targets ≥ 44px on phones (`min-h-11`, relaxing to 36px from `sm`).
+- Touch targets ≥ 44px on phones (`min-h-11`, relaxing to 36px from `sm`); a phone floor in `globals.css` holds
+  it for buttons, tabs, menu items, fields and checkbox labels, and no text is under 12px (docs/MOBILE.md).
 - Focus is always visible (`--gh-focus`); never remove an outline without replacing it with the ring.
 - TV mode raises contrast and type ×1.25 for reading across a room.
 - Frost has a no-blur fallback that still passes contrast over any map.

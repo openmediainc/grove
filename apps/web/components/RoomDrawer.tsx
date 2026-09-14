@@ -718,7 +718,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
       aria-modal="false"
       aria-label={`${title}, room`}
       data-theme-skin={theme.id}
-      className={`pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex h-[86%] flex-col overflow-hidden rounded-t-gh-xl border-t border-line gh-frost font-brand text-gh-sm text-ink shadow-gh-3 sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-0 sm:h-auto sm:rounded-none sm:border-l sm:border-t-0 ${
+      className={`pointer-events-auto absolute inset-x-0 bottom-[var(--kb,0px)] z-30 flex h-[min(86%,calc(100%_-_var(--kb,0px)))] flex-col overflow-hidden rounded-t-gh-xl border-t border-line gh-frost font-brand text-gh-sm text-ink shadow-gh-3 sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-0 sm:h-auto sm:rounded-none sm:border-l sm:border-t-0 ${
         wide ? "sm:w-[min(880px,calc(100%-2rem))]" : "sm:w-[420px]"
       }`}
     >

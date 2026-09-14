@@ -182,3 +182,70 @@ body {
     scroll-behavior: auto;
   }
 }
+
+/* Phones (#70, docs/MOBILE.md). Below the `sm` breakpoint, where a finger is
+   the pointer, three floors apply everywhere, so no component has to remember:
+   - tap targets: buttons, tabs, menu items, options, summaries and text fields
+     are at least 44px tall (and buttons 44px wide); a checkbox or radio is
+     tapped through its label, so the label is what gets the height. `:where()` keeps this at zero
+     specificity, so a component's own larger size still wins; `min-height`
+     beats a smaller `h-*`. A control that sits inside a line of text opts out
+     with `tap-inline` and gets an invisible 44px hit area (`tap-hit`) instead.
+   - text fields are 16px, or iOS zooms the whole page when one takes focus.
+   - text is never under 12px (the arbitrary 9–11px sizes and the nameplate
+     parts become 12px).
+   `--kb` is the height the on-screen keyboard takes from the bottom of the
+   screen (components/KeyboardInset.tsx); bottom sheets with a text field sit on
+   top of it. */
+@media (max-width: 639px) {
+  :where(
+      button:not(.tap-inline),
+      summary,
+      select,
+      textarea,
+      input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"], [type="color"], [type="file"]),
+      [role="button"]:not(.tap-inline),
+      [role="tab"],
+      [role="menuitem"],
+      [role="menuitemcheckbox"],
+      [role="menuitemradio"],
+      [role="option"],
+      label:has(> input[type="checkbox"], > input[type="radio"])
+    ) {
+    min-height: 44px;
+  }
+  :where(button:not(.tap-inline), [role="button"]:not(.tap-inline), [role="tab"]) {
+    min-width: 44px;
+  }
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"], [type="color"], [type="file"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+  /* The brand's mono label is 11px (DESIGN.md); on a phone it is at least 12px.
+     `:root` for specificity: tokens.css may load after this file. */
+  :root .gh-label {
+    font-size: max(12px, var(--gh-label-size));
+  }
+  .text-\[9px\],
+  .text-\[10px\],
+  .text-\[11px\],
+  .grove-badge,
+  .grove-kind,
+  .grove-owner,
+  .grove-you {
+    font-size: 12px;
+  }
+  .tap-hit {
+    position: relative;
+  }
+  .tap-hit::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}

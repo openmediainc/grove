@@ -113,7 +113,7 @@ function ModeSwitcher({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => v
           role="radio"
           aria-checked={mode === m}
           onClick={() => onChange(m)}
-          className={`min-h-9 rounded-gh-pill px-4 text-gh-sm font-medium focus-visible:outline-none focus-visible:shadow-gh-ring ${
+          className={`min-h-11 rounded-gh-pill px-4 text-gh-sm font-medium sm:min-h-9 focus-visible:outline-none focus-visible:shadow-gh-ring ${
             mode === m ? "bg-ink text-surface-raised" : "text-muted hover:text-ink"
           }`}
         >
@@ -669,7 +669,7 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
         </header>
         <nav aria-label="Sections" className="flex flex-wrap gap-2 pb-6">
           {SECTIONS.map(([id, label]) => (
-            <a key={id} href={`#${id}`} className="rounded-gh-pill border border-line px-3 py-1 text-gh-sm text-muted hover:text-ink focus-visible:outline-none focus-visible:shadow-gh-ring">
+            <a key={id} href={`#${id}`} className="inline-flex min-h-11 items-center rounded-gh-pill border border-line px-3 py-1 text-gh-sm text-muted hover:text-ink focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-0">
               {label}
             </a>
           ))}

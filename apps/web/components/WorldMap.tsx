@@ -4397,7 +4397,7 @@ export function WorldMap() {
         <div
           data-speech-avoid
           data-headcount={hud.live ? "" : undefined}
-          className="pointer-events-auto flex max-w-full items-center gap-2 truncate rounded-gh-pill border border-line gh-frost px-3 py-1.5 font-brand-mono text-[11px] tabular-nums text-ink shadow-gh-2 sm:text-xs"
+          className={`pointer-events-auto flex min-h-11 items-center gap-2 truncate rounded-gh-pill border border-line gh-frost px-3 py-1.5 font-brand-mono text-xs tabular-nums text-ink shadow-gh-2 sm:min-h-0 sm:max-w-full ${insetCollapsed && !bare ? "max-w-[calc(100%-3.5rem)]" : "max-w-full"}`}
           title="Bodies on the map right now, how many open maps have checked in over the last minute (counted, never named), and the world clock in UTC."
         >
           {hud.live ? (
@@ -4413,14 +4413,20 @@ export function WorldMap() {
             ) : null}
           </span>
         </div>
-        {firstVisit && !drawerOpen ? <FirstVisitCard onDismiss={dismissFirstVisit} howHref="/how-it-works" /> : null}
+        {/* On a phone an open minimap takes the corner the card would run under; the
+            card waits (it is not dismissed) until the minimap is closed again. */}
+        {firstVisit && !drawerOpen ? (
+          <div className={`w-full max-w-sm ${insetCollapsed ? "" : "max-sm:hidden"}`}>
+            <FirstVisitCard onDismiss={dismissFirstVisit} howHref="/how-it-works" />
+          </div>
+        ) : null}
       </div>
       {/* The minimap (#38): top right, clear of the HUD pill (top left) and the
           controls (bottom). Never in kiosk or TV; out of the way of an open
           drawer — beside it on a wide screen, gone under it on a phone. */}
       {!bare ? (
         <div
-          className={`pointer-events-none absolute right-0 top-0 z-10 p-3 sm:p-5 ${drawerOpen ? "max-sm:hidden sm:right-[var(--drawer-w)]" : ""}`}
+          className={`pointer-events-none absolute right-0 top-0 z-10 p-3 sm:p-5 ${insetCollapsed ? "" : "max-sm:pt-16"} ${drawerOpen ? "max-sm:hidden sm:right-[var(--drawer-w)]" : ""}`}
           style={{ "--drawer-w": drawerWidth } as React.CSSProperties}
         >
           {insetCollapsed ? (
@@ -4468,7 +4474,7 @@ export function WorldMap() {
                 aria-expanded
                 aria-label="Hide minimap"
                 title="Hide the minimap"
-                className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-gh-pill gh-frost text-sm text-ink hover:bg-tint"
+                className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-gh-pill gh-frost text-sm text-ink hover:bg-tint sm:h-8 sm:w-8"
               >
                 <span aria-hidden>×</span>
               </button>
@@ -4793,7 +4799,7 @@ export function WorldMap() {
           and how many bodies are up, in the corner, at the weight of a clock on
           a wall rather than of a heading on a page. */}
       {kiosk && sky ? (
-        <div className="pointer-events-none absolute bottom-4 left-4 max-w-[calc(100%-12rem)] truncate rounded-gh-pill gh-frost px-3 py-1 font-brand-mono text-gh-xs tabular-nums text-muted sm:max-w-[calc(100%-16rem)]">
+        <div className="pointer-events-none absolute bottom-[7.25rem] left-4 max-w-[calc(100%-2rem)] truncate rounded-gh-pill gh-frost px-3 py-1 font-brand-mono text-gh-xs tabular-nums text-muted sm:bottom-4 sm:max-w-[calc(100%-16rem)]">
           {sky.clock} UTC · {sky.label} · {hud.awake} {words.hud.awake} · {hud.asleep} {words.hud.asleep}
           {hud.live ? ` · ${formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, words.hud)}` : ""}
         </div>

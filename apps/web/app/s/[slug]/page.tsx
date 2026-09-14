@@ -230,7 +230,7 @@ export default function SpacePage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href={EXPLORE_PATH} className="inline-block rounded-gh-sm py-2 text-gh-sm text-muted hover:text-ink">
+      <Link href={EXPLORE_PATH} className="inline-flex min-h-11 items-center rounded-gh-sm text-gh-sm text-muted hover:text-ink sm:inline-block sm:min-h-0 sm:py-2">
         ← Explore
       </Link>
 

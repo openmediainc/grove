@@ -141,7 +141,7 @@ function Row({
               type="button"
               onClick={() => onActor(actorRef(entry.actor) ?? entry.actor!.id)}
               title="Only this actor"
-              className={`ml-2 text-[11px] ${t.link}`}
+              className={`tap-inline tap-hit ml-2 text-[11px] ${t.link}`}
             >
               only this
             </button>

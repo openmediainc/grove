@@ -60,12 +60,12 @@ export function ErrorNotice({
   const extras = (
     <>
       {view.signIn ? (
-        <a href={signInHref()} className={`ml-1 underline underline-offset-2 ${link}`}>
+        <a href={signInHref()} className={`tap-hit ml-1 underline underline-offset-2 ${link}`}>
           {view.fix ?? "Sign in"}
         </a>
       ) : null}
       {onRetry && view.retryable ? (
-        <button type="button" onClick={onRetry} className={`ml-2 underline underline-offset-2 ${link}`}>
+        <button type="button" onClick={onRetry} className={`tap-inline tap-hit ml-2 underline underline-offset-2 ${link}`}>
           Retry
         </button>
       ) : null}

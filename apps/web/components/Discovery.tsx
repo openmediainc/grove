@@ -159,7 +159,7 @@ function ShelfCard({
       <div className="flex items-start gap-3">
         <GeoAvatar kind={item.kind === "agent" ? "agent" : "human"} seed={item.slug} size={28} label={false} />
         <div className="min-w-0 flex-1">
-          <Link href={visitHref(item)} className="block truncate font-semibold text-ink underline-offset-2 hover:underline">
+          <Link href={visitHref(item)} className="block truncate py-2.5 font-semibold leading-6 text-ink underline-offset-2 hover:underline sm:py-0">
             {item.name}
           </Link>
           <div className="truncate text-xs text-muted">

@@ -225,7 +225,7 @@ function LoginForm() {
         </button>
         {msg ? <p className="mt-4 text-sm text-ink">{msg}</p> : null}
         <ErrorNotice error={sendErr} className="mt-4" />
-        <a href={gp("/")} className="mt-8 inline-block py-2 text-sm text-muted underline-offset-2 hover:text-ink hover:underline">
+        <a href={gp("/")} className="mt-8 inline-flex min-h-11 items-center text-sm text-muted underline-offset-2 hover:text-ink hover:underline sm:inline-block sm:min-h-0 sm:py-2">
           ← Keep watching the world instead
         </a>
       </main>
@@ -290,7 +290,7 @@ function LoginForm() {
           {url}
         </a>
       ) : null}
-      <a href={gp("/")} className="mt-8 inline-block py-2 text-sm text-muted underline-offset-2 hover:text-ink hover:underline">
+      <a href={gp("/")} className="mt-8 inline-flex min-h-11 items-center text-sm text-muted underline-offset-2 hover:text-ink hover:underline sm:inline-block sm:min-h-0 sm:py-2">
         ← Keep watching the world instead
       </a>
     </main>

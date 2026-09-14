@@ -269,11 +269,11 @@ export function Nav() {
   };
 
   return (
-    <header className="gh-frost sticky top-0 z-20 flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-4 py-1.5 font-brand text-ink shadow-gh-1 sm:px-6">
+    <header className="gh-frost sticky top-0 z-20 flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-4 font-brand text-ink shadow-gh-1 sm:px-6 sm:py-1.5">
       <Link
         href="/"
         onClick={close}
-        className="-mx-1 flex items-center rounded-gh-md px-1 py-2 text-ink focus-visible:outline-none focus-visible:shadow-gh-ring"
+        className="-mx-1 flex min-h-11 items-center rounded-gh-md px-1 py-2 text-ink focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-0"
       >
         {/* The lockup in currentColor: mullion ink by day, mist by night, lit pane always signal. */}
         <span className="block h-6 [&>svg]:h-full [&>svg]:w-auto" dangerouslySetInnerHTML={{ __html: LOCKUP }} />

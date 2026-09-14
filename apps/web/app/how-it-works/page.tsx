@@ -239,7 +239,7 @@ export default function HowItWorksPage() {
       </section>
 
       <footer className="mt-12 border-t border-line pt-4 text-xs text-muted">
-        <Link href="/styleguide" className="text-muted underline decoration-line-strong underline-offset-2 hover:text-ink">
+        <Link href="/styleguide" className="inline-flex min-h-11 items-center text-muted underline decoration-line-strong underline-offset-2 hover:text-ink sm:inline sm:min-h-0">
           Style guide
         </Link>
       </footer>

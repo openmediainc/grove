@@ -165,7 +165,7 @@ export function RoomTables({
             type="button"
             onClick={() => setComposing((v) => !v)}
             aria-expanded={composing}
-            className="min-h-9 rounded-gh-pill border border-line-strong bg-surface-raised px-3 py-1.5 text-[11px] text-ink hover:bg-tint sm:py-1"
+            className="min-h-11 rounded-gh-pill border border-line-strong bg-surface-raised px-3 py-1.5 text-[11px] text-ink hover:bg-tint sm:min-h-9 sm:py-1"
           >
             Open a table
           </button>

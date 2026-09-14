@@ -81,7 +81,7 @@ export function Reactions({
   }
 
   return (
-    <span className="mt-1 flex flex-wrap items-center gap-1 text-[11px]">
+    <span className="mt-3 flex flex-wrap items-center gap-1 text-[11px] sm:mt-1">
       {chips.map((c) => (
         <button
           key={c.key}
@@ -123,7 +123,7 @@ export function Reactions({
                 }
                 onMenuKeyDown(e);
               }}
-              className={`absolute left-0 top-full z-20 mt-1 flex gap-0.5 rounded-full border px-1 py-0.5 ${t.menu}`}
+              className={`absolute left-0 top-full z-20 mt-1 flex w-[9.75rem] flex-wrap gap-0.5 rounded-2xl border px-1 py-0.5 sm:w-auto sm:flex-nowrap sm:rounded-full ${t.menu}`}
             >
               {REACTION_KEYS.map((key) => (
                 <button

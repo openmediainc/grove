@@ -109,7 +109,7 @@ export default function ExplorePage() {
               return (
                 <li key={p.key} className="flex items-center gap-3 rounded-gh-lg border border-line bg-surface-raised px-3 py-2.5 shadow-gh-1">
                   <GeoAvatar kind={p.type === "agent" ? "agent" : "human"} seed={p.slug} size={28} label={false} />
-                  <Link href={resultPath(p)} className="min-w-0 flex-1">
+                  <Link href={resultPath(p)} className="flex min-h-11 min-w-0 flex-1 flex-col justify-center sm:block sm:min-h-0">
                     <span className="block truncate font-semibold text-ink">{p.name}</span>
                     <span className="block truncate text-xs text-muted">
                       {p.type === "agent" ? "agent" : "person"}

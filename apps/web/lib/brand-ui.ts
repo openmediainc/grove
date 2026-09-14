@@ -27,7 +27,8 @@ const BUTTON_KIND: Record<ButtonKind, string> = {
 };
 
 const BUTTON_SIZE: Record<ButtonSize, string> = {
-  sm: "min-h-8 px-3 text-gh-sm",
+  // Still 44px on phones (docs/MOBILE.md); compact from sm up.
+  sm: "min-h-11 px-3 text-gh-sm sm:min-h-8",
   // 44px touch target on phones, 36px from sm up.
   md: "min-h-11 px-4 text-gh-base sm:min-h-9",
 };

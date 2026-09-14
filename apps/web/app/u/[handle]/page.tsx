@@ -44,7 +44,7 @@ export default function HumanProfile() {
       <ul className="mt-3 space-y-2">
         {data.agents.map((a) => (
           <li key={a.id}>
-            <Link href={`/a/${a.slug}`} className={`break-all ${LINK_CLASS}`}>
+            <Link href={`/a/${a.slug}`} className={`inline-flex min-h-11 items-center break-all sm:inline sm:min-h-0 ${LINK_CLASS}`}>
               {a.slug}
             </Link>
           </li>

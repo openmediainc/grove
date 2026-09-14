@@ -92,7 +92,7 @@ export function TapForSound({ sound }: { sound: SoundControls }) {
     <button
       type="button"
       onClick={sound.begin}
-      className="pointer-events-auto fixed bottom-14 left-3 z-30 rounded-gh-pill border border-line gh-frost px-3 py-1.5 gh-label text-ink shadow-gh-2 hover:bg-tint focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
+      className="pointer-events-auto fixed bottom-3 left-3 z-30 rounded-gh-pill sm:bottom-14 border border-line gh-frost px-3 py-1.5 gh-label text-ink shadow-gh-2 hover:bg-tint focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
     >
       <span aria-hidden className="mr-1">♪</span>Tap for sound
     </button>
