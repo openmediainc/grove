@@ -1086,6 +1086,24 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     });
   });
 
+  /**
+   * Replay deep seek (queue #63): the nearest public checkpoint at or before
+   * `at`, resolved for this viewer with their private-place movements layered
+   * on, plus the gated events from it to `until` (default `at`, at most 10
+   * minutes later). Same world choice and same gates as /api/v1/replay — the
+   * checkpoint holds only what a signed-out spectator could reconstruct.
+   */
+  app.get("/api/v1/replay/seek", async (req, reply) => {
+    const worldId = await assertWorldAccess(req, grove);
+    const viewer = await proofViewer(req, grove);
+    const q = req.query as { at?: string; until?: string };
+    const page = await grove.replayCheckpoints.seek(viewer, { at: q.at ?? "", until: q.until ?? null, worldId });
+    return sendOk(reply, {
+      ...page,
+      viewer: { signedIn: viewer.humanId !== null, operator: viewer.isOperator },
+    });
+  });
+
   app.get("/api/v1/inbox", async (req, reply) => {
     const human = await requireHuman(req, grove);
     const inbox = await grove.identity.inbox(human.id);

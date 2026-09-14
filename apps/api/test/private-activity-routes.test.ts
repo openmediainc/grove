@@ -143,6 +143,21 @@ describe.skipIf(!hasDb)("private activity routes", { timeout: 60_000 }, () => {
       });
       expect([403, 404], who).toContain(replay.statusCode);
       expect(replay.body, who).not.toContain(secret);
+
+      // Deep seek (#63): the same world gate, and the commons checkpoint path
+      // never carries the private space either.
+      const cpAt = Date.now() - 5;
+      await grove.replayCheckpoints.computeAt("aetheria-prime", cpAt);
+      const at = encodeURIComponent(new Date(cpAt + 2).toISOString());
+      const seekShut = await app.inject({ method: "GET", url: `/api/v1/replay/seek?at=${at}`, headers: { ...headers, "x-grove-world": shut.id } });
+      expect([403, 404], who).toContain(seekShut.statusCode);
+      expect(seekShut.body, who).not.toContain(secret);
+      const seek = await app.inject({ method: "GET", url: `/api/v1/replay/seek?at=${at}`, headers });
+      expect(seek.statusCode, who).toBe(200);
+      expect(Object.keys(seek.json() as object), who).toEqual(expect.arrayContaining(["keyframe", "entries", "tool_calls", "window"]));
+      expect((seek.json() as { checkpoint: unknown }).checkpoint, who).not.toBeNull();
+      expect(seek.body, who).not.toContain(secret);
+      expect(seek.body, who).not.toContain(shut.id);
     }
 
     // The AWN agent list is unauthenticated: no room, no activity inside the door.

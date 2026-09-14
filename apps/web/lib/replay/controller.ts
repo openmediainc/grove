@@ -124,6 +124,53 @@ function countAtOrBefore(sorted: readonly number[], t: number): number {
 export const REPLAY_SPEEDS = [1, 10, 60] as const;
 export type ReplaySpeed = (typeof REPLAY_SPEEDS)[number];
 
+/**
+ * A seek to an instant the client cannot draw yet (the window is still loading)
+ * asks GET /api/v1/replay/seek for the nearest server checkpoint plus the
+ * events after it, and draws that at once. Each answer also carries this much
+ * history past the target, so a nudge within it needs no second request; a
+ * seek further than this from what is drawable goes back to the server.
+ */
+export const SERVER_SEEK_AHEAD_MS = 2 * 60_000;
+/** A drag fires many seeks; only the one it settles on is asked for. */
+const SERVER_SEEK_DEBOUNCE_MS = 120;
+
+type HistoricalSpanIndex = { byActor: Map<string, HistoricalSpan[]>; edges: number[] };
+
+function indexSpans(raw: ReadonlyArray<Record<string, unknown>>): HistoricalSpanIndex {
+  const byActor = new Map<string, HistoricalSpan[]>();
+  const all: HistoricalSpan[] = [];
+  for (const r of raw) {
+    const view = spanFromWire(r);
+    const actorId = String(r.actor_id ?? r.actorId ?? "");
+    if (!view || !actorId) continue;
+    const span = { ...view, actorId };
+    all.push(span);
+    byActor.set(actorId, [...(byActor.get(actorId) ?? []), span]);
+  }
+  return { byActor, edges: spanEdgesOf(all) };
+}
+
+type RawSeek = {
+  window?: { since: string; until: string };
+  checkpoint?: { at: string } | null;
+  keyframe?: { at: string; bodies: Array<Record<string, unknown>> } | null;
+  entries?: Array<Record<string, unknown>>;
+  trailing?: Array<Record<string, unknown>>;
+  tool_calls?: Array<Record<string, unknown>>;
+  toolCalls?: Array<Record<string, unknown>>;
+};
+
+/** What a server seek drew: a small timeline from a checkpoint to just past the target. */
+interface ProvisionalWindow {
+  since: number;
+  until: number;
+  timeline: ReplayTimeline;
+  spans: HistoricalSpanIndex;
+}
+
+export type ReplayFetcher = <T>(path: string) => Promise<T>;
+
 /** Enough for a busy day; beyond it the window says it was truncated. */
 const MAX_PAGES = 60;
 const PAGE_LIMIT = 1000;
@@ -166,6 +213,8 @@ export interface ReplayView {
   density: ReplayDensityBucket[];
   markers: ReplayMarker[];
   signedIn: boolean;
+  /** The frame comes from a server checkpoint while the full window loads. */
+  provisional: boolean;
   label: string;
 }
 
@@ -263,6 +312,12 @@ export class ReplayController {
   private lastTick = 0;
   private lastFrame = 0;
   private loadToken = 0;
+  /** A server seek's small timeline, drawn until the full window has loaded. */
+  private provisional: ProvisionalWindow | null = null;
+  private seekToken = 0;
+  private seekTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Server seeks answered (for tests and the scrubber's status line). */
+  serverSeeks = 0;
   view: ReplayView = {
     active: false,
     loading: false,
@@ -278,26 +333,21 @@ export class ReplayController {
     density: [],
     markers: [],
     signedIn: false,
+    provisional: false,
     label: "",
   };
 
   /** Called whenever the map should redraw from the playhead. */
-  constructor(private onFrame: () => void) {}
+  constructor(
+    private onFrame: () => void,
+    private fetcher: ReplayFetcher = (path) => api(path),
+  ) {}
 
   /** Test and first-page hook: historical spans off the wire. */
   loadSpans(raw: ReadonlyArray<Record<string, unknown>>): void {
-    const byActor = new Map<string, HistoricalSpan[]>();
-    const all: HistoricalSpan[] = [];
-    for (const r of raw) {
-      const view = spanFromWire(r as Record<string, unknown>);
-      const actorId = String((r as Record<string, unknown>).actor_id ?? (r as Record<string, unknown>).actorId ?? "");
-      if (!view || !actorId) continue;
-      const span = { ...view, actorId };
-      all.push(span);
-      byActor.set(actorId, [...(byActor.get(actorId) ?? []), span]);
-    }
+    const { byActor, edges } = indexSpans(raw);
     this.spansByActor = byActor;
-    this.spanEdges = spanEdgesOf(all);
+    this.spanEdges = edges;
   }
 
   /** Test hook: install a window without the network. */
@@ -327,6 +377,7 @@ export class ReplayController {
     this.timeline = null;
     this.entries = [];
     this.keyframe = [];
+    this.dropProvisional();
     this.emit({
       active: true,
       loading: true,
@@ -350,7 +401,7 @@ export class ReplayController {
           limit: String(PAGE_LIMIT),
         });
         if (cursor) qs.set("cursor", cursor);
-        const res = await api<RawPage>(`/api/v1/replay?${qs.toString()}`);
+        const res = await this.fetcher<RawPage>(`/api/v1/replay?${qs.toString()}`);
         if (token !== this.loadToken) return;
         if (page === 0) {
           this.keyframe = (res.keyframe?.bodies ?? []).map(normaliseKeyframeBody);
@@ -384,6 +435,7 @@ export class ReplayController {
         keyframe: this.keyframe,
         entries: this.entries,
       });
+      this.dropProvisional();
       this.epoch++;
       this.emit({ loading: false, markers: this.timeline.markers });
       this.onFrame();
@@ -399,6 +451,7 @@ export class ReplayController {
     this.pause();
     this.timeline = null;
     this.entries = [];
+    this.dropProvisional();
     this.epoch++;
     this.emit({ active: false, loading: false, error: null, playing: false, markers: [], density: [] });
     this.onFrame();
@@ -409,6 +462,69 @@ export class ReplayController {
     const t = Math.max(this.view.since, Math.min(this.view.until, ms));
     this.emit({ playhead: t });
     this.onFrame();
+    if (this.needsServerSeek(t)) {
+      if (this.seekTimer) clearTimeout(this.seekTimer);
+      this.seekTimer = setTimeout(() => {
+        this.seekTimer = null;
+        void this.serverSeek(t);
+      }, SERVER_SEEK_DEBOUNCE_MS);
+    }
+  }
+
+  /** True when nothing loaded can draw `t`: the window is still loading and no server seek covers it. */
+  needsServerSeek(t: number): boolean {
+    if (!this.view.active || !this.view.loading || this.timeline) return false;
+    const p = this.provisional;
+    return !(p && t >= p.since && t <= p.until);
+  }
+
+  /**
+   * Ask the server for the checkpoint nearest `t` and draw from it now. The
+   * full window keeps loading behind it and replaces it when complete; both
+   * are the same history, so the swap changes nothing but the reach.
+   */
+  async serverSeek(t: number): Promise<void> {
+    const token = ++this.seekToken;
+    const loadToken = this.loadToken;
+    const until = Math.min(this.view.until, t + SERVER_SEEK_AHEAD_MS);
+    const qs = new URLSearchParams({ at: new Date(t).toISOString(), until: new Date(Math.max(t, until)).toISOString() });
+    try {
+      const res = await this.fetcher<RawSeek>(`/api/v1/replay/seek?${qs.toString()}`);
+      if (token !== this.seekToken || loadToken !== this.loadToken || this.timeline || !this.view.active) return;
+      const since = Date.parse(res.window?.since ?? "");
+      const end = Date.parse(res.window?.until ?? "");
+      if (!Number.isFinite(since) || !Number.isFinite(end)) return;
+      const entries = [...(res.entries ?? []), ...(res.trailing ?? [])].map(normaliseReplayEvent);
+      const timeline = ReplayTimeline.build({
+        since: new Date(since).toISOString(),
+        until: new Date(end).toISOString(),
+        keyframe: (res.keyframe?.bodies ?? []).map(normaliseKeyframeBody),
+        entries,
+      });
+      this.provisional = { since, until: end, timeline, spans: indexSpans(res.tool_calls ?? res.toolCalls ?? []) };
+      this.serverSeeks++;
+      this.epoch++;
+      this.emit({ provisional: true });
+      this.onFrame();
+    } catch {
+      /* the full window is still coming; a failed shortcut is not an error */
+    }
+  }
+
+  private dropProvisional(): void {
+    this.seekToken++;
+    if (this.seekTimer) clearTimeout(this.seekTimer);
+    this.seekTimer = null;
+    this.provisional = null;
+    if (this.view.provisional) this.view = { ...this.view, provisional: false };
+  }
+
+  /** What draws `t`: the full window once loaded, else a server seek that covers it. */
+  private sourceAt(t: number): { timeline: ReplayTimeline; byActor: Map<string, HistoricalSpan[]>; edges: number[] } | null {
+    if (this.timeline) return { timeline: this.timeline, byActor: this.spansByActor, edges: this.spanEdges };
+    const p = this.provisional;
+    if (p && t >= p.since - 1 && t <= p.until) return { timeline: p.timeline, byActor: p.spans.byActor, edges: p.spans.edges };
+    return null;
   }
 
   setSpeed(speed: ReplaySpeed): void {
@@ -463,15 +579,18 @@ export class ReplayController {
    * signals are identical, so the motion model is re-synced only on a change.
    */
   signalKey(t: number): string {
-    if (!this.timeline) return "empty";
-    return `${this.timeline.stepIndexAt(t)}|${countAtOrBefore(this.spanEdges, t)}`;
+    const src = this.sourceAt(t);
+    if (!src) return "empty";
+    return `${src.timeline.stepIndexAt(t)}|${countAtOrBefore(src.edges, t)}`;
   }
 
   /** The first instant after `t` at which `signalKey` changes, or null. */
   nextSignalChange(t: number): number | null {
-    const step = this.timeline?.nextStepAfter(t) ?? null;
-    const i = countAtOrBefore(this.spanEdges, t);
-    const edge = i < this.spanEdges.length ? this.spanEdges[i]! : null;
+    const src = this.sourceAt(t);
+    const step = src?.timeline.nextStepAfter(t) ?? null;
+    const edges = src?.edges ?? [];
+    const i = countAtOrBefore(edges, t);
+    const edge = i < edges.length ? edges[i]! : null;
     if (step === null) return edge;
     if (edge === null) return step;
     return Math.min(step, edge);
@@ -479,6 +598,7 @@ export class ReplayController {
 
   /** The loaded window's start. */
   get windowStart(): number {
+    if (!this.timeline && this.provisional) return this.provisional.since;
     return this.view.since;
   }
 
@@ -489,7 +609,8 @@ export class ReplayController {
    */
   bodiesAt(t: number): ReplayWireBody[] {
     const lineMs = LINE_WALL_MS * this.view.speed;
-    const frame = this.timeline ? this.timeline.frameAt(t, { lineMs }) : [];
+    const src = this.sourceAt(t);
+    const frame = src ? src.timeline.frameAt(t, { lineMs }) : [];
     const slugOf = new Map((this.live?.rooms ?? []).map((r) => [r.id, r.slug]));
     return frame.map((b) => {
       const roomSlug =
@@ -497,7 +618,7 @@ export class ReplayController {
         (b.roomId?.includes(":") ? b.roomId.split(":").pop() : b.roomId) ||
         "plaza";
       const phase = b.phase;
-      const tool_calls = toolCallsAt(this.spansByActor.get(b.id) ?? [], t);
+      const tool_calls = toolCallsAt(src?.byActor.get(b.id) ?? [], t);
       return {
         id: b.id,
         kind: b.kind === "human" ? "human" : "agent",
@@ -532,7 +653,8 @@ export class ReplayController {
     const t = this.view.playhead;
     const lineMs = LINE_WALL_MS * this.view.speed;
     const bodies = this.bodiesAt(t);
-    const frame = this.timeline ? this.timeline.frameAt(t, { lineMs }) : [];
+    const src = this.sourceAt(t);
+    const frame = src ? src.timeline.frameAt(t, { lineMs }) : [];
     const recent_speech = frame
       .filter((b) => b.line && b.line.body !== null)
       .sort((p, q) => p.line!.at - q.line!.at || (p.id < q.id ? -1 : 1))
@@ -554,6 +676,7 @@ export class ReplayController {
 
   dispose(): void {
     this.loadToken++;
+    this.dropProvisional();
     cancelAnimationFrame(this.raf);
     this.listeners.clear();
   }

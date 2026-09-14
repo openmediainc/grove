@@ -283,7 +283,7 @@ export function ReplayBar({ controller }: { controller: ReplayController }) {
           {view.error
             ? `Replay failed: ${view.error}`
             : view.loading
-              ? `loading ${view.loaded.toLocaleString()} events…`
+              ? `loading ${view.loaded.toLocaleString()} events…${view.provisional ? " · jumped ahead from a checkpoint" : ""}`
               : `${view.loaded.toLocaleString()} events you may see${view.truncated ? " (window truncated)" : ""}${
                   view.signedIn ? "" : " · signed out: movement only"
                 }`}

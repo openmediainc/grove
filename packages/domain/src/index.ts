@@ -190,6 +190,13 @@ export {
   type ReplayPage,
   type ReplayKeyframeBody,
 } from "./services/replay.js";
+export {
+  ReplayCheckpointService,
+  REPLAY_CHECKPOINT_BUCKET_MS,
+  REPLAY_SEEK_MAX_AHEAD_MS,
+  type ReplaySeekPage,
+  type ReplaySeekQuery,
+} from "./services/replay-checkpoints.js";
 export { WebhookService, JobService } from "./services/webhooks.js";
 export { HostedBrainService, type ResponsesClient, type XaiClientFactory } from "./services/brains.js";
 // Cost burn (migration 024). See services/usage.ts for the three honesty rules.
@@ -327,6 +334,7 @@ import { DiscoveryService } from "./services/discovery.js";
 import { MessageService } from "./services/messages.js";
 import { AudienceService } from "./services/audience.js";
 import { ReplayService } from "./services/replay.js";
+import { ReplayCheckpointService } from "./services/replay-checkpoints.js";
 import { WebhookService, JobService } from "./services/webhooks.js";
 import { HostedBrainService } from "./services/brains.js";
 import { UsageService } from "./services/usage.js";
@@ -373,7 +381,7 @@ export class GroveApp {
   supporters: SupporterService;
   /** Plot decor (044): owner-placed cosmetic presets unlocked by marks. */
   decor: DecorService;
-  /** Owner default theme per space (045). */
+  /** Owner default theme per space (046). */
   spaceTheme: SpaceThemeService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
   follows: FollowService;
@@ -392,6 +400,8 @@ export class GroveApp {
   /** "N watching" on the map: counted tab heartbeats, never identities. */
   audience: AudienceService;
   replay: ReplayService;
+  /** Public replay checkpoints every 5 minutes, for fast deep seeks (046). */
+  replayCheckpoints: ReplayCheckpointService;
   webhooks: WebhookService;
   jobs: JobService;
   brains: HostedBrainService;
@@ -421,6 +431,7 @@ export class GroveApp {
     this.campus = new CampusService(this.store);
     this.chronicle = new ChronicleService(this.store);
     this.replay = new ReplayService(this.chronicle);
+    this.replayCheckpoints = new ReplayCheckpointService(this.store, this.chronicle);
     this.webhooks = new WebhookService(this.store);
     this.jobs = new JobService(this.store);
     this.mailbox = new MailboxService(this.store, this.presence, this.webhooks);

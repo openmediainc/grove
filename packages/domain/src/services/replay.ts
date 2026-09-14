@@ -58,6 +58,12 @@ import { toToolCallView } from "./tool-calls.js";
  * Scrubbing does not re-read: the client builds checkpoints over the loaded
  * events (packages/protocol/src/replay.ts), so seeking is "nearest checkpoint +
  * a few hundred events", never "replay from zero".
+ *
+ * A seek into a window that has not finished loading goes to the server
+ * instead: GET /api/v1/replay/seek reads the nearest PUBLIC checkpoint
+ * (replay-checkpoints.ts, every 5 minutes) plus the events after it, gated by
+ * this same chronicle, so the first deep seek into a busy day is one small
+ * request rather than every page of the day.
  */
 
 /** The longest window one replay may ask for. "The last day" and no more. */

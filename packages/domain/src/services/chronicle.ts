@@ -587,6 +587,35 @@ ORDER BY id DESC
 LIMIT $9::int`;
 
 /**
+ * The same reduction as LAST_MOVEMENT_SQL, narrowed to movements in places a
+ * signed-out spectator could NOT see (a private room, an owner's lounge, a
+ * private space) but this viewer can: the member overlay on a replay
+ * checkpoint (queue #63). The `visible` CTE still decides what this viewer may
+ * see; the extra clause only removes rows, so it can never widen a read.
+ */
+const LAST_PRIVATE_MOVEMENT_SQL = `${VISIBLE_CTE}
+SELECT * FROM (
+  SELECT DISTINCT ON (raw_actor_id) * FROM (${SELECT_COLUMNS}, actor_id AS raw_actor_id
+    FROM visible v
+    WHERE actor_id IS NOT NULL
+      AND room_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM rooms pr LEFT JOIN worlds pw ON pw.id = pr.world_id
+         WHERE pr.id = v.room_id AND ${roomActivityVisibleSql("pr", "pw", "NULL")})) moves
+  ORDER BY raw_actor_id, id DESC
+) latest
+ORDER BY id DESC
+LIMIT $9::int`;
+
+/** Does this viewer see any place in `world` that a signed-out spectator does not? $1 viewer $2 world $3 commons. */
+const HAS_PRIVATE_PLACE_SQL = `
+SELECT EXISTS (
+  SELECT 1 FROM rooms r LEFT JOIN worlds rw ON rw.id = r.world_id
+   WHERE COALESCE(r.world_id, $3::text) = $2::text
+     AND ${roomActivityVisibleSql("r", "rw", "$1")}
+     AND NOT ${roomActivityVisibleSql("r", "rw", "NULL")}) AS any`;
+
+/**
  * Activity density: visible events per time bucket. $9 is the bucket width in
  * seconds. A work span is counted where it STARTED, not where its row was
  * written, because a span's row lands only when the stretch closes.
@@ -745,6 +774,37 @@ export class ChronicleService {
       null,
       ["actor_joined_room", "actor_left_room"],
       query.worldId ?? null,
+      WORLD_ID,
+      limit,
+    ]);
+    const names = await this.resolveNames(rows);
+    return rows.map((r) => this.toEntry(r as Record<string, unknown>, names));
+  }
+
+  /**
+   * Each body's latest movement in a place this viewer may see and a signed-out
+   * spectator may not — the overlay a member gets on top of a public replay
+   * checkpoint. Empty for a signed-out viewer, and without a scan for a viewer
+   * who can see no such place in the world.
+   */
+  async lastPrivateMovements(
+    viewer: ChronicleViewer,
+    query: { since: string; until: string; worldId: string; limit?: number },
+  ): Promise<ChronicleEntry[]> {
+    if (!viewer.humanId) return [];
+    const since = parseTime(query.since, "since");
+    const until = parseTime(query.until, "until");
+    const { rows: any } = await this.store.pg.query(HAS_PRIVATE_PLACE_SQL, [viewer.humanId, query.worldId, WORLD_ID]);
+    if (!any[0]?.any) return [];
+    const limit = Math.max(1, Math.min(5000, Math.trunc(query.limit ?? 2000)));
+    const { rows } = await this.store.pg.query(LAST_PRIVATE_MOVEMENT_SQL, [
+      viewer.humanId,
+      viewer.isOperator,
+      since,
+      until,
+      null,
+      ["actor_joined_room", "actor_left_room"],
+      query.worldId,
       WORLD_ID,
       limit,
     ]);
