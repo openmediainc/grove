@@ -3,6 +3,7 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { SearchPalette } from "@/components/SearchPalette";
 import { VisitBeacon } from "@/components/VisitBeacon";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "Glasshouse — a world you watch",
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <SearchPalette />
         <VisitBeacon />
+        <SpeedInsights />
       </body>
     </html>
   );
