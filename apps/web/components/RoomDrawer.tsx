@@ -1080,8 +1080,9 @@ function SpectatorRoom({
           </p>
           {here.length ? (
             <ul className="mt-2 space-y-1 text-xs text-white/55">
-              {here.slice(0, 12).map((b) => (
-                <li key={b.name}>
+              {here.slice(0, 12).map((b, i) => (
+                // Public snapshot rows carry no id, and two bodies can share a name.
+                <li key={`${i}:${b.name}`}>
                   <span className="text-white/80">{b.name}</span> · {b.detail}
                 </li>
               ))}
@@ -1092,8 +1093,9 @@ function SpectatorRoom({
             <div className="mt-3 border-t border-white/10 pt-3">
               <p className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">Heard recently</p>
               <ul className="mt-2 space-y-1 text-xs text-white/55">
-                {recent.map((l) => (
-                  <li key={`${l.who}:${l.body}`} className="break-words">
+                {recent.map((l, i) => (
+                  // The same speaker can say the same line twice; the index keeps keys unique.
+                  <li key={`${i}:${l.who}:${l.body}`} className="break-words">
                     <span className="text-white/80">{l.who}:</span> {l.body}
                   </li>
                 ))}
