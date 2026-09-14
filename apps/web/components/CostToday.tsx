@@ -18,6 +18,17 @@ import {
   type UsageResponse,
 } from "@/lib/cost";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import {
+  EMPTY_CLASS,
+  LINK_CLASS,
+  NUM_CLASS,
+  SELECT_CLASS,
+  TABLE_CLASS,
+  TABLE_WRAP_CLASS,
+  TD_CLASS,
+  TH_CLASS,
+  buttonClass,
+} from "@/lib/brand-ui";
 
 /**
  * "What did today cost" — per agent, per model, per hour.
@@ -43,13 +54,13 @@ function shiftDay(day: string, by: number): string {
 function Cell({ t }: { t: Totals }) {
   return (
     <>
-      <td className="py-1.5 pr-3 text-right tabular-nums">
-        {t.cost_micros === null ? <span className="text-white/55">{NOT_REPORTED}</span> : money(t.cost_micros)}
+      <td className={`${TD_CLASS} ${NUM_CLASS} text-right`}>
+        {t.cost_micros === null ? <span className="text-muted">{NOT_REPORTED}</span> : money(t.cost_micros)}
         {t.cost_micros !== null && t.uncosted_reports ? (
-          <span className="block text-[10px] text-white/50">+ {t.uncosted_reports} unpriced</span>
+          <span className="block text-gh-xs text-muted">+ {t.uncosted_reports} unpriced</span>
         ) : null}
       </td>
-      <td className="py-1.5 text-right tabular-nums text-white/60">{tokens(totalTokens(t))}</td>
+      <td className={`${TD_CLASS} ${NUM_CLASS} text-right text-muted`}>{tokens(totalTokens(t))}</td>
     </>
   );
 }
@@ -82,16 +93,16 @@ export function CostToday() {
   return (
     <section className="mt-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="font-display text-2xl text-lantern-300">What did {day === today ? "today" : day} cost</h2>
+        <h3 className="font-brand text-gh-base font-bold text-ink">What did {day === today ? "today" : day} cost</h3>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <button type="button" onClick={() => setDay(shiftDay(day, -1))} className="rounded-full border border-white/15 px-3 py-2 sm:py-1">
+          <button type="button" onClick={() => setDay(shiftDay(day, -1))} className={buttonClass("secondary", "sm", "min-h-11 sm:min-h-8")}>
             ← earlier
           </button>
           <button
             type="button"
             disabled={day >= today}
             onClick={() => setDay(shiftDay(day, 1))}
-            className="rounded-full border border-white/15 px-3 py-2 disabled:opacity-30 sm:py-1"
+            className={buttonClass("secondary", "sm", "min-h-11 sm:min-h-8")}
           >
             later →
           </button>
@@ -100,7 +111,7 @@ export function CostToday() {
               aria-label="Whose spend"
               value={scope}
               onChange={(e) => setScope(e.target.value)}
-              className="rounded-lg bg-dusk-800 px-2 py-2 ring-1 ring-white/10 sm:py-1"
+              className={`${SELECT_CLASS} w-auto text-gh-sm`}
             >
               <option value="mine">my agents</option>
               {u.orgs.map((o) => (
@@ -112,30 +123,30 @@ export function CostToday() {
           ) : null}
         </div>
       </div>
-      <p className="mt-1 text-xs text-white/55">
+      <p className="mt-1 text-xs text-muted">
         UTC day. Reported by the agents themselves; a cost they did not report is shown as {NOT_REPORTED}, never as $0.
       </p>
 
       <ErrorNotice error={err} className="mt-4" />
       {!u ? (
-        err ? null : <p className="mt-4 text-sm text-white/55">Adding it up…</p>
+        err ? null : <p className="mt-4 text-sm text-muted">Adding it up…</p>
       ) : (
         <>
           <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-            <span className="font-display text-3xl text-white">
+            <span className={`font-brand-mono text-gh-2xl tabular-nums text-ink`}>
               {u.totals.reports === 0 ? "nothing reported" : u.totals.cost_micros === null ? `cost ${NOT_REPORTED}` : money(u.totals.cost_micros)}
             </span>
-            <span className="text-sm text-white/55">{tokens(totalTokens(u.totals))} tokens</span>
-            <span className="text-xs text-white/55">
+            <span className={`text-sm text-muted ${NUM_CLASS}`}>{tokens(totalTokens(u.totals))} tokens</span>
+            <span className={`text-xs text-muted ${NUM_CLASS}`}>
               {u.totals.reports} report{u.totals.reports === 1 ? "" : "s"}
               {u.totals.uncosted_reports ? ` · ${u.totals.uncosted_reports} without a price` : ""}
             </span>
           </div>
 
           {u.totals.reports === 0 ? (
-            <p className="mt-3 text-sm text-white/55">
+            <p className={`mt-3 ${EMPTY_CLASS}`}>
               No agent in view reported usage on this day. Agents report with <code>POST /world/usage</code> or the MCP{" "}
-              <code>report_usage</code> tool — see <a className="underline" href={gp("/PULSE.md")}>PULSE.md</a>.
+              <code>report_usage</code> tool — see <a className={LINK_CLASS} href={gp("/PULSE.md")}>PULSE.md</a>.
             </p>
           ) : (
             <>
@@ -149,46 +160,54 @@ export function CostToday() {
                       <div
                         key={h.hour}
                         title={`${String(h.hour).padStart(2, "0")}:00 UTC — ${costLine(h)}, ${tokens(totalTokens(h))} tokens`}
-                        className={`flex-1 rounded-t-sm ${unpriced ? "bg-slate-400/40" : "bg-amber-400/80"}`}
+                        className={`flex-1 rounded-t-sm ${unpriced ? "bg-line-strong" : "bg-pane"}`}
                         style={{
                           height: `${unpriced && priced ? 6 : height}%`,
                           backgroundImage: unpriced
-                            ? "repeating-linear-gradient(45deg, rgba(255,255,255,.25) 0 2px, transparent 2px 5px)"
+                            ? "repeating-linear-gradient(45deg, rgb(var(--gh-surface-raised-rgb) / .5) 0 2px, transparent 2px 5px)"
                             : undefined,
                         }}
                       />
                     );
                   })}
                 </div>
-                <div className="mt-1 flex justify-between text-[10px] text-white/50">
+                <div className={`mt-1 flex justify-between text-gh-xs text-muted ${NUM_CLASS}`}>
                   <span>00</span>
                   <span>06</span>
                   <span>12</span>
                   <span>18</span>
                   <span>23</span>
                 </div>
+                <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-gh-xs text-muted" aria-hidden>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-3 rounded-sm bg-pane" /> {priced ? "cost" : "tokens"} per UTC hour
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-3 rounded-sm bg-line-strong" /> reported without a price
+                  </span>
+                </p>
               </div>
 
               <div className="mt-6 grid gap-6 md:grid-cols-2">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className={TABLE_WRAP_CLASS}>
+                  <table className={TABLE_CLASS}>
                     <thead>
-                      <tr className="text-left text-[11px] uppercase tracking-widest text-white/55">
-                        <th className="pb-1 font-normal">Agent</th>
-                        <th className="pb-1 pr-3 text-right font-normal">Cost</th>
-                        <th className="pb-1 text-right font-normal">Tokens</th>
+                      <tr>
+                        <th className={TH_CLASS}>Agent</th>
+                        <th className={`${TH_CLASS} text-right`}>Cost</th>
+                        <th className={`${TH_CLASS} text-right`}>Tokens</th>
                       </tr>
                     </thead>
                     <tbody>
                       {u.by_agent.map((a) => {
                         const line = budgetLine(a.budget);
                         return (
-                          <tr key={a.agent_id} className="border-t border-white/5 align-top">
-                            <td className="py-1.5 pr-3">
-                              <Link href={agentHref(a.agent_id, "settings")} className="hover:underline">
+                          <tr key={a.agent_id}>
+                            <td className={TD_CLASS}>
+                              <Link href={agentHref(a.agent_id, "settings")} className={LINK_CLASS}>
                                 {a.display_name}
                               </Link>
-                              {line && a.budget ? <span className={`block text-[10px] ${BUDGET_TONE[a.budget.state]}`}>{line}</span> : null}
+                              {line && a.budget ? <span className={`block text-gh-xs ${BUDGET_TONE[a.budget.state]}`}>{line}</span> : null}
                             </td>
                             <Cell t={a} />
                           </tr>
@@ -197,20 +216,20 @@ export function CostToday() {
                     </tbody>
                   </table>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className={TABLE_WRAP_CLASS}>
+                  <table className={TABLE_CLASS}>
                     <thead>
-                      <tr className="text-left text-[11px] uppercase tracking-widest text-white/55">
-                        <th className="pb-1 font-normal">Model</th>
-                        <th className="pb-1 pr-3 text-right font-normal">Cost</th>
-                        <th className="pb-1 text-right font-normal">Tokens</th>
+                      <tr>
+                        <th className={TH_CLASS}>Model</th>
+                        <th className={`${TH_CLASS} text-right`}>Cost</th>
+                        <th className={`${TH_CLASS} text-right`}>Tokens</th>
                       </tr>
                     </thead>
                     <tbody>
                       {u.by_model.map((m) => (
-                        <tr key={m.model ?? ""} className="border-t border-white/5 align-top">
-                          <td className="break-all py-1.5 pr-3">
-                            {m.model ?? <span className="text-white/55">model not given</span>}
+                        <tr key={m.model ?? ""}>
+                          <td className={`${TD_CLASS} break-all font-brand-mono text-gh-xs`}>
+                            {m.model ?? <span className="text-muted">model not given</span>}
                           </td>
                           <Cell t={m} />
                         </tr>
@@ -233,14 +252,14 @@ export function CostToday() {
           ) : null}
 
           {data?.paperclip ? (
-            <div className="mt-8 rounded-xl border border-violet-300/15 bg-violet-300/5 p-4 text-sm">
-              <h3 className="text-xs uppercase tracking-widest text-violet-200/70">Paperclip this month · operator view</h3>
+            <div className="mt-8 rounded-gh-lg border border-line bg-surface p-4 text-sm">
+              <h3 className="gh-label text-muted">Paperclip this month · operator view</h3>
               {!data.paperclip.ok ? (
-                <p className="mt-2 text-white/55">Paperclip did not answer, so its budgets are unknown right now.</p>
+                <p className="mt-2 text-muted">Paperclip did not answer, so its budgets are unknown right now.</p>
               ) : (
                 <>
                   {data.paperclip.company ? (
-                    <p className="mt-2 text-white/70">
+                    <p className="mt-2 text-muted">
                       Company: {centsMoney(data.paperclip.company.spent_monthly_cents)} of{" "}
                       {data.paperclip.company.budget_monthly_cents === null ? "no budget" : centsMoney(data.paperclip.company.budget_monthly_cents)}
                     </p>
@@ -248,8 +267,8 @@ export function CostToday() {
                   <ul className="mt-2 space-y-1">
                     {data.paperclip.agents.map((a) => (
                       <li key={a.id} className="flex flex-wrap justify-between gap-2">
-                        <span>{a.name}</span>
-                        <span className="tabular-nums text-white/60">
+                        <span className="text-ink">{a.name}</span>
+                        <span className={`${NUM_CLASS} text-muted`}>
                           {centsMoney(a.spent_monthly_cents)} · {a.budget_monthly_cents === null ? "no budget" : `budget ${centsMoney(a.budget_monthly_cents)}`}
                         </span>
                       </li>

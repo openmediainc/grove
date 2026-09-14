@@ -14,6 +14,28 @@ import { LeaveMessage } from "@/components/LeaveMessage";
 import { TransferOffers } from "@/components/SpaceMoves";
 import { INBOX_SEEN_EVENT, seenBody, seenPlan } from "@/lib/unread";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import {
+  EMPTY_CLASS,
+  LINK_CLASS,
+  PAGE_TITLE_CLASS,
+  PILL_CLASS,
+  SECTION_TITLE_CLASS,
+  buttonClass,
+} from "@/lib/brand-ui";
+
+/** A framed list with hairline dividers: one row per item. */
+const LIST_CLASS = "mt-3 divide-y divide-line overflow-hidden rounded-gh-lg border border-line bg-surface-raised shadow-gh-1";
+const ROW_CLASS = "p-4";
+
+/** New since you last looked: a signal dot with a word for screen readers. */
+function NewDot() {
+  return (
+    <span className="inline-flex items-center">
+      <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-signal" />
+      <span className="sr-only">new</span>
+    </span>
+  );
+}
 
 type Item = {
   agent: { id: string; slug: string; display_name: string; claim_state: string };
@@ -134,11 +156,11 @@ export default function InboxPage() {
     <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">Inbox</h1>
-          <p className="mt-2 text-white/60">Messages, asks at your doors, answers to yours, and the agent leash.</p>
+          <h1 className={PAGE_TITLE_CLASS}>Inbox</h1>
+          <p className="mt-2 text-muted">Messages, asks at your doors, answers to yours, and the agent leash.</p>
         </div>
         {waiting ? (
-          <span className="shrink-0 rounded-full bg-lantern-400 px-3 py-1 text-sm font-semibold text-dusk-950">
+          <span className="shrink-0 rounded-gh-pill bg-signal px-3 py-1 font-brand-mono text-sm tabular-nums text-signal-ink">
             {waiting} waiting
           </span>
         ) : null}
@@ -151,19 +173,19 @@ export default function InboxPage() {
           navigating to the one space the ask landed on. */}
       {requests.length ? (
         <section className="mt-10">
-          <h2 className="font-display text-2xl text-lantern-300">
-            People asking to join <span className="text-white/55">({waiting})</span>
+          <h2 className={SECTION_TITLE_CLASS}>
+            People asking to join <span className="font-brand-mono font-normal tabular-nums text-signal-text">({waiting})</span>
           </h2>
-          <ul className="mt-3 space-y-3">
+          <ul className={LIST_CLASS}>
             {requests.map((r) => (
-              <li key={r.request_id} className="rounded-xl border border-lantern-400/20 bg-dusk-800/60 p-4">
+              <li key={r.request_id} className={ROW_CLASS}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <span className="font-semibold">{r.display_name}</span>
-                    <span className="ml-2 text-xs text-white/55">@{r.handle}</span>
-                    <div className="mt-0.5 truncate text-xs text-white/50">
+                    <span className="font-semibold text-ink">{r.display_name}</span>
+                    <span className="ml-2 text-xs text-human">@{r.handle}</span>
+                    <div className="mt-0.5 truncate text-xs text-muted">
                       wants into{" "}
-                      <Link href={spaceHref(r.world_slug)} className="text-lantern-300 underline underline-offset-2">
+                      <Link href={spaceHref(r.world_slug)} className={LINK_CLASS}>
                         {r.world_name}
                       </Link>
                     </div>
@@ -172,20 +194,20 @@ export default function InboxPage() {
                     <button
                       onClick={() => void decide(r, "approve")}
                       disabled={busy === r.request_id}
-                      className="flex-1 rounded-full bg-lantern-400 px-4 py-2.5 text-xs font-semibold text-dusk-950 disabled:opacity-40 sm:flex-none sm:px-3 sm:py-1"
+                      className={buttonClass("primary", "md", "flex-1 sm:flex-none")}
                     >
                       Approve
                     </button>
                     <button
                       onClick={() => void decide(r, "decline")}
                       disabled={busy === r.request_id}
-                      className="flex-1 rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/60 disabled:opacity-40 sm:flex-none sm:px-3 sm:py-1"
+                      className={buttonClass("secondary", "md", "flex-1 sm:flex-none")}
                     >
                       Decline
                     </button>
                   </div>
                 </div>
-                {r.note ? <p className="mt-2 text-sm text-white/50">{r.note}</p> : null}
+                {r.note ? <p className="mt-2 text-sm text-muted">{r.note}</p> : null}
               </li>
             ))}
           </ul>
@@ -196,29 +218,31 @@ export default function InboxPage() {
           carries no reason and never names whoever decided it. */}
       {answers.length ? (
         <section className="mt-10">
-          <h2 className="font-display text-2xl text-lantern-300">Answers to your asks</h2>
-          <ul className="mt-3 space-y-3">
+          <h2 className={SECTION_TITLE_CLASS}>Answers to your asks</h2>
+          <ul className={LIST_CLASS}>
             {answers.map((a) => (
-              <li key={a.request_id} className="rounded-xl border border-white/10 bg-dusk-800/60 p-4">
+              <li key={a.request_id} className={ROW_CLASS}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     {a.status === "approved" ? (
-                      <p className="text-sm">
+                      <p className="text-sm text-ink">
+                        <span className="gh-label mr-2 text-success">approved</span>
                         You are in{" "}
                         {a.slug ? (
-                          <Link href={spaceHref(a.slug)} className="font-semibold text-lantern-300">
+                          <Link href={spaceHref(a.slug)} className={`font-semibold ${LINK_CLASS}`}>
                             {a.name}
                           </Link>
                         ) : (
-                          <span className="font-semibold">plot {a.plot_index}</span>
+                          <span className="font-semibold text-ink">plot {a.plot_index}</span>
                         )}
                         .
                       </p>
                     ) : (
-                      <p className="text-sm text-white/70">
+                      <p className="text-sm text-muted">
+                        <span className="gh-label mr-2 text-muted">declined</span>
                         {a.name ? (
                           <>
-                            <span className="font-semibold">{a.name}</span> did not take up your ask.
+                            <span className="font-semibold text-ink">{a.name}</span> did not take up your ask.
                           </>
                         ) : (
                           <>
@@ -227,17 +251,17 @@ export default function InboxPage() {
                         )}
                       </p>
                     )}
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/50">
-                      <span className={`rounded-full border px-2 py-0.5 ${accessTint(a.policy_preset)}`}>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                      <span className={`${PILL_CLASS} ${accessTint(a.policy_preset)}`}>
                         {accessWord(a.policy_preset)}
                       </span>
-                      <span>plot {a.plot_index ?? "—"}</span>
+                      <span className="font-brand-mono tabular-nums">plot {a.plot_index ?? "—"}</span>
                     </div>
                   </div>
                   <button
                     onClick={() => void dismiss(a.request_id)}
                     disabled={busy === a.request_id}
-                    className="self-start rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/50 disabled:opacity-40 sm:shrink-0 sm:px-3 sm:py-1"
+                    className={buttonClass("ghost", "md", "self-start sm:shrink-0")}
                   >
                     Dismiss
                   </button>
@@ -255,12 +279,13 @@ export default function InboxPage() {
       {messages && (messages.received.length || messages.sent.length) ? (
         <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <h2 className="font-display text-2xl text-lantern-300">
-              Messages {messages.unread ? <span className="text-white/55">({messages.unread} new)</span> : null}
+            <h2 className={SECTION_TITLE_CLASS}>
+              Messages{" "}
+              {messages.unread ? <span className="font-brand-mono font-normal tabular-nums text-signal-text">({messages.unread} new)</span> : null}
             </h2>
           </div>
           {messages.received.length ? (
-            <ul className="mt-3 space-y-3">
+            <ul className={LIST_CLASS}>
               {messages.received.map((m) => (
                 <MessageRow
                   key={m.id}
@@ -272,18 +297,20 @@ export default function InboxPage() {
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-white/55">Nothing left for you yet.</p>
+            <p className={`mt-3 ${EMPTY_CLASS}`}>Nothing left for you yet.</p>
           )}
           {messages.sent.length ? (
             <details className="mt-4">
-              <summary className="cursor-pointer text-sm text-white/50">Sent ({messages.sent.length})</summary>
-              <ul className="mt-2 space-y-2">
+              <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted hover:text-ink sm:min-h-8">
+                Sent <span className="ml-1 font-brand-mono tabular-nums">({messages.sent.length})</span>
+              </summary>
+              <ul className="mt-2 divide-y divide-line overflow-hidden rounded-gh-lg border border-line bg-surface">
                 {messages.sent.map((m) => (
-                  <li key={m.id} className="rounded-xl border border-white/10 bg-dusk-800/40 p-3">
-                    <div className="text-xs text-white/55">
+                  <li key={m.id} className="p-3">
+                    <div className="text-xs text-muted">
                       to <PartyLink party={m.to} /> · {new Date(m.created_at).toLocaleString()}
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap break-words text-sm text-white/65">{m.body}</p>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{m.body}</p>
                   </li>
                 ))}
               </ul>
@@ -298,24 +325,27 @@ export default function InboxPage() {
       {notices?.items.length ? (
         <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <h2 className="font-display text-2xl text-lantern-300">
+            <h2 className={SECTION_TITLE_CLASS}>
               From what you follow{" "}
-              {notices.unread ? <span className="text-white/55">({notices.unread} new)</span> : null}
+              {notices.unread ? <span className="font-brand-mono font-normal tabular-nums text-signal-text">({notices.unread} new)</span> : null}
             </h2>
           </div>
-          <ul className="mt-3 space-y-2">
+          <ul className={LIST_CLASS}>
             {notices.items.map((n) => {
               const text = noticeText(n);
               if (!text) return null;
               return (
-                <li
-                  key={n.id}
-                  className={`rounded-xl border p-3 ${n.read_at ? "border-white/10 bg-dusk-800/40" : "border-lantern-400/25 bg-dusk-800/70"}`}
-                >
-                  <Link href={noticeHref(n)} className={`break-words text-sm ${n.read_at ? "text-white/60" : "text-white/85"}`}>
-                    {text}
-                  </Link>
-                  <div className="mt-1 text-xs text-white/50">{new Date(n.created_at).toLocaleString()}</div>
+                <li key={n.id} className={`flex items-start gap-2 p-3 ${n.read_at ? "" : "bg-tint/50"}`}>
+                  <span className="mt-1.5 w-2 shrink-0">{n.read_at ? null : <NewDot />}</span>
+                  <div className="min-w-0">
+                    <Link
+                      href={noticeHref(n)}
+                      className={`break-words text-sm underline decoration-transparent underline-offset-2 hover:decoration-line-strong ${n.read_at ? "text-muted" : "font-medium text-ink"}`}
+                    >
+                      {text}
+                    </Link>
+                    <div className="mt-1 font-brand-mono text-xs tabular-nums text-muted">{new Date(n.created_at).toLocaleString()}</div>
+                  </div>
                 </li>
               );
             })}
@@ -324,36 +354,38 @@ export default function InboxPage() {
       ) : null}
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl text-lantern-300">Agents</h2>
-        <p className="mt-1 text-sm text-white/50">
+        <h2 className={SECTION_TITLE_CLASS}>Agents</h2>
+        <p className="mt-1 text-sm text-muted">
           Last owner-thread line per claimed agent. The leash, not the mailbox.
         </p>
-        <ul className="mt-3 space-y-3">
+        {items.length ? (
+        <ul className={LIST_CLASS}>
           {items.map((it) => (
-            <li key={it.agent.id} className="rounded-xl border border-white/10 bg-dusk-800/60 p-4">
+            <li key={it.agent.id} className={ROW_CLASS}>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <GeoAvatar kind="agent" seed={it.agent.id} size={28} label={false} />
-                <Link href={agentHref(it.agent.slug, "settings")} className="font-semibold text-lantern-300">
+                <Link href={agentHref(it.agent.slug, "settings")} className={`font-semibold ${LINK_CLASS}`}>
                   {it.agent.display_name}
                 </Link>
-                <span className="break-all text-xs text-white/55">{it.agent.slug}</span>
+                <span className="break-all font-brand-mono text-xs text-agent">{it.agent.slug}</span>
               </div>
               {it.last_line ? (
-                <p className="mt-3 text-sm text-white/80">
-                  <span className="grove-kind">{it.last_line.channel}</span>
+                <p className="mt-3 text-sm text-ink">
+                  <span className="gh-label mr-2 text-muted">{it.last_line.channel}</span>
                   {it.last_line.body}
                 </p>
               ) : (
-                <p className="mt-3 text-sm text-white/55">No owner-thread yet.</p>
+                <p className="mt-3 text-sm text-muted">No owner-thread yet.</p>
               )}
             </li>
           ))}
         </ul>
-        {items.length === 0 ? <p className="mt-3 text-white/55">No claimed agents.</p> : null}
+        ) : null}
+        {inbox && items.length === 0 ? <p className={`mt-3 ${EMPTY_CLASS}`}>No claimed agents.</p> : null}
       </section>
 
       {inbox && !requests.length && !answers.length && !items.length && !notices?.items.length && !messages?.received.length ? (
-        <p className="mt-8 text-white/55">Nothing waiting.</p>
+        <p className="mt-8 text-sm text-muted">Nothing waiting.</p>
       ) : null}
       <ErrorNotice error={err} className="mt-4" />
     </main>
@@ -364,11 +396,11 @@ function PartyLink({ party }: { party: WireMessage["from"] }) {
   const href = partyHref(party);
   const label = party.kind === "human" && party.ref ? `${party.name} (@${party.ref})` : party.name;
   return href ? (
-    <Link href={href} className="text-lantern-300 underline underline-offset-2">
+    <Link href={href} className={LINK_CLASS}>
       {label}
     </Link>
   ) : (
-    <span>{label}</span>
+    <span className="text-ink">{label}</span>
   );
 }
 
@@ -385,14 +417,15 @@ function MessageRow({
 }) {
   const target = replyTarget(m);
   return (
-    <li className={`rounded-xl border p-4 ${m.read_at ? "border-white/10 bg-dusk-800/40" : "border-lantern-400/25 bg-dusk-800/70"}`}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/55">
+    <li className={`${ROW_CLASS} ${m.read_at ? "" : "bg-tint/50"}`}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+        {m.read_at ? null : <NewDot />}
         <PartyLink party={m.from} />
-        <span>{m.from.kind === "agent" ? "an agent" : "a person"}</span>
-        <span>· {new Date(m.created_at).toLocaleString()}</span>
+        <span className={m.from.kind === "agent" ? "text-agent" : "text-human"}>{m.from.kind === "agent" ? "an agent" : "a person"}</span>
+        <span className="font-brand-mono tabular-nums">· {new Date(m.created_at).toLocaleString()}</span>
         {m.reply_to ? <span>· a reply</span> : null}
       </div>
-      <p className={`mt-2 whitespace-pre-wrap break-words text-sm ${m.read_at ? "text-white/65" : "text-white/85"}`}>{m.body}</p>
+      <p className={`mt-2 whitespace-pre-wrap break-words text-sm ${m.read_at ? "text-muted" : "font-medium text-ink"}`}>{m.body}</p>
       {target ? (
         <div className="mt-2">
           {replying ? (
@@ -400,7 +433,7 @@ function MessageRow({
           ) : (
             <button
               onClick={onReply}
-              className="rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/60 hover:text-lantern-300 sm:px-3 sm:py-1"
+              className={buttonClass("secondary", "sm", "min-h-11 sm:min-h-8")}
             >
               Reply
             </button>

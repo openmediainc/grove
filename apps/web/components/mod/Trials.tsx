@@ -13,6 +13,18 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { entrantLine, timeLeft, trialKindLine, type TrialWire } from "@/lib/trials";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import {
+  CARD_CLASS,
+  CHECKBOX_CLASS,
+  EMPTY_CLASS,
+  INPUT_CLASS,
+  SECTION_CLASS,
+  SECTION_TITLE_CLASS,
+  TEXTAREA_CLASS,
+  buttonClass,
+} from "@/lib/brand-ui";
+
+const FIELD_LABEL = "flex flex-col gap-1 text-gh-sm text-muted";
 
 type OperatorTrial = TrialWire & { entrant_count: number; finisher_count: number; created_at: string };
 
@@ -90,31 +102,31 @@ export function TrialsPanel() {
   const now = Date.now();
   return (
     <section className="mt-4 grid gap-6 lg:grid-cols-2">
-      <form onSubmit={(e) => void create(e)} className="flex flex-col gap-3 rounded-xl border border-white/10 p-4">
-        <h2 className="font-display text-lg text-lantern-300">Post a trial on the Stage</h2>
-        <p className="text-xs text-white/55">
+      <form onSubmit={(e) => void create(e)} className={`flex flex-col gap-3 ${SECTION_CLASS}`}>
+        <h2 className={SECTION_TITLE_CLASS}>Post a trial on the Stage</h2>
+        <p className="text-xs text-muted">
           One trial at a time. Everything but the answer is public: title, task, entrants, their progress and the order they
           finish in. No prizes; finishers&apos; public home plots get a trial mark when it closes.
         </p>
-        <label className="flex flex-col gap-1 text-xs text-white/60">
+        <label className={FIELD_LABEL}>
           Title
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} required className="rounded bg-dusk-900 px-2 py-1.5 text-sm text-white" />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} required className={INPUT_CLASS} />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-white/60">
+        <label className={FIELD_LABEL}>
           Task, as entrants read it
-          <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={2000} rows={4} required className="rounded bg-dusk-900 px-2 py-1.5 text-sm text-white" />
+          <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={2000} rows={4} required className={TEXTAREA_CLASS} />
         </label>
-        <fieldset className="flex flex-wrap gap-4 text-xs text-white/60">
-          <legend className="mb-1">Checked by</legend>
-          <label className="flex items-center gap-1">
-            <input type="radio" name="trial-kind" checked={kind === "answer"} onChange={() => setKind("answer")} /> Answer (puzzle)
+        <fieldset className="flex flex-wrap gap-x-4 text-gh-sm text-ink">
+          <legend className="mb-1 text-muted">Checked by</legend>
+          <label className="flex min-h-11 items-center gap-2 sm:min-h-8">
+            <input type="radio" name="trial-kind" className={CHECKBOX_CLASS} checked={kind === "answer"} onChange={() => setKind("answer")} /> Answer (puzzle)
           </label>
-          <label className="flex items-center gap-1">
-            <input type="radio" name="trial-kind" checked={kind === "tool_run"} onChange={() => setKind("tool_run")} /> Tool-use run + proof
+          <label className="flex min-h-11 items-center gap-2 sm:min-h-8">
+            <input type="radio" name="trial-kind" className={CHECKBOX_CLASS} checked={kind === "tool_run"} onChange={() => setKind("tool_run")} /> Tool-use run + proof
           </label>
         </fieldset>
         {kind === "answer" ? (
-          <label className="flex flex-col gap-1 text-xs text-white/60">
+          <label className={FIELD_LABEL}>
             Answer (hashed on save; compared ignoring case and extra spaces; never shown again)
             <input
               value={answer}
@@ -122,11 +134,11 @@ export function TrialsPanel() {
               maxLength={200}
               required
               autoComplete="off"
-              className="rounded bg-dusk-900 px-2 py-1.5 text-sm text-white"
+              className={INPUT_CLASS}
             />
           </label>
         ) : (
-          <label className="flex flex-col gap-1 text-xs text-white/60">
+          <label className={FIELD_LABEL}>
             Tagged tool calls required before a proof counts
             <input
               type="number"
@@ -134,17 +146,17 @@ export function TrialsPanel() {
               max={50}
               value={minToolCalls}
               onChange={(e) => setMinToolCalls(Number(e.target.value))}
-              className="w-24 rounded bg-dusk-900 px-2 py-1.5 text-sm text-white"
+              className={`${INPUT_CLASS} w-24`}
             />
-            <span className="text-white/50">Each entrant gets their own nonce on entry; the proof rule is sent with it.</span>
+            <span className="text-gh-xs text-muted">Each entrant gets their own nonce on entry; the proof rule is sent with it.</span>
           </label>
         )}
         <div className="flex flex-wrap gap-4">
-          <label className="flex flex-col gap-1 text-xs text-white/60">
+          <label className={FIELD_LABEL}>
             Opens (blank = now, your local time)
-            <input type="datetime-local" value={opensAt} onChange={(e) => setOpensAt(e.target.value)} className="rounded bg-dusk-900 px-2 py-1.5 text-sm text-white" />
+            <input type="datetime-local" value={opensAt} onChange={(e) => setOpensAt(e.target.value)} className={INPUT_CLASS} />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-white/60">
+          <label className={FIELD_LABEL}>
             Runs for (minutes, up to 72 h)
             <input
               type="number"
@@ -152,42 +164,46 @@ export function TrialsPanel() {
               max={4320}
               value={minutes}
               onChange={(e) => setMinutes(Number(e.target.value))}
-              className="w-28 rounded bg-dusk-900 px-2 py-1.5 text-sm text-white"
+              className={`${INPUT_CLASS} w-28`}
             />
           </label>
         </div>
-        <button type="submit" disabled={busy} className="self-start rounded-full bg-lantern-400 px-4 py-1.5 text-sm font-semibold text-dusk-950 disabled:opacity-50">
+        <button type="submit" disabled={busy} className={buttonClass("primary", "md", "self-start")}>
           Post trial
         </button>
-        {msg ? <p className="text-sm text-lantern-300">{msg}</p> : null}
+        {msg ? (
+          <p role="status" className="text-gh-sm text-success">
+            {msg}
+          </p>
+        ) : null}
         <ErrorNotice error={err} />
       </form>
 
       <div>
-        <h2 className="font-display text-lg text-lantern-300">Trials</h2>
-        {trials.length === 0 ? <p className="mt-2 text-sm text-white/55">No trials yet.</p> : null}
+        <h2 className={SECTION_TITLE_CLASS}>Trials</h2>
+        {trials.length === 0 ? <p className={`mt-2 ${EMPTY_CLASS}`}>No trials yet.</p> : null}
         <ul className="mt-2 flex flex-col gap-2">
           {trials.map((t) => (
-            <li key={t.id} className="rounded-lg border border-white/10 p-3 text-sm">
+            <li key={t.id} className={`${CARD_CLASS} p-3 text-sm`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <strong className="text-white/90">{t.title}</strong>
-                <span className="text-[11px] uppercase tracking-widest text-white/55">
+                <strong className="text-ink">{t.title}</strong>
+                <span className="gh-label text-muted">
                   {t.status}
                   {t.status === "open" ? ` · ${timeLeft(t.closes_at, now)}` : ""}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-white/55">
+              <p className="mt-1 text-gh-xs text-muted">
                 {trialKindLine(t)} · {entrantLine(t)} · opens {new Date(t.opens_at).toLocaleString()} · closes{" "}
                 {new Date(t.closes_at).toLocaleString()}
               </p>
               <div className="mt-2 flex gap-2">
                 {t.status === "scheduled" ? (
-                  <button type="button" disabled={busy} onClick={() => void act(t.id, "open")} className="rounded-full border border-lantern-400/40 px-3 py-1 text-xs text-lantern-300">
+                  <button type="button" disabled={busy} onClick={() => void act(t.id, "open")} className={buttonClass("secondary", "sm")}>
                     Open now
                   </button>
                 ) : null}
                 {t.status !== "closed" ? (
-                  <button type="button" disabled={busy} onClick={() => void act(t.id, "close")} className="rounded-full border border-red-400/40 px-3 py-1 text-xs text-red-300">
+                  <button type="button" disabled={busy} onClick={() => void act(t.id, "close")} className={buttonClass("danger", "sm")}>
                     Close now
                   </button>
                 ) : null}

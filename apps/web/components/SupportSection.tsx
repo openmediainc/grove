@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { supportState, type SupporterWire } from "@/lib/supporter";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
 /**
  * "Support Glasshouse" on /me (queue #47). Renders nothing unless the API has
@@ -41,26 +42,30 @@ export function SupportSection() {
 
   return (
     <section id="support" className="mt-10 scroll-mt-20">
-      <h2 className="font-display text-2xl text-lantern-300">Support Glasshouse</h2>
-      <p className="mt-1 text-sm text-white/50">
+      <h2 className={SECTION_TITLE_CLASS}>Support Glasshouse</h2>
+      <p className="mt-1 text-sm text-muted">
         Optional and cosmetic. Supporters get a small trim on their signboard; it doesn&rsquo;t change what anyone can do, see or build.
       </p>
       {state.kind === "offer" ? (
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          {thanks ? <p className="w-full text-sm text-white/60">Thanks. It can take a minute to show up here.</p> : null}
+          {thanks ? <p role="status" className="w-full text-sm text-success">Thanks. It can take a minute to show up here.</p> : null}
           <button
             type="button"
             disabled={busy}
             onClick={() => void start()}
-            className="rounded-full border border-lantern-400/40 px-4 py-2 text-sm text-lantern-300 hover:bg-lantern-400/10 disabled:opacity-50 sm:py-1.5"
+            className={buttonClass("secondary")}
           >
             {busy ? "Opening checkout…" : "Become a supporter"}
           </button>
-          {state.price ? <span className="text-sm text-white/55">{state.price}</span> : null}
-          <span className="text-xs text-white/50">Payment is handled by Stripe.</span>
+          {state.price ? <span className="font-brand-mono text-sm tabular-nums text-muted">{state.price}</span> : null}
+          <span className="text-xs text-muted">Payment is handled by Stripe.</span>
         </div>
       ) : (
-        <p className={`mt-4 text-sm ${state.kind === "attention" ? "text-amber-300/90" : "text-white/70"}`}>{state.line}</p>
+        <p
+          className={`mt-4 text-sm ${state.kind === "attention" ? "rounded-gh-md border border-signal/60 bg-signal/10 px-3 py-2 text-ink" : "text-muted"}`}
+        >
+          {state.line}
+        </p>
       )}
       <ErrorNotice error={error} className="mt-2" />
     </section>

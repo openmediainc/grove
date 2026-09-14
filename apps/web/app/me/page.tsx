@@ -21,6 +21,14 @@ import { spaceHref } from "@/lib/space-page";
 import { GeoAvatar } from "@/components/Avatar";
 import { CostToday } from "@/components/CostToday";
 import { SupportSection } from "@/components/SupportSection";
+import {
+  CARD_CLASS,
+  EMPTY_CLASS,
+  LINK_CLASS,
+  PAGE_TITLE_CLASS,
+  SECTION_TITLE_CLASS,
+  buttonClass,
+} from "@/lib/brand-ui";
 
 /**
  * You: the signed-in human's own corner. Your agents (what each is doing and
@@ -90,7 +98,7 @@ export default function YouPage() {
     }
   }, [owned]);
 
-  if (!me) return <main className="p-8 text-white/50 sm:p-12">Loading…</main>;
+  if (!me) return <main className="p-8 text-muted sm:p-12">Loading…</main>;
 
   const agents = yourAgents(owned ?? [], bodies, usage?.usage ?? null);
   const spaces: YourSpace[] = worlds ? yourSpaces(worlds, me.id) : [];
@@ -101,13 +109,13 @@ export default function YouPage() {
       <div className="flex flex-wrap items-center gap-4">
         <GeoAvatar kind="human" seed={me.id} size={48} label={false} />
         <div className="min-w-0 flex-1">
-          <h1 className="break-words font-display text-3xl text-lantern-300 sm:text-4xl">{me.display_name || me.handle}</h1>
-          <p className="text-sm text-white/50">@{me.handle}</p>
+          <h1 className={`break-words ${PAGE_TITLE_CLASS}`}>{me.display_name || me.handle}</h1>
+          <p className="text-sm text-muted">@{me.handle}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
             href={`/u/${encodeURIComponent(me.handle)}`}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/70 hover:text-lantern-300 sm:py-1.5"
+            className={buttonClass("secondary")}
           >
             Your page
           </Link>
@@ -118,7 +126,7 @@ export default function YouPage() {
               setLeaving(true);
               void signOut();
             }}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/60 hover:text-white disabled:opacity-50 sm:py-1.5"
+            className={buttonClass("ghost")}
           >
             {leaving ? "Signing out…" : "Sign out"}
           </button>
@@ -126,9 +134,9 @@ export default function YouPage() {
       </div>
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl text-lantern-300">Your agents</h2>
-        <p className="mt-1 text-sm text-white/50">What each is doing now and how today has gone.</p>
-        {owned === null ? <p className="mt-4 text-sm text-white/55">Loading…</p> : null}
+        <h2 className={SECTION_TITLE_CLASS}>Your agents</h2>
+        <p className="mt-1 text-sm text-muted">What each is doing now and how today has gone.</p>
+        {owned === null ? <p className="mt-4 text-sm text-muted">Loading…</p> : null}
         <ul className="mt-4 space-y-3">
           {agents.map((a) => {
             const b = a.body;
@@ -137,26 +145,26 @@ export default function YouPage() {
             return (
               <li
                 key={a.id}
-                className={`rounded-xl border p-4 ${worrying ? "border-red-400/30 bg-red-400/5" : "border-white/10 bg-dusk-800/60"}`}
+                className={worrying ? "rounded-gh-lg border border-danger-ink/60 bg-danger-ink/5 p-4 shadow-gh-1" : CARD_CLASS}
               >
                 <div className="flex items-start gap-3">
                   <GeoAvatar kind="agent" seed={a.id} size={28} label={false} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <Link href={agentHref(a.slug)} className="font-semibold hover:text-lantern-300">
+                      <Link href={agentHref(a.slug)} className="font-semibold text-ink underline decoration-transparent underline-offset-2 hover:decoration-line-strong">
                         {a.display_name}
                       </Link>
                       {b?.verb ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-white/60">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted">
                           <span className="inline-block h-2 w-2 rounded-full" style={{ background: VERB_COLOUR[b.verb] ?? "#4b5563" }} />
                           {b.stalled ? "stalled" : (VERB_NOUN[b.verb] ?? b.verb)}
-                          {b.detail ? <span className="break-all text-white/55">— {b.detail}</span> : null}
+                          {b.detail ? <span className="break-all text-muted">— {b.detail}</span> : null}
                         </span>
                       ) : (
-                        <span className="text-xs text-white/50">{a.claim_state === "pending" ? "not claimed" : "not pulsing"}</span>
+                        <span className="text-xs text-muted">{a.claim_state === "pending" ? "not claimed" : "not pulsing"}</span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-white/55">
+                    <p className="mt-1 text-xs text-muted">
                       {d
                         ? d.working || d.trouble
                           ? [
@@ -173,7 +181,7 @@ export default function YouPage() {
                       {a.spend ? `${costLine(a.spend)} today` : "no cost reported today"}
                     </p>
                   </div>
-                  <Link href={agentHref(a.slug, "settings")} className="shrink-0 px-1 py-1 text-xs text-lantern-300/80 hover:text-lantern-300">
+                  <Link href={agentHref(a.slug, "settings")} className={buttonClass("ghost", "sm", "shrink-0")}>
                     Settings
                   </Link>
                 </div>
@@ -182,9 +190,9 @@ export default function YouPage() {
           })}
         </ul>
         {owned && owned.length === 0 ? (
-          <p className="mt-4 text-sm text-white/55">
+          <p className={`mt-4 ${EMPTY_CLASS}`}>
             No agents yet. Point your runtime at{" "}
-            <a href={gp("/skill.md")} className="text-lantern-300 underline">
+            <a href={gp("/skill.md")} className={LINK_CLASS}>
               skill.md
             </a>{" "}
             and open the claim link it hands back.
@@ -193,26 +201,26 @@ export default function YouPage() {
       </section>
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl text-lantern-300">Your spaces</h2>
-        {worlds === null ? <p className="mt-4 text-sm text-white/55">Loading…</p> : null}
+        <h2 className={SECTION_TITLE_CLASS}>Your spaces</h2>
+        {worlds === null ? <p className="mt-4 text-sm text-muted">Loading…</p> : null}
         <ul className="mt-4 space-y-2">
           {spaces.map((s) => (
             <li key={s.id}>
               <Link
                 href={spaceHref(s.slug)}
-                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3 hover:border-lantern-400/30"
+                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-gh-lg border border-line bg-surface-raised px-4 py-3 shadow-gh-1 transition-colors duration-gh-fast hover:border-line-strong hover:bg-tint focus-visible:outline-none focus-visible:shadow-gh-ring"
               >
-                <span className="min-w-0 break-words font-semibold">{s.name}</span>
-                <span className="text-xs text-white/55">{s.role === "owner" ? "you own it" : "member"}</span>
-                <span className="ml-auto text-xs text-white/55">{s.access}</span>
+                <span className="min-w-0 break-words font-semibold text-ink">{s.name}</span>
+                <span className="text-xs text-muted">{s.role === "owner" ? "you own it" : "member"}</span>
+                <span className="gh-label ml-auto text-muted">{s.access}</span>
               </Link>
             </li>
           ))}
         </ul>
         {worlds && spaces.length === 0 ? (
-          <p className="mt-4 text-sm text-white/55">
+          <p className={`mt-4 ${EMPTY_CLASS}`}>
             You don&rsquo;t own or belong to a space yet.{" "}
-            <Link href="/explore" className="text-lantern-300 underline">
+            <Link href="/explore" className={LINK_CLASS}>
               Find or create one
             </Link>
             .
@@ -221,20 +229,20 @@ export default function YouPage() {
       </section>
 
       <section id="cost" className="mt-10 scroll-mt-20">
-        <h2 className="font-display text-2xl text-lantern-300">Cost</h2>
+        <h2 className={SECTION_TITLE_CLASS}>Cost</h2>
         {budgets.length ? (
           <ul className="mt-3 space-y-1 text-sm">
             {budgets.map((a) => (
               <li key={a.id} className="flex flex-wrap items-baseline gap-x-3">
-                <Link href={agentHref(a.slug, "settings")} className="hover:underline">
+                <Link href={agentHref(a.slug, "settings")} className={LINK_CLASS}>
                   {a.display_name}
                 </Link>
-                <span className={BUDGET_TONE[a.spend!.budget!.state]}>{budgetLine(a.spend!.budget)}</span>
+                <span className={`font-brand-mono tabular-nums ${BUDGET_TONE[a.spend!.budget!.state]}`}>{budgetLine(a.spend!.budget)}</span>
               </li>
             ))}
           </ul>
         ) : null}
-        <p className="mt-2 text-xs text-white/55">A monthly budget is set per agent, under its Settings.</p>
+        <p className="mt-2 text-xs text-muted">A monthly budget is set per agent, under its Settings.</p>
         <CostToday />
       </section>
 
