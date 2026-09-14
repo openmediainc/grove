@@ -1,0 +1,86 @@
+# Glasshouse E2E smoke (#69): signed-out Playwright journeys against PRODUCTION.
+#
+# RUNNERS: `ubuntu-latest`, always — never self-hosted (see ci.yml and docs/CI.md).
+#
+# Read-only by construction: the suite never signs in, never submits a form and
+# only GETs the API, so pointing it at https://glasshouse.rendrr.app is safe.
+#
+# On a push to main, Vercel deploys that commit. /ready does not expose the
+# commit, so the job waits for Vercel's own commit status on the pushed sha to
+# turn `success` (it gives up waiting after ~8 minutes and tests whatever is
+# live, which is then reported in the log). Nightly and manual runs test prod as it is.
+
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Deployment to test (default: production)"
+        required: false
+        default: "https://glasshouse.rendrr.app"
+
+permissions:
+  contents: read
+  statuses: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: e2e smoke (prod)
+    runs-on: ubuntu-latest # never self-hosted
+    timeout-minutes: 15
+    env:
+      BASE_URL: ${{ inputs.base_url || 'https://glasshouse.rendrr.app' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install (e2e package only)
+        run: pnpm install --frozen-lockfile --filter @grove/e2e
+
+      - name: Install Chromium
+        run: pnpm --filter @grove/e2e exec playwright install --with-deps chromium
+
+      - name: Wait for Vercel to deploy this commit
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 48); do
+            state=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/status" \
+              --jq '[.statuses[] | select(.context | test("vercel"; "i"))][0].state // "missing"')
+            echo "vercel status: $state (poll $i)"
+            case "$state" in
+              success) break ;;
+              failure|error) echo "::error::Vercel reports $state for ${{ github.sha }}"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          # Vercel marks success as the build finishes; give the alias a moment to move.
+          sleep 15
+          curl -fsS "$BASE_URL/ready"; echo
+
+      - name: Run the smoke suite
+        run: pnpm test:e2e
+
+      - name: Upload report, traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report-${{ github.run_id }}
+          path: |
+            apps/e2e/playwright-report
+            apps/e2e/test-results
+          retention-days: 7

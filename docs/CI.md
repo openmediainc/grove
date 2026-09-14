@@ -118,3 +118,35 @@ comes from the root `package.json` `"packageManager"` field and the Node version
 from `.nvmrc`, so neither is pinned twice. Jobs run in parallel and
 `concurrency` cancels superseded runs on the same ref. CI people route around is
 CI that does not gate anything.
+
+## E2E smoke (`.github/workflows/e2e.yml`, #69)
+
+A separate workflow, not a job in `ci.yml`, because it tests a **deployment**,
+not the tree. Playwright (Chromium, desktop 1440 + mobile 390) walks the
+signed-out journeys in `apps/e2e/tests`: the map renders a canvas with its
+stylesheet and no console errors, the first-visit card dismisses, the room and
+History drawers open from `?room=` / `?history=1` and from the `/w/plaza` and
+`/chronicle` redirects, Go to / Watch / ⋯ open and close by keyboard, `/` opens
+the search palette, `/explore` shelves, `/s/aetheria-prime` tabs, `/how-it-works#agents`,
+`/login` (never submitted), `/styleguide`, the old routes (`/spaces`, `/agents`,
+`/studio`, `/docs`, `/enter`), no sideways scroll at 390px, and the shapes of
+`/ready`, `/skill.md`, minimap, discovery, search and follow state.
+
+It never signs in and never writes, so it runs against production: on a push
+to `main` (after Vercel's commit status for that sha reports `success`), nightly
+at 04:17 UTC, and by hand (`workflow_dispatch`, optional `base_url`). Failures
+upload the HTML report, traces and screenshots.
+
+Locally:
+
+```bash
+pnpm --filter @grove/e2e exec playwright install chromium   # once
+E2E_TARGET=prod pnpm test:e2e                                 # production
+BASE_URL=https://q-ai.tail735569.ts.net/grove pnpm test:e2e   # the Mini (tailnet)
+pnpm test:e2e                                                 # http://localhost:3510/grove
+```
+
+The Mini runs `next dev`, so against it the suite uses two workers and long
+timeouts (`E2E_WORKERS`, `E2E_FAST=1` override). The console allowlist lives in
+`apps/e2e/tests/support.ts`; keep it short, because every entry is something the
+suite can no longer see break.
