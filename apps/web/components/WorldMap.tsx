@@ -29,7 +29,8 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
 import { themedAccess } from "@/lib/access";
-import { MotionDirector, mergeSpan, spanFromWire, OUTCOME_MARK_MS } from "@/lib/motion/director";
+import { MotionDirector, mergeSpan, spanFromWire, OUTCOME_MARK_MS, type BodyFrame } from "@/lib/motion/director";
+import { bodyScreenRect, clearCentre, holeRuns, hoverCardSpot, type Rect as LayerRect } from "@/lib/layering";
 import { drawOutcomeMark, drawRestingMark, drawStanceMark, drawTrialRing, drawWorkBar, RESTING_MARK_COLOUR, scaffoldStageFor } from "@/lib/motion/marks";
 import { useTrialStage } from "@/components/useTrialStage";
 import { restingBodies, type RestingBody, type RestingWire } from "@/lib/resting";
@@ -833,6 +834,8 @@ export function WorldMap() {
   const expandRef = useRef<{ id: string; until: number } | null>(null);
   /** Screen rects of the HTML laid over the canvas, refreshed a few times a second. */
   const overlayRectsRef = useRef<{ at: number; rects: Rect[] }>({ at: 0, rects: [] });
+  /** Open drawers over the canvas, in canvas px: the follow-cam frames the part they leave clear (#52). */
+  const coverRectsRef = useRef<LayerRect[]>([]);
   /**
    * The same speech as text, for a screen reader: the canvas must not be the
    * only thing carrying what people say. Newest last, a handful kept.
@@ -2616,6 +2619,18 @@ export function WorldMap() {
         const hazards: Array<{ x: number; y: number; tone: HazardTone }> = [];
         /** Bodies whose connection is drifting. Fixed-size marks, drawn later. */
         const meters: Array<{ x: number; y: number; drift: number }> = [];
+        /** Each body's reading marks (verb glyph, work bar, outcome, stance), painted in the top pass (#52). */
+        const marks: Array<{
+          x: number;
+          y: number;
+          alpha: number;
+          verb: Actor["verb"] | null;
+          workSpan: BodyFrame["span"];
+          mark: BodyFrame["mark"];
+          stance: string | null;
+        }> = [];
+        /** Screen boxes of every body drawn this frame: signs and labels are cut away round them (#52). */
+        const bodyBoxes: LayerRect[] = [];
         /** Where the lamps are this frame; lit after the hour's wash goes down. */
         const lamps: Array<{ x: number; y: number; r: number }> = [];
         /** Speech, lifted out of the depth list so the night can never dim it. */
@@ -2723,6 +2738,7 @@ export function WorldMap() {
             a.verb === "offline" ? sleepingAlpha(health.drift) : a.verb === "idle" ? 0.72 : 1;
           const tone = hazardOf(a);
           if (tone) hazards.push({ x, y, tone });
+          bodyBoxes.push(bodyScreenRect(x, y, z, v.px, v.py));
           costCarryRef.current.note(a.id, x, y);
           if (healthVisible(health)) meters.push({ x, y, drift: health.drift });
           // Remember where this body stood, so that if it is gone by the next
@@ -2799,12 +2815,12 @@ export function WorldMap() {
               // the verb, the abstract glyph stands down instead of saying the
               // same thing twice beside it.
               const carried = z >= LOD_DRESSING ? itemForActor(a) : null;
-              if (!(carried && art.carry(ctx, carried, x + 11, y + 3))) art.glyph(ctx, a.verb, x, y, t);
-              // Motion marks (lib/motion/marks.ts): fixed semantics, not theme art.
-              if (workSpan && z >= LOD_DRESSING) drawWorkBar(ctx, workSpan, x, y, t, reduceMotion.matches);
-              if (mark) drawOutcomeMark(ctx, mark.outcome, x, y, ((replay.view.active ? replayMotion.now : Date.now()) - mark.at) / OUTCOME_MARK_MS, reduceMotion.matches);
-              if (stance && z >= LOD_LABELS) drawStanceMark(ctx, stance, x, y);
+              const held = Boolean(carried && art.carry(ctx, carried, x + 11, y + 3));
               ctx.restore();
+              // The verb glyph and the motion marks are things you READ, so
+              // they leave the depth list for the top pass (#52): a building
+              // in front, the hour's grade and a signboard never cover them.
+              marks.push({ x, y, alpha, verb: held ? null : a.verb, workSpan, mark, stance: stance ?? null });
             },
           });
           // Speech leaves the depth list. It used to be painted inside the
@@ -2844,6 +2860,7 @@ export function WorldMap() {
             const q = iso(tx, ty);
             const x = ox + q.x;
             const y = oy + q.y - 18;
+            bodyBoxes.push(bodyScreenRect(x, y, z, v.px, v.py));
             scene.push({
               s: tx + ty - 0.5,
               draw: () => {
@@ -2977,6 +2994,27 @@ export function WorldMap() {
           ctx.imageSmoothingEnabled = false;
         }
 
+        /**
+         * Signs and district names are read-things at a fixed screen size, so
+         * zoomed out they are bigger than the ground they label. They are cut
+         * away round every body (#52): whoever stands in front of a building
+         * is never painted over by its board. Even-odd over non-overlapping
+         * runs (lib/layering), built once a frame and only when needed.
+         */
+        let bodyHoles: Path2D | null | undefined;
+        const clipOutBodies = () => {
+          if (bodyHoles === undefined) {
+            if (!bodyBoxes.length) bodyHoles = null;
+            else {
+              const path = new Path2D();
+              path.rect(0, 0, cssW, cssH);
+              for (const r of holeRuns(bodyBoxes, Math.max(4, 6 * z), { w: cssW, h: cssH })) path.rect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+              bodyHoles = path;
+            }
+          }
+          if (bodyHoles) ctx.clip(bodyHoles, "evenodd");
+        };
+
         // District names (#38), zoomed out only: each ring's name hangs just
         // inside its north and south corners, faint, in the theme's words, with
         // the neutral "ring N" the search palette uses underneath. Screen space,
@@ -2984,6 +3022,7 @@ export function WorldMap() {
         if (districtLabelsVisible(z)) {
           ctx.save();
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          clipOutBodies();
           ctx.textAlign = "center";
           ctx.lineJoin = "round";
           const family = pal.displayFont;
@@ -3018,6 +3057,7 @@ export function WorldMap() {
         if (signs.length) {
           ctx.save();
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          clipOutBodies();
           const signFamily = art.speechFont ?? "ui-sans-serif, system-ui, sans-serif";
           const measure = (text: string, px: number) => {
             ctx.font = `${px >= 11 ? "600 " : ""}${px}px ${signFamily}`;
@@ -3040,6 +3080,7 @@ export function WorldMap() {
         if (estateSigns.length) {
           ctx.save();
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          clipOutBodies();
           const signFamily = art.speechFont ?? "ui-sans-serif, system-ui, sans-serif";
           const measure = (text: string, px: number) => {
             ctx.font = `${px >= 11 ? "600 " : ""}${px}px ${signFamily}`;
@@ -3055,6 +3096,22 @@ export function WorldMap() {
             if (board && board.x1 > 0 && board.x0 < cssW && board.y1 > 0 && board.y0 < cssH) art.estateSign(ctx, board, t);
           }
           ctx.restore();
+        }
+
+        // The reading marks, over every sign and the hour, back to front (#52).
+        if (marks.length) {
+          const markNow = replay.view.active ? replayMotion.now : Date.now();
+          marks.sort((p, q) => p.y - q.y);
+          for (const m of marks) {
+            ctx.save();
+            ctx.globalAlpha = m.alpha;
+            if (m.verb) art.glyph(ctx, m.verb, m.x, m.y, t);
+            // Motion marks (lib/motion/marks.ts): fixed semantics, not theme art.
+            if (m.workSpan && z >= LOD_DRESSING) drawWorkBar(ctx, m.workSpan, m.x, m.y, t, reduceMotion.matches);
+            if (m.mark) drawOutcomeMark(ctx, m.mark.outcome, m.x, m.y, (markNow - m.mark.at) / OUTCOME_MARK_MS, reduceMotion.matches);
+            if (m.stance && z >= LOD_LABELS) drawStanceMark(ctx, m.stance, m.x, m.y);
+            ctx.restore();
+          }
         }
 
         // Captions last, front-most first, skipping any that would collide:
@@ -3118,6 +3175,12 @@ export function WorldMap() {
             const cr = el.getBoundingClientRect();
             const host = el.parentElement;
             overlay.at = nowMs;
+            coverRectsRef.current = host
+              ? Array.from(host.querySelectorAll("[data-map-drawer]"))
+                  .map((node) => node.getBoundingClientRect())
+                  .filter((b) => b.width > 0 && b.height > 0)
+                  .map((b) => ({ x0: b.left - cr.left, y0: b.top - cr.top, x1: b.right - cr.left, y1: b.bottom - cr.top }))
+              : [];
             overlay.rects = host
               ? Array.from(host.querySelectorAll("h1, p, button, a, select, [data-speech-avoid]"))
                   .map((node) => node.getBoundingClientRect())
@@ -3198,8 +3261,10 @@ export function WorldMap() {
             if (tvRef.current && tvAppliedRef.current) {
               v.zoom = clamp(v.zoom + (TV_ZOOM - v.zoom) * followEase * 0.5, minZoom(), MAX_ZOOM);
             }
-            const wantX = cssW / 2 - (ox + q.x) * v.zoom;
-            const wantY = cssH / 2 - (oy + q.y) * v.zoom;
+            // The middle of what an open drawer leaves visible (#52).
+            const c = clearCentre({ w: cssW, h: cssH }, coverRectsRef.current);
+            const wantX = c.x - (ox + q.x) * v.zoom;
+            const wantY = c.y - (oy + q.y) * v.zoom;
             v.px += (wantX - v.px) * followEase;
             v.py += (wantY - v.py) * followEase;
             clampPan();
@@ -3311,8 +3376,9 @@ export function WorldMap() {
           const q = iso(glide.tx, glide.ty);
           const k = reduceMotion.matches ? 1 : 0.1;
           v.zoom = clamp(v.zoom + (glide.zoom - v.zoom) * k, minZoom(), MAX_ZOOM);
-          const wantX = cssW / 2 - (ox + q.x) * v.zoom;
-          const wantY = cssH / 2 - (oy + q.y) * v.zoom;
+          const gc = glide.fit ? { x: cssW / 2, y: cssH / 2 } : clearCentre({ w: cssW, h: cssH }, coverRectsRef.current);
+          const wantX = gc.x - (ox + q.x) * v.zoom;
+          const wantY = gc.y - (oy + q.y) * v.zoom;
           v.px += (wantX - v.px) * k;
           v.py += (wantY - v.py) * k;
           clampPan();
@@ -3338,13 +3404,18 @@ export function WorldMap() {
           const consequence = badgeConsequence(hover.badges);
           if (consequence) lines.push(consequence);
           const boxH = 14 + lines.length * 16;
+          const boxW = Math.min(460, cssW - 24);
+          // Never over the body it describes (#52): another corner when it would be.
+          const drawn = lastPosRef.current.get(hover.id);
+          const hq = drawn ? iso(drawn.x, drawn.y) : null;
+          const spot = hoverCardSpot(hq ? bodyScreenRect(ox + hq.x, oy + hq.y - 18, z, v.px, v.py) : null, { w: boxW, h: boxH }, { w: cssW, h: cssH });
           ctx.fillStyle = pal.card.bg;
-          ctx.fillRect(12, cssH - boxH - 12, 460, boxH);
+          ctx.fillRect(spot.x, spot.y, boxW, boxH);
           ctx.textAlign = "left";
           ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
           lines.forEach((ln, i) => {
             ctx.fillStyle = i === 0 ? pal.card.title : hover.stalled && i === 1 ? STALL_RING : pal.card.text;
-            ctx.fillText(ln, 20, cssH - boxH + 6 + i * 16);
+            ctx.fillText(ln, spot.x + 8, spot.y + 18 + i * 16);
           });
         }
         // The minimap (#38), throttled: an overview a few times a second.

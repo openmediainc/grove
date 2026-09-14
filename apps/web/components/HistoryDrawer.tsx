@@ -47,6 +47,7 @@ export function HistoryDrawer({
   return (
     <aside
       data-speech-avoid
+      data-map-drawer
       aria-label="History"
       className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex h-[86%] flex-col overflow-hidden rounded-t-2xl border-t border-lantern-400/25 bg-dusk-950/[0.97] text-sm shadow-2xl sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-0 sm:h-auto sm:w-[420px] sm:rounded-none sm:border-l sm:border-t-0"
     >
