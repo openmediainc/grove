@@ -17,17 +17,30 @@ import {
   type ColorRole,
   type Mode,
 } from "@grove/ui/tokens";
+import { accessTint } from "@/lib/access";
 import { gp } from "@/lib/base";
 import {
   CARD_CLASS,
+  EMPTY_CLASS,
   FROST_PANEL_CLASS,
   INPUT_CLASS,
   LABEL_CLASS,
   MENU_CLASS,
   NOTICE_CLASS,
+  LINK_CLASS,
+  NUM_CLASS,
+  PAGE_TITLE_CLASS,
+  PILL_CLASS,
+  SECTION_CLASS,
+  SECTION_TITLE_CLASS,
+  TABLE_CLASS,
+  TABLE_WRAP_CLASS,
+  TD_CLASS,
+  TH_CLASS,
   buttonClass,
   chipClass,
   menuItemClass,
+  optionClass,
   tabClass,
   type ButtonKind,
 } from "@/lib/brand-ui";
@@ -67,6 +80,7 @@ const SECTIONS = [
   ["tabs", "Tabs and menus"],
   ["chips", "Chips"],
   ["cards", "Cards and notices"],
+  ["pages", "Pages"],
   ["map", "Over the map"],
   ["mark", "Mark"],
   ["phone", "390px"],
@@ -441,11 +455,11 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
           </span>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-gh-pill border border-line-strong px-2.5 py-0.5 text-gh-sm text-ink">Open</span>
-          <span className="inline-flex items-center gap-1.5 rounded-gh-pill border border-line-strong px-2.5 py-0.5 text-gh-sm text-ink">
+          <span className={`${PILL_CLASS} text-gh-sm ${accessTint("public_write")}`}>Open</span>
+          <span className={`${PILL_CLASS} text-gh-sm ${accessTint("public_view")}`}>
             <span aria-hidden>◐</span> Watch only
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-gh-pill border border-line-strong bg-tint px-2.5 py-0.5 text-gh-sm text-ink">
+          <span className={`${PILL_CLASS} text-gh-sm ${accessTint("private")}`}>
             <span aria-hidden>🔒︎</span> Private
           </span>
         </div>
@@ -490,6 +504,68 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
           ErrorNotice names the cause and the fix. RefusalNotice names whose door refused and what to do; the text above
           is the real kernel copy for a block.
         </p>
+      </Section>
+
+      <Section id="pages" title="Pages">
+        <p className="max-w-prose text-muted">
+          The page recipes /explore, /s, /a, /u, /me, /inbox and /mod share: one title, quiet sections, cards on
+          sections, tables that scroll in their own frame, and a dashed empty state that says what is missing.
+        </p>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="grid content-start gap-4">
+            <h3 className={PAGE_TITLE_CLASS}>Harbour studio</h3>
+            <section className={SECTION_CLASS} aria-labelledby="sg-access-h">
+              <h4 id="sg-access-h" className={SECTION_TITLE_CLASS}>Access</h4>
+              <p className="mt-1 text-gh-sm text-muted">Who can see in. Members always can.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <button type="button" className={optionClass(true)}>
+                  <span className="block font-medium">Open</span>
+                  <span className="block text-gh-xs text-muted">Visitors come in and speak</span>
+                </button>
+                <button type="button" className={optionClass(false)}>
+                  <span className="block font-medium">Watch only</span>
+                  <span className="block text-gh-xs text-muted">Visitors listen</span>
+                </button>
+                <button type="button" className={optionClass(false)}>
+                  <span className="block font-medium">Private</span>
+                  <span className="block text-gh-xs text-muted">Members only</span>
+                </button>
+              </div>
+              <p className="mt-3 text-gh-sm text-muted">
+                Rules in <a href="#pages" className={LINK_CLASS}>How it works</a>.
+              </p>
+            </section>
+            <div className={EMPTY_CLASS}>
+              <p>No invites yet.</p>
+              <button type="button" className={`mt-3 ${buttonClass("secondary", "sm")}`}>Create invite</button>
+            </div>
+          </div>
+          <div className={TABLE_WRAP_CLASS}>
+            <table className={TABLE_CLASS}>
+              <caption className="sr-only">Metrics, last 24 hours</caption>
+              <thead>
+                <tr>
+                  <th scope="col" className={TH_CLASS}>Metric</th>
+                  <th scope="col" className={`${TH_CLASS} text-right`}>Today</th>
+                  <th scope="col" className={`${TH_CLASS} text-right`}>Yesterday</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ["Tool-call errors", "36", "12"],
+                  ["Pulses", "1,204", "1,188"],
+                  ["Emails delivered", "not reported", "41"],
+                ].map(([m, a, b]) => (
+                  <tr key={m}>
+                    <td className={TD_CLASS}>{m}</td>
+                    <td className={`${TD_CLASS} ${NUM_CLASS} text-right`}>{a}</td>
+                    <td className={`${TD_CLASS} ${NUM_CLASS} text-right text-muted`}>{b}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </Section>
 
       <Section id="map" title="Over the map">

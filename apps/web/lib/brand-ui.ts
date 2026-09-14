@@ -103,3 +103,36 @@ export function navLinkClass(current: boolean): string {
 
 /** Mono uppercase heading inside a menu (Appearance, You). */
 export const MENU_HEADING_CLASS = "gh-label px-3 pb-1 pt-2 text-muted";
+
+/* Page recipes (rollout #75). Pages compose these so a card, a table or an
+   empty state reads the same on /explore, /s, /a, /me, /inbox and /mod. */
+
+/** The one page title (h1): display weight, tight tracking. */
+export const PAGE_TITLE_CLASS = "font-brand text-gh-2xl font-extrabold tracking-[-0.02em] text-ink sm:text-gh-3xl";
+/** A section heading (h2) inside a page. */
+export const SECTION_TITLE_CLASS = "font-brand text-gh-lg font-bold tracking-[-0.01em] text-ink";
+/** A quiet section: a surface with a hairline, no shadow (Manage and Settings groups). */
+export const SECTION_CLASS = "rounded-gh-lg border border-line bg-surface p-4 sm:p-5";
+/** An inline text link: ink with a visible underline (signal is never a link colour). */
+export const LINK_CLASS =
+  "text-ink underline decoration-line-strong underline-offset-2 hover:decoration-ink focus-visible:outline-none focus-visible:shadow-gh-ring rounded-gh-sm";
+/** Nothing here yet: dashed frame, one terse line, optional action below. */
+export const EMPTY_CLASS = "rounded-gh-lg border border-dashed border-line-strong bg-surface px-4 py-6 text-center text-gh-sm text-muted";
+/** A data table scrolls inside its own frame at 390px; the page never scrolls sideways. */
+export const TABLE_WRAP_CLASS = "overflow-x-auto rounded-gh-lg border border-line bg-surface-raised";
+export const TABLE_CLASS = "w-full border-collapse text-left text-gh-sm text-ink";
+export const TH_CLASS = "gh-label whitespace-nowrap border-b border-line px-3 py-2 text-left font-normal text-muted";
+export const TD_CLASS = "border-t border-line px-3 py-2 align-top";
+/** A count, clock or amount: mono, tabular. */
+export const NUM_CLASS = "font-brand-mono tabular-nums";
+/** A textarea in the input frame. */
+export const TEXTAREA_CLASS = `${INPUT_CLASS} py-2 leading-relaxed`;
+/** A small status pill with a word (Open, delivered, pending…): tone classes come from the caller. */
+export const PILL_CLASS = "inline-flex items-center gap-1 rounded-gh-pill border px-2 py-0.5 text-gh-xs";
+/** Selected / unselected option tile (create flow, plot pickers, theme choices). */
+export function optionClass(selected: boolean): string {
+  return (
+    "rounded-gh-lg border p-3 text-left transition-colors duration-gh-fast focus-visible:outline-none focus-visible:shadow-gh-ring " +
+    (selected ? "border-signal bg-tint text-ink" : "border-line bg-surface-raised text-ink hover:bg-tint")
+  );
+}

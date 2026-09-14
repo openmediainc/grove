@@ -88,11 +88,11 @@ export function costLine(t: Totals): string {
 }
 
 export const BUDGET_TONE: Record<BudgetState, string> = {
-  none: "text-white/40",
-  unknown: "text-white/55",
-  ok: "text-emerald-300",
-  near: "text-amber-300",
-  over: "text-red-300",
+  none: "text-muted",
+  unknown: "text-muted",
+  ok: "text-success",
+  near: "text-signal-text",
+  over: "text-danger-ink",
 };
 
 export function budgetLine(b: Budget | null): string | null {

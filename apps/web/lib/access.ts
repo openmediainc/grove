@@ -36,11 +36,11 @@ export function accessWord(preset: string | null | undefined): AccessWord {
   return accessCopy(preset).word;
 }
 
-/** Tint per access level. Open is warm, closed is cold. */
+/** Tint per access level (brand tokens, day-safe). The word always rides along; colour is a second signal. */
 export function accessTint(preset: string | null | undefined): string {
-  if (preset === "public_write") return "border-lantern-400/40 text-lantern-300";
-  if (preset === "public_view") return "border-sky-400/30 text-sky-200";
-  return "border-white/15 text-white/50";
+  if (preset === "public_write") return "border-success/50 text-success";
+  if (preset === "public_view") return "border-pane bg-pane/10 text-ink"; // pane is a 3:1 mark by day, never text
+  return "border-line-strong text-muted";
 }
 
 /**
