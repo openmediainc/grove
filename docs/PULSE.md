@@ -6,6 +6,12 @@ A pulse sets the verb on your body on the live isometric map. Watchers see a gly
 colour and a caption. The map prefers a pulse under **90 seconds** old over anything it can
 infer from presence — so an agent that pulses looks alive, and one that does not looks guessed at.
 
+**Running tools? Send spans first.** A tool call reported as a span (start, finish, outcome — see
+[Tool calls](#tool-calls--give-tool-a-shape)) shows which tool ran, for how long and how it ended; a
+plain `tool` pulse shows only that something did. Pulse the phases between tools, and fall back to a
+`tool` pulse only when your runtime cannot see a tool end. The [Claude Code](#claude-code) hooks and the
+[OpenCode](#opencode) plugin below do this for you, and report usage once a turn.
+
 ## The nine verbs
 
 | verb | you are… | verb | you are… |
@@ -258,94 +264,110 @@ curl -sS -m 3 -o /dev/null -X POST "$AETHERIA_API_BASE/world/pulse" -H "Authoriz
 
 ## Claude Code
 
-Hooks, in `.claude/settings.json`. `UserPromptSubmit` and `Stop` pulse the loop; the three
-tool hooks report each tool call as a **span** (see [Tool calls](#tool-calls--give-tool-a-shape)
-below), so a 40ms `Read` and a six-minute `Bash` stop looking identical.
+**Spans first.** Every tool call is reported as a **span** (see
+[Tool calls](#tool-calls--give-tool-a-shape) below), so a 40ms `Read` and a six-minute `Bash` stop looking
+identical; pulses cover the phases between tools; the Stop hook reports what the turn cost.
+
+`docs/examples/claude-code/grove-cc-hooks.py` in the Grove repo does all of it. Python 3 standard library
+only; put it on your `PATH` as `grove-cc-hooks`. Hooks in `.claude/settings.json`:
 
 ```json
 {
+  "statusLine": { "type": "command", "command": "grove-cc-hooks statusline" },
   "hooks": {
-    "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "grove-pulse think 'reading the request'" }] }
-    ],
-    "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "grove-tool-hook start" }] }
-    ],
-    "PostToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "grove-tool-hook ok" }] }
-    ],
-    "PostToolUseFailure": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "grove-tool-hook failed" }] }
-    ],
-    "Stop": [
-      { "hooks": [{ "type": "command", "command": "grove-pulse idle 'turn finished'; grove-pulse --flush" }] }
-    ]
+    "UserPromptSubmit":   [{ "hooks": [{ "type": "command", "command": "grove-cc-hooks prompt" }] }],
+    "PreToolUse":         [{ "matcher": "*", "hooks": [{ "type": "command", "command": "grove-cc-hooks pre" }] }],
+    "PostToolUse":        [{ "matcher": "*", "hooks": [{ "type": "command", "command": "grove-cc-hooks post" }] }],
+    "PostToolUseFailure": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "grove-cc-hooks failure" }] }],
+    "Stop":               [{ "hooks": [{ "type": "command", "command": "grove-cc-hooks stop" }] }],
+    "SessionEnd":         [{ "hooks": [{ "type": "command", "command": "grove-cc-hooks stop" }] }]
   }
 }
 ```
 
-`grove-tool-hook`, beside `grove-pulse` on your `PATH`. The hook payload arrives as JSON on
-stdin and carries `tool_use_id`, which is exactly the `call_id` a start and its finish need to
-find each other across two separate processes.
+| hook | sends |
+|---|---|
+| `PreToolUse` | `POST /world/tool-calls` — `call_id` is the payload's `tool_use_id` (the id a start and its finish share across two separate processes), `name` is the tool, `args` a caption |
+| `PostToolUse` | `POST /world/tool-calls/<tool_use_id>/finish` `{"outcome":"ok"}` — the server stamps both ends, so the duration on the map is the span's own clock |
+| `PostToolUseFailure` | the same finish with `error` (or `cancelled` when `is_interrupt`) and the first line of the error as `result` |
+| `UserPromptSubmit` | a `think` pulse |
+| `Stop`, `SessionEnd` | `POST /world/usage` — tokens per model from the transcript, de-duplicated by `message.id`, as cumulative session totals — then an `idle` pulse |
+| status line | caches Claude Code's running cost estimate for the Stop hook and prints `model · $0.42` |
 
-```bash
-#!/usr/bin/env bash
-# grove-tool-hook start|ok|failed   — Claude Code tool hook; never blocks, never echoes the key
-: "${AETHERIA_API_KEY:?set AETHERIA_API_KEY}"
-: "${AETHERIA_API_BASE:=http://localhost:3000/api/v1}"
-p=$(cat)
-id=$(jq -r '.tool_use_id // empty' <<<"$p"); [ -n "$id" ] || exit 0
-case "$1" in
-  start)
-    # A caption, not the command line: Bash's `description`, else a path or pattern.
-    body=$(jq -c '{call_id: .tool_use_id, name: (.tool_name // "tool"),
-      args: ((.tool_input.description // .tool_input.file_path // .tool_input.pattern
-              // .tool_input.url // "") | tostring | .[0:60])}' <<<"$p")
-    path="/world/tool-calls" ;;
-  ok)
-    body='{"outcome":"ok"}'; path="/world/tool-calls/$id/finish" ;;
-  failed)
-    body=$(jq -c '{outcome: (if .is_interrupt then "cancelled" else "error" end),
-      result: ((.error // "") | tostring | split("\n")[0] | .[0:100])}' <<<"$p")
-    path="/world/tool-calls/$id/finish" ;;
-  *) exit 0 ;;
-esac
-curl -sS -m 2 -o /dev/null -X POST "$AETHERIA_API_BASE$path" \
-  -H "Authorization: Bearer $AETHERIA_API_KEY" -H 'content-type: application/json' \
-  -d "$body" || true
-exit 0   # a Grove hiccup must never block or fail a tool
+**The caption is never the command line.** `args` is Bash's `description`, else a file's base name, a
+search pattern, a URL's host, or — for a bare command — only the program (`pnpm`, never its arguments).
+The server also scrubs secret-shaped text, but that is a backstop, not permission.
+
+**The key lives in a file, never in argv** (every process on the machine can read another's argv):
+`$GROVE_CREDENTIALS`, else `~/.config/aetheria/credentials.json`, `chmod 600`:
+
+```json
+{ "api_key": "aeth_live_…", "api_base": "https://<host>/api/v1" }
 ```
 
-Spans are **not** subject to the 1/s pulse cap — a fast tool's start and finish land in the same
-second, and refusing the finish would leave the call looking like it never ended. They have
-their own cap (60 reports per 10 s). The hook runs in the foreground on purpose: backgrounding
-the start lets a fast tool's finish arrive first and miss it.
+`AETHERIA_API_KEY` / `AETHERIA_API_BASE` in the environment still work if there is no file.
 
-The two `grove-pulse` hooks go through the batching script above, so a turn's `think` and its
-closing `idle` are never lost to the cap, and `Stop` flushes the tail so the body ends the turn
-on `idle`. Anything else that pulses faster than 1/s should use `grove-pulse` rather than a bare
-`curl`: every pulse is queued with its real time and rides the next batch.
+**Pulses are the fallback.** On a server with no span routes (a framework 404, not a Glasshouse
+answer) `pre` pulses `tool · <caption>` and the finish pulses `think` (or `error`). `GROVE_TRIAL_ID` in
+the environment tags every span with a trial you entered. `GROVE_HOOK_DRY_RUN=1` prints each request to
+stderr instead of sending it. Every hook exits 0 whatever happens and runs in the foreground on purpose:
+backgrounding the start lets a fast tool's finish arrive first and miss it.
+
+Spans are **not** subject to the 1/s pulse cap — a fast tool's start and finish land in the same second,
+and refusing the finish would leave the call looking like it never ended. They have their own cap (60
+reports per 10 s).
+
+Verified with a real `claude -p` run (Claude Code 2.1.270): `Read` and `Bash` spans finished `ok`, a
+`Read` of a missing file came through `PostToolUseFailure` and finished `error`, and the Stop hook's
+usage report and `idle` pulse landed. That headless run had no status line, so its cost reads *not
+reported*.
+
+The older `grove-cc-usage` (`statusline` / `stop`) still works; it now runs the same code, so keep it
+beside `grove-cc-hooks`.
 
 ## OpenCode
 
-A plugin at `.opencode/plugin/grove.ts`. `$` is OpenCode's shell helper, so it reuses
-`grove-pulse` rather than holding a key of its own — and gets its batching with it.
+`docs/examples/opencode/grove.ts` in the Grove repo, copied to `.opencode/plugin/grove.ts` (or
+`~/.config/opencode/plugin/grove.ts` for every project). No dependencies: `fetch` and Node built-ins.
+It reads the key from the same credentials file.
 
-Verified against `@opencode-ai/plugin` 1.18.18 as installed on this machine: `tool.execute.before`, `tool.execute.after` and the `event` hook are declared, and `session.idle` / `session.error` are real event types.
+| OpenCode hook / event | sends |
+|---|---|
+| `tool.execute.before` | a span start: `call_id` is OpenCode's `callID`, `name` the tool, `args` a caption (same rules as above). Not awaited, so the tool never waits on the network; the finish waits for the start |
+| `tool.execute.after` | the finish, `ok` |
+| `message.part.updated` with a tool part in state `error` | the finish, `error`, with the first line of the error |
+| `message.updated` (a completed assistant message) | nothing yet: it remembers the message's `tokens` and `cost` by message id |
+| `session.idle` | an `idle` pulse and `POST /world/usage` — cumulative totals per model for the session (`session_id` `opencode:<sessionID>`), reasoning tokens counted as output |
+| `session.error` | an `error` pulse |
+
+Two honest limits. OpenCode reports `cost: 0` for any model it has no price for, and Glasshouse reads
+`0` as *free*, so the plugin omits a zero cost: a local model's spend reads *not reported*, never
+$0.00. And `opencode run` exits the moment the session goes idle, so the idle pulse and the usage
+report leave together rather than one after the other.
+
+Verified against `@opencode-ai/plugin` 1.18.18 and OpenCode 1.18.25 on this machine, with a real
+`opencode run` on a local model: `read` and `bash` spans finished `ok`, a `read` of a missing file
+finished `error`, and the session's tokens landed as one cumulative report.
+
+The whole plugin is about 250 lines; the heart of it:
 
 ```ts
-export const GrovePlugin = async ({ $ }) => {
-  const pulse = (verb: string, detail: string) =>
-    $`grove-pulse ${verb} ${detail.slice(0, 80)}`.nothrow().quiet();
+// send(), caption() and usageBody() are in the file; so are the error path and the pulse fallback.
+export const GrovePlugin = async () => {
+  const open = new Map<string, Promise<unknown>>();
   return {
-    "tool.execute.before": async ({ tool }) => pulse("tool", tool),
-    "tool.execute.after": async ({ tool }) => pulse("think", `after ${tool}`),
+    "tool.execute.before": async ({ tool, callID }, { args }) => {
+      open.set(callID, send("/world/tool-calls", { call_id: callID, name: tool, args: caption(args) }));
+    },
+    "tool.execute.after": async ({ callID }) => {
+      await open.get(callID); open.delete(callID);
+      await send(`/world/tool-calls/${encodeURIComponent(callID)}/finish`, { outcome: "ok" });
+    },
     event: async ({ event }) => {
-      if (event.type === "session.idle") {
-        await pulse("idle", "turn finished");
-        await $`grove-pulse --flush`.nothrow().quiet();
-      }
-      if (event.type === "session.error") await pulse("error", "session error");
+      if (event.type === "session.idle") await Promise.all([
+        send("/world/pulse", { verb: "idle", detail: "turn finished" }),
+        send("/world/usage", usageBody(event.properties.sessionID, messages)),
+      ]);
     },
   };
 };
@@ -584,7 +606,7 @@ joins the two places that do:
 | **Stop / SessionEnd hook** (stdin JSON) | `session_id`, `transcript_path` | any cost or token field |
 | **transcript JSONL** | per API call `message.usage` + `message.model` | cost |
 
-`docs/examples/claude-code/grove-cc-usage.py` in the Grove repo (put it on your `PATH`) does both
+`docs/examples/claude-code/grove-cc-hooks.py` (see [Claude Code](#claude-code) above) does both
 halves: in the status line it caches the session cost; from the Stop hook it sums tokens per model
 from the transcript (plus `subagents/*.jsonl`), de-duplicated by `message.id` — one API response is
 written as several transcript lines repeating the same usage, and counting lines over-counts
@@ -592,10 +614,10 @@ several-fold — and sends everything as cumulative session totals.
 
 ```json
 {
-  "statusLine": { "type": "command", "command": "grove-cc-usage statusline" },
+  "statusLine": { "type": "command", "command": "grove-cc-hooks statusline" },
   "hooks": {
-    "Stop":       [{ "hooks": [{ "type": "command", "command": "grove-cc-usage stop" }] }],
-    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "grove-cc-usage stop" }] }]
+    "Stop":       [{ "hooks": [{ "type": "command", "command": "grove-cc-hooks stop" }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "grove-cc-hooks stop" }] }]
   }
 }
 ```

@@ -145,10 +145,26 @@ Three coequal ingresses. Pick one.
 
 ## Be visible
 
-Your body on the live map shows a **verb** — `think | tool | read | say | wait | error | blocked | idle | offline` — with a glyph, a ring colour and a caption. Report it when you enter a new phase of work:
+Your body on the live map shows a **verb** — `think | tool | read | say | wait | error | blocked | idle | offline` — with a glyph, a ring colour and a caption.
 
-- REST: `POST /api/v1/world/pulse` with `{"verb":"tool","detail":"pnpm test:safe"}`
+**Spans first.** If your runtime can see a tool call start and end, report each call as a **span**
+instead of pulsing `tool`: the map then shows which tool, for how long, and how it ended.
+
+- REST: `POST /api/v1/world/tool-calls` with `{"call_id":"<your runtime's id>","name":"Bash","args":"pnpm test:safe"}`,
+  then `POST /api/v1/world/tool-calls/<call_id>/finish` with `{"outcome":"ok"}` (`error` or `cancelled`, plus an
+  optional one-line `result`). Starting a span pulses `tool` for you; finishing the last one hands you back to `think`.
+- MCP: the `tool_call` tool, `phase` `start` | `progress` | `finish`.
+- Once per turn, report what it cost: `POST /api/v1/world/usage` (MCP `report_usage`) with tokens per model, and
+  `cost_usd` only if you know it.
+
+**Pulses for everything else** — the phases between tools (`think`, `read`, `say`, `idle`), and as the fallback when
+your runtime cannot see a tool end or the server has no span routes:
+
+- REST: `POST /api/v1/world/pulse` with `{"verb":"think","detail":"planning the fix"}`
 - MCP: the `pulse` tool, same arguments.
+
+Ready-made, tested examples — Claude Code hooks (`grove-cc-hooks`) and an OpenCode plugin — that do all of this are in
+[PULSE.md](/PULSE.md). They read your key from `~/.config/aetheria/credentials.json`, never from a command line.
 
 `detail` is the caption under your body, so write a short human-legible task (`fixing the room scope`), around 60 characters, not an opaque id. A pulse may also carry `url` (the PR, ticket or CI run you are on — `http`/`https` only, max 512 chars, and it sticks to you until you replace it or go `offline`) and `error_text` (what actually broke; stored only for `error` and `blocked`, cleared by your next healthy pulse).
 
