@@ -104,28 +104,28 @@ export const KIND_ORDER = [
 export type KindCopy = { label: string; plural: (n: number) => string; tint: string };
 
 const KIND_COPY: Record<string, KindCopy> = {
-  arrival: { label: "arrivals", plural: (n) => `${n} arrived`, tint: "border-lantern-400/40 text-lantern-300" },
-  claim: { label: "claims", plural: (n) => `${n} agents found an owner`, tint: "border-lantern-400/30 text-lantern-300/90" },
-  movement: { label: "movement", plural: (n) => `${n} moves between rooms`, tint: "border-white/15 text-white/50" },
+  arrival: { label: "arrivals", plural: (n) => `${n} arrived`, tint: "border-signal/60 text-ink" },
+  claim: { label: "claims", plural: (n) => `${n} agents found an owner`, tint: "border-line-strong text-ink" },
+  movement: { label: "movement", plural: (n) => `${n} moves between rooms`, tint: "border-line text-muted" },
   // Phase history: only the agent's owner and operators ever receive these rows.
-  work: { label: "work", plural: (n) => `${n} stretches of agent work`, tint: "border-violet-400/20 text-violet-200/80" },
-  speech: { label: "talk", plural: (n) => `${n} lines spoken`, tint: "border-sky-400/30 text-sky-200" },
-  notice: { label: "notices", plural: (n) => `${n} notices posted`, tint: "border-sky-400/30 text-sky-200" },
-  permission: { label: "permissions", plural: (n) => `${n} permission changes`, tint: "border-violet-400/30 text-violet-200" },
-  instruction: { label: "instructions", plural: (n) => `${n} instructions sent`, tint: "border-violet-400/30 text-violet-200" },
-  credential: { label: "keys", plural: (n) => `${n} key changes`, tint: "border-amber-400/30 text-amber-200" },
-  moderation: { label: "moderation", plural: (n) => `${n} moderation events`, tint: "border-red-400/40 text-red-300" },
+  work: { label: "work", plural: (n) => `${n} stretches of agent work`, tint: "border-agent/40 text-ink" },
+  speech: { label: "talk", plural: (n) => `${n} lines spoken`, tint: "border-pane/50 text-ink" },
+  notice: { label: "notices", plural: (n) => `${n} notices posted`, tint: "border-pane/50 text-ink" },
+  permission: { label: "permissions", plural: (n) => `${n} permission changes`, tint: "border-pane/50 text-ink" },
+  instruction: { label: "instructions", plural: (n) => `${n} instructions sent`, tint: "border-pane/50 text-ink" },
+  credential: { label: "keys", plural: (n) => `${n} key changes`, tint: "border-line-strong text-ink" },
+  moderation: { label: "moderation", plural: (n) => `${n} moderation events`, tint: "border-danger-ink/60 text-danger-ink" },
   // Trials on the Stage (040): public commons events, and ones people cheer on.
-  trial: { label: "trials", plural: (n) => `${n} trial moments on the Stage`, tint: "border-teal-400/40 text-teal-200" },
+  trial: { label: "trials", plural: (n) => `${n} trial moments on the Stage`, tint: "border-pane/50 text-ink" },
   // The artifact board on a space's page (041).
-  board: { label: "board", plural: (n) => `${n} board posts`, tint: "border-sky-400/40 text-sky-200" },
+  board: { label: "board", plural: (n) => `${n} board posts`, tint: "border-pane/50 text-ink" },
   // Board tables (#42): moves and game ends, as public as the room the table stands in.
-  game: { label: "games", plural: (n) => `${n} board game moments`, tint: "border-violet-300/40 text-violet-200" },
-  other: { label: "other", plural: (n) => `${n} other events`, tint: "border-white/15 text-white/50" },
+  game: { label: "games", plural: (n) => `${n} board game moments`, tint: "border-pane/50 text-ink" },
+  other: { label: "other", plural: (n) => `${n} other events`, tint: "border-line text-muted" },
 };
 
 export function kindCopy(kind: string): KindCopy {
-  return KIND_COPY[kind] ?? { label: kind, plural: (n) => `${n} ${kind} events`, tint: "border-white/15 text-white/50" };
+  return KIND_COPY[kind] ?? { label: kind, plural: (n) => `${n} ${kind} events`, tint: "border-line text-muted" };
 }
 
 /** Kinds that arrive in floods and say little one at a time; three or more in a row fold. */

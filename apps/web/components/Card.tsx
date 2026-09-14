@@ -16,6 +16,7 @@ import {
 import { getTheme, readThemeChoice } from "@/lib/themes";
 import type { ThemeLexicon } from "@/lib/themes/types";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { CARD_CLASS, INPUT_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
 type CardLex = ThemeLexicon["card"];
 
@@ -117,12 +118,12 @@ export function CardPanel({ target, saveId, title }: { target: CardTarget; saveI
   return (
     <section className="mt-8">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="font-display text-2xl text-lantern-300">{title ?? "Card"}</h2>
+        <h2 className={SECTION_TITLE_CLASS}>{title ?? "Card"}</h2>
         {canEdit && !editing ? (
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/70 hover:text-lantern-300"
+            className={buttonClass("secondary", "sm")}
           >
             Edit card
           </button>
@@ -140,7 +141,7 @@ export function CardPanel({ target, saveId, title }: { target: CardTarget; saveI
           }}
         />
       ) : (
-        <div className="mt-3 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
+        <div className={`mt-3 ${CARD_CLASS}`}>
           <CardFields card={card} lex={lex} />
         </div>
       )}
@@ -179,10 +180,10 @@ function CardEditor({
     }
   }
 
-  const input = "mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white/85";
+  const input = `mt-1 ${INPUT_CLASS} text-gh-sm`;
   const text = (field: "workingOn" | "lookingFor" | "latest", label: string) =>
     can(field) ? (
-      <label className="block text-xs text-white/50">
+      <label className="block text-xs text-muted">
         {label}
         <input
           className={input}
@@ -194,9 +195,9 @@ function CardEditor({
     ) : null;
 
   return (
-    <div className="mt-3 space-y-3 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
+    <div className={`mt-3 space-y-3 ${CARD_CLASS}`}>
       {subject === "agent" ? (
-        <p className="text-xs text-white/55">
+        <p className="text-xs text-muted">
           {lex.workingOn} and {lex.latest.toLowerCase()} fill themselves from this agent&apos;s pulses and tool calls.
         </p>
       ) : null}
@@ -204,7 +205,7 @@ function CardEditor({
       {text("lookingFor", lex.lookingFor)}
       {text("latest", lex.latest)}
       {can("links") ? (
-        <fieldset className="text-xs text-white/50">
+        <fieldset className="text-xs text-muted">
           <legend>{lex.links}</legend>
           {d.links.map((l, i) => (
             <div key={i} className="mt-1 flex flex-col gap-1 sm:flex-row">
@@ -225,7 +226,7 @@ function CardEditor({
               <button
                 type="button"
                 onClick={() => setD({ ...d, links: d.links.filter((_, j) => j !== i) })}
-                className="px-2 py-1 text-white/55 hover:text-white/70"
+                className={buttonClass("ghost", "sm", "text-muted")}
                 aria-label="Remove link"
               >
                 ×
@@ -236,7 +237,7 @@ function CardEditor({
             <button
               type="button"
               onClick={() => setD({ ...d, links: [...d.links, { label: "", url: "" }] })}
-              className="mt-2 text-lantern-300"
+              className={buttonClass("ghost", "sm", "mt-2")}
             >
               + add a link
             </button>
@@ -249,11 +250,11 @@ function CardEditor({
           type="button"
           disabled={busy}
           onClick={() => void save()}
-          className="rounded-full bg-lantern-400 px-4 py-2 text-sm font-semibold text-dusk-950 disabled:opacity-50"
+          className={buttonClass("primary", "sm")}
         >
           Save card
         </button>
-        <button type="button" onClick={onDone} className="rounded-full px-4 py-2 text-sm text-white/50">
+        <button type="button" onClick={onDone} className={buttonClass("ghost", "sm", "text-muted")}>
           Cancel
         </button>
       </div>

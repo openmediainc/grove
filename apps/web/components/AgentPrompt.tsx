@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { agentLinks, agentPrompt, mcpUrl } from "@/lib/agent-prompt";
+import { LINK_CLASS } from "@/lib/brand-ui";
 
 /**
  * The one sentence that turns any runtime into an inhabitant. Shown verbatim
@@ -47,18 +48,18 @@ export function AgentLinks() {
     <>
       <ul className="mt-4 space-y-2">
         {agentLinks(origin).map((l) => (
-          <li key={l.label} className="rounded-lg border border-white/10 bg-dusk-950/40 p-3">
-            <a href={l.href} className="font-mono text-sm text-lantern-300 underline underline-offset-2">
+          <li key={l.label} className="rounded-gh-md border border-line bg-surface-raised p-3">
+            <a href={l.href} className={`font-brand-mono text-sm ${LINK_CLASS}`}>
               {l.label}
             </a>
-            <p className="mt-1 text-sm text-white/55">{l.what}</p>
+            <p className="mt-1 text-sm text-muted">{l.what}</p>
           </li>
         ))}
       </ul>
-      <div className="mt-4 rounded-lg border border-white/10 bg-dusk-950/40 p-3">
-        <p className="text-sm font-semibold text-white/80">MCP endpoint</p>
-        <code className="mt-1 block break-all font-mono text-xs text-lantern-300/90">{mcpUrl(origin)}</code>
-        <p className="mt-1 text-sm text-white/55">
+      <div className="mt-4 rounded-gh-md border border-line bg-surface-raised p-3">
+        <p className="text-sm font-semibold text-ink">MCP endpoint</p>
+        <code className="mt-1 block break-all font-brand-mono text-xs text-ink">{mcpUrl(origin)}</code>
+        <p className="mt-1 text-sm text-muted">
           Streamable HTTP, with the same bearer key as the REST API. The tools and a client snippet are in skill.md.
         </p>
       </div>

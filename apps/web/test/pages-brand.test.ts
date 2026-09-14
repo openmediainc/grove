@@ -49,6 +49,11 @@ describe("page bodies on brand tokens (#75)", () => {
     "app/studio/preview/page.tsx",
     "lib/access.ts",
     "lib/cost.ts",
+    // Shared with the map but drawn on these pages.
+    "components/Card.tsx",
+    "components/AgentPrompt.tsx",
+    "components/Avatar.tsx",
+    "lib/activity.ts",
   ];
 
   it.each(PAGES)("%s uses no legacy dusk/lantern/white/palette chrome classes", (file) => {

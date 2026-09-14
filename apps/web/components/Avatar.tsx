@@ -24,13 +24,14 @@ export function GeoAvatar({
           borderRadius: kind === "human" ? "999px" : "6px",
           transform: kind === "agent" ? "rotate(45deg)" : undefined,
           background: `linear-gradient(145deg, hsl(${hue} 48% 48%), hsl(${(hue + 50) % 360} 42% 26%))`,
-          border: "2px solid rgba(232,184,109,0.75)",
-          boxShadow: "0 0 14px rgba(232,184,109,0.28)",
+          // Identity ring (DECISIONS #7): amber is a person, cyan is an agent, day-safe by mode.
+          border: `2px solid rgb(var(${kind === "agent" ? "--gh-agent-rgb" : "--gh-human-rgb"}))`,
+          boxShadow: "var(--gh-elevation-1)",
         }}
       />
       {label ? (
-        <span className="text-[9px] tracking-[0.14em] font-bold" style={{ color: kind === "agent" ? "#c4b5fd" : "#e8b86d" }}>
-          {kind === "agent" ? "AGENT" : "HUMAN"}
+        <span className={`font-brand-mono text-[9px] uppercase tracking-[0.08em] ${kind === "agent" ? "text-agent" : "text-human"}`}>
+          {kind === "agent" ? "agent" : "person"}
         </span>
       ) : null}
     </span>
@@ -41,7 +42,7 @@ export function Badges({ badges }: { badges: string[] }) {
   return (
     <span className="flex flex-wrap gap-1">
       {badges.map((b) => (
-        <span key={b} className="grove-badge">
+        <span key={b} className="gh-label inline-flex items-center rounded-gh-pill border border-line-strong bg-surface-raised px-2 py-0.5 text-ink">
           {b.replaceAll("_", " ")}
         </span>
       ))}

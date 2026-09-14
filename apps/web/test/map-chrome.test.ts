@@ -91,7 +91,8 @@ describe("map chrome speaks brand tokens (#74)", () => {
 
   it("the map route is branded, so its chrome follows the viewer's mode (not the legacy night frame)", () => {
     expect(isBrandedRoute("/")).toBe(true);
-    expect(isBrandedRoute("/explore")).toBe(false);
+    // "/" is the root only; pages joined on their own routes (#75).
+    expect(isBrandedRoute("/explore", ["/"])).toBe(false);
   });
 
   it.each(["components/LeaveMessage.tsx", "components/Reactions.tsx", "components/AgentPrompt.tsx", "components/Activity.tsx"])(

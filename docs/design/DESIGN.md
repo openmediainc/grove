@@ -317,4 +317,26 @@ tokens in the viewer's mode (guarded by `apps/web/test/map-chrome.test.ts`); a t
 DOM (the pixel room). `LeaveMessage`, `Reactions`, `AgentPrompt` and `Activity` moved to roles with it, so on pages
 still in the legacy frame they render night. Replay is marked in the sky pane (amber is a person now).
 
+**Done: page bodies (#75).** `/explore`, `/s`, `/a`, `/u`, `/me`, `/inbox`, `/how-it-works`, `/login`, `/mod`,
+`/spaces/join` and `/studio/preview` are in `BRANDED_ROUTES` (with `/styleguide` and `/`), so Light · Night · System
+apply to every page. Page recipes live beside the control recipes in `lib/brand-ui.ts` and are shown in the style
+guide's **Pages** section:
+
+| Recipe | Use |
+|---|---|
+| `PAGE_TITLE_CLASS` | the one h1: Schibsted 800, tight tracking |
+| `SECTION_TITLE_CLASS` / `SECTION_CLASS` | an h2 and a quiet surface for a group (Manage, Settings) |
+| `CARD_CLASS` | a card on a section or the ground (`surface-raised`, `shadow-gh-1`) |
+| `EMPTY_CLASS` | dashed frame and one terse line ("No invites yet."), optional secondary action |
+| `TABLE_WRAP_CLASS` · `TABLE_CLASS` · `TH_CLASS` · `TD_CLASS` · `NUM_CLASS` | tables scroll in their own frame at 390px; headers are mono labels; numbers mono, tabular, right-aligned |
+| `LINK_CLASS` | ink with an underline; signal is never a link |
+| `optionClass(selected)` | option tiles (access, plots, presets): signal border on tint when chosen |
+| `PILL_CLASS` + `accessTint(preset)` | Open = success, Watch only = pane frame with ink text, Private = muted |
+
+Status tones on pages: ok = `success`; warning/near = `signal` frame with ink text and a `signal-text` word; fault =
+`danger-ink`; unknown = `muted`. `pane` is a 3:1 mark by day (4.33:1 on surface), so it frames or fills but is never
+text. One primary per view: the rest are secondary, ghost or danger. Overlays that stay dark in both modes (the board
+lightbox) set `data-mode="night"` on the overlay. The people/agent ring on `GeoAvatar` and its label read
+`--gh-human` / `--gh-agent`.
+
 When the last usage moves, delete `LEGACY_CHROME_COLORS` and the page-level Source Sans fallback (map themes keep their own display faces for in-world text).
