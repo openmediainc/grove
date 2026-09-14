@@ -241,6 +241,9 @@ export function __setListenClientFactory(factory: ListenClientFactory | null, id
 }
 
 /** ioredis-shaped bus backed by Postgres so Grove can run without Redis. */
+/** SQL: the conflicting grove_kv row has expired, so it counts as absent. */
+const EXPIRED_KV = "(grove_kv.expires_at IS NOT NULL AND grove_kv.expires_at <= now())";
+
 export class PgRedis extends EventEmitter {
   private subscribed = new Set<string>();
 
@@ -274,11 +277,12 @@ export class PgRedis extends EventEmitter {
     const { ex, px, nx } = parseSetArgs(args);
     const exp = expiresSql(ex, px);
     if (nx) {
-      const sql = exp
-        ? `INSERT INTO grove_kv (key, value, expires_at) VALUES ($1, $2, ${exp})
-           ON CONFLICT (key) DO NOTHING`
-        : `INSERT INTO grove_kv (key, value, expires_at) VALUES ($1, $2, NULL)
-           ON CONFLICT (key) DO NOTHING`;
+      // An expired row is a missing key (Redis semantics): NX must take it.
+      // Without the WHERE arm a lapsed lock or dedupe key blocked NX forever,
+      // because nothing purges grove_kv on its own.
+      const sql = `INSERT INTO grove_kv (key, value, expires_at) VALUES ($1, $2, ${exp ?? "NULL"})
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, expires_at = EXCLUDED.expires_at
+         WHERE ${EXPIRED_KV}`;
       const res = await this.pool.query(sql, [key, value]);
       return res.rowCount === 1 ? "OK" : null;
     }
@@ -301,8 +305,13 @@ export class PgRedis extends EventEmitter {
 
   async incr(key: string): Promise<number> {
     const { rows } = await this.pool.query<{ value: string }>(
+      // An expired counter starts again at 1 with no TTL, as in Redis. It used
+      // to keep counting past its window, so a rate limit (which only sets the
+      // TTL when the count is 1) never reset and refused that actor for good.
       `INSERT INTO grove_kv (key, value) VALUES ($1, '1')
-       ON CONFLICT (key) DO UPDATE SET value = (COALESCE(grove_kv.value, '0')::int + 1)::text
+       ON CONFLICT (key) DO UPDATE SET
+         value = CASE WHEN ${EXPIRED_KV} THEN '1' ELSE (COALESCE(grove_kv.value, '0')::int + 1)::text END,
+         expires_at = CASE WHEN ${EXPIRED_KV} THEN NULL ELSE grove_kv.expires_at END
        RETURNING value`,
       [key],
     );
@@ -323,9 +332,11 @@ export class PgRedis extends EventEmitter {
 
   async pttl(key: string): Promise<number> {
     const { rows } = await this.pool.query<{ ms: string | null }>(
-      `SELECT CASE WHEN expires_at IS NULL THEN -1
-                  WHEN expires_at <= now() THEN -2
-                  ELSE FLOOR(EXTRACT(EPOCH FROM (expires_at - now())) * 1000)::text
+      // One type in every arm: mixing integer and text failed the whole query,
+      // so every rate-limit refusal answered 500 instead of 429.
+      `SELECT CASE WHEN expires_at IS NULL THEN -1::bigint
+                  WHEN expires_at <= now() THEN -2::bigint
+                  ELSE FLOOR(EXTRACT(EPOCH FROM (expires_at - now())) * 1000)::bigint
              END AS ms
        FROM grove_kv WHERE key = $1`,
       [key],
@@ -343,6 +354,9 @@ export class PgRedis extends EventEmitter {
   }
 
   async sadd(key: string, member: string): Promise<number> {
+    // A set whose TTL lapsed is gone: clear it first, or re-adding a member it
+    // held would be a silent no-op and the member would stay invisible.
+    await this.pool.query("DELETE FROM grove_set WHERE key = $1 AND expires_at IS NOT NULL AND expires_at <= now()", [key]);
     const res = await this.pool.query(
       "INSERT INTO grove_set (key, member) VALUES ($1, $2) ON CONFLICT DO NOTHING",
       [key, member],
