@@ -52,14 +52,15 @@ export function wordmarkSvg(variant: MarkVariant = "light"): string {
 }
 
 /** Mark + wordmark, wordmark optically centred on the mark. */
-export function lockupSvg(variant: MarkVariant = "light"): string {
+export function lockupSvg(variant: MarkVariant = "light", ink?: string): string {
+  const c = ink ?? FRAME_INK[variant];
   const gap = 12;
   const scale = 0.82;
   const ww = round(WORDMARK_WIDTH * scale);
   const wh = WORDMARK_HEIGHT * scale;
   const width = round(46 + gap + ww);
   const y = round((46 - wh) / 2 + 1);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 46" width="${width}" height="46" role="img" aria-label="glasshouse">${markBody(variant)}<g transform="translate(${46 + gap} ${y}) scale(${scale})"><path fill="${FRAME_INK[variant]}" d="${WORDMARK_PATH}"/></g></svg>\n`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 46" width="${width}" height="46" role="img" aria-label="glasshouse">${markBody(variant, "regular", c)}<g transform="translate(${46 + gap} ${y}) scale(${scale})"><path fill="${c}" d="${WORDMARK_PATH}"/></g></svg>\n`;
 }
 
 /**

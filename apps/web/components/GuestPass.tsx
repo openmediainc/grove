@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { buttonClass } from "@/lib/brand-ui";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import {
@@ -85,17 +86,17 @@ export function GuestPass() {
         aria-haspopup="true"
         onClick={() => setOpen((o) => !o)}
         title="You are reacting and following as a guest in this browser"
-        className="flex w-full items-center gap-1.5 rounded-lg px-3 py-3 text-left text-lantern-300/80 hover:bg-white/5 sm:w-auto sm:rounded-full sm:border sm:border-white/15 sm:px-3 sm:py-1"
+        className="flex w-full items-center gap-1.5 rounded-gh-md px-3 py-3 text-left text-gh-sm text-ink hover:bg-tint focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-8 sm:w-auto sm:rounded-gh-pill sm:border sm:border-line-strong sm:bg-surface-raised sm:py-0"
       >
         <span aria-hidden>♥</span>
         {guestChipLabel(follows.length)}
-        <span aria-hidden className="text-[10px] text-white/50">
+        <span aria-hidden className="text-[10px] text-muted">
           ▾
         </span>
       </button>
       {open ? (
-        <div className="z-30 mt-1 flex w-full flex-col gap-1 rounded-xl border border-white/10 bg-dusk-900/95 p-2 text-sm shadow-xl backdrop-blur-md sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-64">
-          <span className="px-2 pt-1 text-[11px] uppercase tracking-widest text-white/50">From what you follow</span>
+        <div className="z-30 mt-1 flex w-full flex-col gap-1 rounded-gh-md border border-line bg-surface-raised p-2 text-gh-sm text-ink shadow-gh-3 sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-64">
+          <span className="gh-label px-2 pt-1 text-muted">From what you follow</span>
           {follows.length ? (
             <ul className="flex flex-col">
               {follows.map((f) => (
@@ -103,18 +104,18 @@ export function GuestPass() {
                   <Link
                     href={guestFollowHref(f)}
                     onClick={() => setOpen(false)}
-                    className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-white/80 hover:bg-white/5"
+                    className="flex min-h-11 items-center justify-between gap-2 rounded-gh-sm px-2 text-ink hover:bg-tint focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-8"
                   >
                     <span className="truncate">{f.name}</span>
-                    <span className="shrink-0 text-[10px] text-white/50">{f.subject}</span>
+                    <span className="gh-label shrink-0 text-muted">{f.subject}</span>
                   </Link>
                 </li>
               ))}
             </ul>
           ) : null}
-          <p className="px-2 text-xs text-white/55">{guestFollowLine(follows.length)}</p>
+          <p className="px-2 text-gh-xs text-muted">{guestFollowLine(follows.length)}</p>
           <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-1">
-            <Link href={guestSignInHref(next)} className="rounded-full border border-lantern-400/40 px-3 py-1 text-xs text-lantern-300">
+            <Link href={guestSignInHref(next)} className={buttonClass("primary", "sm")}>
               Sign in
             </Link>
             <button
@@ -122,7 +123,7 @@ export function GuestPass() {
               disabled={busy}
               onClick={() => void forget()}
               title="Delete this browser's guest reactions and follows"
-              className="text-[11px] text-white/50 hover:text-white/70 disabled:opacity-50"
+              className="rounded-gh-sm text-gh-xs text-muted underline-offset-2 hover:text-ink hover:underline focus-visible:outline-none focus-visible:shadow-gh-ring disabled:opacity-50"
             >
               Forget this browser
             </button>

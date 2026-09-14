@@ -76,3 +76,30 @@ export const NOTICE_CLASS = {
   error: "rounded-gh-md border border-danger-ink/60 bg-danger-ink/5 px-3 py-2 text-gh-sm",
   refusal: "rounded-gh-md border border-line-strong bg-tint px-3 py-2 text-gh-sm",
 } as const;
+
+/** A native select in the input's frame, with room for the browser's arrow. */
+export const SELECT_CLASS = `${INPUT_CLASS} pr-8`;
+
+/** Checkbox and radio: native control, signal accent, the brand ring. 44px row on phones comes from the label. */
+export const CHECKBOX_CLASS =
+  "h-4 w-4 shrink-0 cursor-pointer rounded-gh-sm border-line-strong accent-[var(--gh-signal)] focus-visible:outline-none focus-visible:shadow-gh-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+/** A round icon-only control (search, menu, close): 44px on phones, 36px from sm. */
+export const ICON_BUTTON_CLASS =
+  "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-gh-pill border border-line-strong bg-surface-raised text-ink transition-colors duration-gh-fast hover:bg-tint focus-visible:outline-none focus-visible:shadow-gh-ring";
+
+/** The unread count on the bar: signal with its ink label (white on signal fails AA). */
+export const BADGE_CLASS =
+  "inline-flex min-w-[1.25rem] items-center justify-center rounded-gh-pill bg-signal px-1.5 font-brand-mono text-[11px] leading-5 tabular-nums text-signal-ink";
+
+/** A section link on the bar. Full-width row in the phone disclosure, inline from sm. */
+export function navLinkClass(current: boolean): string {
+  return (
+    "rounded-gh-md px-3 py-3 text-gh-sm transition-colors duration-gh-fast hover:bg-tint hover:text-ink focus-visible:outline-none focus-visible:shadow-gh-ring " +
+    "sm:rounded-gh-pill sm:px-3 sm:py-1.5 " +
+    (current ? "font-medium text-ink sm:bg-tint" : "text-muted")
+  );
+}
+
+/** Mono uppercase heading inside a menu (Appearance, You). */
+export const MENU_HEADING_CLASS = "gh-label px-3 pb-1 pt-2 text-muted";

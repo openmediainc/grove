@@ -55,22 +55,22 @@ export function CardFields({ card, lex, compact = false }: { card: WireCard | nu
   const rows = cardRows(card, lex);
   const links = card.card.links;
   if (!rows.length && !links.length) {
-    return <p className={`${compact ? "mt-3" : "mt-2"} text-xs text-white/50`}>{lex.empty}</p>;
+    return <p className={`${compact ? "mt-3" : "mt-2"} text-gh-xs text-muted`}>{lex.empty}</p>;
   }
   return (
-    <dl className={`${compact ? "mt-3 border-t border-white/10 pt-3" : "mt-2"} space-y-2 text-xs`}>
+    <dl className={`${compact ? "mt-3 border-t border-line pt-3" : "mt-2"} space-y-2 text-gh-xs`}>
       {rows.map((r) => (
         <div key={r.field}>
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">
+          <dt className="gh-label text-muted">
             {r.label}
-            {r.hint ? <span className="ml-1 normal-case tracking-normal text-white/50">· {r.hint}</span> : null}
+            {r.hint ? <span className="ml-1 font-brand normal-case tracking-normal">· {r.hint}</span> : null}
           </dt>
-          <dd className="mt-0.5 break-words text-white/75">{r.value}</dd>
+          <dd className="mt-0.5 break-words text-ink">{r.value}</dd>
         </div>
       ))}
       {links.length ? (
         <div>
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">{lex.links}</dt>
+          <dt className="gh-label text-muted">{lex.links}</dt>
           <dd className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
             {links.map((l) => (
               <a
@@ -78,7 +78,7 @@ export function CardFields({ card, lex, compact = false }: { card: WireCard | nu
                 href={l.url}
                 target="_blank"
                 rel="noopener noreferrer nofollow ugc"
-                className="break-all text-lantern-300 underline decoration-lantern-400/40 underline-offset-2"
+                className="break-all text-pane underline decoration-pane/40 underline-offset-2"
               >
                 {l.label}
               </a>

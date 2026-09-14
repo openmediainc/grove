@@ -22,12 +22,13 @@ without sight of the canvas. This is the contract from the accessibility pass
 
 ## Focus
 
-`:focus-visible` gets a 2px outline in `--g-lantern-400` (the theme's token; aoe
-value as fallback) with a 2px offset, in the base layer so a component's own focus
-style still wins. Inputs that remove the outline show a full-strength lantern
-border or ring instead. Programmatic focus targets (a dialog container, `<main>`)
-show no ring. When a brand focus token lands (#72 `--gh-focus`), point the one
-rule in `app/globals.css` at it; nothing else hard-codes a focus colour.
+`:focus-visible` gets a 2px outline in the brand `--gh-focus` token (#73: sky pane
+by day, dusk violet by night, brighter on TV) with a 2px offset, in the base layer so
+a component's own focus style still wins. Brand controls replace the outline with
+`shadow-gh-ring` (2px ground gap + 2px focus). Programmatic focus targets (a dialog
+container, `<main>`) show no ring. Nothing else hard-codes a focus colour; a web
+test checks the night ring is ≥ 3:1 on every map theme's dusk surfaces too, since
+map chrome still sits on them until #74.
 
 ## Contrast
 
@@ -38,6 +39,12 @@ rule in `app/globals.css` at it; nothing else hard-codes a focus colour.
 - dusk-950 text on a lantern-400 button: ≥ 4.5:1;
 - the focus ring (lantern-400) on dusk-950/900/800/700: ≥ 3:1;
 - the muted-text floor, white at 50%, on dusk-950 and dusk-800: ≥ 4.5:1.
+
+The same checks run on the legacy `dusk-*`/`lantern-*` fallbacks (`LEGACY_NIGHT`,
+Nightwatch values) that pages outside the map use until #75. Brand chrome pairs
+(nav, menus, palette, notices) are checked per mode by
+`packages/ui/test/tokens-contrast.test.ts`; `audit.mjs` runs axe with the stored
+Appearance set to light, night and tv (`MODES=` to narrow).
 
 All the tokens already passed, so no palette token changed. What failed was faint
 text: `text-white/25…/45` measured 2.5–4.5:1 on the darkest chrome. Those were

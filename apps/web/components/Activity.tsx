@@ -283,7 +283,7 @@ export function Activity({
         <p className="mt-4 rounded-xl border border-white/10 bg-dusk-800/60 p-3 text-xs text-white/55">
           Signed out, this is the public record only: arrivals, claims and permission changes. Talk,
           notices and moderation need a{" "}
-          <Link href="/login" className="text-lantern-300">
+          <Link href="/login" className="text-lantern-300 underline underline-offset-2">
             sign-in
           </Link>
           .

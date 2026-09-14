@@ -254,7 +254,7 @@ export function SkipLink() {
         if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
         main.focus();
       }}
-      className="sr-only left-3 top-3 z-[60] rounded-full bg-lantern-400 px-4 py-2 text-sm font-semibold text-dusk-950 focus:not-sr-only focus:fixed"
+      className="sr-only left-3 top-3 z-[60] rounded-gh-pill bg-signal px-4 py-2 font-brand text-gh-sm font-medium text-signal-ink focus:not-sr-only focus:fixed focus-visible:outline-none focus-visible:shadow-gh-ring"
     >
       Skip to content
     </a>

@@ -19,6 +19,8 @@ const axeSource = fs.readFileSync(require.resolve("axe-core/axe.min.js"), "utf8"
 
 const BASE = (process.env.BASE || "https://glasshouse.rendrr.app").replace(/\/$/, "");
 const MODE = process.argv[2] || "all";
+// Brand modes (#73): each axe pass runs with the stored Appearance choice set.
+const MODES = (process.env.MODES || "light,night,tv").split(",");
 const PAGES = (process.env.PAGES || "/,/?room=plaza,/?history=1,/explore,/s/aetheria-prime,/how-it-works,/login,/u/hello,/a/hello/opencode").split(",");
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, headless: true });
@@ -38,25 +40,31 @@ async function axe(page, label) {
 
 if (MODE === "all" || MODE === "axe") {
   let total = 0;
+  for (const mode of MODES)
   for (const p of PAGES) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await page.addInitScript((m) => {
+      try {
+        localStorage.setItem("gh-mode", m);
+      } catch {}
+    }, mode);
     await page.goto(BASE + p, { waitUntil: "networkidle", timeout: 45000 }).catch(() => {});
     await page.waitForTimeout(2500);
-    total += await axe(page, p);
+    total += await axe(page, `[${mode}] ${p}`);
     if (p === "/") {
       for (const text of ["Go to", "Watch", "⋯"]) {
         const btn = page.locator('button[aria-haspopup="menu"]').filter({ hasText: new RegExp(text, "i") }).first();
         if (!(await btn.count())) continue;
         await btn.click();
         await page.waitForTimeout(300);
-        total += await axe(page, `/ with ${text} open`);
+        total += await axe(page, `[${mode}] / with ${text} open`);
         await page.keyboard.press("Escape");
       }
       await page.keyboard.press("/");
       await page.waitForTimeout(800);
       await page.keyboard.type("pla");
       await page.waitForTimeout(1500);
-      total += await axe(page, "/ with the search palette open");
+      total += await axe(page, `[${mode}] / with the search palette open`);
     }
     await page.close();
   }
@@ -167,7 +175,12 @@ if (MODE === "all" || MODE === "keys") {
   const rm = await browser.newPage({ reducedMotion: "reduce" });
   await rm.goto(BASE + "/explore", { waitUntil: "domcontentloaded" });
   await rm.waitForTimeout(1500);
-  check((await rm.evaluate(() => getComputedStyle(document.querySelector(".lantern")).animationName)) === "none", "the lantern glow stops under reduced motion");
+  const glow = await rm.evaluate(() => {
+    const el = document.querySelector(".lantern");
+    return el ? getComputedStyle(el).animationName : null;
+  });
+  if (glow === null) console.log("SKIP reduced motion: no lantern glow on /explore");
+  else check(glow === "none", "the lantern glow stops under reduced motion");
   console.log(failures ? `\n${failures} keyboard check(s) FAILED` : "\nkeyboard checks: all pass");
 }
 

@@ -22,6 +22,7 @@ import { FollowButton } from "./Follow";
 import { followTargetFromCard } from "@/lib/follow";
 import { hasSignedInHint } from "@/lib/unread";
 import { useDialogFocus } from "./a11y";
+import { buttonClass } from "@/lib/brand-ui";
 
 /**
  * `/` search, on every page. Agents, people, spaces and rooms by name; with no
@@ -157,8 +158,8 @@ export function SearchPalette() {
 
   return (
     <PaletteDialog onClose={close}>
-        <div className="flex items-center gap-2 border-b border-white/10 px-4 focus-within:border-lantern-400/60">
-          <span aria-hidden className="text-lantern-400/70">/</span>
+        <div className="flex items-center gap-2 border-b border-line px-4 focus-within:border-focus">
+          <span aria-hidden className="font-brand-mono text-muted">/</span>
           <input
             ref={inputRef}
             value={query}
@@ -178,12 +179,12 @@ export function SearchPalette() {
             maxLength={64}
             autoComplete="off"
             spellCheck={false}
-            className="min-h-12 flex-1 bg-transparent py-3 text-base text-white/90 outline-none placeholder:text-white/50 sm:text-sm"
+            className="min-h-12 flex-1 bg-transparent py-3 text-gh-base text-ink outline-none placeholder:text-muted sm:text-gh-sm"
           />
           <button
             type="button"
             onClick={close}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-white/55 hover:text-white/80 sm:h-8 sm:w-auto sm:px-2 sm:text-xs"
+            className="flex h-11 w-11 items-center justify-center rounded-gh-pill text-muted hover:bg-tint hover:text-ink focus-visible:outline-none focus-visible:shadow-gh-ring sm:h-8 sm:w-auto sm:px-2 sm:font-brand-mono sm:text-gh-xs"
           >
             <span className="sm:hidden" aria-hidden>
               ×
@@ -195,17 +196,17 @@ export function SearchPalette() {
 
         <div className="flex-1 overflow-auto px-2 py-2">
           <div role="status" aria-live="polite" className="empty:hidden">
-            {failed ? <p className="px-3 py-4 text-xs text-white/55">Search is not answering. Try again in a moment.</p> : null}
+            {failed ? <p className="px-3 py-4 text-gh-xs text-muted">Search is not answering. Try again in a moment.</p> : null}
             {empty ? (
-              <p className="px-3 py-4 text-xs text-white/55">{query.trim() ? "Nothing by that name." : "Nobody on the map right now."}</p>
+              <p className="px-3 py-4 text-gh-xs text-muted">{query.trim() ? "Nothing by that name." : "Nobody on the map right now."}</p>
             ) : null}
           </div>
           <div id="grove-search-results" role="listbox" aria-label="Results">
             {groups.map((g, gi) => (
               <div key={g.label} role="group" aria-labelledby={`grove-search-group-${gi}`} className="mb-2">
-                <p id={`grove-search-group-${gi}`} role="presentation" className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">
+                <p id={`grove-search-group-${gi}`} role="presentation" className="gh-label px-3 pb-1 pt-2 text-muted">
                   {g.label}
-                  {g.label === "Online now" ? <span className="ml-1 normal-case tracking-normal text-white/50">· {g.items.length}</span> : null}
+                  {g.label === "Online now" ? <span className="ml-1 tabular-nums text-muted">· {g.items.length}</span> : null}
                 </p>
                 {g.items.map((item) => {
                   const idx = items.indexOf(item);
@@ -217,16 +218,16 @@ export function SearchPalette() {
                       id={`grove-search-${idx}`}
                       role="option"
                       aria-selected={selected}
-                      className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 ${selected ? "bg-white/[0.07] ring-1 ring-lantern-400/50" : "hover:bg-white/5"}`}
+                      className={`flex cursor-pointer items-center gap-2 rounded-gh-md px-3 py-2 ${selected ? "bg-tint ring-1 ring-focus" : "hover:bg-tint"}`}
                       onMouseEnter={() => setSel(idx)}
                       onClick={() => (cardTargetFor(item) ? setDetail(detail?.key === item.key ? null : item) : go(resultPath(item)))}
                     >
                       <span className="flex min-h-11 min-w-0 flex-1 flex-col items-start justify-center text-left sm:min-h-0">
-                        <span className="flex max-w-full items-center gap-2 truncate text-white/85">
+                        <span className="flex max-w-full items-center gap-2 truncate text-ink">
                           <KindMark type={item.type} online={"online" in item && item.online} />
                           <span className="truncate">{item.name}</span>
                         </span>
-                        {item.detail ? <span className="max-w-full truncate text-xs text-white/55">{item.detail}</span> : null}
+                        {item.detail ? <span className="max-w-full truncate text-gh-xs text-muted">{item.detail}</span> : null}
                         {jump ? <span className="sr-only">. Shift+Enter follows on the map.</span> : null}
                       </span>
                       {jump ? (
@@ -239,7 +240,7 @@ export function SearchPalette() {
                             close();
                           }}
                           title={`Follow ${item.name} on the map (Shift+Enter)`}
-                          className="flex min-h-11 shrink-0 items-center rounded-full border border-lantern-400/40 px-3 text-xs text-lantern-300 hover:bg-lantern-400/10 sm:min-h-0 sm:py-1"
+                          className={buttonClass("secondary", "sm", "min-h-11 shrink-0 text-gh-xs sm:min-h-8")}
                         >
                           Jump
                         </a>
@@ -252,11 +253,11 @@ export function SearchPalette() {
           </div>
         </div>
         {detail ? (
-          <section aria-label={`${detail.name}: card`} className="max-h-[40%] shrink-0 overflow-auto border-t border-white/10 px-2 pt-2">
+          <section aria-label={`${detail.name}: card`} className="max-h-[40%] shrink-0 overflow-auto border-t border-line px-2 pt-2">
             <ResultDetail item={detail} onOpen={() => go(resultPath(detail))} />
           </section>
         ) : null}
-        <p className="hidden border-t border-white/10 px-4 py-2 text-[11px] text-white/50 sm:block">
+        <p className="hidden border-t border-line px-4 py-2 font-brand-mono text-[11px] text-muted sm:block">
           ↑↓ to move · Enter for the card, Enter again to open · Shift+Enter or Jump follows on the map
         </p>
     </PaletteDialog>
@@ -270,7 +271,7 @@ function PaletteDialog({ onClose, children }: { onClose: () => void; children: R
   // else in the dialog (the card's buttons) Escape closes.
   useDialogFocus(ref, { modal: true, autoFocus: false, onEscape: (e) => (e.target as HTMLElement).getAttribute("role") === "combobox" ? false : onClose() });
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-dusk-950/70 px-4 pt-[10svh] backdrop-blur-sm" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ground/70 px-4 pt-[10svh] backdrop-blur-sm" onMouseDown={onClose}>
       <div
         ref={ref}
         data-a11y-dialog
@@ -278,7 +279,7 @@ function PaletteDialog({ onClose, children }: { onClose: () => void; children: R
         aria-modal="true"
         aria-label="Search Glasshouse"
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[80svh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-lantern-400/25 bg-dusk-950/[0.97] text-sm shadow-2xl"
+        className="flex max-h-[80svh] w-full max-w-lg flex-col overflow-hidden rounded-gh-lg border border-line bg-surface-raised font-brand text-gh-sm text-ink shadow-gh-3"
       >
         {children}
       </div>
@@ -290,7 +291,7 @@ function KindMark({ type, online }: { type: SearchItem["type"]; online: boolean 
   const glyph = type === "agent" ? "◆" : type === "human" ? "●" : type === "space" ? "▣" : "▢";
   const word = type === "agent" ? "Agent" : type === "human" ? "Person" : type === "space" ? "Space" : "Room";
   return (
-    <span className={`shrink-0 text-[10px] ${online ? "text-emerald-300" : "text-white/50"}`} title={online ? `${word}, on the map now` : word}>
+    <span className={`shrink-0 text-[10px] ${online ? "text-success" : "text-muted"}`} title={online ? `${word}, on the map now` : word}>
       <span aria-hidden>{glyph}</span>
       <span className="sr-only">{online ? `${word}, on the map now` : word}</span>
     </span>
@@ -310,14 +311,14 @@ function ResultDetail({ item, onOpen }: { item: SearchItem; onOpen: () => void }
   useEffect(() => setSignedIn(hasSignedInHint(document.cookie)), []);
   const openWord = item.type === "space" ? "Open space" : "Open profile";
   return (
-    <div className="mx-3 mb-2 rounded-xl border border-white/10 bg-dusk-800/60 px-3 py-2">
-      {!loaded ? <p className="text-xs text-white/50">Reading the card…</p> : <CardFields card={card} lex={lex} />}
+    <div className="mx-3 mb-2 rounded-gh-md border border-line bg-surface px-3 py-2">
+      {!loaded ? <p className="text-gh-xs text-muted">Reading the card…</p> : <CardFields card={card} lex={lex} />}
       <div className="mt-2 flex flex-wrap gap-2">
         {follow ? <FollowButton target={follow} signedIn={signedIn} lex={lex} name={item.name} /> : null}
         <button
           type="button"
           onClick={onOpen}
-          className="min-h-11 rounded-full border border-white/15 px-3 text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:min-h-0 sm:py-1"
+          className={buttonClass("secondary", "sm", "min-h-11 text-gh-xs sm:min-h-8")}
         >
           {openWord}
         </button>

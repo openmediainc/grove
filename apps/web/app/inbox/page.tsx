@@ -163,7 +163,7 @@ export default function InboxPage() {
                     <span className="ml-2 text-xs text-white/55">@{r.handle}</span>
                     <div className="mt-0.5 truncate text-xs text-white/50">
                       wants into{" "}
-                      <Link href={spaceHref(r.world_slug)} className="text-lantern-300">
+                      <Link href={spaceHref(r.world_slug)} className="text-lantern-300 underline underline-offset-2">
                         {r.world_name}
                       </Link>
                     </div>
@@ -364,7 +364,7 @@ function PartyLink({ party }: { party: WireMessage["from"] }) {
   const href = partyHref(party);
   const label = party.kind === "human" && party.ref ? `${party.name} (@${party.ref})` : party.name;
   return href ? (
-    <Link href={href} className="text-lantern-300">
+    <Link href={href} className="text-lantern-300 underline underline-offset-2">
       {label}
     </Link>
   ) : (

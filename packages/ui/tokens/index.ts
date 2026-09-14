@@ -2,7 +2,7 @@ export * from "./values.js";
 export * from "./contrast.js";
 export * from "./mode.js";
 export { tokensCss } from "./css.js";
-export { brandColors, brandTheme, LEGACY_CHROME_COLORS, LEGACY_TO_SEMANTIC } from "./tailwind.js";
+export { brandColors, brandTheme, LEGACY_CHROME_COLORS, LEGACY_NIGHT, LEGACY_TO_SEMANTIC } from "./tailwind.js";
 export {
   appIconSvg,
   brandFiles,

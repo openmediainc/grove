@@ -6,11 +6,11 @@
 
 /* Accessibility (#67, docs/ACCESSIBILITY.md). In the base layer so a component's
    own focus style (a ring, a border) still wins; everything else gets this. The
-   ring is the theme's lantern-400 token, >= 3:1 on every dusk surface in all four
-   themes (test/a11y.test.ts). */
+   ring is the brand --gh-focus token (#73): >= 3:1 on every brand surface in each
+   mode, and on every map theme's dusk surfaces (test/a11y.test.ts). */
 @layer base {
   :focus-visible {
-    outline: 2px solid rgb(var(--g-lantern-400, 232 184 109));
+    outline: 2px solid var(--gh-focus);
     outline-offset: 2px;
   }
   /* Programmatic focus targets (a dialog's container, <main> after Skip to
@@ -21,22 +21,38 @@
   }
 }
 
-:root {
+/* Brand ground and type for the whole document (#73). The mode comes from
+   data-mode on <html> (tokens.css); with none, the system preference. */
+html {
+  color-scheme: light;
+  background: var(--gh-ground);
+}
+html[data-mode="night"],
+html[data-mode="tv"] {
   color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-mode]) {
+    color-scheme: dark;
+  }
 }
 
 html,
 body {
   min-height: 100%;
-  background: #070814;
-  color: #f4efe4;
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 20% -10%, rgba(124, 58, 237, 0.18), transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, rgba(232, 184, 109, 0.12), transparent 50%),
-    linear-gradient(180deg, #1a1540 0%, #0b1220 42%, #070814 100%);
+  background: var(--gh-ground);
+  color: var(--gh-ink);
+  font-family: var(--gh-font-sans);
+}
+
+/* Page bodies not yet on the brand (rollout #74–#75): the night ground, white
+   text and the page face they were written for. Tokens inside are pinned to
+   night by [data-brand-legacy] in tokens.css. */
+.gh-legacy-page {
+  color: #f4efe4;
   font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
 }
 

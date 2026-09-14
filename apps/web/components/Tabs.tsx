@@ -2,6 +2,7 @@
 
 import { useRef, type KeyboardEvent } from "react";
 import { nextRovingIndex } from "@/lib/a11y";
+import { tabClass } from "@/lib/brand-ui";
 
 /**
  * The tab strip on the one-subject pages: agent `/a/[slug]` (Activity · Card ·
@@ -47,7 +48,7 @@ export function Tabs<T extends string>({
     refs.current[next]?.focus();
   };
   return (
-    <div role="tablist" aria-label={label} onKeyDown={onKey} className="mt-8 flex gap-1 overflow-x-auto border-b border-white/10">
+    <div role="tablist" aria-label={label} onKeyDown={onKey} className="mt-8 flex gap-1 overflow-x-auto border-b border-line font-brand">
       {tabs.map((t, i) => (
         <button
           key={t}
@@ -61,9 +62,7 @@ export function Tabs<T extends string>({
           aria-controls={tabPanelProps(label, current).id}
           tabIndex={current === t ? 0 : -1}
           onClick={() => onChoose(t)}
-          className={`-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm ${
-            current === t ? "border-lantern-400 text-lantern-300" : "border-transparent text-white/60 hover:text-white/80"
-          }`}
+          className={tabClass(current === t)}
         >
           {labels[t]}
         </button>

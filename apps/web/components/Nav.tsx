@@ -1,7 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { lockupSvg } from "@grove/ui/tokens";
+import { AppearanceMenuGroup, AppearanceRadios } from "./Appearance";
+import {
+  BADGE_CLASS,
+  ICON_BUTTON_CLASS,
+  MENU_CLASS,
+  MENU_HEADING_CLASS,
+  buttonClass,
+  menuItemClass,
+  navLinkClass,
+} from "@/lib/brand-ui";
 import { api } from "@/lib/api";
 import { signOut } from "@/lib/session";
 import { GuestPass } from "./GuestPass";
@@ -40,10 +52,6 @@ import {
  * foot of the disclosure (phone), with Sign out in both.
  */
 
-/** Mobile: a full-width row you can hit. Desktop: back to a plain inline link. */
-const ITEM =
-  "rounded-lg px-3 py-3 hover:bg-white/5 sm:rounded-none sm:px-0 sm:py-0 sm:hover:bg-transparent";
-
 /** Opens the `/` search palette (components/SearchPalette), for thumbs and mice. */
 function SearchButton({ className }: { className: string }) {
   return (
@@ -54,11 +62,18 @@ function SearchButton({ className }: { className: string }) {
       className={className}
     >
       <span aria-hidden>⌕</span>
-      <span aria-hidden className="hidden text-xs text-white/55 sm:inline">/</span>
+      <span aria-hidden className="hidden text-gh-sm sm:inline">
+        Search
+      </span>
+      <kbd aria-hidden className="hidden rounded-gh-sm border border-line px-1.5 font-brand-mono text-[11px] leading-4 text-muted sm:inline">
+        /
+      </kbd>
       <span className="sr-only">Search agents, people, spaces and rooms</span>
     </button>
   );
 }
+
+const LOCKUP = lockupSvg("light", "currentColor");
 
 /**
  * Unseen messages plus follow notices. A signed-out visitor (no hint cookie)
@@ -131,10 +146,7 @@ function Badge({ total, className = "" }: { total: number; className?: string })
   const text = badgeText(total);
   if (!text) return null;
   return (
-    <span
-      aria-hidden
-      className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-lantern-400 px-1.5 text-[11px] font-semibold leading-5 text-dusk-950 ${className}`}
-    >
+    <span aria-hidden className={`${BADGE_CLASS} ${className}`}>
       {text}
     </span>
   );
@@ -164,6 +176,7 @@ function YouMenu({ viewer, unread }: { viewer: Viewer; unread: number }) {
     };
   }, [open]);
   const profile = profileHref(viewer);
+  const handle = viewer.state === "signed-in" ? viewer.handle : null;
   return (
     <div ref={ref} data-menu-root className="relative hidden sm:block" onClick={(e) => e.stopPropagation()}>
       <button
@@ -174,11 +187,11 @@ function YouMenu({ viewer, unread }: { viewer: Viewer; unread: number }) {
         aria-controls={open ? "grove-you-menu" : undefined}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={onButtonKey}
-        className="flex items-center gap-1.5 rounded-full border border-lantern-400/40 px-3 py-1 text-lantern-300"
+        className={`${buttonClass("secondary", "sm")} before:inline-block before:h-2 before:w-2 before:rounded-full before:bg-human before:content-['']`}
       >
         You
         <Badge total={unread} />
-        <span aria-hidden className="text-[10px] text-lantern-300/70">
+        <span aria-hidden className="text-[10px] text-muted">
           ▾
         </span>
         {unread > 0 ? <span className="sr-only">, {inboxLabel(unread)}</span> : null}
@@ -190,13 +203,18 @@ function YouMenu({ viewer, unread }: { viewer: Viewer; unread: number }) {
           role="menu"
           aria-label="You"
           onKeyDown={onMenuKeyDown}
-          className="absolute right-0 top-full z-30 mt-2 flex w-48 flex-col rounded-xl border border-white/10 bg-dusk-900/95 p-1 text-sm shadow-xl backdrop-blur-md"
+          className={`absolute right-0 top-full z-30 mt-2 flex w-56 flex-col ${MENU_CLASS}`}
         >
-          <Link role="menuitem" tabIndex={-1} href="/me" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 hover:bg-white/5">
+          {handle ? (
+            <p role="presentation" className={`${MENU_HEADING_CLASS} truncate normal-case`}>
+              <span className="text-human">●</span> @{handle}
+            </p>
+          ) : null}
+          <Link role="menuitem" tabIndex={-1} href="/me" onClick={() => setOpen(false)} className={menuItemClass()}>
             You
           </Link>
           {profile ? (
-            <Link role="menuitem" tabIndex={-1} href={profile} onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 hover:bg-white/5">
+            <Link role="menuitem" tabIndex={-1} href={profile} onClick={() => setOpen(false)} className={menuItemClass()}>
               Your page
             </Link>
           ) : null}
@@ -206,11 +224,14 @@ function YouMenu({ viewer, unread }: { viewer: Viewer; unread: number }) {
             href="/inbox"
             aria-label={inboxLabel(unread)}
             onClick={() => setOpen(false)}
-            className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-white/5"
+            className={menuItemClass()}
           >
             Inbox
             <Badge total={unread} />
           </Link>
+          <div role="separator" className="my-1 h-px bg-line" />
+          <AppearanceMenuGroup />
+          <div role="separator" className="my-1 h-px bg-line" />
           <button
             role="menuitem"
             tabIndex={-1}
@@ -220,7 +241,7 @@ function YouMenu({ viewer, unread }: { viewer: Viewer; unread: number }) {
               setLeaving(true);
               void signOut();
             }}
-            className="rounded-lg px-3 py-2 text-left text-white/70 hover:bg-white/5 hover:text-white disabled:opacity-50"
+            className={menuItemClass()}
           >
             {leaving ? "Signing out…" : "Sign out"}
           </button>
@@ -237,22 +258,31 @@ export function Nav() {
   const viewer = useViewer();
   const signedIn = isSignedIn(viewer);
   const profile = profileHref(viewer);
+  const pathname = usePathname() ?? "/";
+  const link = (href: string, label: string, match: (p: string) => boolean = (p) => p === href) => {
+    const current = match(pathname);
+    return (
+      <Link href={href} aria-current={current ? "page" : undefined} className={navLinkClass(current)}>
+        {label}
+      </Link>
+    );
+  };
 
   return (
-    <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/5 bg-dusk-950/50 px-4 py-2.5 backdrop-blur-md sm:px-6 sm:py-3">
-      <Link href="/" onClick={close} className="flex items-center gap-3 py-1.5 sm:py-0">
-        <span className="lantern" />
-        <span className="font-display text-xl tracking-wide text-lantern-300">Glasshouse</span>
+    <header className="gh-frost sticky top-0 z-20 flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-4 py-1.5 font-brand text-ink shadow-gh-1 sm:px-6">
+      <Link
+        href="/"
+        onClick={close}
+        className="-mx-1 flex items-center rounded-gh-md px-1 py-2 text-ink focus-visible:outline-none focus-visible:shadow-gh-ring"
+      >
+        {/* The lockup in currentColor: mullion ink by day, mist by night, lit pane always signal. */}
+        <span className="block h-6 [&>svg]:h-full [&>svg]:w-auto" dangerouslySetInnerHTML={{ __html: LOCKUP }} />
       </Link>
 
       <div className="flex items-center gap-2 sm:hidden">
-        <SearchButton className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-lg text-lantern-300/80" />
+        <SearchButton className={`${ICON_BUTTON_CLASS} text-lg`} />
         {viewer.state === "signed-out" ? (
-          <Link
-            href="/login"
-            onClick={close}
-            className="rounded-full border border-lantern-400/40 px-4 py-2 text-sm text-lantern-300"
-          >
+          <Link href="/login" onClick={close} className={buttonClass("primary", "md")}>
             Sign in
           </Link>
         ) : null}
@@ -261,7 +291,7 @@ export function Nav() {
           aria-expanded={open}
           aria-controls="grove-sections"
           onClick={() => setOpen((o) => !o)}
-          className="relative flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-lantern-300/80"
+          className={`relative ${ICON_BUTTON_CLASS}`}
         >
           {!open ? <Badge total={unread} className="absolute -right-1 -top-1" /> : null}
           <span aria-hidden className="text-xl leading-none">
@@ -277,60 +307,53 @@ export function Nav() {
       <nav
         id="grove-sections"
         aria-label="Sections"
-        onClick={close}
+        onClick={(e) => {
+          // A pick closes the disclosure; the Appearance radios keep it open.
+          if (!(e.target as HTMLElement).closest("fieldset")) close();
+        }}
         className={`${
           open ? "flex" : "hidden"
-        } w-full basis-full flex-col items-stretch gap-0.5 pb-2 text-sm text-lantern-300/80 sm:flex sm:w-auto sm:basis-auto sm:flex-row sm:items-center sm:gap-5 sm:pb-0`}
+        } w-full basis-full flex-col items-stretch gap-0.5 pb-2 sm:flex sm:w-auto sm:basis-auto sm:flex-row sm:items-center sm:gap-1 sm:pb-0`}
       >
-        <Link href={campusHref(viewer)} className={ITEM}>
-          World
-        </Link>
-        <Link href="/explore" className={ITEM}>
-          Explore
-        </Link>
-        <Link href="/?history=1" className={ITEM}>
+        {link(campusHref(viewer), "World", (p) => p === "/")}
+        {link("/explore", "Explore", (p) => p.startsWith("/explore"))}
+        <Link href="/?history=1" className={navLinkClass(false)}>
           History
         </Link>
-        {isOperator(viewer) ? (
-          <Link href="/mod" className={ITEM}>
-            Mod
-          </Link>
-        ) : null}
-        <Link href="/how-it-works" className={ITEM}>
-          How it works
-        </Link>
-        <SearchButton className="hidden items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-lantern-300/80 hover:text-lantern-300 sm:flex" />
+        {isOperator(viewer) ? link("/mod", "Mod", (p) => p.startsWith("/mod")) : null}
+        {link("/how-it-works", "How it works")}
+        <SearchButton className={`hidden sm:ml-2 sm:inline-flex ${buttonClass("secondary", "sm", "text-muted hover:text-ink")}`} />
         {/* A signed-out browser holding a guest pass: what it follows. Renders nothing otherwise. */}
         {viewer.state === "signed-out" ? <GuestPass /> : null}
         {viewer.state === "signed-out" ? (
-          <Link
-            href="/login"
-            className="hidden rounded-full border border-lantern-400/40 px-3 py-1 text-lantern-300 sm:block"
-          >
+          <Link href="/login" className={`hidden sm:inline-flex ${buttonClass("primary", "sm")}`}>
             Sign in
           </Link>
         ) : null}
         {signedIn ? <YouMenu viewer={viewer} unread={unread} /> : null}
         {signedIn ? (
-          <div className="mt-1 flex flex-col gap-0.5 border-t border-white/10 pt-1 sm:hidden">
-            <span className="px-3 pt-2 text-[11px] uppercase tracking-widest text-white/50">You</span>
-            <Link href="/me" className={ITEM}>
+          <div className="mt-1 flex flex-col gap-0.5 border-t border-line pt-1 sm:hidden">
+            <span className={MENU_HEADING_CLASS}>You</span>
+            <Link href="/me" className={navLinkClass(pathname === "/me")}>
               Your agents and spaces
             </Link>
             {profile ? (
-              <Link href={profile} className={ITEM}>
+              <Link href={profile} className={navLinkClass(pathname === profile)}>
                 Your page
               </Link>
             ) : null}
-            <Link href="/inbox" aria-label={inboxLabel(unread)} className={`${ITEM} flex items-center gap-1.5`}>
+            <Link href="/inbox" aria-label={inboxLabel(unread)} className={`${navLinkClass(pathname === "/inbox")} flex items-center gap-1.5`}>
               Inbox
               <Badge total={unread} />
             </Link>
-            <button type="button" onClick={() => void signOut()} className={`${ITEM} text-left`}>
+            <button type="button" onClick={() => void signOut()} className={`${navLinkClass(false)} text-left`}>
               Sign out
             </button>
           </div>
         ) : null}
+        <div className="mt-1 border-t border-line pt-1 sm:hidden">
+          <AppearanceRadios />
+        </div>
       </nav>
     </header>
   );

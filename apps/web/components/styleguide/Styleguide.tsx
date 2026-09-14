@@ -416,7 +416,7 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
             <div className={`px-3 pb-1 pt-2 ${LABEL_CLASS}`}>Mode</div>
             {(["system", ...MODES] as const).map((m) => (
               <button key={m} role="menuitemradio" aria-checked={m === mode} type="button" onClick={() => m !== "system" && setMode(m)} className={menuItemClass({ checked: m === mode })}>
-                {m === "system" ? "Match system" : MODE_LABEL[m]}
+                {m === "system" ? "System" : MODE_LABEL[m]}
                 <span aria-hidden className="text-signal-text">{m === mode ? "●" : ""}</span>
               </button>
             ))}
@@ -425,8 +425,8 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
             <button role="menuitem" type="button" className={menuItemClass({ danger: true })}>Sign out</button>
           </div>
           <p className="max-w-xs text-gh-sm text-muted">
-            The You menu and ⋯ carry the mode toggle (rollout). Items are 44px tall on phones. The preview mode here
-            follows the menu.
+            The You menu and the map&apos;s ⋯ carry Appearance: System · Light · Night. Items are 44px tall on phones.
+            The preview mode here follows the menu.
           </p>
         </div>
       </Section>

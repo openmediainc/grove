@@ -21,21 +21,38 @@ export function brandColors(): Record<string, string> {
 }
 
 /**
- * The legacy chrome names. `dusk-*`/`lantern-*` keep resolving exactly as
- * before (map themes set --g-*, pages fall back to aoe) until rollout rows
- * #73–#75 move each usage to a semantic token. Then these go.
+ * The legacy chrome names. Rollout #73 moved the global chrome onto semantic
+ * tokens; pages and the map chrome (#74–#75) still use `dusk-*`/`lantern-*`.
+ * Inside the map a theme sets --g-* as before. Everywhere else the fallback is
+ * now Nightwatch (night ground, surfaces, line; dusk-violet accents), and those
+ * pages sit in a `[data-brand-legacy]` frame that pins the brand tokens to
+ * night, so nothing written for a dark page lands on a light ground.
  */
+const rgb = (hex: string) => {
+  const c = parseColor(hex);
+  return `${c.r} ${c.g} ${c.b}`;
+};
+export const LEGACY_NIGHT = {
+  dusk950: rgb(COLORS.night.ground),
+  dusk900: rgb(COLORS.night.surface),
+  dusk800: rgb(COLORS.night["surface-raised"]),
+  dusk700: rgb(COLORS.night.line),
+  lantern300: rgb(COLORS.tv.focus),
+  lantern400: rgb(COLORS.night.sky),
+  lantern500: "154 134 230",
+} as const;
+
 export const LEGACY_CHROME_COLORS = {
   dusk: {
-    950: "rgb(var(--g-dusk-950, 7 8 20) / <alpha-value>)",
-    900: "rgb(var(--g-dusk-900, 11 18 32) / <alpha-value>)",
-    800: "rgb(var(--g-dusk-800, 18 26 46) / <alpha-value>)",
-    700: "rgb(var(--g-dusk-700, 26 39 68) / <alpha-value>)",
+    950: `rgb(var(--g-dusk-950, ${LEGACY_NIGHT.dusk950}) / <alpha-value>)`,
+    900: `rgb(var(--g-dusk-900, ${LEGACY_NIGHT.dusk900}) / <alpha-value>)`,
+    800: `rgb(var(--g-dusk-800, ${LEGACY_NIGHT.dusk800}) / <alpha-value>)`,
+    700: `rgb(var(--g-dusk-700, ${LEGACY_NIGHT.dusk700}) / <alpha-value>)`,
   },
   lantern: {
-    300: "rgb(var(--g-lantern-300, 244 209 154) / <alpha-value>)",
-    400: "rgb(var(--g-lantern-400, 232 184 109) / <alpha-value>)",
-    500: "rgb(var(--g-lantern-500, 212 146 58) / <alpha-value>)",
+    300: `rgb(var(--g-lantern-300, ${LEGACY_NIGHT.lantern300}) / <alpha-value>)`,
+    400: `rgb(var(--g-lantern-400, ${LEGACY_NIGHT.lantern400}) / <alpha-value>)`,
+    500: `rgb(var(--g-lantern-500, ${LEGACY_NIGHT.lantern500}) / <alpha-value>)`,
   },
 } as const;
 

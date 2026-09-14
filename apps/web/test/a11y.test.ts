@@ -14,6 +14,7 @@ import {
   relativeLuminance,
   typeaheadIndex,
 } from "../lib/a11y";
+import { COLORS, LEGACY_NIGHT, MODES } from "@grove/ui/tokens";
 import { THEME_IDS, THEMES } from "../lib/themes";
 import { HAZARD_COLOUR } from "../lib/themes/types";
 
@@ -92,7 +93,28 @@ describe("chrome contrast in all four themes", () => {
     expect(checks.some((c) => c.min === NON_TEXT_MIN)).toBe(true);
   });
 
+  it("the brand focus ring (--gh-focus, night) is >= 3:1 on every theme's dusk surfaces, where the map chrome still sits", () => {
+    const ring = parseColour(COLORS.night.focus);
+    const failing: string[] = [];
+    for (const id of THEME_IDS) {
+      const c = THEMES[id].palette.chrome;
+      for (const k of ["dusk950", "dusk900", "dusk800", "dusk700"] as const) {
+        const r = contrastRatio(ring, parseColour(c[k]));
+        if (r < NON_TEXT_MIN) failing.push(`${id} ${k} = ${r.toFixed(2)}`);
+      }
+    }
+    expect(failing).toEqual([]);
+  });
+
+  it("the legacy dusk/lantern fallbacks (Nightwatch) pass the same chrome checks", () => {
+    const failing = chromeContrast(LEGACY_NIGHT).filter((c) => !c.ok).map((c) => `${c.pair} = ${c.ratio.toFixed(2)}`);
+    expect(failing).toEqual([]);
+  });
+
   it("the focus ring is never a hazard colour", () => {
+    for (const m of MODES) {
+      for (const hazard of Object.values(HAZARD_COLOUR)) expect(COLORS[m].focus.toLowerCase()).not.toBe(hazard.toLowerCase());
+    }
     for (const id of THEME_IDS) {
       const ring = parseColour(THEMES[id].palette.chrome.lantern400);
       for (const hazard of Object.values(HAZARD_COLOUR)) {

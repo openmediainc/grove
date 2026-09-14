@@ -268,6 +268,58 @@
   --gh-mode: tv;
 }
 
+/* Pages and map chrome not yet on the brand (rollout #74–#75) sit in a
+   [data-brand-legacy] frame: the tokens stay night there in light mode, so
+   dark-page classes never land on a light ground. TV keeps its own values. */
+:root:not([data-mode="tv"]) [data-brand-legacy] {
+  --gh-ground: #0A0B14;
+  --gh-ground-rgb: 10 11 20;
+  --gh-surface: #12142A;
+  --gh-surface-rgb: 18 20 42;
+  --gh-surface-raised: #1B1E3A;
+  --gh-surface-raised-rgb: 27 30 58;
+  --gh-tint: #232748;
+  --gh-tint-rgb: 35 39 72;
+  --gh-frost: rgb(16 18 31 / 0.94);
+  --gh-frost-blur: rgb(16 18 31 / 0.8);
+  --gh-ink: #E4E2F0;
+  --gh-ink-rgb: 228 226 240;
+  --gh-muted: #A9A6C0;
+  --gh-muted-rgb: 169 166 192;
+  --gh-line: #2A2E52;
+  --gh-line-rgb: 42 46 82;
+  --gh-line-strong: #7A7EA8;
+  --gh-line-strong-rgb: 122 126 168;
+  --gh-signal: #E2542B;
+  --gh-signal-rgb: 226 84 43;
+  --gh-signal-ink: #0A0B14;
+  --gh-signal-ink-rgb: 10 11 20;
+  --gh-signal-text: #F2794F;
+  --gh-signal-text-rgb: 242 121 79;
+  --gh-sky: #B7A6F2;
+  --gh-sky-rgb: 183 166 242;
+  --gh-human: #F4B860;
+  --gh-human-rgb: 244 184 96;
+  --gh-agent: #7FD1E8;
+  --gh-agent-rgb: 127 209 232;
+  --gh-focus: #B7A6F2;
+  --gh-focus-rgb: 183 166 242;
+  --gh-danger: #f87171;
+  --gh-danger-rgb: 248 113 113;
+  --gh-danger-ink: #f87171;
+  --gh-danger-ink-rgb: 248 113 113;
+  --gh-success: #6FD3A0;
+  --gh-success-rgb: 111 211 160;
+  --gh-elevation-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --gh-elevation-2: 0 4px 14px rgb(0 0 0 / 0.45);
+  --gh-elevation-3: 0 14px 36px rgb(0 0 0 / 0.55);
+  --gh-type-scale: 1;
+  --gh-mode: night;
+}
+[data-brand-legacy] {
+  color-scheme: dark;
+}
+
 /* Chrome primitives. Scoped to .gh-chrome so nothing outside it changes. */
 .gh-chrome {
   color-scheme: light;

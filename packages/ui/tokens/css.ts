@@ -67,6 +67,16 @@ export function tokensCss(): string {
     out.push(`[data-mode="${mode}"] {`, modeVars(mode, "  "), "}", "");
   }
   out.push(
+    "/* Pages and map chrome not yet on the brand (rollout #74–#75) sit in a",
+    "   [data-brand-legacy] frame: the tokens stay night there in light mode, so",
+    "   dark-page classes never land on a light ground. TV keeps its own values. */",
+    ':root:not([data-mode="tv"]) [data-brand-legacy] {',
+    modeVars("night", "  "),
+    "}",
+    "[data-brand-legacy] {",
+    "  color-scheme: dark;",
+    "}",
+    "",
     "/* Chrome primitives. Scoped to .gh-chrome so nothing outside it changes. */",
     ".gh-chrome {",
     "  color-scheme: light;",

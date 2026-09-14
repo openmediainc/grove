@@ -29,6 +29,7 @@ import {
   type ThemeId,
 } from "@/lib/themes";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import { AppearanceMenuGroup } from "./Appearance";
 import { linkAtTile, viewedOwnerDefault, type ViewLink } from "@/lib/themes/owner-default";
 import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
@@ -4637,6 +4638,7 @@ export function WorldMap() {
                     {lex.postcard.button}
                   </MenuItem>
                   <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />
+                  <AppearanceMenuGroup />
                   <MenuItem
                     hint="0"
                     onSelect={() => {

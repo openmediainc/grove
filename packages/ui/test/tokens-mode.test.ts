@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODE_STORAGE_KEY, NO_FLASH_SCRIPT, applyModeChoice, resolveMode } from "../tokens/index.js";
+import { MODE_STORAGE_KEY, NO_FLASH_SCRIPT, applyModeChoice, readModeChoice, resolveMode } from "../tokens/index.js";
 
 describe("mode resolution", () => {
   it("follows the system when nothing is stored", () => {
@@ -93,5 +93,13 @@ describe("mode resolution", () => {
     const doc = { documentElement: env.documentElement } as unknown as Document;
     expect(() => applyModeChoice("night", doc, env.localStorage as unknown as Storage)).not.toThrow();
     expect(env.attrs.get("data-mode")).toBe("night");
+  });
+
+  it("readModeChoice answers the stored mode, else system, and never throws", () => {
+    expect(readModeChoice(fakeDoc("", "night").localStorage)).toBe("night");
+    expect(readModeChoice(fakeDoc("", "light").localStorage)).toBe("light");
+    expect(readModeChoice(fakeDoc().localStorage)).toBe("system");
+    expect(readModeChoice(fakeDoc("", "sepia").localStorage)).toBe("system");
+    expect(readModeChoice(fakeDoc("", "night", true).localStorage)).toBe("system");
   });
 });

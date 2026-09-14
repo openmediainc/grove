@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { COLOR_ROLES, MODES, brandTheme, markGeometry, markSvg, tokensCss } from "../tokens/index.js";
+import { COLOR_ROLES, MODES, brandTheme, lockupSvg, markGeometry, markSvg, tokensCss } from "../tokens/index.js";
 
 const cssPath = fileURLToPath(new URL("../tokens/tokens.css", import.meta.url));
 
@@ -20,6 +20,22 @@ describe("generated token files", () => {
     expect(css).toContain(":root:not([data-mode])");
   });
 
+  it("pins the tokens to night inside a legacy page frame, except on tv", () => {
+    const css = tokensCss();
+    const at = css.indexOf(':root:not([data-mode="tv"]) [data-brand-legacy] {');
+    expect(at).toBeGreaterThan(-1);
+    const block = css.slice(at, css.indexOf("}", at));
+    expect(block).toContain("--gh-ground: #0A0B14;");
+    expect(block).toContain("--gh-ink: #E4E2F0;");
+  });
+
+  it("legacy dusk/lantern fall back to Nightwatch, not the old aoe amber", () => {
+    const { dusk, lantern } = brandTheme().colors as unknown as { dusk: Record<string, string>; lantern: Record<string, string> };
+    expect(dusk[950]).toContain("--g-dusk-950, 10 11 20");
+    expect(lantern[400]).toContain("--g-lantern-400, 183 166 242");
+    expect(JSON.stringify({ dusk, lantern })).not.toContain("232 184 109");
+  });
+
   it("keeps the legacy dusk/lantern names alongside the semantic ones", () => {
     const colors = brandTheme().colors as Record<string, unknown>;
     for (const k of ["dusk", "lantern", "surface", "ink", "muted", "line", "signal", "human", "agent", "focus", "pane"]) {
@@ -31,6 +47,14 @@ describe("generated token files", () => {
 });
 
 describe("mark", () => {
+  it("the lockup can take currentColor so one inline SVG follows the mode", () => {
+    const svg = lockupSvg("light", "currentColor");
+    expect(svg).toContain('stroke="currentColor"');
+    expect(svg).toContain('fill="currentColor"');
+    expect(svg.match(/fill="#E2542B"/g)).toHaveLength(1);
+    expect(lockupSvg("light")).not.toContain("currentColor");
+  });
+
   it("four panes in a square frame, one lit in signal", () => {
     const svg = markSvg("light");
     expect(svg).toContain('stroke="#0E1B2B"');

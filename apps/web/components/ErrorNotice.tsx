@@ -11,8 +11,9 @@ import { RefusalNotice } from "./RefusalNotice";
  *
  * - `live="alert"` (default) for a failure the person just caused;
  *   `live="polite"` for a background refresh that failed quietly.
- * - `tone="drawer"` inside the room drawer: follows the live map theme's
- *   chrome tokens. Pages stay neutral (DECISIONS #3).
+ * - `tone="drawer"` inside the room drawer: a denser fill so it reads over the
+ *   drawer's own background. Both tones are brand tokens (DECISIONS #7), and
+ *   error text is `danger-ink` in every mode.
  * - `onRetry` shows a Retry button when the failure is worth retrying.
  * - `inline` renders a span, for errors that sit in a row of controls.
  */
@@ -46,8 +47,8 @@ export function ErrorNotice({
   }
 
   const a11y = live === "alert" ? ({ role: "alert" } as const) : ({ role: "status", "aria-live": "polite" } as const);
-  const cause = tone === "drawer" ? "text-white/90" : "text-red-200";
-  const link = tone === "drawer" ? "text-lantern-300" : "text-white/85";
+  const cause = "text-danger-ink";
+  const link = "rounded-gh-sm text-ink focus-visible:outline-none focus-visible:shadow-gh-ring";
 
   const signInHref = () => {
     const here = typeof window !== "undefined" ? window.location.pathname + window.location.search : "";
@@ -73,9 +74,9 @@ export function ErrorNotice({
 
   if (inline) {
     return (
-      <span {...a11y} className={`text-xs ${className}`}>
+      <span {...a11y} className={`text-gh-xs ${className}`}>
         <span className={cause}>{view.cause}</span>
-        {view.fix && !view.signIn ? <span className="ml-1 text-white/55">{view.fix}</span> : null}
+        {view.fix && !view.signIn ? <span className="ml-1 text-muted">{view.fix}</span> : null}
         {extras}
       </span>
     );
@@ -84,13 +85,13 @@ export function ErrorNotice({
   return (
     <div
       {...a11y}
-      className={`rounded-lg border ${size === "xs" ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm"} ${
-        tone === "drawer" ? "border-red-400/35 bg-dusk-900/70" : "border-red-400/30 bg-red-500/5"
+      className={`rounded-gh-md border border-danger-ink/60 ${size === "xs" ? "px-2.5 py-1.5 text-gh-xs" : "px-3 py-2 text-gh-sm"} ${
+        tone === "drawer" ? "bg-surface" : "bg-danger-ink/5"
       } ${className}`}
     >
-      <p className={cause}>{view.cause}</p>
+      <p className={`font-medium ${cause}`}>{view.cause}</p>
       {view.fix || view.signIn || (onRetry && view.retryable) ? (
-        <p className="mt-0.5 text-white/60">
+        <p className="mt-0.5 text-muted">
           {view.signIn ? null : view.fix}
           {extras}
         </p>

@@ -28,7 +28,20 @@ export const NO_FLASH_SCRIPT = `(function(){try{var d=document.documentElement,m
   MODE_STORAGE_KEY,
 )});if(s==="light"||s==="night"||s==="tv")m=s;}catch(e){}}if(m)d.setAttribute("data-mode",m);}catch(e){}})();`;
 
-/** Apply a manual choice in the browser (the You menu and ⋯ toggle use this in #73+). */
+/** Fired on `window` after `applyModeChoice`, so every open toggle shows the new choice. */
+export const MODE_EVENT = "gh-mode-change";
+
+/** The viewer's stored choice, or "system". Never throws (blocked storage reads as "system"). */
+export function readModeChoice(storage?: Pick<Storage, "getItem">): ModeChoice {
+  try {
+    const value = (storage ?? window.localStorage).getItem(MODE_STORAGE_KEY);
+    return isMode(value) ? value : "system";
+  } catch {
+    return "system";
+  }
+}
+
+/** Apply a manual choice in the browser (the You menu and the map's ⋯ toggle). */
 export function applyModeChoice(choice: ModeChoice, doc: Document = document, storage?: Storage): void {
   try {
     const store = storage ?? window.localStorage;
@@ -39,4 +52,9 @@ export function applyModeChoice(choice: ModeChoice, doc: Document = document, st
   }
   if (choice === "system") doc.documentElement.removeAttribute("data-mode");
   else doc.documentElement.setAttribute("data-mode", choice);
+  try {
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(MODE_EVENT, { detail: choice }));
+  } catch {
+    // No window (tests, SSR): nothing else is listening.
+  }
 }

@@ -2,6 +2,7 @@
 
 import { UNATTRIBUTED_NOTE, describeRefusal, type RefusalInput } from "@grove/ui";
 import { toRefusalInput } from "@/lib/api-error";
+import { NOTICE_CLASS } from "@/lib/brand-ui";
 
 /**
  * §5.5 at the point of failure. A refused `say` used to land here as
@@ -18,16 +19,16 @@ export function RefusalNotice({ input }: { input: RefusalInput }) {
   return (
     <div
       role="status"
-      className="mt-2 rounded-lg border border-red-400/30 bg-red-500/5 px-3 py-2 text-sm"
+      className={`mt-2 ${NOTICE_CLASS.refusal}`}
     >
-      <p className="text-red-200">{refusal.headline}</p>
-      {refusal.recourse ? <p className="mt-0.5 text-white/60">{refusal.recourse}</p> : null}
+      <p className="font-medium text-ink">{refusal.headline}</p>
+      {refusal.recourse ? <p className="mt-0.5 text-muted">{refusal.recourse}</p> : null}
       {/* The hint is the API's own actionable suggestion (e.g. "use owner_reply").
           Shown only when it adds something the sentence above does not. */}
-      {refusal.hint ? <p className="mt-0.5 text-white/50">{refusal.hint}</p> : null}
+      {refusal.hint ? <p className="mt-0.5 text-muted">{refusal.hint}</p> : null}
       {/* Say the gap out loud rather than pointing at a door we guessed. */}
       {refusal.attribution === "unknown" ? (
-        <p className="mt-0.5 text-[11px] text-white/50">{UNATTRIBUTED_NOTE}</p>
+        <p className="mt-0.5 text-gh-xs text-muted">{UNATTRIBUTED_NOTE}</p>
       ) : null}
     </div>
   );

@@ -4,15 +4,17 @@ import { COLORS, NO_FLASH_SCRIPT } from "@grove/ui/tokens";
 import "@grove/ui/tokens/tokens.css";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { PageFrame } from "@/components/PageFrame";
 import { SkipLink } from "@/components/a11y";
 import { SearchPalette } from "@/components/SearchPalette";
 import { VisitBeacon } from "@/components/VisitBeacon";
 import { siteOrigin } from "@/lib/og/public-data";
 
 // Brand type (DECISIONS #7). Self-hosted by next/font, so no third-party
-// request at runtime. Only exposed as variables (--gh-font-schibsted,
-// --gh-font-fragment) consumed by --gh-font-sans/--gh-font-mono; nothing
-// outside .gh-chrome uses them yet, so preload stays off until rollout #73.
+// request at runtime. Exposed as variables (--gh-font-schibsted,
+// --gh-font-fragment) consumed by --gh-font-sans/--gh-font-mono. Not preloaded:
+// four weights would be four preloads on every page (perf budget, #68), and
+// next/font's metric-matched fallback keeps the swap from shifting the nav.
 const schibsted = Schibsted_Grotesk({
   subsets: ["latin"],
   weight: ["400", "500", "700", "800"],
@@ -67,10 +69,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
       </head>
-      <body className="min-h-screen antialiased">
+      <body className="flex min-h-screen flex-col bg-ground text-ink antialiased">
         <SkipLink />
         <Nav />
-        {children}
+        <PageFrame>{children}</PageFrame>
         <SearchPalette />
         <VisitBeacon />
       </body>

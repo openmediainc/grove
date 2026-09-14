@@ -181,7 +181,7 @@ notices use `danger-ink` for text and border, and hazard triangles carry their o
   clocks, counts and data. One type system in both modes; Nightwatch's Syne is not used.
 - Loaded with `next/font/google` (self-hosted at build, `display: swap`, system fallbacks), exposed as
   `--gh-font-schibsted` / `--gh-font-fragment` and consumed through `--gh-font-sans` / `--gh-font-mono`
-  (Tailwind `font-brand`, `font-brand-mono`). Preload is off until rollout (#73) starts using them.
+  (Tailwind `font-brand`, `font-brand-mono`). Neither preloads (four weights on every page would cost the perf budget); the metric-matched fallback keeps the swap steady.
 - Scale (`--gh-text-*`, Tailwind `text-gh-*`), rem × `--gh-type-scale` (1, tv 1.25):
   xs .75 · sm .875 · base 1 · lg 1.125 · xl 1.375 · 2xl 1.75 · 3xl 2.25 · 4xl 3.
 - **Mono label** (`.gh-label`): Fragment Mono, 11px, uppercase, `letter-spacing: .08em`. Use it
@@ -207,7 +207,10 @@ notices use `danger-ink` for text and border, and hazard triangles carry their o
 - An inline script in `<head>` (`NO_FLASH_SCRIPT`) sets the attribute before paint from `?tv=1` or the
   stored choice (`localStorage["gh-mode"]`), inside try/catch; blocked storage just follows the system.
 - Resolution order (`resolveMode`): TV/kiosk → stored choice → system. TV and kiosk default to night-derived `tv`.
-- The toggle lives in the You menu and ⋯ (rollout); `applyModeChoice("light"|"night"|"tv"|"system")` does it.
+- **Appearance: System · Light · Night** lives in the You menu (desktop), at the foot of the phone
+  disclosure (everyone), and in the map's ⋯ (`components/Appearance.tsx`). `applyModeChoice` stores
+  it and fires `MODE_EVENT` so every toggle and other tabs stay in step; `readModeChoice` reads it.
+  TV is not offered there; it comes from `?tv=1` and kiosk.
 - `[data-mode]` also works on any element, which is how `/styleguide` previews a mode without changing yours.
 - `.gh-chrome` sets ground, ink, font and `color-scheme` for a brand surface. Nothing outside a
   `.gh-chrome` element changes until rollout.
@@ -295,5 +298,15 @@ Map legacy chrome to roles, page by page, with no page left half-branded:
 | `bg-lantern-400` primary | `bg-signal text-signal-ink` |
 | `text-red-200`, `border-red-400/30` | `text-danger-ink`, `border-danger-ink/60` |
 | `font-display` | `font-brand` 800 |
+
+**Rollout state (#73 shipped the global chrome).** The root layout, Nav (lockup, section links, You
+menu, phone disclosure), GuestPass, the search palette, ErrorNotice/RefusalNotice, Tabs, CardFields,
+FollowButton and the skip link are on brand tokens; shared controls are `components/ui` (`Button`,
+`Input`, `Select`, `Checkbox`) over `lib/brand-ui.ts`. Page bodies and the map chrome sit in a
+`[data-brand-legacy]` frame (`components/PageFrame.tsx`): inside it the `--gh-*` tokens are pinned to
+night (except tv), so dark-page classes never land on a light ground, and the legacy `dusk-*`/
+`lantern-*` fallbacks are Nightwatch values (`LEGACY_NIGHT`: night ground/surfaces/line, dusk-violet
+accents) instead of aoe amber. Inside the map a theme still sets `--g-*`. To migrate a page (#74–#75),
+move its classes to roles and add its route to `BRANDED_ROUTES` in `lib/appearance.ts`.
 
 When the last usage moves, delete `LEGACY_CHROME_COLORS` and the page-level Source Sans fallback (map themes keep their own display faces for in-world text).

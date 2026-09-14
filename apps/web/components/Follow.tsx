@@ -82,7 +82,7 @@ export function FollowButton({
   if (!target || hidden) return null;
   const base =
     className ??
-    "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border border-white/15 px-4 py-2 text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:min-h-0 sm:py-1.5";
+    "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-gh-pill border border-line-strong bg-surface-raised px-4 py-2 text-gh-xs text-ink transition-colors duration-gh-fast hover:bg-tint focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-0 sm:py-1.5";
 
   const loginPath = () => {
     const next = typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : "/";
@@ -138,11 +138,11 @@ export function FollowButton({
             ? "Stop following"
             : "Follow: hear when it errors, finishes a long job or opens a Stage event")
       }
-      className={`${base} disabled:opacity-60 ${state?.following ? "border-lantern-400/40 text-lantern-300" : ""}`}
+      className={`${base} disabled:opacity-60 ${state?.following ? "!border-signal" : ""}`}
     >
       <Heart on={state?.following ?? false} />
       <span aria-live="polite">{heartLabel(state, lex)}</span>
-      {asGuest && state?.following ? <span className="text-[10px] text-white/50">as a guest</span> : null}
+      {asGuest && state?.following ? <span className="text-[10px] text-muted">as a guest</span> : null}
     </button>
   );
 }
