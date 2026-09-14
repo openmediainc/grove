@@ -2,10 +2,10 @@
   "note": "First-load JS per route, gzip bytes (page + root layout). Written by `pnpm perf:budget --record`; see docs/PERFORMANCE.md.",
   "tolerance": 0.1,
   "routes": {
-    "/": 227806,
-    "/explore": 166355,
-    "/s/[slug]": 169850,
-    "/a/[slug]": 172245,
-    "/me": 171559
+    "/": 234173,
+    "/explore": 168525,
+    "/s/[slug]": 172467,
+    "/a/[slug]": 176861,
+    "/me": 173750
   }
 }

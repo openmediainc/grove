@@ -41,6 +41,10 @@ script's page + layout gzip figure in brackets.
 | `/a/[slug]` | 190 kB (193.7 KiB) | 161 kB (168.2 KiB) | −29 kB, −15% |
 | `/me` | 143 kB (181.2 KiB) | 124 kB (167.5 KiB) | −19 kB, −13% |
 
+The recorded baseline in `perf-budget.json` was taken after rebasing onto
+#60, #65, #67 and #72, which landed alongside #68 and added their own weight:
+`/` is 213 kB (228.7 KiB) there.
+
 Other routes shrank too, from the package change below: `/inbox` 142→125 kB,
 `/login` 130→112 kB and `/mod` 140→122 kB.
 
