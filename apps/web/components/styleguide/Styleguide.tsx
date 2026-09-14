@@ -34,7 +34,6 @@ import {
   SECTION_CLASS,
   SECTION_TITLE_CLASS,
   TABLE_CLASS,
-  TABLE_WRAP_CLASS,
   TD_CLASS,
   TH_CLASS,
   buttonClass,
@@ -44,6 +43,7 @@ import {
   tabClass,
   type ButtonKind,
 } from "@/lib/brand-ui";
+import { TableFrame } from "@/components/ui";
 
 const MODE_LABEL: Record<Mode, string> = { light: "Light", night: "Night", tv: "TV" };
 
@@ -204,7 +204,7 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
           Every allowed pair in {MODE_LABEL[mode]}: text needs 4.5:1, marks and borders 3:1. Frost is judged over both a
           black and a white map. The build fails if any pair drops below. {failing === 0 ? "All pass." : `${failing} failing.`}
         </p>
-        <div className="mt-4 max-h-[28rem] overflow-auto rounded-gh-md border border-line">
+        <div role="region" aria-label="Contrast pairs" tabIndex={0} className="mt-4 max-h-[28rem] overflow-auto rounded-gh-md border border-line">
           <table className="w-full min-w-[30rem] border-collapse text-left text-gh-sm">
             <caption className="sr-only">Contrast ratios for {MODE_LABEL[mode]}</caption>
             <thead className="sticky top-0 bg-surface-raised">
@@ -540,7 +540,7 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
               <button type="button" className={`mt-3 ${buttonClass("secondary", "sm")}`}>Create invite</button>
             </div>
           </div>
-          <div className={TABLE_WRAP_CLASS}>
+          <TableFrame label="Metrics, last 24 hours">
             <table className={TABLE_CLASS}>
               <caption className="sr-only">Metrics, last 24 hours</caption>
               <thead>
@@ -564,7 +564,7 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableFrame>
         </div>
       </Section>
 
@@ -675,7 +675,7 @@ export function Styleguide({ initialMode, embed }: { initialMode: Mode; embed: b
         {body}
         <Section id="phone" title="390px">
           <p className="max-w-prose text-muted">The same page at phone width, in each mode.</p>
-          <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
+          <div role="region" aria-label="Style guide at 390px" tabIndex={0} className="mt-4 flex gap-4 overflow-x-auto pb-2">
             {MODES.map((m) => (
               <figure key={m} className="shrink-0">
                 <figcaption className={`mb-2 ${LABEL_CLASS}`}>{MODE_LABEL[m]} · 390px</figcaption>

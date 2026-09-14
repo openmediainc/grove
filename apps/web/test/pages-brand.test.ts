@@ -90,3 +90,15 @@ describe("page bodies on brand tokens (#75)", () => {
     expect(web("components/Board.tsx")).toMatch(/data-mode="night"/);
   });
 });
+
+describe("tables on pages (#75)", () => {
+  it.each(["components/CostToday.tsx", "components/mod/Overview.tsx", "components/mod/EmailHealth.tsx"])(
+    "%s frames every table in a named, focusable TableFrame",
+    (file) => {
+      const src = web(file);
+      const tables = (src.match(/<table\b/g) ?? []).length;
+      expect(tables).toBeGreaterThan(0);
+      expect((src.match(/<TableFrame label="/g) ?? []).length).toBe(tables);
+    },
+  );
+});

@@ -19,7 +19,8 @@ import { dmarcApplied } from "@/components/mod/EmailHealth";
 import { cohortPercent, countText, weekLabel } from "@/lib/analytics";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { startPoll } from "@/lib/poll";
-import { LINK_CLASS, NUM_CLASS, TABLE_CLASS, TABLE_WRAP_CLASS, TD_CLASS, TH_CLASS, buttonClass } from "@/lib/brand-ui";
+import { LINK_CLASS, NUM_CLASS, TABLE_CLASS, TD_CLASS, TH_CLASS, buttonClass } from "@/lib/brand-ui";
+import { TableFrame } from "@/components/ui";
 
 type Anomaly = {
   metric: string;
@@ -280,7 +281,7 @@ export function OverviewPanel() {
       {!failed(data.metrics) ? (
         <div>
           <h3 className="gh-label text-muted">Pulse and traffic</h3>
-          <div className={`mt-2 ${TABLE_WRAP_CLASS}`}>
+          <TableFrame label="Pulse and traffic" className="mt-2">
             <table className={`${TABLE_CLASS} min-w-[520px]`}>
               <thead>
                 <tr>
@@ -311,7 +312,7 @@ export function OverviewPanel() {
                 })}
               </tbody>
             </table>
-          </div>
+          </TableFrame>
         </div>
       ) : null}
 
@@ -353,7 +354,7 @@ function FunnelCard({ a }: { a: Analytics | Failed }) {
           privacy stance
         </a>
       </p>
-      <div className={`mt-2 ${TABLE_WRAP_CLASS}`}>
+      <TableFrame label="Visitors" className="mt-2">
         <table className={`${TABLE_CLASS} min-w-[360px]`}>
           <thead>
             <tr>
@@ -376,13 +377,13 @@ function FunnelCard({ a }: { a: Analytics | Failed }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
 
       <h4 className="gh-label mt-4 text-muted">Weekly retention (signed-in people)</h4>
       <p className="text-xs text-muted">
         Rows: the week people first signed in. Columns: share of them active in week N (0 = that week).
       </p>
-      <div className={`mt-2 ${TABLE_WRAP_CLASS}`}>
+      <TableFrame label="Weekly retention" className="mt-2">
         <table className={`${TABLE_CLASS} min-w-[420px] text-gh-xs`}>
           <thead>
             <tr>
@@ -409,7 +410,7 @@ function FunnelCard({ a }: { a: Analytics | Failed }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </TableFrame>
     </Card>
   );
 }

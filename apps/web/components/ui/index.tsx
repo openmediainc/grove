@@ -1,5 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
-import { CHECKBOX_CLASS, INPUT_CLASS, SELECT_CLASS, buttonClass, type ButtonKind, type ButtonSize } from "@/lib/brand-ui";
+import { CHECKBOX_CLASS, INPUT_CLASS, SELECT_CLASS, TABLE_WRAP_CLASS, buttonClass, type ButtonKind, type ButtonSize } from "@/lib/brand-ui";
 
 /**
  * The shared chrome controls (DECISIONS #7, docs/design/DESIGN.md). Thin
@@ -41,3 +41,15 @@ export const Checkbox = forwardRef<
     </label>
   );
 });
+
+/**
+ * A table's frame: scrolls sideways inside itself at 390px, and is a named,
+ * focusable region so a keyboard can scroll it (axe scrollable-region-focusable).
+ */
+export function TableFrame({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <div role="region" aria-label={label} tabIndex={0} className={`${TABLE_WRAP_CLASS} focus-visible:outline-none focus-visible:shadow-gh-ring ${className}`.trim()}>
+      {children}
+    </div>
+  );
+}

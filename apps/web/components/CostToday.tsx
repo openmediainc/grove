@@ -24,11 +24,11 @@ import {
   NUM_CLASS,
   SELECT_CLASS,
   TABLE_CLASS,
-  TABLE_WRAP_CLASS,
   TD_CLASS,
   TH_CLASS,
   buttonClass,
 } from "@/lib/brand-ui";
+import { TableFrame } from "@/components/ui";
 
 /**
  * "What did today cost" — per agent, per model, per hour.
@@ -189,7 +189,7 @@ export function CostToday() {
               </div>
 
               <div className="mt-6 grid gap-6 md:grid-cols-2">
-                <div className={TABLE_WRAP_CLASS}>
+                <TableFrame label="Cost by agent">
                   <table className={TABLE_CLASS}>
                     <thead>
                       <tr>
@@ -215,8 +215,8 @@ export function CostToday() {
                       })}
                     </tbody>
                   </table>
-                </div>
-                <div className={TABLE_WRAP_CLASS}>
+                </TableFrame>
+                <TableFrame label="Cost by model">
                   <table className={TABLE_CLASS}>
                     <thead>
                       <tr>
@@ -236,7 +236,7 @@ export function CostToday() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </TableFrame>
               </div>
             </>
           )}

@@ -14,7 +14,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { ErrorNotice } from "@/components/ErrorNotice";
-import { EMPTY_CLASS, NUM_CLASS, TABLE_CLASS, TABLE_WRAP_CLASS, TD_CLASS, TH_CLASS, buttonClass } from "@/lib/brand-ui";
+import { EMPTY_CLASS, NUM_CLASS, TABLE_CLASS, TD_CLASS, TH_CLASS, buttonClass } from "@/lib/brand-ui";
+import { TableFrame } from "@/components/ui";
 
 type Reason = { code: string; severity: "critical" | "warning" | "info"; message: string };
 
@@ -251,7 +252,7 @@ export function EmailHealthPanel() {
 
       <div>
         <h3 className="gh-label text-muted">Recent sends</h3>
-        <div className={`mt-2 ${TABLE_WRAP_CLASS}`}>
+        <TableFrame label="Recent sends" className="mt-2">
           <table className={`${TABLE_CLASS} min-w-[640px]`}>
             <thead>
               <tr>
@@ -280,7 +281,7 @@ export function EmailHealthPanel() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableFrame>
         {recent.length === 0 ? <p className={`mt-2 ${EMPTY_CLASS}`}>No magic links requested since tracking began.</p> : null}
       </div>
     </section>
