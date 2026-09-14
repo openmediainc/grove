@@ -69,7 +69,7 @@ describe("appearance", () => {
     // The map (#74) is on the brand tokens; "/" covers only the root, not every path.
     expect(BRANDED_ROUTES).toContain("/");
     expect(isBrandedRoute("/")).toBe(true);
-    expect(isBrandedRoute("/explore")).toBe(false);
+    expect(isBrandedRoute("/?room=plaza")).toBe(true);
     expect(isBrandedRoute(null)).toBe(false);
     expect(isBrandedRoute("/s/den", ["/s"])).toBe(true);
     expect(isBrandedRoute("/explore", ["/"])).toBe(false);
