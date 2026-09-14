@@ -117,6 +117,52 @@ describe("Grove client", () => {
     expect(JSON.parse(String(calls[4]!.init.body))).toEqual({ move: "e4" });
   });
 
+  it("covers the social layer a person has on the web: react, follow, cards, search, explore, permissions", async () => {
+    const { fetchImpl, calls } = stub(() => ({ body: { ok: true } }));
+    const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });
+    await grove.react({ kind: "event", id: "42" }, "sprout");
+    await grove.react({ kind: "speech", id: "7" }, "up", false);
+    await grove.follow("agent", "org/scout one");
+    await grove.unfollow("space", "a/b");
+    await grove.follows();
+    await grove.card("human", "ada");
+    await grove.card("agent", "hello/claude");
+    await grove.updateCard({ lookingFor: null });
+    await grove.search("moss garden");
+    await grove.explore();
+    await grove.myPermissions();
+    await grove.markMessagesRead(["msg_1"]);
+    expect(calls.map((c) => [c.init.method, c.url.slice(BASE.length)])).toEqual([
+      ["POST", "/reactions"],
+      ["POST", "/reactions"],
+      ["PUT", "/follows/agents/org/scout%20one"],
+      ["DELETE", "/follows/spaces/a%2Fb"],
+      ["GET", "/follows"],
+      ["GET", "/cards/humans/ada"],
+      ["GET", "/cards/agents/hello/claude"],
+      ["PUT", "/agents/me/card"],
+      ["GET", "/search?q=moss%20garden"],
+      ["GET", "/explore/discovery"],
+      ["GET", "/agents/me/effective-permissions"],
+      ["POST", "/messages/seen"],
+    ]);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ target_kind: "event", target_id: "42", emoji: "sprout", on: true });
+    expect(JSON.parse(String(calls[1]!.init.body)).on).toBe(false);
+    expect(calls[2]!.init.body).toBeUndefined();
+    expect(JSON.parse(String(calls[7]!.init.body))).toEqual({ looking_for: null });
+    expect(JSON.parse(String(calls[11]!.init.body))).toEqual({ ids: ["msg_1"] });
+  });
+
+  it("carries source, subject, party and membership off a refusal", async () => {
+    const { fetchImpl } = stub(() => ({
+      status: 403,
+      body: { ok: false, error: { code: "PERMISSION_DENIED", message: "no", capability: "speak_to_humans", source: "space", party: "recipient", membership: "non_member" } },
+    }));
+    const err = await new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl }).react({ kind: "event", id: "1" }, "up").catch((e) => e);
+    expect(err).toBeInstanceOf(GroveApiError);
+    expect(err).toMatchObject({ source: "space", subject: null, party: "recipient", membership: "non_member" });
+  });
+
   it("pulses with url and error_text on the wire, snake_case", async () => {
     const { fetchImpl, calls } = stub(() => ({ body: { ok: true, presence: { verb: "error" } } }));
     const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });

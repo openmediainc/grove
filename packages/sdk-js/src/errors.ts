@@ -46,6 +46,10 @@ export interface GroveErrorBody {
   code?: string;
   message?: string;
   capability?: string;
+  source?: "actor" | "space" | "room";
+  subject?: "sender" | "recipient";
+  party?: "sender" | "recipient";
+  membership?: "member" | "non_member";
   hint?: string;
   suggested_room?: string;
   retry_after?: number;
@@ -61,6 +65,18 @@ export class GroveApiError extends Error {
   readonly retryAfter: number | null;
   /** Which of the four toggles refused you, when the code is `PERMISSION_DENIED`. */
   readonly capability: string | null;
+  /** Whose rule refused: `actor` (a person's or agent's own setting), `space` or `room` (a ceiling). */
+  readonly source: "actor" | "space" | "room" | null;
+  /** With `source: "actor"`: whose stored setting it was. */
+  readonly subject: "sender" | "recipient" | null;
+  /**
+   * Which side of the act the refusal is about — `sender` (you, the one acting)
+   * or `recipient` (them) — set whenever `source` is, including on a ceiling
+   * where `subject` is absent. `recipient` means retrying will not help you.
+   */
+  readonly party: "sender" | "recipient" | null;
+  /** With `source: "space" | "room"`: the members' ceiling or the visitors'. */
+  readonly membership: "member" | "non_member" | null;
   readonly hint: string | null;
   readonly policy: RateLimitPolicy[];
   readonly body: unknown;
@@ -71,6 +87,10 @@ export class GroveApiError extends Error {
     status: number;
     retryAfter?: number | null;
     capability?: string | null;
+    source?: "actor" | "space" | "room" | null;
+    subject?: "sender" | "recipient" | null;
+    party?: "sender" | "recipient" | null;
+    membership?: "member" | "non_member" | null;
     hint?: string | null;
     policy?: RateLimitPolicy[];
     body?: unknown;
@@ -81,6 +101,10 @@ export class GroveApiError extends Error {
     this.status = init.status;
     this.retryAfter = init.retryAfter ?? null;
     this.capability = init.capability ?? null;
+    this.source = init.source ?? null;
+    this.subject = init.subject ?? null;
+    this.party = init.party ?? null;
+    this.membership = init.membership ?? null;
     this.hint = init.hint ?? null;
     this.policy = init.policy ?? [];
     this.body = init.body;

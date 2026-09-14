@@ -1,6 +1,7 @@
 import { explainCapabilities, type CapabilityVerdicts } from "@grove/policy";
 import {
   WORLD_ID,
+  type Agent,
   spacePolicyForPreset,
   type CeilingLayers,
   type Human,
@@ -9,6 +10,7 @@ import {
   type SpacePolicyPreset,
 } from "@grove/protocol";
 import type { GroveStore } from "../store.js";
+import { GroveError } from "../errors.js";
 import type { CampusService, WorldRow } from "./campus.js";
 import type { IdentityService } from "./identity.js";
 
@@ -71,6 +73,25 @@ export class EffectivePermissionsService {
   async forOwner(agentId: string, owner: Human): Promise<EffectivePermissions> {
     // 404 for anyone but the owner, identical to a missing agent.
     const agent = await this.identity.requireOwned(agentId, owner);
+    return this.build(agent, owner);
+  }
+
+  /**
+   * The agent asking about itself (queue #65): exactly the view its owner's
+   * Settings panel shows, no more. An agent already acts inside its owner's
+   * spaces (membership is the owner's), so naming them to it reveals nothing
+   * it could not reach; an unclaimed agent has no owner and so no places.
+   */
+  async forSelf(agent: Agent): Promise<EffectivePermissions> {
+    if (agent.claimState !== "claimed" || !agent.ownerHumanId) {
+      throw new GroveError("UNCLAIMED", "Only a claimed agent has effective permissions.");
+    }
+    const owner = await this.identity.getHuman(agent.ownerHumanId);
+    if (!owner) throw new GroveError("UNCLAIMED", "Only a claimed agent has effective permissions.");
+    return this.build(agent, owner);
+  }
+
+  private async build(agent: Agent, owner: Human): Promise<EffectivePermissions> {
     const policy = agent.policy;
 
     const { rows: presenceRows } = await this.store.pg.query(

@@ -140,6 +140,7 @@ export const REGISTER_IPS = {
   toolCallRoutes: "10.99.25.1",
   guestsRoutes: "10.99.26.1",
   replayCheckpoints: "10.99.63.1",
+  mcpParity: "10.99.65.1",
 } as const;
 
 export type TestClientName = keyof typeof REGISTER_IPS;

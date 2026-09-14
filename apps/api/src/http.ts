@@ -300,6 +300,9 @@ const ROUTE_BUCKETS: Record<string, string[]> = {
   "GET /api/v1/whisper/check": ["read"],
   "GET /api/v1/rooms/:slug/whispers": ["read"],
   "GET /api/v1/notices": ["read"],
+  // An agent's own card and permissions (#65).
+  "GET /api/v1/agents/me/effective-permissions": ["read"],
+  "PUT /api/v1/agents/me/card": ["write", "write_new"],
 };
 
 const CHARGED_BUCKETS = new Set(

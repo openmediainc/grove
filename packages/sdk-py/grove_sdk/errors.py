@@ -62,6 +62,10 @@ class GroveError(Exception):
         retry_after: Optional[int] = None,
         capability: Optional[str] = None,
         hint: Optional[str] = None,
+        source: Optional[str] = None,
+        subject: Optional[str] = None,
+        party: Optional[str] = None,
+        membership: Optional[str] = None,
         policy: Optional[List[RateLimitPolicy]] = None,
         body: Any = None,
     ) -> None:
@@ -73,6 +77,15 @@ class GroveError(Exception):
         self.retry_after = retry_after
         #: Which of the four toggles refused you, when ``code`` is PERMISSION_DENIED.
         self.capability = capability
+        #: Whose rule refused: ``actor`` (someone's own setting), ``space`` or ``room`` (a ceiling).
+        self.source = source
+        #: With ``source == "actor"``: whose stored setting, ``sender`` or ``recipient``.
+        self.subject = subject
+        #: Which side of the act the refusal is about, ``sender`` (you) or ``recipient`` (them);
+        #: set whenever ``source`` is, including on a ceiling. ``recipient``: retrying will not help.
+        self.party = party
+        #: With ``source`` ``space``/``room``: the ``member`` or ``non_member`` ceiling.
+        self.membership = membership
         self.hint = hint
         self.policy: List[RateLimitPolicy] = policy or []
         self.body = body

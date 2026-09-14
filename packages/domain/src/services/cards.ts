@@ -10,6 +10,7 @@ import {
   type AgentVerb,
   type CardField,
   type CardFields,
+  type Agent,
   type CardSubject,
   type Human,
 } from "@grove/protocol";
@@ -178,6 +179,26 @@ export class CardService {
     const stored = { lookingFor: next.lookingFor, links: next.links };
     await this.store.pg.query(`UPDATE agents SET card = $2 WHERE id = $1`, [agent.id, JSON.stringify(stored)]);
     return this.agentCard(human.id, agent.id);
+  }
+
+  /**
+   * An agent writes its own card (queue #65): the same two fields its owner
+   * writes (`looking_for`, `links`) and nothing else, through the same
+   * normaliser. The owner can overwrite either at any time, so the human stays
+   * in charge; a pending or suspended agent has no public card to write.
+   * Charged to the write limiter like any other thing an agent publishes.
+   */
+  async setOwnAgentCard(agent: Agent, raw: unknown, charge?: (agent: Agent) => Promise<void>): Promise<CardView> {
+    if (agent.claimState !== "claimed") throw new GroveError("UNCLAIMED", "Only a claimed agent has a card to write.");
+    const patch = readPatch(raw, "agent");
+    await charge?.(agent);
+    const { rows } = await this.store.pg.query<{ card: unknown }>(`SELECT card FROM agents WHERE id = $1`, [agent.id]);
+    const next = mergeCard(readStoredCard(rows[0]?.card), patch);
+    const stored = { lookingFor: next.lookingFor, links: next.links };
+    await this.store.pg.query(`UPDATE agents SET card = $2 WHERE id = $1`, [agent.id, JSON.stringify(stored)]);
+    const view = await this.agentCard(agent.ownerHumanId ?? null, agent.id);
+    // The agent may write these two; the owner's `editable` is the owner's.
+    return { ...view, editable: [...CARD_EDITABLE.agent] };
   }
 
   // ------------------------------------------------------------------ humans

@@ -488,6 +488,14 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
    * signed in or not an owner, gets the same 404 as a missing agent. Private
    * spaces appear only when the owner is a member (see the service).
    */
+  // The agent's own view of the same panel (#65), with its own key.
+  app.get("/api/v1/agents/me/effective-permissions", async (req, reply) => {
+    const agent = await requireAgent(req, grove);
+    await grove.quota.consumeRead(agent.id);
+    const view = await grove.effectivePermissions.forSelf(agent);
+    return sendOk(reply, { effectivePermissions: view });
+  });
+
   app.get("/api/v1/agents/:id/effective-permissions", async (req, reply) => {
     const human = await requireHuman(req, grove);
     const view = await grove.effectivePermissions.forOwner((req.params as { id: string }).id, human);

@@ -254,6 +254,60 @@ class ClientTest(unittest.TestCase):
         grove.tables("library")
         self.assertEqual(rec.last.full_url, BASE + "/tables?room=library")
 
+    def test_social_parity_helpers(self):
+        rec = Recorder({"ok": True})
+        grove = self.client(rec)
+        grove.react("event", "42", "sprout")
+        self.assertEqual((rec.last.get_method(), rec.last.full_url), ("POST", BASE + "/reactions"))
+        self.assertEqual(rec.last_body(), {"target_kind": "event", "target_id": "42", "emoji": "sprout", "on": True})
+        grove.react("speech", "7", "up", on=False)
+        self.assertEqual(rec.last_body()["on"], False)
+        grove.follow("agent", "org/scout one")
+        self.assertEqual((rec.last.get_method(), rec.last.full_url), ("PUT", BASE + "/follows/agents/org/scout%20one"))
+        grove.unfollow("space", "a/b")
+        self.assertEqual((rec.last.get_method(), rec.last.full_url), ("DELETE", BASE + "/follows/spaces/a%2Fb"))
+        grove.follows()
+        self.assertEqual(rec.last.full_url, BASE + "/follows")
+        grove.card("human", "ada")
+        self.assertEqual(rec.last.full_url, BASE + "/cards/humans/ada")
+        grove.card("agent", "hello/claude")
+        self.assertEqual(rec.last.full_url, BASE + "/cards/agents/hello/claude")
+        grove.update_card(looking_for=None)
+        self.assertEqual((rec.last.get_method(), rec.last.full_url), ("PUT", BASE + "/agents/me/card"))
+        self.assertEqual(rec.last_body(), {"looking_for": None})
+        grove.update_card(links=[{"label": "repo", "url": "https://example.com"}])
+        self.assertEqual(rec.last_body(), {"links": [{"label": "repo", "url": "https://example.com"}]})
+        grove.search("moss garden")
+        self.assertEqual(rec.last.full_url, BASE + "/search?q=moss+garden")
+        grove.explore()
+        self.assertEqual(rec.last.full_url, BASE + "/explore/discovery")
+        grove.my_permissions()
+        self.assertEqual(rec.last.full_url, BASE + "/agents/me/effective-permissions")
+        grove.mark_messages_read(["msg_1"])
+        self.assertEqual((rec.last.full_url, rec.last_body()), (BASE + "/messages/seen", {"ids": ["msg_1"]}))
+        with self.assertRaises(ValueError):
+            grove.follow("human", "ada")
+
+    def test_refusal_carries_source_subject_party_and_membership(self):
+        rec = Recorder(
+            status=403,
+            body={
+                "ok": False,
+                "error": {
+                    "code": "PERMISSION_DENIED",
+                    "message": "Visitors here may not speak.",
+                    "capability": "speak_to_humans",
+                    "source": "space",
+                    "party": "recipient",
+                    "membership": "non_member",
+                },
+            },
+        )
+        with self.assertRaises(GroveError) as caught:
+            self.client(rec).react("event", "1", "up")
+        err = caught.exception
+        self.assertEqual((err.source, err.subject, err.party, err.membership), ("space", None, "recipient", "non_member"))
+
     def test_space_scoping_header(self):
         rec = Recorder({"ok": True, "observation": {}})
         self.client(rec).in_world("wld_123").observe()

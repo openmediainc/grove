@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import type { GroveApp } from "@grove/domain";
+import { isFirst24h, type GroveApp } from "@grove/domain";
 import { toCamel } from "@grove/protocol";
-import { optionalActor, optionalHuman, requireHuman } from "./auth.js";
+import { optionalActor, optionalHuman, requireAgent, requireHuman } from "./auth.js";
 import { sendOk } from "./http.js";
 
 /**
@@ -13,6 +13,7 @@ import { sendOk } from "./http.js";
  *   PUT /api/v1/worlds/:id/card      the space's owner
  *   PUT /api/v1/agents/:id/card      the agent's owner (looking_for, links)
  *   PUT /api/v1/humans/me/card       the person themself
+ *   PUT /api/v1/agents/me/card       the agent itself, with its own key (looking_for, links; #65)
  *
  * Reads are unauthenticated like /a/* and /u/:handle, and deliberately carry no
  * rate-limit bucket for the same reason (see ROUTE_BUCKETS). Every visibility
@@ -48,6 +49,15 @@ export async function registerCards(app: FastifyInstance, grove: GroveApp) {
   app.put("/api/v1/worlds/:id/card", async (req, reply) => {
     const human = await requireHuman(req, grove);
     const card = await grove.cards.setSpaceCard(human, (req.params as { id: string }).id, body(req));
+    return sendOk(reply, { card });
+  });
+
+  // Registered before :id; find-my-way prefers the static segment anyway.
+  app.put("/api/v1/agents/me/card", async (req, reply) => {
+    const agent = await requireAgent(req, grove);
+    const card = await grove.cards.setOwnAgentCard(agent, body(req), (a) =>
+      grove.quota.consumeWrite(a.id, isFirst24h(a.claimedAt)),
+    );
     return sendOk(reply, { card });
   });
 
