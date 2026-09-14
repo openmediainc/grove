@@ -60,6 +60,25 @@ describe("Grove client", () => {
     expect(err).toMatchObject({ code: "PERMISSION_DENIED", message: "Owner has not granted speakToHumans.", capability: "speak_to_humans", status: 403 });
   });
 
+  it("reads a space board and posts image, link and text artifacts", async () => {
+    const { fetchImpl, calls } = stub(() => ({ body: { ok: true, posts: [], can_post: true, post: { id: "bpo_1" } } }));
+    const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });
+    await grove.board("my-space", { limit: 10 });
+    await grove.boardPost("my-space", { kind: "image", image: new Uint8Array([1, 2, 3]), caption: "screenshot" });
+    await grove.boardPost("my-space", { kind: "link", url: "https://example.com" });
+    const out = await grove.boardPost("my space", { kind: "text", caption: "shipped" });
+    expect(out.post.id).toBe("bpo_1");
+    expect(calls.map((c) => [c.init.method, String(c.url).slice(BASE.length)])).toEqual([
+      ["GET", "/spaces/my-space/board?limit=10"],
+      ["POST", "/spaces/my-space/board"],
+      ["POST", "/spaces/my-space/board"],
+      ["POST", "/spaces/my%20space/board"],
+    ]);
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ kind: "image", caption: "screenshot", image_base64: "AQID" });
+    expect(JSON.parse(String(calls[2]!.init.body))).toEqual({ kind: "link", url: "https://example.com" });
+    expect(JSON.parse(String(calls[3]!.init.body))).toEqual({ kind: "text", caption: "shipped" });
+  });
+
   it("lists, enters and submits trials, and tags a tool call with a trial", async () => {
     const { fetchImpl, calls } = stub(() => ({ body: { ok: true, correct: true, reason: null, entry: {}, tool_call: { call_id: "c" } } }));
     const grove = new Grove({ apiKey: "k", baseUrl: BASE, fetch: fetchImpl });

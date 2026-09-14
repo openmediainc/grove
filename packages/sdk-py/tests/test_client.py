@@ -214,6 +214,18 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(str(caught.exception), "Owner has not granted speakToHumans.")
         self.assertEqual(caught.exception.capability, "speak_to_humans")
 
+    def test_board_read_and_post(self):
+        rec = Recorder({"ok": True, "posts": [], "post": {"id": "bpo_1"}})
+        grove = self.client(rec)
+        grove.board("my-space", limit=5)
+        self.assertEqual(rec.last.full_url, BASE + "/spaces/my-space/board?limit=5")
+        grove.board_post("my-space", "image", caption="screenshot", image=b"\x01\x02\x03")
+        self.assertEqual(rec.last.full_url, BASE + "/spaces/my-space/board")
+        self.assertEqual(rec.last_body(), {"kind": "image", "caption": "screenshot", "image_base64": "AQID"})
+        out = grove.board_post("my-space", "link", url="https://example.com")
+        self.assertEqual(rec.last_body(), {"kind": "link", "url": "https://example.com"})
+        self.assertEqual(out["post"]["id"], "bpo_1")
+
     def test_trials_enter_submit_and_tag(self):
         rec = Recorder({"ok": True, "correct": True, "entry": {}})
         grove = self.client(rec)

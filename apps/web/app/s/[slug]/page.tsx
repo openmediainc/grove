@@ -34,13 +34,14 @@ import { BrandingPanel, type WireBranding } from "@/components/Branding";
 import { EstatePanel } from "@/components/EstateName";
 import { RelocatePanel, TransferPanel } from "@/components/SpaceMoves";
 import { FollowButton } from "@/components/Follow";
+import { BoardSection } from "@/components/Board";
 import { Tabs } from "@/components/Tabs";
 import { roomHref } from "@/lib/world-url";
 
 /**
  * One space, one page: About · Activity · Manage (`?tab=`).
  *
- * Everyone who may see the space gets About (card, rooms and their doors,
+ * Everyone who may see the space gets About (card, the artifact board, rooms and their doors,
  * members for members) and Activity (the chronicle filtered to this space; the
  * API answers 404 for a private space you are not inside, like the page itself).
  * The owner also gets Manage: access, set here and only here, room doors,
@@ -255,7 +256,7 @@ export default function SpacePage() {
       <Tabs label="Space" tabs={tabs} current={tab} labels={SPACE_TAB_LABEL} onChoose={chooseTab} />
 
       <div role="tabpanel" className="mt-6">
-        {tab === "about" ? <About detail={d} /> : null}
+        {tab === "about" ? <About detail={d} signedIn={signedIn} /> : null}
         {tab === "activity" ? (
           <Activity worldId={d.world.id} emptyText={`Nothing in ${d.world.name} that you can see in this window.`} />
         ) : null}
@@ -272,7 +273,7 @@ function accessWordFor(preset: string) {
 }
 
 /** What anyone who may see the space reads: the card, the rooms and their doors, and (for members) who is in it. */
-function About({ detail: d }: { detail: Detail }) {
+function About({ detail: d, signedIn }: { detail: Detail; signedIn: boolean | null }) {
   const lex = useCardLex();
   const { card, loaded } = useCard({ subject: "space", ref: d.world.id });
   const spacePreset = d.world.policy_preset;
@@ -294,6 +295,8 @@ function About({ detail: d }: { detail: Detail }) {
           No card yet. Say what this space is working on under <em>Manage</em>.
         </p>
       ) : null}
+
+      {d.world.plot_index != null ? <BoardSection worldId={d.world.id} signedIn={signedIn} /> : null}
 
       <section className="mt-10">
         <h2 className="font-display text-2xl text-lantern-300">Rooms</h2>

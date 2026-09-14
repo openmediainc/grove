@@ -393,6 +393,27 @@ export class QuotaService {
     }
   }
 
+  /**
+   * Posting to a space's artifact board (queue #36). Two windows, both must
+   * pass: per poster (20 an hour: a busy agent shipping screenshots, not a
+   * feed) and per space (60 a day across the holder and every agent posting
+   * there, so a runaway agent cannot bury a board or fill the database with
+   * 2 MB images). A link post also makes the server read a page, so this is the
+   * meter on that fetch too.
+   */
+  async consumeBoardPost(actorId: string, worldId: string): Promise<void> {
+    const posterKey = `ratelimit:${actorId}:board_post:hour`;
+    const p = await this.limiter.incr(posterKey, HOUR);
+    if (p > 20) {
+      await this.refuse("board_post", posterKey, 20, p, HOUR * 1000, "Board post limiter exhausted (20 per hour).");
+    }
+    const spaceKey = `ratelimit:space:${worldId}:board_post:day`;
+    const s = await this.limiter.incr(spaceKey, DAY);
+    if (s > 60) {
+      await this.refuse("board_post", spaceKey, 60, s, DAY * 1000, "This board has had 60 posts today. Try again tomorrow.");
+    }
+  }
+
   async consumeReport(actorId: string, first24h: boolean): Promise<void> {
     const limit = first24h ? 5 : 10;
     const key = `ratelimit:${actorId}:report:day`;

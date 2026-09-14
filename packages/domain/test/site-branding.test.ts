@@ -148,7 +148,7 @@ describe("extractPageFacts", () => {
 
   it("falls back to /favicon.ico and to no name or colour", () => {
     const f = extractPageFacts("<html><body>hi</body></html>", "http://plain.example/a/b");
-    expect(f).toEqual({ siteName: null, title: null, themeColor: null, icons: ["http://plain.example/favicon.ico"] });
+    expect(f).toEqual({ siteName: null, title: null, description: null, themeColor: null, icons: ["http://plain.example/favicon.ico"] });
   });
 
   it("parses the CSS colour forms theme-color uses", () => {

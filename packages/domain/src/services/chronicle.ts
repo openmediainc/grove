@@ -188,6 +188,7 @@ export type ChronicleKind =
   | "credential"
   | "moderation"
   | "trial"
+  | "board"
   | "other";
 
 /**
@@ -307,6 +308,9 @@ const KIND_OF: Record<string, ChronicleKind> = {
   "trial.entered": "trial",
   "trial.finished": "trial",
   "trial.closed": "trial",
+  // Queue #36: something went up on a space's artifact board. Its own kind so
+  // a reader can filter a board's posts in or out of a space's activity.
+  "board.posted": "board",
   // Migration 017: one row per stretch of pulse verb. Its own kind rather than
   // "other", so an owner can filter a day's work away from a day's events.
   agent_phase: "work",
@@ -355,11 +359,12 @@ export const CHRONICLE_KINDS: ChronicleKind[] = [
   "credential",
   "moderation",
   "trial",
+  "board",
   "other",
 ];
 
 /** The kinds a reader may react to. Everything else is a fact, not a moment. */
-const REACTABLE_KINDS = new Set<ChronicleKind>(["arrival", "claim", "movement", "speech", "notice", "permission", "trial"]);
+const REACTABLE_KINDS = new Set<ChronicleKind>(["arrival", "claim", "movement", "speech", "notice", "permission", "trial", "board"]);
 
 function kindOf(type: string): ChronicleKind {
   return KIND_OF[type] ?? "other";
@@ -482,6 +487,10 @@ visible AS (
       -- serves the same title, entrants and finish order signed-out. The place
       -- gate above still applies to the room in the payload.
       WHEN type IN ('trial.opened', 'trial.entered', 'trial.finished', 'trial.closed') THEN TRUE
+      -- Queue #36. A board post is as visible as the board: the payload names
+      -- the space's plaza, so the place gate above keeps a private space's
+      -- posts to its members. The row carries no caption, url or image.
+      WHEN type = 'board.posted' THEN TRUE
       -- GET /notices requires an actor, so this does too. The place gate above
       -- applies like everywhere else; the title is gated separately (rule 9).
       WHEN type = 'notice' THEN $1::text IS NOT NULL
@@ -1007,6 +1016,11 @@ function summaryFor(
       return `${who(actor)} finished the trial “${String(payload.title ?? "")}”.`;
     case "trial.closed":
       return `The trial “${String(payload.title ?? "")}” closed in ${room}.`;
+    case "board.posted": {
+      const what = payload.postKind === "image" ? "an image" : payload.postKind === "link" ? "a link" : "a note";
+      const space = typeof payload.space === "string" && payload.space ? payload.space : "a space";
+      return `${who(actor)} posted ${what} to the board in ${space}.`;
+    }
     case "speech":
       return `${who(actor)} spoke in ${room}.`;
     case "notice":
@@ -1124,6 +1138,8 @@ function detailFor(
       // Never an answer, a nonce or a proof: none of them are in the payload,
       // and this allow-list would not publish them if they were.
       return pick("trialId", "title", "kind", "closesAt");
+    case "board.posted":
+      return pick("postId", "postKind", "space");
     case "speech":
       return pick("channel");
     case "notice":

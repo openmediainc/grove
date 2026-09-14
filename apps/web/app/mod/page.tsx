@@ -70,6 +70,20 @@ type Report = {
   target_report_count: number;
   target_warn_count: number;
   target_injection_flag_count: number;
+  /** 041: a report about a board post names it here. */
+  target_kind?: string | null;
+  board_post?: {
+    id: string;
+    kind: string;
+    caption: string | null;
+    link_url: string | null;
+    link_title: string | null;
+    image_url: string | null;
+    hidden_by_mod: boolean;
+    hidden_reason: string | null;
+    space_slug: string;
+    space_name: string;
+  } | null;
 };
 
 type ReportDetail = Report & {
@@ -477,6 +491,54 @@ export default function ModPage() {
                     {actorLabel(r.reporter)}
                   </p>
                   {r.details ? <p className="mt-2 whitespace-pre-wrap text-white/80">“{r.details}”</p> : null}
+                  {r.target_kind === "board_post" ? (
+                    r.board_post ? (
+                      <div className="mt-3 rounded-lg border border-white/10 p-3">
+                        <p className="text-xs text-white/50">
+                          Board post ({r.board_post.kind}) in{" "}
+                          <a className="text-lantern-300 underline" href={gp(`/s/${encodeURIComponent(r.board_post.space_slug)}`)}>
+                            {r.board_post.space_name}
+                          </a>
+                          {r.board_post.hidden_by_mod ? (
+                            <span className="text-red-200"> · hidden{r.board_post.hidden_reason ? ` — ${r.board_post.hidden_reason}` : ""}</span>
+                          ) : null}
+                        </p>
+                        {r.board_post.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- operator-only API route, never cached
+                          <img src={gp(r.board_post.image_url)} alt="Reported image" className="mt-2 max-h-64 max-w-full rounded object-contain" />
+                        ) : null}
+                        {r.board_post.link_url ? (
+                          <p className="mt-2 break-all text-xs text-white/70">
+                            {r.board_post.link_title ? `${r.board_post.link_title} — ` : ""}
+                            {r.board_post.link_url}
+                          </p>
+                        ) : null}
+                        {r.board_post.caption ? <p className="mt-2 whitespace-pre-wrap text-white/80">{r.board_post.caption}</p> : null}
+                        <button
+                          disabled={busy}
+                          onClick={() => {
+                            const post = r.board_post!;
+                            const why = reasonFor(`report:${r.id}`).trim();
+                            if (!post.hidden_by_mod && !why) {
+                              setErr("Write a reason before hiding a post.");
+                              return;
+                            }
+                            void act(post.hidden_by_mod ? "Post restored." : "Post hidden.", () =>
+                              api(`/api/v1/mod/board/posts/${encodeURIComponent(post.id)}/hide`, {
+                                method: "POST",
+                                body: JSON.stringify({ hidden: !post.hidden_by_mod, reason: why || undefined }),
+                              }),
+                            );
+                          }}
+                          className="mt-2 rounded-full bg-red-400/20 px-3 py-1 text-xs text-red-200 disabled:opacity-50"
+                        >
+                          {r.board_post.hidden_by_mod ? "Unhide post" : "Hide post"}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-white/40">The reported board post has been deleted.</p>
+                    )
+                  ) : null}
 
                   <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/50">
                     <Chip>{r.target_report_count} report(s) against this target</Chip>

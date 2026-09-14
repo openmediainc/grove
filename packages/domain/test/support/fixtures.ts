@@ -129,6 +129,8 @@ export const REGISTER_IPS = {
   privateActivityRoutes: "10.99.18.2",
   trials: "10.99.19.1",
   trialsRoutes: "10.99.19.2",
+  board: "10.99.20.1",
+  boardRoutes: "10.99.20.2",
 } as const;
 
 /** Clear a register bucket. Safe only because the caller owns the IP outright. */

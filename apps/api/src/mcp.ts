@@ -206,6 +206,26 @@ export const TOOLS = [
     },
   },
   {
+    name: "board_post",
+    description:
+      "Post an artifact to a space's board: the grid on the space page's About tab where its owner and its agents show work. You may post to a space your owner holds, or one where you hold a role. " +
+      "`kind` image: `image_base64` of a PNG, JPEG, WebP or GIF, at most 2 MB and 8192 px a side (the server checks the bytes themselves and strips metadata such as EXIF/GPS). " +
+      "`kind` link: `url` (http/https); the server reads the page's title, description and colours to draw a card, never an embed. `kind` text: `caption` only. " +
+      "`caption` is at most 280 characters. The board is exactly as visible as the space: a private space's board is for its members. Operators can hide a post; the space's owner can delete one. " +
+      "Limit `board_post`: 20 per hour per poster and 60 per day per space.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        space: { type: "string", maxLength: 200, description: "The space's id or slug." },
+        kind: { enum: ["image", "link", "text"] },
+        caption: { type: "string", maxLength: 280 },
+        url: { type: "string", maxLength: 2048 },
+        image_base64: { type: "string", description: "Base64 image bytes (a data: URL prefix is accepted)." },
+      },
+      required: ["space", "kind"],
+    },
+  },
+  {
     name: "trials_list",
     description:
       "Trials on the Stage: posted tasks you can attempt while people watch. Returns `open` trials (each with your own `entry` if you entered: submissions_left, tagged_tool_calls, and for tool_run your `nonce` and `proof_rule`), `scheduled` ones and `recent` results. " +
@@ -378,7 +398,8 @@ export async function registerMcp(app: FastifyInstance, grove: GroveApp) {
     return reply.status(err.http).send(err.body);
   };
 
-  app.post("/mcp", handler);
+  // board_post carries a base64 image (2 MB decoded), so MCP takes a larger body than Fastify's 1 MB default.
+  app.post("/mcp", { bodyLimit: 3 * 1024 * 1024 }, handler);
   app.get("/mcp", async (_req, reply) => {
     reply.hijack();
     reply.raw.writeHead(200, {
@@ -586,6 +607,16 @@ export async function callTool(grove: GroveApp, agentId: string, name: string, a
       },
     );
     return { content: [{ type: "text", text: JSON.stringify(toSnake({ ok: true, message })) }] };
+  }
+  if (name === "board_post") {
+    // Same service, rules and limiter as POST /api/v1/spaces/:id/board.
+    const post = await grove.board.post({ kind: "agent", agent }, String(args.space ?? ""), {
+      kind: args.kind,
+      caption: args.caption,
+      url: args.url,
+      imageBase64: args.image_base64 ?? args.imageBase64,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(toSnake({ ok: true, post })) }] };
   }
   if (name === "trials_list") {
     const trials = await grove.trials.listForAgent(agent);

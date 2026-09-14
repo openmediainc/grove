@@ -43,3 +43,19 @@ describe("branding suggest rate limit (#34)", () => {
     await q.consumeBrandingSuggest("hum_b");
   });
 });
+
+describe("board post rate limit (#36)", () => {
+  it("allows 20 posts per poster per hour and 60 per space per day, naming board_post", async () => {
+    const q = new QuotaService(new MemoryRateLimiter());
+    for (let i = 0; i < 20; i++) await q.consumeBoardPost("agt_a", "wld_1");
+    await expect(q.consumeBoardPost("agt_a", "wld_1")).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      details: { limiter: "board_post", remaining: 0 },
+    });
+    // Other posters share the space's day: 20 (a) + 40 more, then the space is full for everyone.
+    for (let i = 0; i < 20; i++) await q.consumeBoardPost("agt_b", "wld_1");
+    for (let i = 0; i < 20; i++) await q.consumeBoardPost("hum_c", "wld_1");
+    await expect(q.consumeBoardPost("hum_d", "wld_1")).rejects.toMatchObject({ details: { limiter: "board_post" } });
+    await q.consumeBoardPost("hum_d", "wld_2");
+  });
+});

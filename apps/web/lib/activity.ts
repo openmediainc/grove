@@ -96,6 +96,7 @@ export const KIND_ORDER = [
   "credential",
   "moderation",
   "trial",
+  "board",
   "other",
 ];
 
@@ -115,6 +116,8 @@ const KIND_COPY: Record<string, KindCopy> = {
   moderation: { label: "moderation", plural: (n) => `${n} moderation events`, tint: "border-red-400/40 text-red-300" },
   // Trials on the Stage (040): public commons events, and ones people cheer on.
   trial: { label: "trials", plural: (n) => `${n} trial moments on the Stage`, tint: "border-teal-400/40 text-teal-200" },
+  // The artifact board on a space's page (041).
+  board: { label: "board", plural: (n) => `${n} board posts`, tint: "border-sky-400/40 text-sky-200" },
   other: { label: "other", plural: (n) => `${n} other events`, tint: "border-white/15 text-white/50" },
 };
 

@@ -93,6 +93,28 @@ export interface ReportSummary {
   targetWarnCount: number;
   /** Unreviewed prompt-injection flags standing against this target. */
   targetInjectionFlagCount: number;
+  /** What the report is about when it is not just an actor: 'board_post' (041), else null. */
+  targetKind: string | null;
+  /** The reported thing's id (a board post id), else null. */
+  targetRef: string | null;
+  /** The reported board post as it stands now; null when it was deleted or the report is about an actor. */
+  boardPost: ReportedBoardPost | null;
+}
+
+/** A reported board post, for the queue. `imageUrl` is the operator-only image route. */
+export interface ReportedBoardPost {
+  id: string;
+  kind: string;
+  caption: string | null;
+  linkUrl: string | null;
+  linkTitle: string | null;
+  imageUrl: string | null;
+  hiddenByMod: boolean;
+  hiddenReason: string | null;
+  spaceId: string;
+  spaceSlug: string;
+  spaceName: string;
+  createdAt: string;
 }
 
 export interface ReportDetail extends ReportSummary {
@@ -364,10 +386,49 @@ export class ModerationService {
       [status, JSON.stringify(CATEGORY_RANK), limit],
     );
     const names = await this.describeActors(rows.flatMap((r) => [String(r.reporter_id), String(r.target_id)]));
-    return rows.map((r) => this.toSummary(r, names));
+    const posts = await this.reportedBoardPosts(rows);
+    return rows.map((r) => this.toSummary(r, names, posts));
   }
 
-  private toSummary(r: Record<string, unknown>, names: Map<string, ActorRef>): ReportSummary {
+  /** Board posts named by `target_ref` on 'board_post' reports, in one query. */
+  private async reportedBoardPosts(rows: Array<Record<string, unknown>>): Promise<Map<string, ReportedBoardPost>> {
+    const out = new Map<string, ReportedBoardPost>();
+    const ids = [
+      ...new Set(rows.filter((r) => r.target_kind === "board_post" && r.target_ref).map((r) => String(r.target_ref))),
+    ];
+    if (!ids.length) return out;
+    const { rows: posts } = await this.store.pg.query(
+      `SELECT p.id, p.kind, p.caption, p.link_url, p.link_preview->>'title' AS link_title, p.hidden_by_mod,
+              p.hidden_reason, p.created_at, w.id AS world_id, w.slug::text AS world_slug, w.name AS world_name
+         FROM board_posts p JOIN worlds w ON w.id = p.world_id
+        WHERE p.id = ANY($1::text[])`,
+      [ids],
+    );
+    for (const p of posts) {
+      const id = String(p.id);
+      out.set(id, {
+        id,
+        kind: String(p.kind),
+        caption: p.caption == null ? null : String(p.caption),
+        linkUrl: p.link_url == null ? null : String(p.link_url),
+        linkTitle: p.link_title == null ? null : String(p.link_title),
+        imageUrl: p.kind === "image" ? `/api/v1/mod/board/posts/${encodeURIComponent(id)}/image` : null,
+        hiddenByMod: Boolean(p.hidden_by_mod),
+        hiddenReason: p.hidden_reason == null ? null : String(p.hidden_reason),
+        spaceId: String(p.world_id),
+        spaceSlug: String(p.world_slug),
+        spaceName: String(p.world_name),
+        createdAt: iso(p.created_at),
+      });
+    }
+    return out;
+  }
+
+  private toSummary(
+    r: Record<string, unknown>,
+    names: Map<string, ActorRef>,
+    posts: Map<string, ReportedBoardPost> = new Map(),
+  ): ReportSummary {
     const reporterId = String(r.reporter_id);
     const targetId = String(r.target_id);
     return {
@@ -393,6 +454,9 @@ export class ModerationService {
       targetReportCount: Number(r.target_report_count ?? 0),
       targetWarnCount: Number(r.target_warn_count ?? 0),
       targetInjectionFlagCount: Number(r.target_injection_flag_count ?? 0),
+      targetKind: r.target_kind == null ? null : String(r.target_kind),
+      targetRef: r.target_ref == null ? null : String(r.target_ref),
+      boardPost: r.target_kind === "board_post" && r.target_ref ? (posts.get(String(r.target_ref)) ?? null) : null,
     };
   }
 
@@ -462,7 +526,7 @@ export class ModerationService {
     ]);
 
     return {
-      ...this.toSummary(row, names),
+      ...this.toSummary(row, names, await this.reportedBoardPosts([row])),
       snapshotLines: snapshotRows.map((s) => ({
         ...s,
         senderName: names.get(s.senderId)?.displayName ?? s.senderId,

@@ -5,7 +5,7 @@ export { migrate, pendingMigrations, schemaStatus } from "./migrate.js";
 export type { SchemaStatus } from "./migrate.js";
 export { GroveError } from "./errors.js";
 export { newId } from "./ids.js";
-export { insideSpaceSql, roomActivityVisibleSql, visibleOccupancySql } from "./visibility.js";
+export { insideSpaceSql, roomActivityVisibleSql, spaceVisibleSql, visibleOccupancySql } from "./visibility.js";
 export type { GroveStore } from "./store.js";
 export { IdentityService } from "./services/identity.js";
 export { PresenceService, type PulseBatchResult } from "./services/presence.js";
@@ -77,10 +77,12 @@ export {
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
 export { BrandingService, normaliseSiteUrl } from "./services/branding.js";
 export { SpaceMoveService } from "./services/space-moves.js";
+export { BoardService, type BoardActor, type BoardPostInput, type BoardImage } from "./services/board.js";
+export { inspectBoardImage, sniffImageMime, type BoardImageResult } from "./board-image.js";
 export type { SpaceTransfer, TransferCandidates, RelocationPlan } from "./services/space-moves.js";
 export { SiteFetchSession, SiteFetchError, isBlockedAddress, SITE_FETCH_USER_AGENT } from "./site-fetch.js";
 export type { SiteFetchOptions, ResolvedAddress } from "./site-fetch.js";
-export { suggestBrandingFromSite, extractPageFacts, decodePng, decodeIco, dominantColour, parseCssColour } from "./site-branding.js";
+export { suggestBrandingFromSite, readLinkPreview, extractPageFacts, decodePng, decodeIco, dominantColour, parseCssColour } from "./site-branding.js";
 export type { SiteBrandingSuggestion } from "./site-branding.js";
 export { EstateService, type EstateNames } from "./services/estates.js";
 // Supporter plumbing (036): cosmetic, env-gated, off until the owner adds Stripe keys.
@@ -269,6 +271,7 @@ import { CardService } from "./services/cards.js";
 import { BrandingService } from "./services/branding.js";
 import { EstateService } from "./services/estates.js";
 import { SpaceMoveService } from "./services/space-moves.js";
+import { BoardService } from "./services/board.js";
 import { SupporterService } from "./services/supporters.js";
 import { FollowService } from "./services/follows.js";
 import { SearchService } from "./services/search.js";
@@ -311,6 +314,8 @@ export class GroveApp {
   estates: EstateService;
   /** Transfer a space to a member or bound org, or move it to a free plot (039). */
   spaceMoves: SpaceMoveService;
+  /** The artifact board on a space's page: images, link cards, text (041). */
+  board: BoardService;
   /** Cosmetic supporter tier via Stripe Checkout; inert unless all four env vars are set (036). */
   supporters: SupporterService;
   /** Hearts on spaces and agents, and the notices they earn (028). */
@@ -364,6 +369,7 @@ export class GroveApp {
     this.branding = new BrandingService(this.store, this.campus, this.quota);
     this.estates = new EstateService(this.store, this.campus);
     this.spaceMoves = new SpaceMoveService(this.store, this.campus);
+    this.board = new BoardService(this.store, this.campus, this.quota);
     // Written on the event: the three sources call back into this after their
     // own write. Late-bound because all three are built before speech/mailbox.
     this.follows = new FollowService(this.store, this.identity, this.campus, this.presence, this.speech, this.mailbox, this.quota);

@@ -32,6 +32,16 @@ export function insideSpaceSql(world: string, viewer: string): string {
                 WHERE vis_m.world_id = ${world}.id AND vis_m.human_id = ${viewer}::text)))`;
 }
 
+/**
+ * SQL: the viewer may see what is posted in space `world` as a whole (queue #36,
+ * the artifact board): exactly the space page's own door — a `private` space to
+ * people inside it, anything else to anyone. No operator bypass: moderators read
+ * a reported post through /mod, not through the board. Never NULL.
+ */
+export function spaceVisibleSql(world: string, viewer: string): string {
+  return `COALESCE((${world}.policy_preset IS DISTINCT FROM 'private' OR ${insideSpaceSql(world, viewer)}), FALSE)`;
+}
+
 /** SQL: the viewer may see activity in room `room` of space `world`. Never NULL. */
 export function roomActivityVisibleSql(room: string, world: string, viewer: string): string {
   return `COALESCE(CASE

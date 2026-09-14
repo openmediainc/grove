@@ -62,6 +62,8 @@ function attrs(raw: string): Record<string, string> {
 export type PageFacts = {
   siteName: string | null;
   title: string | null;
+  /** og:description, else meta description; whitespace collapsed. */
+  description: string | null;
   themeColor: string | null;
   /** Icon URLs in the order they should be tried, ending with /favicon.ico. */
   icons: string[];
@@ -154,9 +156,11 @@ export function extractPageFacts(html: string, pageUrl: string): PageFacts {
     /* ignore */
   }
 
+  const rawDescription = meta("og:description") ?? meta("description") ?? meta("twitter:description");
   return {
     siteName: meta("og:site_name") ?? meta("application-name") ?? meta("apple-mobile-web-app-title"),
     title,
+    description: rawDescription ? rawDescription.replace(/\s+/g, " ").trim() || null : null,
     themeColor: themeRaw ? parseCssColour(themeRaw) : null,
     icons,
   };
@@ -421,6 +425,29 @@ function dataUrlBytes(url: string): Buffer | null {
   return Buffer.from(m[2]!, "base64");
 }
 
+/**
+ * The first favicon (in the page's own order, at most MAX_FAVICON_TRIES) that
+ * decodes to a colour. Every fetch goes through the session, so its network
+ * rules and deadline apply; a failed icon is skipped, never thrown.
+ */
+export async function readFaviconColour(
+  session: SiteFetchSession,
+  facts: Pick<PageFacts, "icons">,
+): Promise<{ favicon: string | null; colour: string | null }> {
+  for (const icon of facts.icons.slice(0, MAX_FAVICON_TRIES)) {
+    if (session.remainingMs() <= 250) break;
+    try {
+      const bytes = icon.startsWith("data:") ? dataUrlBytes(icon) : (await session.get(icon, ICON_WANT)).body;
+      const img = bytes ? decodeIcon(bytes) : null;
+      const colour = img ? dominantColour(img) : null;
+      if (colour) return { favicon: icon.startsWith("data:") ? "(inline icon)" : icon, colour };
+    } catch (e) {
+      if (!(e instanceof SiteFetchError)) throw e;
+    }
+  }
+  return { favicon: null, colour: null };
+}
+
 /** Read a site and suggest branding. Throws SiteFetchError when the page itself cannot be read. */
 export async function suggestBrandingFromSite(rawUrl: string, opts: SiteFetchOptions = {}): Promise<SiteBrandingSuggestion> {
   const session = new SiteFetchSession(opts);
@@ -433,21 +460,9 @@ export async function suggestBrandingFromSite(rawUrl: string, opts: SiteFetchOpt
   // The favicon is read when the page names no theme colour, or only a neutral
   // one (white, black, grey: usually the browser chrome, not the brand).
   if (!facts.themeColor || isNeutral(facts.themeColor)) {
-    for (const icon of facts.icons.slice(0, MAX_FAVICON_TRIES)) {
-      if (session.remainingMs() <= 250) break;
-      try {
-        const bytes = icon.startsWith("data:") ? dataUrlBytes(icon) : (await session.get(icon, ICON_WANT)).body;
-        const img = bytes ? decodeIcon(bytes) : null;
-        const colour = img ? dominantColour(img) : null;
-        if (colour) {
-          favicon = icon.startsWith("data:") ? "(inline icon)" : icon;
-          faviconColour = colour;
-          break;
-        }
-      } catch (e) {
-        if (!(e instanceof SiteFetchError)) throw e;
-      }
-    }
+    const icon = await readFaviconColour(session, facts);
+    favicon = icon.favicon;
+    faviconColour = icon.colour;
   }
 
   const useFavicon = Boolean(faviconColour && (!facts.themeColor || !isNeutral(faviconColour)));
@@ -474,5 +489,52 @@ export async function suggestBrandingFromSite(rawUrl: string, opts: SiteFetchOpt
       accentFrom: useFavicon ? "favicon" : facts.themeColor ? "theme_color" : null,
     },
     notes,
+  };
+}
+
+// ------------------------------------------------------------------ link cards
+
+export type LinkPreview = {
+  /** The page actually read, after redirects. */
+  url: string;
+  host: string;
+  title: string | null;
+  description: string | null;
+  themeColour: string | null;
+  faviconColour: string | null;
+};
+
+const PREVIEW_TITLE_MAX = 120;
+const PREVIEW_DESCRIPTION_MAX = 240;
+
+function cut(s: string | null, max: number): string | null {
+  if (!s) return null;
+  const chars = [...s];
+  if (chars.length <= max) return s;
+  const head = chars.slice(0, max - 1).join("");
+  const space = head.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? head.slice(0, space) : head).trimEnd()}…`;
+}
+
+/**
+ * What a board link card shows (queue #36): title, description, theme colour and
+ * favicon colour, read through the same SSRF-safe session as branding
+ * suggestions. Text only; no image URL leaves this function, so the card never
+ * loads anything from the linked site. Throws SiteFetchError when the page
+ * itself cannot be read.
+ */
+export async function readLinkPreview(rawUrl: string, opts: SiteFetchOptions = {}): Promise<LinkPreview> {
+  const session = new SiteFetchSession(opts);
+  const page = await session.get(rawUrl, HTML_WANT);
+  const facts = extractPageFacts(page.body.toString("utf8"), page.url);
+  const icon = await readFaviconColour(session, facts);
+  const title = facts.siteName && facts.title && !facts.title.includes(facts.siteName) ? `${facts.title} · ${facts.siteName}` : facts.title ?? facts.siteName;
+  return {
+    url: page.url,
+    host: new URL(page.url).hostname,
+    title: cut(title, PREVIEW_TITLE_MAX),
+    description: cut(facts.description, PREVIEW_DESCRIPTION_MAX),
+    themeColour: facts.themeColor,
+    faviconColour: icon.colour,
   };
 }

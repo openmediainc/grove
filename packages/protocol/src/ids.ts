@@ -37,6 +37,8 @@ export const ID_PREFIX = {
   guest: "gst_",
   /** A trial on the Stage (040). */
   trial: "trl_",
+  /** A post on a space's artifact board (041). */
+  boardPost: "bpo_",
 } as const;
 
 export function isHumanId(id: string): id is HumanId {

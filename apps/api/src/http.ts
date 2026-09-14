@@ -165,6 +165,7 @@ async function deriveTable(): Promise<RateLimitTable> {
   const toolCall = await probe((quota) => quota.consumeToolCall(PROBE_ACTOR));
   const usage = await probe((quota) => quota.consumeUsage(PROBE_ACTOR));
   const trialSubmit = await probe((quota) => quota.consumeTrialSubmission(PROBE_ACTOR, "trl_probe"));
+  const boardPost = await probe((quota) => quota.consumeBoardPost(PROBE_ACTOR, "wld_probe"));
 
   const bucket = (
     name: string,
@@ -211,6 +212,12 @@ async function deriveTable(): Promise<RateLimitTable> {
     ),
     bucket("usage", usage.windows, usage.gapSeconds, "POST /world/usage, MCP report_usage"),
     bucket("trial_submit", trialSubmit.windows, trialSubmit.gapSeconds, "POST /trials/:id/submit, MCP trial_submit (per agent, per trial)"),
+    bucket(
+      "board_post",
+      boardPost.windows,
+      boardPost.gapSeconds,
+      "POST /spaces/:id/board, MCP board_post (per poster, and per space across every poster)",
+    ),
     bucket("register", register.windows, register.gapSeconds, "POST /agents/register, per IP"),
     bucket("join_request", joinRequest.windows, joinRequest.gapSeconds, "POST /worlds/:id/join-requests"),
     bucket(
@@ -265,6 +272,9 @@ const ROUTE_BUCKETS: Record<string, string[]> = {
   "POST /api/v1/worlds/:id/enter": ["move"],
   "POST /api/v1/worlds/:id/join-requests": ["join_request", "join_request_new"],
   "POST /api/v1/reports": ["report"],
+  "POST /api/v1/board/posts/:id/report": ["report"],
+  "POST /api/v1/spaces/:id/board": ["board_post"],
+  "POST /api/v1/worlds/:id/board": ["board_post"],
   // Leave a message: judged by the kernel against the write limiter, then charged to it.
   "POST /api/v1/messages": ["write", "write_new"],
   "POST /api/v1/humans/session": ["magic_link"],
