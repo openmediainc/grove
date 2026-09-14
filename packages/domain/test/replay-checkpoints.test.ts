@@ -161,7 +161,7 @@ describe.skipIf(!hasDb)("replay checkpoints", { timeout: 60_000 }, () => {
 
     // Idempotent: a second compute writes nothing and the row is unchanged.
     const before = await rows(space.id);
-    expect(before.map((r) => Date.parse(r.at))).toEqual([cp1, cp2]);
+    expect(before.map((r) => new Date(r.at).getTime())).toEqual([cp1, cp2]);
     expect((await grove.replayCheckpoints.computeAt(space.id, cp2)).created).toBe(false);
     expect(await rows(space.id)).toEqual(before);
     // A chained checkpoint equals one bootstrapped from the keyframe.
@@ -221,7 +221,7 @@ describe.skipIf(!hasDb)("replay checkpoints", { timeout: 60_000 }, () => {
     expect(raw).not.toContain(`${space.id}:library`);
     expect(raw).toContain(pub.id);
     const [hiddenRow] = await rows(hidden);
-    expect(Date.parse(hiddenRow!.at)).toBe(cpHidden);
+    expect(new Date(hiddenRow!.at).getTime()).toBe(cpHidden);
     expect(hiddenRow!.bodies).toEqual([]);
     expect(JSON.stringify(hiddenRow)).not.toContain(resident.id);
 
@@ -273,19 +273,19 @@ describe.skipIf(!hasDb)("replay checkpoints", { timeout: 60_000 }, () => {
     const B = REPLAY_CHECKPOINT_BUCKET_MS;
 
     expect(await grove.replayCheckpoints.advance(space.id, now, 3)).toBe(3);
-    const first = (await rows(space.id)).map((r) => Date.parse(r.at));
+    const first = (await rows(space.id)).map((r) => new Date(r.at).getTime());
     expect(first).toHaveLength(3);
     expect(first[0]).toBe(Math.ceil((now - 24 * 3600_000) / B) * B);
     expect(first[1]! - first[0]!).toBe(B);
     // Resumes where it stopped.
     expect(await grove.replayCheckpoints.advance(space.id, now, 3)).toBe(3);
-    const second = (await rows(space.id)).map((r) => Date.parse(r.at));
+    const second = (await rows(space.id)).map((r) => new Date(r.at).getTime());
     expect(second.slice(0, 3)).toEqual(first);
     expect(second[3]! - second[2]!).toBe(B);
 
     // Catching all the way up never computes a bucket that has not ended (plus grace).
     await grove.replayCheckpoints.advance(space.id, now, 400);
-    const all = (await rows(space.id)).map((r) => Date.parse(r.at));
+    const all = (await rows(space.id)).map((r) => new Date(r.at).getTime());
     expect(Math.max(...all)).toBeLessThanOrEqual(now - REPLAY_CHECKPOINT_GRACE_MS);
     expect(Math.max(...all)).toBeGreaterThan(now - REPLAY_CHECKPOINT_GRACE_MS - B);
     expect(new Set(all).size).toBe(all.length);
