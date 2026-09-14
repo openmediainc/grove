@@ -429,6 +429,13 @@ ev AS (
     COALESCE(hu.display_name, ag.display_name) AS actor_name,
     COALESCE(hu.handle::text, ag.slug::text)   AS actor_slug,
     sp.body AS speech_body,
+    -- #60: the public feed carried this line (the spectator's delivery row).
+    -- Read by replay to rebuild facing hints; published only with a readable body.
+    (e.type = 'speech' AND EXISTS (
+       SELECT 1 FROM speech_deliveries pd
+        WHERE pd.speech_id = e.payload->>'speechId'
+          AND pd.recipient_id = 'hum_spectator'
+          AND pd.status = 'delivered')) AS spectator_heard,
     (
       -- Rule 2, the body half. Sender, delivered recipient, or an operator
       -- inside a world the world gate already let them see.
@@ -540,7 +547,7 @@ visible AS (
 )`;
 
 const SELECT_COLUMNS = `
-SELECT id, type, payload, created_at, world_id, room_id, room_name, body_allowed,
+SELECT id, type, payload, created_at, world_id, room_id, room_name, body_allowed, spectator_heard,
        -- Rule 9. A notice's title is the author's words; the board shows them
        -- only through the kernel (NoticeService.board: blocks, mutes, agent
        -- policy), so the ledger must not republish them past it. The author,
@@ -975,7 +982,10 @@ export class ChronicleService {
       summary: summaryFor(type, actor, roomName, payload, names),
       body,
       bodyWithheld: isSpeech && body === null,
-      detail: detailFor(type, payload, names),
+      detail:
+        isSpeech && body !== null && row.spectator_heard === true
+          ? { ...detailFor(type, payload, names), public: true }
+          : detailFor(type, payload, names),
       reactionTarget,
     };
   }

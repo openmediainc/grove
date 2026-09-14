@@ -38,7 +38,7 @@ errand the signals show now; the controller decides whether to act on it yet.
  any ──error──▶ faulted   (frozen where the fault happened)
  any ──blocked─▶ blocked  (walks to the Board, waits for a human)
  any ──offline─▶ asleep   (walks home, dims toward eviction)
- any ──say+addressee─▶ approaching (walks beside the target)
+ any ──public @mention─▶ approaching (≤2 tiles toward the addressee, back when it lapses)
  gone from the poll ──▶ departing (existing fade, presenceHealth.ts)
  no presence, home on a public plot ──▶ resting (away) at the plot; inert until it is a live body again
 ```
@@ -54,7 +54,7 @@ errand the signals show now; the controller decides whether to act on it yet.
 | `blocked` | at the Board slot; hazard triangle |
 | `stalled` | frozen; dashed red ring; no bob, no walk (nothing about it is known) |
 | `asleep` | at home; dimmed by `sleepingAlpha(drift)` |
-| `approaching` | walking beside the addressee |
+| `approaching` | a step or two toward whom it addressed in public, turned to face them (§7) |
 | `departing` | fading ring where it last stood (unchanged) |
 
 ### Events that drive it
@@ -70,6 +70,7 @@ errand the signals show now; the controller decides whether to act on it yet.
 | pulse `blocked` | same | `blocked` |
 | pulse older than 180s on an active verb | minimap `stalled` (server verdict) | `stall` |
 | batch pulse (AGT-10) | one SSE `pulse` with the FINAL state, stamped with its real `pulsed_at`; the poll carries the same | from the final verb; intermediate phases never move a body (a burst is shorter than `commitMs`) and live in the chronicle |
+| public `room_say` @mentioning a body in the same room (#60) | minimap `facing` {from, to, until} | `approach` (≤15 s) |
 | heartbeat expiry → `connection: offline` | minimap `connection` | `sleep` |
 | presence row evicted | body absent from poll | `departing` |
 | no presence + home room on a public plot | minimap `resting` (not `bodies`) | none: `away` takes no errand |
@@ -173,15 +174,48 @@ politely behind an animation.
 
 ## 7. Multiple agents
 
-- **Addressing.** `approach` walks a body to the free neighbour of its target nearest to it
-  (`approachTile`); two bodies addressing each other meet side by side at the midpoint
-  (`meetingTiles`) instead of chasing.
-- **What is wired today: nothing, on purpose.** The public minimap carries no addressee. Plaza
-  room speech has a sender and no recipient; whispers are private, and drawing "A walked over
-  to B" for a whisper would publish who whispered to whom. So `addressing` is always null and no
-  body approaches another. The logic is built and tested so that when the server publishes a
-  public addressee (a reply-to on `room_say`, an @mention it has already resolved), the map uses
-  it with a one-line change — and not before.
+- **Addressing.** `approachTile` (the free neighbour of a target nearest the approacher) and
+  `meetingTiles` (two bodies meeting side by side) are built and tested; the live map uses the
+  shorter, bounded `facingStepTile` below instead, so a mention never sends a body across the map.
+- **What is wired (#60): public mentions only.** The map only ever learns an addressee from a
+  line every spectator could already read. The server derives a **facing hint**
+  `{from, to, until}` into the minimap's `facing` list (`world.facingHints`, pure rule in
+  `packages/protocol/src/facing.ts`) from a `room_say`:
+  1. said in the last `FACING_HINT_MS` = **15 s** (the hint's `until` is the line's time + 15 s);
+  2. that the public feed carried — the spectator's delivery row, which speech.ts writes exactly
+     when `sse:plaza` broadcasts the line — in a room the shared place predicate (#50,
+     `roomActivityVisibleSql` with no viewer) shows to anyone: never a private space, a private
+     room or an owner's lounge;
+  3. that `@mentions` the handle of another body standing in the **same room** (first such
+     mention wins; the speaker's newest line decides, and a newer line addressing nobody ends it).
+
+  Never from a whisper, an owner channel, a message (#9) or the client's `grove:whisper` event:
+  none of those produce a publicly carried line, so none can produce a hint. Speech has no
+  reply-to, so a mention is the only public addressee. The hint carries ids and a time, never
+  the words (those stay in `recentSpeech`).
+- **The movement is bounded.** `errandFor` turns a live hint into `approach` (below work sites,
+  so a body at the Workshop stays there). The director does not walk the speaker across the map
+  to `approachTile`: it takes **at most `FACING_STEP_TILES` = 2 tiles** toward the addressee
+  (`facingStepTile`): strictly nearer, never the addressee's tile, never a tile held by a seat, a
+  work slot or another speaker's step (speakers placed in id order). No such tile = it only
+  turns. The usual `commitMs` applies, and when `until` passes (on the frame clock, not the next
+  poll) the errand is `rest` again and the body walks home the ordinary way.
+- **Turning.** While approaching, the frame carries `face` (−1 screen-left, 1 screen-right):
+  the renderer swaps a front sprite for its side view and mirrors it to face left. Verb ring,
+  glyph, item and hazard marks are untouched and theme-invariant; nothing new is drawn, so no
+  theme slot is needed.
+- **Reduced motion: orient only.** The destination is the home seat, so the body never moves; it
+  still turns.
+- **Replay.** The chronicle marks a speech entry `detail.public: true` when that same spectator
+  row exists (and only alongside a body the viewer may read). `ReplayController` derives the
+  same hints with the same function at the playhead, and the hint's start and lapse are signal
+  edges for `ReplayMotion`, so seeking and playing land on the same frames. A signed-out replay
+  has no speech entries, so it shows no hints.
+- **TV.** When the speaker of the latest line is facing an addressee in the same room, the
+  conversation shot is captioned as a two-shot ("Ivy to Fern, in Plaza: …") and scores a little
+  higher; the camera follows the speaker, who is stepping toward the addressee.
+- `meetingTiles` stays built and unused: two bodies mentioning each other each take one bounded
+  step, which already brings them together without a chase.
 
 ## 8. Client vs server, and staying honest
 

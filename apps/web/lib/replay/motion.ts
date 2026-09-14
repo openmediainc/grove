@@ -79,6 +79,8 @@ export function motionActorOf(b: ReplayWireBody): MotionActor {
     source: "grove",
     pulsedAt: b.pulsed_at,
     toolCalls: (b.tool_calls ?? []).map((s) => spanFromWire(s as unknown as Record<string, unknown>) ?? s),
+    addressing: b.addressing ?? null,
+    addressingUntil: b.addressing_until ?? null,
   };
 }
 

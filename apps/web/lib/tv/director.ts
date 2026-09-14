@@ -36,6 +36,8 @@ export interface TvActor {
   /** Asleep and counting down to eviction. */
   fading?: boolean;
   toolCalls?: ToolCallView[];
+  /** #60: a body it just addressed in public (a live facing hint), if any. */
+  addressing?: string | null;
 }
 
 export interface TvStage {
@@ -279,7 +281,19 @@ export class TvDirector {
       const last = list[list.length - 1]!;
       const speaker = byId.get(last.actorId)!;
       const voices = [...new Set(list.map((l) => l.actorId))].map((id) => byId.get(id)!.name);
-      if (voices.length >= 2) {
+      // #60: the speaker is facing someone it addressed in public, standing in
+      // the same room: prefer that as a two-shot, named as one.
+      const partner = speaker.addressing ? byId.get(speaker.addressing) : undefined;
+      if (partner && partner.region === region && now - last.at <= TV_LINE_WINDOW_MS) {
+        out.push({
+          key: `conversation:${region}`,
+          kind: "conversation",
+          actorId: speaker.id,
+          region,
+          caption: `${speaker.name} to ${partner.name}, in ${words.regionTitle(region)}: “${quote(last.body)}”`,
+          score: SCORE.conversation + Math.min(Math.max(voices.length, 2), 5) + 1,
+        });
+      } else if (voices.length >= 2) {
         out.push({
           key: `conversation:${region}`,
           kind: "conversation",

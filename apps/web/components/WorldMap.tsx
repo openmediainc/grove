@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { asPermissionBadges, consequenceOf, STANCES, type Rect, type Speaker } from "@grove/ui";
-import { AWAY_ALPHA, decorSlotTile, describeToolCall, normaliseMarks, type DecorItem, type SpaceBranding, type SpaceMark, type ToolCallView } from "@grove/protocol";
+import { AWAY_ALPHA, decorSlotTile, describeToolCall, facingFromWire, normaliseMarks, type DecorItem, type SpaceBranding, type SpaceMark, type ToolCallView } from "@grove/protocol";
 import { paintDecorClear, plotDecor } from "@/lib/decor";
 import { api } from "@/lib/api";
 import {
@@ -436,6 +436,8 @@ type Minimap = {
   watching?: number | null;
   audience_cap?: number;
   paperclip?: { ok: boolean; agents: PaperclipBody[]; issues?: PaperclipIssue[] };
+  /** #60: public facing hints {from, to, until}; see @grove/protocol facing.ts. */
+  facing?: unknown[];
 };
 
 type Actor = {
@@ -470,6 +472,9 @@ type Actor = {
   toolCalls?: ToolCallView[];
   /** Stance (autonomy_mode), agents only. */
   stance?: string | null;
+  /** #60: whom it just addressed in public (a server hint, never a whisper), and until when (ms). */
+  addressing?: string | null;
+  addressingUntil?: number | null;
 };
 
 /**
@@ -1779,6 +1784,13 @@ export function WorldMap() {
         const orgList = (data.orgs ?? []).map((o) => ({ id: o.id, name: o.name, colour: o.colour }));
         const orgById = new Map(orgList.map((o) => [o.id, o]));
         const orgMode = data.org_render_mode ?? data.orgRenderMode ?? "shared";
+        // #60: who just addressed whom in public. Built server-side from lines the
+        // public feed carried (or, in replay, from the same chronicle lines).
+        const facingBy = new Map<string, { to: string; until: number }>();
+        for (const raw of data.facing ?? []) {
+          const h = facingFromWire(raw);
+          if (h) facingBy.set(h.from, { to: h.to, until: h.until });
+        }
         const grove = (data.bodies ?? []).map((b) => {
           const room = (b.room_slug ?? b.roomSlug ?? "plaza") as MapRegion;
           const region =
@@ -1823,6 +1835,8 @@ export function WorldMap() {
             flagged: flaggedIds.has(b.id),
             pulsedAt,
             stance: b.stance ?? null,
+            addressing: facingBy.get(b.id)?.to ?? null,
+            addressingUntil: facingBy.get(b.id)?.until ?? null,
             toolCalls: (b.tool_calls ?? b.toolCalls ?? [])
               .map((raw) => spanFromWire(raw))
               .filter((v): v is ToolCallView => v !== null),
@@ -3271,8 +3285,21 @@ export function WorldMap() {
                 ctx.stroke();
                 ctx.globalAlpha = alpha;
               }
-              const key = spriteKey(a.kind === "paperclip" ? "agent" : a.kind, a.verb);
-              if (!art.body(ctx, key, x, y)) {
+              const baseKey = spriteKey(a.kind === "paperclip" ? "agent" : a.kind, a.verb);
+              // #60: turned toward someone it just addressed in public. A
+              // front-facing sprite turns to its side view; the side art faces
+              // right, so facing left mirrors it. Nothing else about it changes.
+              const face = at.face;
+              const key = face !== 0 && baseKey.endsWith("-front") ? (baseKey.replace("-front", "-side") as CharKey) : baseKey;
+              if (face < 0) {
+                ctx.save();
+                ctx.translate(x, 0);
+                ctx.scale(-1, 1);
+                ctx.translate(-x, 0);
+              }
+              const drawn = art.body(ctx, key, x, y);
+              if (face < 0) ctx.restore();
+              if (!drawn) {
                 ctx.fillStyle = a.kind === "human" ? pal.placeholder.human : pal.placeholder.agent;
                 ctx.fillRect(x - 6, y - 6, 12, 12);
               }
@@ -3935,6 +3962,7 @@ export function WorldMap() {
             errorText: a.errorText ?? null,
             fading: a.fading,
             toolCalls: a.toolCalls,
+            addressing: a.addressing && (a.addressingUntil ?? 0) > nowMs ? a.addressing : null,
           }));
           director.observe(tvActors, nowMs);
           const shot = director.step({

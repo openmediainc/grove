@@ -26,6 +26,14 @@ import {
   type ReplayMarker,
 } from "@grove/protocol";
 import { TOOL_RESULT_VISIBLE_SECONDS, type ToolCallView } from "@grove/protocol";
+import {
+  FACING_HINT_MS,
+  deriveFacingHints,
+  facingEdges,
+  facingToWire,
+  type FacingHintWire,
+  type PublicLine,
+} from "@grove/protocol";
 import { api } from "@/lib/api";
 import { spanFromWire } from "@/lib/motion/director";
 
@@ -54,7 +62,37 @@ export type ReplayWireBody = Record<string, unknown> & {
   pulsed_at: string | null;
   stalled: boolean;
   tool_calls: ToolCallView[];
+  /** #60: whom this body just addressed in public, and until when (ms). */
+  addressing?: string | null;
+  addressing_until?: number | null;
 };
+
+/** Public lines from a window, sorted by time, with the instants they change a hint. */
+type FacingIndex = { lines: PublicLine[]; ats: number[]; edges: number[] };
+
+/**
+ * The lines a facing hint may come from: speech entries the chronicle marks as
+ * carried by the public feed (detail.public, the spectator's delivery row) with
+ * a readable body. Exactly the live minimap's input (world.ts publicLines), so
+ * replay turns the same speakers toward the same people at the same instants.
+ */
+export function indexFacing(entries: readonly ReplayEvent[]): FacingIndex {
+  const lines: PublicLine[] = [];
+  for (const e of entries) {
+    if (e.type !== "speech" || !e.actor || e.detail.public !== true || e.body === null) continue;
+    const at = Date.parse(e.createdAt);
+    if (!Number.isFinite(at)) continue;
+    lines.push({ speechId: e.id, senderId: e.actor.id, roomId: e.roomId, body: e.body, at, public: true });
+  }
+  lines.sort((p, q) => p.at - q.at || (p.speechId < q.speechId ? -1 : 1));
+  return { lines, ats: lines.map((l) => l.at), edges: facingEdges(lines) };
+}
+
+function linesAround(index: FacingIndex, t: number): PublicLine[] {
+  const lo = countAtOrBefore(index.ats, t - FACING_HINT_MS);
+  const hi = countAtOrBefore(index.ats, t);
+  return index.lines.slice(lo, hi);
+}
 
 type HistoricalSpan = ToolCallView & { actorId: string };
 
@@ -167,6 +205,7 @@ interface ProvisionalWindow {
   until: number;
   timeline: ReplayTimeline;
   spans: HistoricalSpanIndex;
+  facing: FacingIndex;
 }
 
 export type ReplayFetcher = <T>(path: string) => Promise<T>;
@@ -229,6 +268,8 @@ export interface ReplaySnapshot {
   org_render_mode?: string;
   orgs: unknown[];
   paperclip: { ok: boolean; agents: []; issues: [] };
+  /** #60: the public facing hints at the playhead, shaped like the live minimap's. */
+  facing: FacingHintWire[];
 }
 
 /** "09:14" in UTC — the world's clock — with the date when it is not today's. */
@@ -305,6 +346,7 @@ export class ReplayController {
   private keyframe: ReplayKeyframeBodyInput[] = [];
   private spansByActor = new Map<string, HistoricalSpan[]>();
   private spanEdges: number[] = [];
+  private facing: FacingIndex = { lines: [], ats: [], edges: [] };
   /** Bumped whenever the loaded window changes, so motion knows to start over. */
   epoch = 0;
   private listeners = new Set<() => void>();
@@ -351,8 +393,15 @@ export class ReplayController {
   }
 
   /** Test hook: install a window without the network. */
-  loadWindow(input: { since: number; until: number; timeline: ReplayTimeline; spans?: ReadonlyArray<Record<string, unknown>> }): void {
+  loadWindow(input: {
+    since: number;
+    until: number;
+    timeline: ReplayTimeline;
+    spans?: ReadonlyArray<Record<string, unknown>>;
+    entries?: readonly ReplayEvent[];
+  }): void {
     this.timeline = input.timeline;
+    this.facing = indexFacing(input.entries ?? []);
     this.loadSpans(input.spans ?? []);
     this.epoch++;
     this.emit({ active: true, loading: false, since: input.since, until: input.until, playhead: input.since, markers: input.timeline.markers });
@@ -429,6 +478,7 @@ export class ReplayController {
         if (page === MAX_PAGES - 1) this.emit({ truncated: true });
       }
       this.entries = [...seen.values()];
+      this.facing = indexFacing(this.entries);
       this.timeline = ReplayTimeline.build({
         since: new Date(lo).toISOString(),
         until: new Date(until).toISOString(),
@@ -501,7 +551,13 @@ export class ReplayController {
         keyframe: (res.keyframe?.bodies ?? []).map(normaliseKeyframeBody),
         entries,
       });
-      this.provisional = { since, until: end, timeline, spans: indexSpans(res.tool_calls ?? res.toolCalls ?? []) };
+      this.provisional = {
+        since,
+        until: end,
+        timeline,
+        spans: indexSpans(res.tool_calls ?? res.toolCalls ?? []),
+        facing: indexFacing(entries),
+      };
       this.serverSeeks++;
       this.epoch++;
       this.emit({ provisional: true });
@@ -520,10 +576,13 @@ export class ReplayController {
   }
 
   /** What draws `t`: the full window once loaded, else a server seek that covers it. */
-  private sourceAt(t: number): { timeline: ReplayTimeline; byActor: Map<string, HistoricalSpan[]>; edges: number[] } | null {
-    if (this.timeline) return { timeline: this.timeline, byActor: this.spansByActor, edges: this.spanEdges };
+  private sourceAt(
+    t: number,
+  ): { timeline: ReplayTimeline; byActor: Map<string, HistoricalSpan[]>; edges: number[]; facing: FacingIndex } | null {
+    if (this.timeline) return { timeline: this.timeline, byActor: this.spansByActor, edges: this.spanEdges, facing: this.facing };
     const p = this.provisional;
-    if (p && t >= p.since - 1 && t <= p.until) return { timeline: p.timeline, byActor: p.spans.byActor, edges: p.spans.edges };
+    if (p && t >= p.since - 1 && t <= p.until)
+      return { timeline: p.timeline, byActor: p.spans.byActor, edges: p.spans.edges, facing: p.facing };
     return null;
   }
 
@@ -581,7 +640,8 @@ export class ReplayController {
   signalKey(t: number): string {
     const src = this.sourceAt(t);
     if (!src) return "empty";
-    return `${src.timeline.stepIndexAt(t)}|${countAtOrBefore(src.edges, t)}`;
+    // #60: a facing hint starts and lapses on its own edges, so those re-sync too.
+    return `${src.timeline.stepIndexAt(t)}|${countAtOrBefore(src.edges, t)}|${countAtOrBefore(src.facing.edges, t)}`;
   }
 
   /** The first instant after `t` at which `signalKey` changes, or null. */
@@ -590,7 +650,11 @@ export class ReplayController {
     const step = src?.timeline.nextStepAfter(t) ?? null;
     const edges = src?.edges ?? [];
     const i = countAtOrBefore(edges, t);
-    const edge = i < edges.length ? edges[i]! : null;
+    const fEdges = src?.facing.edges ?? [];
+    const j = countAtOrBefore(fEdges, t);
+    const spanEdge = i < edges.length ? edges[i]! : null;
+    const facingEdge = j < fEdges.length ? fEdges[j]! : null;
+    const edge = spanEdge === null ? facingEdge : facingEdge === null ? spanEdge : Math.min(spanEdge, facingEdge);
     if (step === null) return edge;
     if (edge === null) return step;
     return Math.min(step, edge);
@@ -612,6 +676,7 @@ export class ReplayController {
     const src = this.sourceAt(t);
     const frame = src ? src.timeline.frameAt(t, { lineMs }) : [];
     const slugOf = new Map((this.live?.rooms ?? []).map((r) => [r.id, r.slug]));
+    const hints = this.facingAt(t, frame);
     return frame.map((b) => {
       const roomSlug =
         (b.roomId && slugOf.get(b.roomId)) ||
@@ -643,8 +708,20 @@ export class ReplayController {
         source: "grove",
         stance: null,
         tool_calls,
+        addressing: hints.get(b.id)?.to ?? null,
+        addressing_until: hints.get(b.id)?.until ?? null,
       };
     });
+  }
+
+  /** #60: the facing hints at `t`, derived from public lines exactly as the live server does. */
+  private facingAt(t: number, frame: ReadonlyArray<{ id: string; slug: string | null; roomId: string | null }>) {
+    const src = this.sourceAt(t);
+    const out = new Map<string, { to: string; until: number }>();
+    if (!src || !src.facing.lines.length) return out;
+    const bodies = frame.map((b) => ({ id: b.id, slug: b.slug ?? b.id, roomId: b.roomId }));
+    for (const h of deriveFacingHints(linesAround(src.facing, t), bodies, t)) out.set(h.from, { to: h.to, until: h.until });
+    return out;
   }
 
   /** The map's payload at the playhead, shaped like GET /world/minimap. */
@@ -671,6 +748,11 @@ export class ReplayController {
       org_render_mode: l?.org_render_mode ?? l?.orgRenderMode,
       orgs: l?.orgs ?? [],
       paperclip: { ok: false, agents: [], issues: [] },
+      facing: bodies.flatMap((b) =>
+        b.addressing && b.addressing_until
+          ? [facingToWire({ from: b.id, to: b.addressing, speechId: "", at: 0, until: b.addressing_until })]
+          : [],
+      ),
     };
   }
 

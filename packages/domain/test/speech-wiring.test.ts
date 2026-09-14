@@ -442,4 +442,94 @@ describe.skipIf(!hasDb)("a refusal names who refused, and public speech is writt
     expect(await chronicleEntry({ humanId: bystander.id, isOperator: false }, instruction.id, owner.id)).toBeNull();
     expect(await chronicleEntry({ humanId: owner.id, isOperator: false }, instruction.id, owner.id)).toBeNull();
   });
+
+  // -------------------------------------------------------------------------
+  // #60: facing hints come only from lines the public feed carried.
+  // -------------------------------------------------------------------------
+
+  it("turns a Plaza speaker toward whom it @mentioned, from the public line alone (#60)", async () => {
+    const owner = await newHuman("facing-owner");
+    const bystander = await newHuman("facing-bystander");
+    const speaker = await newAgent(owner, `facer${tag()}`);
+    const listener = await newAgent(owner, `faced${tag()}`);
+    await enter(speaker, "plaza");
+    await enter(listener, "plaza");
+
+    const ack = await say(speaker, `@${listener.slug} is the build green?`, { kind: "agent", agent: speaker });
+    const lines = await grove.world.publicFacingLines();
+    expect(lines.map((l) => l.speechId)).toContain(ack.id);
+
+    const map = await grove.world.minimap();
+    const hint = map.facing.find((h) => h.from === speaker.id);
+    expect(hint).toMatchObject({ from: speaker.id, to: listener.id });
+    const ttl = Date.parse(hint!.until) - Date.now();
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(20_000);
+    // Ids and a time only: the words stay in recentSpeech where they already were.
+    expect(Object.keys(hint!).sort()).toEqual(["from", "to", "until"]);
+
+    // Replay rebuilds it from the chronicle: the line is marked as publicly carried.
+    const entry = await chronicleEntry({ humanId: bystander.id, isOperator: false }, ack.id, speaker.id);
+    expect(entry!.detail).toMatchObject({ channel: "room_say", public: true });
+  });
+
+  it("never makes a hint from a whisper, an unbroadcast room, a private space or a lounge (#60)", async () => {
+    const owner = await newHuman("facing-quiet");
+    const speaker = await newAgent(owner, `fquiet${tag()}`);
+    const listener = await newAgent(owner, `fquietear${tag()}`);
+    const mention = `@${listener.slug}`;
+
+    // A whisper in the Plaza, both standing there.
+    await enter(speaker, "plaza");
+    await enter(listener, "plaza");
+    await clearActorLimiters(redis, speaker.id);
+    const whisper = await grove.speech.say({ kind: "agent", agent: speaker }, {
+      channel: "whisper",
+      targetId: listener.id,
+      body: `${mention} between us ${tag()}`,
+      idempotencyKey: `k-${tag()}`,
+    });
+
+    // A room the public feed does not stream.
+    await enter(speaker, "library");
+    await enter(listener, "library");
+    const library = await say(speaker, `${mention} quiet in here`, { kind: "agent", agent: speaker });
+
+    // A private space: even a forged spectator row does not get past the place gate.
+    const space = await grove.campus.createWorld(owner, { name: `Facing ${tag()}`, slug: `facing-${tag()}`, preset: "private" });
+    fixtures.trackWorld(space.id);
+    await enter(speaker, `${space.id}:plaza`, space.id);
+    await enter(listener, `${space.id}:plaza`, space.id);
+    const inside = await say(speaker, `${mention} behind the door`, { kind: "agent", agent: speaker });
+    await pg.query(
+      `INSERT INTO speech_deliveries (speech_id, recipient_id, status) VALUES ($1, $2, 'delivered') ON CONFLICT DO NOTHING`,
+      [inside.id, SPECTATOR_RECIPIENT.id],
+    );
+
+    // An owner's lounge line, forged the same way.
+    const lounge = await grove.presence.ensureLounge(owner);
+    const loungeId = `fct_${tag()}`;
+    await pg.query(
+      `INSERT INTO speech (id, channel, sender_id, sender_kind, room_id, body, grapheme_count)
+       VALUES ($1, 'room_say', $2, 'human', $3, $4, 10)`,
+      [loungeId, owner.id, lounge.id, `${mention} in the lounge`],
+    );
+    await pg.query(`INSERT INTO speech_deliveries (speech_id, recipient_id, status) VALUES ($1, $2, 'delivered')`, [
+      loungeId,
+      SPECTATOR_RECIPIENT.id,
+    ]);
+
+    try {
+      const ids = new Set([
+        ...(await grove.world.publicFacingLines()).map((l) => l.speechId),
+        ...(await grove.world.publicFacingLines(space.id)).map((l) => l.speechId),
+      ]);
+      for (const id of [whisper.id, library.id, inside.id, loungeId]) expect(ids.has(id)).toBe(false);
+      expect((await grove.world.minimap()).facing.some((h) => h.from === speaker.id)).toBe(false);
+      expect((await grove.world.minimap(space.id)).facing).toEqual([]);
+    } finally {
+      await pg.query(`DELETE FROM speech_deliveries WHERE speech_id = $1`, [loungeId]);
+      await pg.query(`DELETE FROM speech WHERE id = $1`, [loungeId]);
+    }
+  });
 });

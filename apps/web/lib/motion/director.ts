@@ -14,6 +14,8 @@ import {
   assignWorkSlots,
   doorTile,
   errandFor,
+  facingScreenDir,
+  facingStepTile,
   findPath,
   positionOf,
   restingAt,
@@ -46,6 +48,13 @@ export interface MotionActor {
   source: "grove" | "paperclip";
   pulsedAt?: string | null;
   toolCalls?: ToolCallView[];
+  /**
+   * A body this one just addressed in public (#60, protocol facing.ts): a
+   * server-derived hint, never a whisper. Ignored once `addressingUntil` passes.
+   */
+  addressing?: string | null;
+  /** When the hint lapses (ms). */
+  addressingUntil?: number | null;
 }
 
 /** How long a finish mark plays on the body. The result itself stays on the hover card. */
@@ -66,6 +75,11 @@ export interface BodyFrame {
   span: ToolCallView | null;
   /** A finish that is still playing, if any. */
   mark: OutcomeMark | null;
+  /**
+   * Which way the body turns to face someone it just addressed in public:
+   * -1 screen-left, 1 screen-right, 0 no turn. Reduced motion keeps the turn.
+   */
+  face: -1 | 0 | 1;
 }
 
 type Signals = {
@@ -73,6 +87,9 @@ type Signals = {
   since: number | null;
   open: ToolCallView[];
   destination: Tile | null;
+  /** Approach only: when the hint lapses, and the addressee's id. */
+  until: number | null;
+  target: string | null;
 };
 
 export class MotionDirector {
@@ -101,10 +118,14 @@ export class MotionDirector {
     const restingSeats = new Set<string>();
     for (const a of actors) {
       const open = (a.toolCalls ?? []).filter((s) => s.finishedAt === null && !s.stalled);
+      const addressing =
+        a.source !== "paperclip" && a.addressing && a.addressing !== a.id && (a.addressingUntil ?? -Infinity) > now
+          ? a.addressing
+          : null;
       const errand: Errand =
         a.source === "paperclip"
           ? { kind: "rest" }
-          : errandFor({ verb: a.verb, stalled: a.stalled, connection: a.connection, openToolCalls: open.length });
+          : errandFor({ verb: a.verb, stalled: a.stalled, connection: a.connection, openToolCalls: open.length, addressing });
       let since: number | null = null;
       if (open.length) since = Math.min(...open.map((s) => Date.parse(s.startedAt)).filter(Number.isFinite));
       else if (a.pulsedAt) since = Date.parse(a.pulsedAt);
@@ -113,7 +134,14 @@ export class MotionDirector {
       const prev = this.began.get(a.id);
       if (prev && prev.key === key) since = prev.since ?? since;
       else this.began.set(a.id, { key, since });
-      next.set(a.id, { errand, since, open, destination: null });
+      next.set(a.id, {
+        errand,
+        since,
+        open,
+        destination: null,
+        until: errand.kind === "approach" ? (a.addressingUntil ?? null) : null,
+        target: errand.kind === "approach" ? errand.targetId : null,
+      });
       if (errand.kind === "work") requests.push({ id: a.id, site: errand.site, since: since ?? now });
       else {
         const home = homes.get(a.id);
@@ -139,6 +167,34 @@ export class MotionDirector {
     }
     const slots = assignWorkSlots(requests, this.grid, restingSeats);
     for (const [id, sig] of next) sig.destination = slots.get(id) ?? null;
+    // #60: a speaker steps at most FACING_STEP_TILES toward whom it addressed,
+    // onto a tile no seat, work slot or other speaker's step holds. Speakers are
+    // placed in id order so the layout is a function of the inputs alone.
+    const occupied = new Set<string>();
+    for (const [id, sig] of next) {
+      const t = sig.destination ?? homes.get(id);
+      if (t) occupied.add(`${t.x},${t.y}`);
+    }
+    for (const id of [...next.keys()].sort()) {
+      const sig = next.get(id)!;
+      if (sig.errand.kind !== "approach") continue;
+      const home = homes.get(id);
+      const targetSig = next.get(sig.errand.targetId);
+      const target = targetSig?.destination ?? homes.get(sig.errand.targetId);
+      if (!home || !target || !targetSig) {
+        // Addressee not on the map: nothing to walk toward.
+        sig.errand = { kind: "rest" };
+        sig.until = null;
+        sig.target = null;
+        continue;
+      }
+      const mine = `${home.x},${home.y}`;
+      const others = new Set(occupied);
+      others.delete(mine);
+      const step = facingStepTile(home, target, this.grid, others);
+      if (step.x !== home.x || step.y !== home.y) occupied.add(`${step.x},${step.y}`);
+      sig.destination = step;
+    }
     this.signals = next;
     this.firstSync = false;
     // Forget bodies that left, and finishes old enough that no poll will carry them again.
@@ -150,12 +206,17 @@ export class MotionDirector {
 
   /** One body, this frame. Cheap: the path search only runs when a trip starts. */
   frame(id: string, home: Tile, now: number, reducedMotion: boolean): BodyFrame {
-    const sig = this.signals.get(id) ?? { errand: { kind: "rest" } as Errand, since: null, open: [], destination: null };
+    const known = this.signals.get(id) ?? { errand: { kind: "rest" } as Errand, since: null, open: [], destination: null, until: null, target: null };
+    // A hint lapses on the clock it was given, not on the next poll: then the
+    // body walks back home through the ordinary commit.
+    const lapsed = known.errand.kind === "approach" && (known.until === null || now >= known.until);
+    const sig = lapsed ? { ...known, errand: { kind: "rest" } as Errand, destination: null, target: null } : known;
     let m = this.motion.get(id);
     if (!m) {
       // First sighting stands where the signals say, rather than walking in from
       // the home seat: a body already mid-tool-call on page load is AT the site.
-      const start = sig.errand.kind === "rest" || sig.errand.kind === "sleep" ? home : (sig.destination ?? home);
+      const start =
+        sig.errand.kind === "rest" || sig.errand.kind === "sleep" || sig.errand.kind === "approach" ? home : (sig.destination ?? home);
       m = { ...restingAt(start, now), errand: sig.errand, state: sig.errand.kind === "work" ? "working" : "resting" };
     }
     const grid = this.grid;
@@ -167,6 +228,8 @@ export class MotionDirector {
       destinationFor: (e) => {
         if (e.kind === "work") return sig.destination ?? doorTile(e.site);
         if (e.kind === "blocked") return sig.destination ?? doorTile("board");
+        // Reduced motion: orient only, never a walk (MOTION.md §7).
+        if (e.kind === "approach") return reducedMotion ? home : (sig.destination ?? home);
         return home;
       },
       path: (from, to) => findPath(from, to, grid),
@@ -179,7 +242,13 @@ export class MotionDirector {
       mark = null;
     }
     const span = m.state === "working" || m.state === "dispatched" ? (sig.open[0] ?? null) : null;
-    return { x: at.x, y: at.y, state: m.state, span, mark };
+    let face: -1 | 0 | 1 = 0;
+    if (sig.target && m.errand.kind === "approach") {
+      const other = this.motion.get(sig.target);
+      const there = other ? positionOf(other, now) : this.signals.get(sig.target)?.destination;
+      if (there) face = facingScreenDir(at, there);
+    }
+    return { x: at.x, y: at.y, state: m.state, span, mark, face };
   }
 }
 

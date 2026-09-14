@@ -1,11 +1,12 @@
+import { deriveFacingHints, facingToWire, FACING_HINT_MS, type FacingHintWire, type PublicLine } from "@grove/protocol";
 import { EMOTE_ENUM, normaliseMarks, publishedDecor, publishedDefaultTheme, publicEstates, readStoredBranding, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
 import type { SupporterService } from "./supporters.js";
 import type { GroveStore } from "../store.js";
-import { visibleOccupancySql } from "../visibility.js";
+import { roomActivityVisibleSql, visibleOccupancySql } from "../visibility.js";
 import { GroveError } from "../errors.js";
 import { newId } from "../ids.js";
 import { isStalledPulse, pulseAgeSeconds, STALL_AFTER_SECONDS, type PresenceService } from "./presence.js";
-import { spectatorMayHear } from "./speech.js";
+import { SPECTATOR_RECIPIENT, spectatorMayHear } from "./speech.js";
 import type { IdentityService } from "./identity.js";
 import type { FlagService } from "./flags.js";
 import type { MailboxService } from "./mailbox.js";
@@ -429,6 +430,12 @@ export class WorldService {
        */
       resting: await this.restingAtPlots(),
       recentSpeech: await this.recentPublicSpeech(3),
+      /**
+       * #60: who just addressed whom IN PUBLIC, {from, to, until}, for the map to
+       * turn a speaker toward. Only from lines the public feed carried; see
+       * facingHints() and @grove/protocol facing.ts.
+       */
+      facing: await this.facingHints(worldId, bodies, now),
       claimedAgents: rows[0]?.n ?? 0,
       stallAfterSeconds: STALL_AFTER_SECONDS,
       /** How this world paints its orgs; see campus.orgRenderFor(). */
@@ -478,6 +485,53 @@ export class WorldService {
       displayName: String(r.display_name),
       plotIndex: Number(r.plot_index),
     }));
+  }
+
+  /**
+   * The public lines a facing hint may come from (#60): `room_say` in the last
+   * FACING_HINT_MS, in a room of this world whose activity a signed-out viewer
+   * may see (the shared place predicate, #50: no private space, private room or
+   * owner's lounge), that the synthetic spectator was delivered — the row
+   * speech.ts writes exactly when the public feed broadcast the line. A whisper,
+   * an owner channel or a message has no such row, so it can never make a hint.
+   * The replay reads the same rows through the chronicle (detail.public).
+   */
+  async publicFacingLines(worldId: string = WORLD_ID): Promise<PublicLine[]> {
+    const { rows } = await this.store.pg.query(
+      `SELECT s.id, s.sender_id, s.room_id, s.body, s.created_at
+         FROM speech s
+         JOIN rooms r ON r.id = s.room_id
+         LEFT JOIN worlds w ON w.id = r.world_id
+        WHERE s.channel = 'room_say'
+          AND s.created_at > now() - make_interval(secs => $2::int / 1000.0)
+          AND COALESCE(r.world_id, $3::text) = $1::text
+          AND ${roomActivityVisibleSql("r", "w", "NULL")}
+          AND EXISTS (SELECT 1 FROM speech_deliveries d
+                       WHERE d.speech_id = s.id AND d.recipient_id = $4 AND d.status = 'delivered')
+        ORDER BY s.created_at, s.id
+        LIMIT 200`,
+      [worldId, FACING_HINT_MS, WORLD_ID, SPECTATOR_RECIPIENT.id],
+    );
+    return rows.map((r) => ({
+      speechId: String(r.id),
+      senderId: String(r.sender_id),
+      roomId: String(r.room_id),
+      body: String(r.body),
+      at: new Date(String(r.created_at)).getTime(),
+      public: true,
+    }));
+  }
+
+  /** #60: the facing hints for the bodies on this minimap, on the minimap's clock. */
+  async facingHints(
+    worldId: string,
+    bodies: ReadonlyArray<{ id: string; slug: string; roomId: string }>,
+    now: number,
+  ): Promise<FacingHintWire[]> {
+    if (bodies.length < 2) return [];
+    const lines = await this.publicFacingLines(worldId);
+    if (!lines.length) return [];
+    return deriveFacingHints(lines, bodies.map((b) => ({ id: b.id, slug: b.slug, roomId: b.roomId })), now).map(facingToWire);
   }
 
   /** How this world paints bound orgs. Unknown values read as 'shared'. */

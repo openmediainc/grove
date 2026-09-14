@@ -96,6 +96,22 @@ describe("Grove TV director", () => {
     expect(shot.caption).toBe("ivy and fern are talking in Plaza: fern: “after the tests pass”");
   });
 
+  it("names a public two-shot when the speaker is facing whom it addressed (#60)", () => {
+    const d = new TvDirector();
+    const actors = [body("ivy", { addressing: "fern" }), body("fern", { kind: "human" })];
+    run(d, actors, T0);
+    d.heard("ivy", "@fern shall we ship it?", T0 + 1_000);
+    const shot = run(d, actors, T0 + TV_MIN_HOLD_MS + 5_000);
+    expect(shot).toMatchObject({ kind: "conversation", actorId: "ivy", region: "plaza" });
+    expect(shot.caption).toBe("ivy to fern, in Plaza: “@fern shall we ship it?”");
+    // An addressee in another room is not a two-shot.
+    const apart = new TvDirector();
+    const split = [body("ivy", { addressing: "fern" }), body("fern", { region: "garden" })];
+    run(apart, split, T0);
+    apart.heard("ivy", "@fern hello?", T0 + 1_000);
+    expect(run(apart, split, T0 + TV_MIN_HOLD_MS + 5_000).caption).toBe("ivy, in Plaza: “@fern hello?”");
+  });
+
   it("puts a Stage event that just started on air", () => {
     const d = new TvDirector();
     const stage = { title: "Demo hour", startsAt: new Date(T0 - 30_000).toISOString(), region: "stage" };
