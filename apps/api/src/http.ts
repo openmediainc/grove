@@ -1,4 +1,4 @@
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { GroveError, QuotaService } from "@grove/domain";
 import { capabilityWire, HTTP_STATUS_FOR_CODE, toSnake } from "@grove/protocol";
 
@@ -436,9 +436,36 @@ export function sendError(reply: FastifyReply, err: unknown) {
     }
     return reply.status(status).send(body);
   }
+  // Fastify's own request errors (a malformed or oversized body, an unsupported
+  // media type) carry a 4xx statusCode. They are the caller's mistake, so they
+  // answer with that status rather than a 500 that reads as "our fault".
+  const fastifyStatus = (err as { statusCode?: unknown } | null)?.statusCode;
+  if (err instanceof Error && typeof fastifyStatus === "number" && fastifyStatus >= 400 && fastifyStatus < 500) {
+    return reply.status(fastifyStatus).send({ ok: false, error: { code: "INVALID", message: err.message } });
+  }
   const message = err instanceof Error ? err.message : "internal error";
   console.error(err);
   return reply.status(500).send({ ok: false, error: { code: "INTERNAL", message } });
+}
+
+/**
+ * JSON bodies, where an EMPTY body is no body. Fastify refuses
+ * `content-type: application/json` with nothing after it, and the web client
+ * sent that header on every call, so a bodiless DELETE or POST (delete a board
+ * post, leave a space) failed before reaching its route. Non-empty bodies go
+ * through Fastify's default parser, prototype-poisoning guards included.
+ */
+export function installJsonBodyParser(app: FastifyInstance): void {
+  const parse = app.getDefaultJsonParser("error", "error");
+  app.removeContentTypeParser("application/json");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
+    const text = typeof body === "string" ? body : body.toString("utf8");
+    if (text.trim() === "") {
+      done(null, undefined);
+      return;
+    }
+    parse(req, text, done);
+  });
 }
 
 export function sendOk(reply: FastifyReply, data: Record<string, unknown>, status = 200) {

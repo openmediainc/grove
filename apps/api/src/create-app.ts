@@ -31,7 +31,7 @@ import { registerTrials } from "./trials.js";
 import { registerBoard } from "./board.js";
 import { registerSequences } from "./sequences.js";
 import { registerTables } from "./tables.js";
-import { sendError } from "./http.js";
+import { installJsonBodyParser, sendError } from "./http.js";
 
 export async function buildApp(grove: GroveApp) {
   const app = Fastify({
@@ -62,6 +62,7 @@ export async function buildApp(grove: GroveApp) {
 
   app.decorate("grove", grove);
 
+  installJsonBodyParser(app);
   app.setErrorHandler((err, _req, reply) => sendError(reply, err));
 
   await registerRoutes(app, grove);

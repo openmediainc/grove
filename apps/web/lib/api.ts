@@ -7,8 +7,10 @@ export const WS_ORIGIN =
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(gp(path), {
     ...init,
+    // Only a request with a body says it is JSON: the API used to refuse a
+    // bodiless DELETE/POST that still carried the header (board Delete 500'd).
     headers: {
-      "content-type": "application/json",
+      ...(init?.body != null ? { "content-type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },
     credentials: "include",
