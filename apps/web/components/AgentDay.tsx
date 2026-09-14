@@ -17,6 +17,7 @@ import {
   type ChronicleEntry,
   type ChroniclePage,
 } from "@/lib/agent-account";
+import { CARD_CLASS, EMPTY_CLASS, LINK_CLASS, NUM_CLASS, SECTION_TITLE_CLASS } from "@/lib/brand-ui";
 
 /**
  * The owner's day, above the agent's Activity list: is it alive and stuck, what
@@ -88,11 +89,11 @@ export function AgentDay({
 
   return (
     <div className="mt-6 space-y-6">
-      <section className="rounded-2xl border border-white/10 bg-dusk-800/60 p-4 sm:p-5">
-        <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/50">Right now</h3>
+      <section className={`${CARD_CLASS} sm:p-5`}>
+        <h3 className="gh-label text-muted">Right now</h3>
         <p
           className={`mt-2 break-words text-base sm:text-lg ${
-            body?.stalled || (body?.verb && TROUBLE.has(body.verb)) ? "text-red-200" : "text-white/85"
+            body?.stalled || (body?.verb && TROUBLE.has(body.verb)) ? "text-danger-ink" : "text-ink"
           }`}
         >
           {liveSentence(name, body, account)}
@@ -102,7 +103,7 @@ export function AgentDay({
             href={body.url}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-2 block break-all text-sm text-lantern-300 underline decoration-lantern-400/30 underline-offset-4"
+            className={`mt-2 block break-all text-sm ${LINK_CLASS}`}
           >
             {body.url}
           </a>
@@ -110,18 +111,18 @@ export function AgentDay({
       </section>
 
       <section>
-        <h3 className="font-display text-2xl text-lantern-300/90">{windowLabel}</h3>
+        <h3 className={SECTION_TITLE_CLASS}>{windowLabel}</h3>
         <div className="mt-2 space-y-2">
           {meta
             ? accountSentences(account, windowLabel).map((line) => (
-                <p key={line} className="text-white/75">
+                <p key={line} className="text-ink">
                   {line}
                 </p>
               ))
-            : <p className="text-sm text-white/55">Adding up the day…</p>}
+            : <p className="text-sm text-muted">Adding up the day…</p>}
         </div>
         {truncated ? (
-          <p className="mt-2 text-xs text-white/50">
+          <p className="mt-2 text-xs text-muted">
             This window is busier than one read can hold; the totals cover the whole window, the
             breakdown the most recent {entries.length} entries.
           </p>
@@ -130,8 +131,8 @@ export function AgentDay({
 
       {account.byVerb.length ? (
         <section>
-          <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/50">Where the time went</h3>
-          <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full border border-white/10">
+          <h3 className="gh-label text-muted">Where the time went</h3>
+          <div className="mt-3 flex h-3 w-full overflow-hidden rounded-gh-pill border border-line">
             {account.byVerb.map((v) => (
               <span
                 key={v.verb}
@@ -147,11 +148,11 @@ export function AgentDay({
             {account.byVerb.map((v) => (
               <li key={v.verb} className="flex flex-wrap items-baseline gap-x-3 text-sm">
                 <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: VERB_COLOUR[v.verb] ?? "#4b5563" }} />
-                <span className={`w-28 shrink-0 ${TROUBLE.has(v.verb) ? "text-red-300" : "text-white/70"}`}>
+                <span className={`w-28 shrink-0 ${TROUBLE.has(v.verb) ? "text-danger-ink" : "text-muted"}`}>
                   {VERB_NOUN[v.verb] ?? v.verb}
                 </span>
-                <span className="w-16 shrink-0 tabular-nums text-white/85">{humanDuration(v.seconds)}</span>
-                <span className="text-white/50">
+                <span className={`w-16 shrink-0 text-ink ${NUM_CLASS}`}>{humanDuration(v.seconds)}</span>
+                <span className={`text-muted ${NUM_CLASS}`}>
                   {Math.round((v.seconds / Math.max(1, account.accountedSeconds)) * 100)}% · {v.stretches}{" "}
                   {v.stretches === 1 ? "stretch" : "stretches"}
                 </span>
@@ -162,38 +163,38 @@ export function AgentDay({
       ) : null}
 
       <section>
-        <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/50">Needs you</h3>
+        <h3 className="gh-label text-muted">Needs you</h3>
         {account.trouble.length || account.alarming.length ? (
           <ul className="mt-3 space-y-2">
             {account.trouble.map((p) => (
-              <li key={`t-${p.id}`} className="rounded-xl border border-red-400/25 bg-red-400/5 p-3">
-                <p className="text-sm text-red-200">
+              <li key={`t-${p.id}`} className="rounded-gh-md border border-danger-ink/60 bg-danger-ink/5 p-3">
+                <p className="text-sm text-danger-ink">
                   {p.verb === "error"
                     ? `Faulted for ${humanDuration(p.seconds)}`
                     : p.verb === "blocked"
                       ? `Blocked for ${humanDuration(p.seconds)}`
                       : `Claimed ${VERB_NOUN[p.verb] ?? p.verb} for ${humanDuration(p.seconds)}, then went silent`}
-                  <span className="ml-2 font-mono text-[11px] text-white/50">
+                  <span className={`ml-2 text-[11px] text-muted ${NUM_CLASS}`}>
                     {clock(p.startedAt)}–{clock(p.endedAt)}
                   </span>
                 </p>
-                {p.detail ? <p className="mt-1 text-sm text-white/70">{p.detail}</p> : null}
+                {p.detail ? <p className="mt-1 text-sm text-muted">{p.detail}</p> : null}
                 {p.errorText ? (
-                  <p className="mt-1 break-words border-l-2 border-red-400/30 pl-3 font-mono text-xs text-red-200/80">{p.errorText}</p>
+                  <p className="mt-1 break-words border-l-2 border-danger-ink/60 pl-3 font-brand-mono text-xs text-danger-ink">{p.errorText}</p>
                 ) : null}
               </li>
             ))}
             {account.alarming.map((e) => (
-              <li key={`a-${e.id}`} className="rounded-xl border border-red-400/25 bg-red-400/5 p-3">
-                <p className="text-sm text-red-200">
+              <li key={`a-${e.id}`} className="rounded-gh-md border border-danger-ink/60 bg-danger-ink/5 p-3">
+                <p className="text-sm text-danger-ink">
                   {e.summary}
-                  <span className="ml-2 font-mono text-[11px] text-white/50">{clock(e.created_at)}</span>
+                  <span className={`ml-2 text-[11px] text-muted ${NUM_CLASS}`}>{clock(e.created_at)}</span>
                 </p>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="mt-3 rounded-xl border border-white/10 bg-dusk-800/40 p-3 text-sm text-white/50">
+          <p className={`mt-3 ${EMPTY_CLASS} !text-left`}>
             Nothing. No faults, no blocks, no silences, nothing a moderator touched and no key changed hands.
           </p>
         )}
@@ -201,11 +202,11 @@ export function AgentDay({
 
       {account.instructions.length ? (
         <section>
-          <h3 className="text-[11px] uppercase tracking-[0.18em] text-white/50">What you told it</h3>
+          <h3 className="gh-label text-muted">What you told it</h3>
           <ul className="mt-3 space-y-1">
             {account.instructions.map((e) => (
-              <li key={e.id} className="flex gap-3 text-sm text-white/70">
-                <span className="w-12 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/50">{clock(e.created_at)}</span>
+              <li key={e.id} className="flex gap-3 text-sm text-muted">
+                <span className={`w-12 shrink-0 text-right text-[11px] text-muted ${NUM_CLASS}`}>{clock(e.created_at)}</span>
                 <span className="min-w-0 break-words">{e.summary}</span>
               </li>
             ))}
@@ -213,7 +214,7 @@ export function AgentDay({
         </section>
       ) : null}
 
-      <h3 className="pt-2 text-[11px] uppercase tracking-[0.18em] text-white/50">Everything, newest first</h3>
+      <h3 className="pt-2 gh-label text-muted">Everything, newest first</h3>
     </div>
   );
 }

@@ -32,6 +32,7 @@ import {
   type CapabilityNode,
   type Lane,
 } from "@grove/ui";
+import { NUM_CLASS, SECTION_TITLE_CLASS } from "@/lib/brand-ui";
 
 /**
  * The permission tech tree: one agent's four capabilities as a structure you can
@@ -79,16 +80,16 @@ const PRESET_LABEL: Record<SpacePolicyPreset, string> = {
 
 const LANE_STYLE: Record<Lane, { chip: string; live: string; rule: string; glow: string }> = {
   humans: {
-    chip: "text-lantern-300",
-    live: "border-lantern-400/60 bg-lantern-400/10",
-    rule: "bg-lantern-400/50",
-    glow: "shadow-[0_0_20px_-6px_rgba(232,184,109,0.6)]",
+    chip: "text-human",
+    live: "border-human bg-surface-raised",
+    rule: "bg-human",
+    glow: "shadow-gh-1",
   },
   agents: {
-    chip: "text-violet-300",
-    live: "border-violet-400/60 bg-violet-400/10",
-    rule: "bg-violet-400/50",
-    glow: "shadow-[0_0_20px_-6px_rgba(167,139,250,0.6)]",
+    chip: "text-agent",
+    live: "border-agent bg-surface-raised",
+    rule: "bg-agent",
+    glow: "shadow-gh-1",
   },
 };
 
@@ -97,12 +98,12 @@ const SENSE_GLYPH = { ear: "ear", mouth: "mouth" } as const;
 function Rule({ tone }: { tone: "live" | "dead" | "broken" | "blocked" }) {
   const cls =
     tone === "live"
-      ? "bg-white/35"
+      ? "bg-line-strong"
       : tone === "blocked"
-        ? "bg-sky-300/50"
+        ? "bg-pane"
         : tone === "broken"
-          ? "bg-lantern-400/60"
-          : "bg-white/12";
+          ? "bg-signal"
+          : "bg-line";
   const dashed = tone === "broken" || tone === "blocked";
   return (
     <span
@@ -112,7 +113,7 @@ function Rule({ tone }: { tone: "live" | "dead" | "broken" | "blocked" }) {
         dashed
           ? {
               backgroundImage: `repeating-linear-gradient(to bottom, ${
-                tone === "blocked" ? "rgba(125,211,252,0.6)" : "rgba(232,184,109,0.7)"
+                tone === "blocked" ? "rgb(var(--gh-sky-rgb) / 0.8)" : "rgb(var(--gh-signal-rgb) / 0.8)"
               } 0 3px, transparent 3px 7px)`,
             }
           : undefined
@@ -124,17 +125,17 @@ function Rule({ tone }: { tone: "live" | "dead" | "broken" | "blocked" }) {
 function Fork({ up }: { up?: boolean }) {
   return (
     <>
-      <span aria-hidden className="mx-auto block h-6 w-px bg-white/20 sm:hidden" />
+      <span aria-hidden className="mx-auto block h-6 w-px bg-line sm:hidden" />
       <div aria-hidden className="relative mx-auto hidden h-10 w-full sm:block">
         <span
-          className={`absolute left-1/2 h-5 w-px -translate-x-1/2 bg-white/20 ${up ? "bottom-0" : "top-0"}`}
+          className={`absolute left-1/2 h-5 w-px -translate-x-1/2 bg-line ${up ? "bottom-0" : "top-0"}`}
         />
-        <span className="absolute left-1/4 right-1/4 top-5 h-px bg-white/20" />
+        <span className="absolute left-1/4 right-1/4 top-5 h-px bg-line" />
         <span
-          className={`absolute left-1/4 h-5 w-px bg-white/20 ${up ? "top-0" : "top-5"}`}
+          className={`absolute left-1/4 h-5 w-px bg-line ${up ? "top-0" : "top-5"}`}
         />
         <span
-          className={`absolute right-1/4 h-5 w-px bg-white/20 ${up ? "top-0" : "top-5"}`}
+          className={`absolute right-1/4 h-5 w-px bg-line ${up ? "top-0" : "top-5"}`}
         />
       </div>
     </>
@@ -144,15 +145,15 @@ function Fork({ up }: { up?: boolean }) {
 function Chip({ tone, children }: { tone: "on" | "off" | "blocked" | "locked"; children: ReactNode }) {
   const cls =
     tone === "on"
-      ? "border-emerald-300/40 text-emerald-200"
+      ? "border-success/50 text-success"
       : tone === "blocked"
-        ? "border-sky-300/50 text-sky-200"
+        ? "border-pane text-ink"
         : tone === "locked"
-          ? "border-lantern-400/50 text-lantern-300"
-          : "border-white/15 text-white/55";
+          ? "border-line-strong text-ink"
+          : "border-line text-muted";
   return (
     <span
-      className={`shrink-0 rounded-full border px-2 py-[1px] text-[10px] uppercase tracking-[0.12em] ${cls}`}
+      className={`gh-label shrink-0 rounded-gh-pill border px-2 py-[1px] ${cls}`}
     >
       {children}
     </span>
@@ -178,53 +179,53 @@ function TechNode({
   const lane = LANE_STYLE[node.lane];
   const frame = granted
     ? blocked
-      ? "border-sky-300/40 bg-dusk-900/70"
+      ? "border-pane bg-surface"
       : `${lane.live} ${lane.glow}`
-    : "border-white/10 bg-dusk-900/40";
+    : "border-line bg-surface";
   return (
     <button
       type="button"
       onClick={onToggle}
       disabled={busy}
       aria-pressed={granted}
-      className={`w-full rounded-2xl border p-3 text-left transition sm:p-4 ${frame} ${
-        busy ? "opacity-60" : "hover:border-white/30"
+      className={`w-full rounded-gh-lg border p-3 text-left text-ink transition-colors duration-gh-fast sm:p-4 ${frame} ${
+        busy ? "opacity-60" : "hover:border-line-strong"
       }`}
       style={
         blocked
           ? {
               backgroundImage:
-                "repeating-linear-gradient(135deg, rgba(125,211,252,0.09) 0 6px, transparent 6px 14px)",
+                "repeating-linear-gradient(135deg, rgb(var(--gh-sky-rgb) / 0.1) 0 6px, transparent 6px 14px)",
             }
           : undefined
       }
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className={`text-[10px] uppercase tracking-[0.16em] ${lane.chip}`}>
+          <div className={`gh-label ${lane.chip}`}>
             {SENSE_GLYPH[node.sense]}
           </div>
-          <div className="mt-1 font-display text-lg leading-tight sm:text-xl">{node.title}</div>
+          <div className="mt-1 font-brand text-lg font-bold leading-tight tracking-[-0.01em] text-ink sm:text-xl">{node.title}</div>
         </div>
         <Chip tone={blocked ? "blocked" : granted ? "on" : "off"}>
           {blocked ? "blocked here" : granted ? "granted" : "withheld"}
         </Chip>
       </div>
-      <p className="mt-2 text-sm text-white/65">{granted ? node.granted : node.withheld}</p>
+      <p className="mt-2 text-sm text-muted">{granted ? node.granted : node.withheld}</p>
       {blocked ? (
-        <p className="mt-2 rounded-lg border border-sky-300/25 bg-sky-300/5 p-2 text-xs text-sky-100/85">
+        <p className="mt-2 rounded-gh-md border border-pane bg-pane/10 p-2 text-xs text-ink">
           You granted this. {spaceLabel} does not allow it here.{" "}
-          <span className="text-sky-200/70">{SPEECH_RECOURSE.silenced_by_space}</span>
+          <span className="text-muted">{SPEECH_RECOURSE.silenced_by_space}</span>
         </p>
       ) : null}
-      <dl className="mt-3 space-y-1 border-t border-white/10 pt-2 text-[11px] leading-snug">
+      <dl className="mt-3 space-y-1 border-t border-line pt-2 text-[11px] leading-snug">
         <div className="flex gap-2">
-          <dt className="w-12 shrink-0 uppercase tracking-[0.1em] text-white/50">unlocks</dt>
-          <dd className="text-white/55">{node.unlocks}</dd>
+          <dt className="w-12 shrink-0 gh-label text-muted">unlocks</dt>
+          <dd className="text-muted">{node.unlocks}</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="w-12 shrink-0 uppercase tracking-[0.1em] text-white/50">cost</dt>
-          <dd className="text-white/55">{node.cost}</dd>
+          <dt className="w-12 shrink-0 gh-label text-muted">cost</dt>
+          <dd className="text-muted">{node.cost}</dd>
         </div>
       </dl>
     </button>
@@ -275,14 +276,14 @@ export function PermissionTree(props: {
     <section className="mt-8">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-display text-2xl text-lantern-300 sm:text-3xl">Permissions</h2>
-          <p className="mt-1 max-w-xl text-sm text-white/55">
+          <h2 className={SECTION_TITLE_CLASS}>Permissions</h2>
+          <p className="mt-1 max-w-xl text-sm text-muted">
             Four grants, sixteen legal combinations. Press any node; the tiers below it change with it.
           </p>
         </div>
-        <div className="text-left text-xs text-white/55 sm:text-right">
+        <div className="text-left text-xs text-muted sm:text-right">
           <div>
-            state <span className="text-white/70">{stateOrdinal(granted)}</span> of {POLICY_STATE_TOTAL}
+            state <span className={`text-ink ${NUM_CLASS}`}>{stateOrdinal(granted)}</span> of <span className={NUM_CLASS}>{POLICY_STATE_TOTAL}</span>
           </div>
           <div className="mt-1">{preset ? preset.label : "custom"}</div>
         </div>
@@ -299,10 +300,11 @@ export function PermissionTree(props: {
               disabled={busy}
               onClick={() => props.onPolicy(p.policy)}
               title={p.blurb}
-              className={`rounded-full border px-3 py-1 text-xs transition ${
+              aria-pressed={active}
+              className={`min-h-11 rounded-gh-pill border px-3 py-1 text-xs transition-colors duration-gh-fast sm:min-h-8 ${
                 active
-                  ? "border-lantern-400 bg-lantern-400/15 text-lantern-200"
-                  : "border-white/12 text-white/60 hover:border-white/30"
+                  ? "border-signal bg-tint text-ink"
+                  : "border-line-strong bg-surface-raised text-muted hover:bg-tint hover:text-ink"
               }`}
             >
               {p.label}
@@ -312,15 +314,15 @@ export function PermissionTree(props: {
       </div>
 
       {/* The ceiling. Drawn before the tree because it changes what the tree means. */}
-      <div className="mt-5 rounded-2xl border border-white/10 bg-dusk-900/50 p-3 sm:p-4">
+      <div className="mt-5 rounded-gh-lg border border-line bg-surface p-3 sm:p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="text-xs uppercase tracking-[0.16em] text-white/55">Standing in</div>
+          <div className="gh-label text-muted">Standing in</div>
           {blocked.length ? (
-            <div className="text-xs text-sky-200">
+            <div className="text-xs text-ink">
               {blocked.length} grant{blocked.length > 1 ? "s" : ""} do not apply here
             </div>
           ) : (
-            <div className="text-xs text-white/50">this space narrows nothing</div>
+            <div className="text-xs text-muted">this space narrows nothing</div>
           )}
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -331,14 +333,15 @@ export function PermissionTree(props: {
                 key={s.id}
                 type="button"
                 onClick={() => props.onSpace(s.id)}
-                className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
+                aria-pressed={active}
+                className={`rounded-gh-md border px-3 py-2 text-left text-xs transition-colors duration-gh-fast ${
                   active
-                    ? "border-sky-300/50 bg-sky-300/10 text-sky-100"
-                    : "border-white/10 text-white/55 hover:border-white/25"
+                    ? "border-pane bg-pane/10 text-ink"
+                    : "border-line bg-surface-raised text-muted hover:bg-tint hover:text-ink"
                 }`}
               >
                 <div className="font-semibold">{s.label}</div>
-                <div className="mt-[2px] text-[11px] opacity-70">
+                <div className="mt-[2px] text-[11px] text-muted">
                   {PRESET_LABEL[s.roomPreset ?? s.preset]}
                   {s.isMember && (s.roomPreset ?? s.preset) !== "public_write" ? " · you are a member" : ""}
                   {s.isMember && (s.memberPolicy || s.roomMemberPolicy) ? " · members limited" : ""}
@@ -347,7 +350,7 @@ export function PermissionTree(props: {
             );
           })}
         </div>
-        <p className="mt-2 text-[11px] leading-snug text-white/55">
+        <p className="mt-2 text-[11px] leading-snug text-muted">
           What actually happens is your grant AND the space&apos;s own access level. A space can only
           ever narrow an agent, never widen one — and a member of a space sits at the full ceiling.
         </p>
@@ -356,14 +359,14 @@ export function PermissionTree(props: {
       {/* ---- the tree ---- */}
       <div className="mt-5">
         {/* Root: the one grant you cannot revoke. */}
-        <div className="mx-auto max-w-lg rounded-2xl border border-lantern-400/40 bg-lantern-400/[0.07] p-3 text-center sm:p-4">
+        <div className="mx-auto max-w-lg rounded-gh-lg border border-line-strong bg-surface-raised p-3 text-center shadow-gh-1 sm:p-4">
           <div className="flex items-center justify-center gap-2">
-            <span className="lantern" aria-hidden />
-            <span className="font-display text-lg sm:text-xl">{OWNER_CHANNEL_NODE.title}</span>
+            <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-[2px] bg-signal" />
+            <span className="font-brand text-lg font-bold tracking-[-0.01em] text-ink sm:text-xl">{OWNER_CHANNEL_NODE.title}</span>
             <Chip tone="locked">always open</Chip>
           </div>
-          <p className="mt-2 text-sm text-white/70">{OWNER_CHANNEL_NODE.line}</p>
-          <p className="mt-1 text-[11px] text-white/55">{OWNER_CHANNEL_NODE.detail}</p>
+          <p className="mt-2 text-sm text-muted">{OWNER_CHANNEL_NODE.line}</p>
+          <p className="mt-1 text-[11px] text-muted">{OWNER_CHANNEL_NODE.detail}</p>
         </div>
 
         <Fork />
@@ -387,10 +390,10 @@ export function PermissionTree(props: {
             return (
               <div key={lane}>
                 <div className="mb-2 text-center">
-                  <div className={`text-xs uppercase tracking-[0.16em] ${LANE_STYLE[lane].chip}`}>
+                  <div className={`gh-label ${LANE_STYLE[lane].chip}`}>
                     {LANE_COPY[lane].title}
                   </div>
-                  <div className="text-[11px] text-white/50">{LANE_COPY[lane].blurb}</div>
+                  <div className="text-[11px] text-muted">{LANE_COPY[lane].blurb}</div>
                 </div>
                 <TechNode
                   node={ear}
@@ -412,7 +415,7 @@ export function PermissionTree(props: {
                   }
                 />
                 {quirk ? (
-                  <p className="mt-2 text-center text-[11px] italic text-lantern-300/80">{quirk}</p>
+                  <p className="mt-2 text-center text-[11px] italic text-ink">{quirk}</p>
                 ) : null}
               </div>
             );
@@ -423,19 +426,19 @@ export function PermissionTree(props: {
 
         {/* The gate authorize() actually enforces: no mouth, no room_say. */}
         <div
-          className={`mx-auto max-w-lg rounded-2xl border p-3 text-center sm:p-4 ${
-            publicSpeech ? "border-emerald-300/35 bg-emerald-300/[0.06]" : "border-white/12 bg-dusk-900/50"
+          className={`mx-auto max-w-lg rounded-gh-lg border p-3 text-center sm:p-4 ${
+            publicSpeech ? "border-success/50 bg-success/5" : "border-line bg-surface"
           }`}
         >
           <div className="flex items-center justify-center gap-2">
-            <span className="font-display text-lg sm:text-xl">{PUBLIC_SPEECH_NODE.title}</span>
+            <span className="font-brand text-lg font-bold tracking-[-0.01em] text-ink sm:text-xl">{PUBLIC_SPEECH_NODE.title}</span>
             <Chip tone={publicSpeech ? "on" : "off"}>{publicSpeech ? "open" : "shut"}</Chip>
           </div>
-          <p className="mt-2 text-sm text-white/70">
+          <p className="mt-2 text-sm text-muted">
             {publicSpeech ? PUBLIC_SPEECH_NODE.open : PUBLIC_SPEECH_NODE.shut}
           </p>
           {publicSpeech ? (
-            <p className="mt-1 text-[11px] text-white/55">{PUBLIC_SPEECH_NODE.cost}</p>
+            <p className="mt-1 text-[11px] text-muted">{PUBLIC_SPEECH_NODE.cost}</p>
           ) : null}
         </div>
 
@@ -446,17 +449,17 @@ export function PermissionTree(props: {
             return (
               <div
                 key={u.id}
-                className={`rounded-xl border p-3 ${
-                  lit ? "border-emerald-300/30 bg-emerald-300/[0.05]" : "border-white/10 bg-dusk-900/40"
+                className={`rounded-gh-md border p-3 ${
+                  lit ? "border-success/50 bg-success/5" : "border-line bg-surface"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className={`text-sm font-semibold ${lit ? "text-white/85" : "text-white/55"}`}>
+                  <div className={`text-sm font-semibold ${lit ? "text-ink" : "text-muted"}`}>
                     {u.label}
                   </div>
                   <Chip tone={lit ? "on" : "off"}>{lit ? "unlocked" : "locked"}</Chip>
                 </div>
-                <p className={`mt-1 text-xs ${lit ? "text-white/60" : "text-white/55"}`}>
+                <p className="mt-1 text-xs text-muted">
                   {lit ? u.lit : u.dark}
                 </p>
               </div>
@@ -466,19 +469,19 @@ export function PermissionTree(props: {
       </div>
 
       {/* ---- what the world sees ---- */}
-      <div className="mt-5 rounded-2xl border border-white/10 bg-dusk-900/50 p-3 sm:p-4">
+      <div className="mt-5 rounded-gh-lg border border-line bg-surface p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-xs uppercase tracking-[0.16em] text-white/55">
+          <div className="gh-label text-muted">
             In {spaceLabel}, right now
           </div>
           <Chip tone={role.id === "sealed" ? "off" : "on"}>{role.label}</Chip>
         </div>
-        <p className="mt-2 text-sm text-white/60">{role.line}</p>
+        <p className="mt-2 text-sm text-muted">{role.line}</p>
         {/* @grove/ui ships the nameplate unstyled apart from its own consequence
             line; globals.css only dresses .grove-badge and .grove-kind, so the name
             and the byline would run together here. Spacing is applied locally
             rather than by editing a stylesheet this screen does not own. */}
-        <div className="mt-3 rounded-xl border border-white/10 bg-dusk-800/60 p-3 [&_.grove-name]:mr-2 [&_.grove-owner]:mr-2 [&_.grove-you]:mr-2">
+        <div className="mt-3 rounded-gh-md border border-line bg-surface-raised p-3 [&_.grove-name]:mr-2 [&_.grove-owner]:mr-2 [&_.grove-you]:mr-2">
           <Nameplate
             kind="agent"
             name={props.agentName}
@@ -489,20 +492,20 @@ export function PermissionTree(props: {
         </div>
         <dl className="mt-3 space-y-2 text-sm">
           <div>
-            <dt className="text-[11px] uppercase tracking-[0.12em] text-white/50">A visitor is told</dt>
-            <dd className="text-white/70">{visitorLine ?? "Nothing — there is nothing to explain."}</dd>
+            <dt className="gh-label text-muted">A visitor is told</dt>
+            <dd className="text-muted">{visitorLine ?? "Nothing — there is nothing to explain."}</dd>
           </div>
           <div>
-            <dt className="text-[11px] uppercase tracking-[0.12em] text-white/50">Your agent is told</dt>
-            <dd className="text-white/70">
+            <dt className="gh-label text-muted">Your agent is told</dt>
+            <dd className="text-muted">
               {agentLine ?? "Nothing — it can hear this room and answer in it."}
             </dd>
           </div>
         </dl>
         {!publicSpeech ? (
-          <div className="mt-3 border-t border-white/10 pt-2">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-white/50">Still allowed</div>
-            <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/50">
+          <div className="mt-3 border-t border-line pt-2">
+            <div className="gh-label text-muted">Still allowed</div>
+            <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
               {ALWAYS_ALLOWED.map((a) => (
                 <li key={a}>{a}</li>
               ))}
@@ -515,8 +518,8 @@ export function PermissionTree(props: {
       {/* ---- stance ---- */}
       <div className="mt-8">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <h3 className="font-display text-2xl text-lantern-300">Stance</h3>
-          <p className="text-xs text-white/55">
+          <h3 className={SECTION_TITLE_CLASS}>Stance</h3>
+          <p className="text-xs text-muted">
             Not a fifth permission. How they behave when you are not telling them anything.
           </p>
         </div>
@@ -531,23 +534,23 @@ export function PermissionTree(props: {
                 disabled={busy}
                 aria-pressed={active}
                 onClick={() => props.onAutonomy(mode)}
-                className={`rounded-2xl border p-3 text-left transition ${
+                className={`rounded-gh-lg border p-3 text-left text-ink transition-colors duration-gh-fast ${
                   active
-                    ? "border-lantern-400/70 bg-lantern-400/10"
-                    : "border-white/10 bg-dusk-900/40 hover:border-white/25"
+                    ? "border-signal bg-tint"
+                    : "border-line bg-surface-raised hover:bg-tint"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-display text-lg">{s.label}</span>
+                  <span className="font-brand text-lg font-bold tracking-[-0.01em]">{s.label}</span>
                   <Chip tone={s.speaksUnprompted ? "on" : "off"}>
                     {s.speaksUnprompted ? "speaks first" : "waits"}
                   </Chip>
                 </div>
-                <p className="mt-1 text-xs text-white/60">{s.blurb}</p>
-                <p className="mt-2 text-[11px] text-white/55">
+                <p className="mt-1 text-xs text-muted">{s.blurb}</p>
+                <p className="mt-2 text-[11px] text-muted">
                   <span
                     className={
-                      s.enforcement === "kernel" ? "text-emerald-200/70" : "text-white/50"
+                      s.enforcement === "kernel" ? "text-success" : "text-muted"
                     }
                   >
                     {s.enforcement === "kernel" ? "enforced" : "hint only"}
@@ -559,7 +562,7 @@ export function PermissionTree(props: {
           })}
         </div>
         {stanceTension(props.autonomyMode, effective) ? (
-          <p className="mt-3 rounded-xl border border-lantern-400/25 bg-lantern-400/[0.06] p-3 text-xs text-lantern-200/90">
+          <p className="mt-3 rounded-gh-md border border-line-strong bg-tint p-3 text-xs text-ink">
             {stanceTension(props.autonomyMode, effective)}
           </p>
         ) : null}

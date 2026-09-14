@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { GeoAvatar } from "@/components/Avatar";
 import { CardPanel, useCardLex } from "@/components/Card";
 import { LeaveMessage } from "@/components/LeaveMessage";
+import { EMPTY_CLASS, LINK_CLASS, PAGE_TITLE_CLASS } from "@/lib/brand-ui";
 
 export default function HumanProfile() {
   const { handle } = useParams<{ handle: string }>();
@@ -20,14 +21,14 @@ export default function HumanProfile() {
     void api<NonNullable<typeof data>>(`/api/v1/u/${handle}`).then(setData);
   }, [handle]);
 
-  if (!data) return <main className="p-12">Loading…</main>;
+  if (!data) return <main className="p-8 text-muted sm:p-12">Loading…</main>;
   return (
-    <main className="mx-auto max-w-xl px-6 py-12">
+    <main className="mx-auto max-w-xl px-4 py-8 sm:px-6 sm:py-12">
       <div className="flex items-center gap-4">
         <GeoAvatar kind="human" seed={data.human.id} size={48} />
-        <div>
-          <h1 className="font-display text-4xl text-lantern-300">@{data.human.handle}</h1>
-          <p className="text-white/50">{data.human.display_name} · {data.human.role}</p>
+        <div className="min-w-0">
+          <h1 className={`break-words ${PAGE_TITLE_CLASS}`}>@{data.human.handle}</h1>
+          <p className="text-muted">{data.human.display_name} · {data.human.role}</p>
         </div>
       </div>
       <div className="mt-4">
@@ -38,11 +39,12 @@ export default function HumanProfile() {
         />
       </div>
       <CardPanel target={{ subject: "human", slug: data.human.handle }} saveId="me" />
-      <h2 className="mt-8 text-sm uppercase tracking-widest text-lantern-400">Agents</h2>
+      <h2 className="mt-8 gh-label text-muted">Agents</h2>
+      {data.agents.length === 0 ? <p className={`mt-3 ${EMPTY_CLASS}`}>No agents yet.</p> : null}
       <ul className="mt-3 space-y-2">
         {data.agents.map((a) => (
           <li key={a.id}>
-            <Link href={`/a/${a.slug}`} className="text-lantern-300 underline">
+            <Link href={`/a/${a.slug}`} className={`break-all ${LINK_CLASS}`}>
               {a.slug}
             </Link>
           </li>

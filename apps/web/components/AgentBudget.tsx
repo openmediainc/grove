@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { BUDGET_TONE, budgetLine, costLine, money, tokens, totalTokens, type UsageResponse } from "@/lib/cost";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { INPUT_CLASS, LINK_CLASS, NUM_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
 /**
  * Settings: this agent's spend today and its optional monthly budget.
@@ -53,18 +54,18 @@ export function AgentBudget({ agentId }: { agentId: string }) {
 
   return (
     <section className="mt-8">
-      <h2 className="font-display text-2xl text-lantern-300">Budget</h2>
-      <p className="text-sm text-white/50">
+      <h2 className={SECTION_TITLE_CLASS}>Budget</h2>
+      <p className="mt-1 text-sm text-muted">
         What this agent reported today, and an optional monthly cap in USD (UTC month). Glasshouse warns at 80% and over; it
         does not stop the agent.
       </p>
       <ErrorNotice error={err} className="mt-2" />
       {u ? (
-        <div className="mt-3 rounded-xl bg-dusk-800/80 p-3 text-sm">
+        <div className="mt-3 rounded-gh-lg border border-line bg-surface-raised p-3 text-sm">
           <div className="flex flex-wrap items-baseline gap-x-4">
-            <span className="text-white">{row ? costLine(row) : "nothing reported today"}</span>
-            {row ? <span className="text-white/50">{tokens(totalTokens(row))} tokens</span> : null}
-            <Link href="/me#cost" className="ml-auto text-xs text-lantern-300/80 hover:underline">
+            <span className={`text-ink ${NUM_CLASS}`}>{row ? costLine(row) : "nothing reported today"}</span>
+            {row ? <span className={`text-muted ${NUM_CLASS}`}>{tokens(totalTokens(row))} tokens</span> : null}
+            <Link href="/me#cost" className={`ml-auto text-xs ${LINK_CLASS}`}>
               the whole day →
             </Link>
           </div>
@@ -79,7 +80,7 @@ export function AgentBudget({ agentId }: { agentId: string }) {
               void save(n);
             }}
           >
-            <label className="text-xs text-white/60" htmlFor="budget-usd">
+            <label className="text-xs text-muted" htmlFor="budget-usd">
               Monthly budget $
             </label>
             <input
@@ -88,13 +89,13 @@ export function AgentBudget({ agentId }: { agentId: string }) {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="none"
-              className="w-28 rounded-lg bg-dusk-900 px-3 py-2 ring-1 ring-white/10 sm:py-1"
+              className={`${INPUT_CLASS} !w-28 ${NUM_CLASS}`}
             />
-            <button type="submit" disabled={busy} className="rounded-full bg-white/10 px-4 py-2 text-sm sm:py-1">
+            <button type="submit" disabled={busy} className={buttonClass("secondary", "md")}>
               Save
             </button>
             {row?.budget?.monthly_micros ? (
-              <button type="button" disabled={busy} onClick={() => void save(null)} className="px-2 py-2 text-sm text-white/50 sm:py-1">
+              <button type="button" disabled={busy} onClick={() => void save(null)} className={buttonClass("ghost", "md", "text-muted")}>
                 Clear ({money(row.budget.monthly_micros)})
               </button>
             ) : null}

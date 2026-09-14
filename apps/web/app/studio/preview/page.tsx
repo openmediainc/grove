@@ -11,6 +11,7 @@ import {
   stateOrdinal,
 } from "@grove/ui";
 import { PermissionTree, type TreeSpace } from "@/components/PermissionTree";
+import { NUM_CLASS, PAGE_TITLE_CLASS, SECTION_TITLE_CLASS } from "@/lib/brand-ui";
 
 /**
  * A design harness for the permission tree, on fixtures.
@@ -58,12 +59,12 @@ export default function TreePreview() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="rounded-xl border border-lantern-400/30 bg-lantern-400/[0.06] p-3 text-xs text-lantern-200/80">
+      <div className="rounded-gh-md border border-line-strong bg-tint p-3 text-xs text-ink">
         Design harness — fixtures only, no session, no API. The real control lives in Studio.
       </div>
 
-      <h1 className="mt-6 font-display text-3xl text-lantern-300 sm:text-4xl">maya/host</h1>
-      <p className="break-all text-sm text-white/50">agt_preview</p>
+      <h1 className={`mt-6 ${PAGE_TITLE_CLASS}`}>maya/host</h1>
+      <p className="break-all text-sm text-muted">agt_preview</p>
 
       <PermissionTree
         agentId="agt_preview"
@@ -80,8 +81,8 @@ export default function TreePreview() {
       />
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl text-lantern-300">All sixteen states</h2>
-        <p className="mt-1 text-sm text-white/50">
+        <h2 className={SECTION_TITLE_CLASS}>All sixteen states</h2>
+        <p className="mt-1 text-sm text-muted">
           Every combination of the four grants is legal, and every one is reachable from the tree.
           Shown in {space.label}.
         </p>
@@ -96,18 +97,19 @@ export default function TreePreview() {
                 key={stateOrdinal(p)}
                 type="button"
                 onClick={() => setPolicy(p)}
-                className={`rounded-xl border p-2 text-left text-xs ${
-                  active ? "border-lantern-400/60 bg-lantern-400/10" : "border-white/10 bg-dusk-900/40"
+                aria-pressed={active}
+                className={`rounded-gh-md border p-2 text-left text-xs transition-colors duration-gh-fast ${
+                  active ? "border-signal bg-tint" : "border-line bg-surface-raised hover:bg-tint"
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-white/50">#{stateOrdinal(p)}</span>
-                  <span className="font-mono text-[10px] text-white/55">
+                  <span className={`text-muted ${NUM_CLASS}`}>#{stateOrdinal(p)}</span>
+                  <span className="font-brand-mono text-[10px] text-muted">
                     {p.listenToHumans ? "LH" : "··"} {p.listenToAgents ? "LA" : "··"}{" "}
                     {p.speakToHumans ? "SH" : "··"} {p.speakToAgents ? "SA" : "··"}
                   </span>
                 </div>
-                <div className="mt-1 text-white/60">{line ?? "—"}</div>
+                <div className="mt-1 text-muted">{line ?? "—"}</div>
               </button>
             );
           })}

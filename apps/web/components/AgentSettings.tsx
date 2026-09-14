@@ -7,6 +7,7 @@ import { gp, publicUrl } from "@/lib/base";
 import { PermissionTree, type TreeSpace } from "@/components/PermissionTree";
 import { AgentBudget } from "@/components/AgentBudget";
 import { WhereAgentCanTalk } from "@/components/WhereAgentCanTalk";
+import { CARD_CLASS, EMPTY_CLASS, INPUT_CLASS, NUM_CLASS, SECTION_TITLE_CLASS, TEXTAREA_CLASS, buttonClass } from "@/lib/brand-ui";
 import { effectivePermissionsPath, treeCeilings, type WireEffectivePermissions } from "@/lib/effective-permissions";
 
 /** Wire JSON is snake_case (see @grove/protocol codec); the tree speaks the type. */
@@ -201,7 +202,7 @@ export function AgentSettings({ agentId }: { agentId: string }) {
     })();
   }, []);
 
-  if (!agent) return <p className="mt-6 text-sm text-white/50">Loading settings…</p>;
+  if (!agent) return <p className="mt-6 text-sm text-muted">Loading settings…</p>;
 
   const spaces = treeCeilings(directory, effective);
 
@@ -225,36 +226,38 @@ export function AgentSettings({ agentId }: { agentId: string }) {
       <WhereAgentCanTalk data={effective} error={effectiveError && !effective} />
 
       <section className="mt-8">
-        <h2 className="font-display text-2xl text-lantern-300">Standing orders</h2>
+        <h2 className={SECTION_TITLE_CLASS}>Standing orders</h2>
         <textarea
-          className="mt-3 w-full rounded-xl bg-dusk-800 p-3 ring-1 ring-white/10"
+          className={`mt-3 ${TEXTAREA_CLASS}`}
           rows={3}
           value={orders}
           onChange={(e) => setOrders(e.target.value)}
           placeholder="Be warm. Offer to show newcomers the Garden. Never ask for API keys."
         />
-        <button onClick={sendOrder} className="mt-2 rounded-full bg-white/10 px-4 py-2 sm:py-1">
+        <button onClick={sendOrder} className={buttonClass("secondary", "md", "mt-2")}>
           Save standing order
         </button>
       </section>
 
       <section className="mt-8">
-        <h2 className="font-display text-2xl text-lantern-300">Owner thread</h2>
+        <h2 className={SECTION_TITLE_CLASS}>Owner thread</h2>
+        {thread.length === 0 ? <p className={`mt-3 ${EMPTY_CLASS}`}>No messages between you and this agent yet.</p> : null}
         <ul className="mt-3 max-h-48 space-y-2 overflow-auto text-sm">
           {thread.map((t) => (
-            <li key={t.id} className="rounded-lg bg-dusk-800/80 p-2">
+            <li key={t.id} className="break-words rounded-gh-md border border-line bg-surface-raised p-2 text-ink">
               {t.body}
             </li>
           ))}
         </ul>
         <div className="mt-3 flex gap-2">
           <input
-            className="min-w-0 flex-1 rounded-lg bg-dusk-800 px-3 py-2 ring-1 ring-white/10"
+            aria-label="One-shot instruction"
+            className={`${INPUT_CLASS} min-w-0 flex-1`}
             value={reply}
             onChange={(e) => setReply(e.target.value)}
             placeholder="One-shot instruction"
           />
-          <button onClick={oneShot} className="shrink-0 rounded-full bg-lantern-400 px-4 py-2 text-dusk-950">
+          <button onClick={oneShot} className={buttonClass("primary", "md", "shrink-0")}>
             Send
           </button>
         </div>
@@ -265,8 +268,8 @@ export function AgentSettings({ agentId }: { agentId: string }) {
       </div>
 
       <section className="mt-8">
-        <h2 className="font-display text-2xl text-lantern-300">Hosted brain</h2>
-        <p className="text-sm text-white/50">Runs on the hosted worker. The website never sees API keys.</p>
+        <h2 className={SECTION_TITLE_CLASS}>Hosted brain</h2>
+        <p className="mt-1 text-sm text-muted">Runs on the hosted worker. The website never sees API keys.</p>
         <button
           onClick={async () => {
             await api(`/api/v1/agents/${agentId}/hosted-brain`, {
@@ -275,28 +278,30 @@ export function AgentSettings({ agentId }: { agentId: string }) {
             });
             await refresh();
           }}
-          className={`mt-3 rounded-full px-5 py-2 text-sm sm:py-1 ${brain?.enabled ? "bg-lantern-400 text-dusk-950" : "border border-white/15"}`}
+          aria-pressed={Boolean(brain?.enabled)}
+          className={buttonClass("secondary", "md", `mt-3 px-5 ${brain?.enabled ? "!border-success text-success" : ""}`)}
         >
           {brain?.enabled ? "on" : "off"}
         </button>
         {brain ? (
-          <p className="mt-2 text-xs text-white/55">
+          <p className={`mt-2 text-xs text-muted ${NUM_CLASS}`}>
             {brain.tokens_used_month} / {brain.token_budget_month} tokens this month
           </p>
         ) : null}
       </section>
 
       <section className="mt-8">
-        <h2 className="font-display text-2xl text-lantern-300">Keys</h2>
-        <p className="text-sm text-white/50">Glasshouse never displays aeth_live_ secrets. Rotate from the runtime. You may revoke.</p>
+        <h2 className={SECTION_TITLE_CLASS}>Keys</h2>
+        <p className="mt-1 text-sm text-muted">Glasshouse never displays aeth_live_ secrets. Rotate from the runtime. You may revoke.</p>
+        {keys.length === 0 ? <p className={`mt-3 ${EMPTY_CLASS}`}>No keys issued.</p> : null}
         <ul className="mt-3 space-y-2 text-sm">
           {keys.map((k) => (
-            <li key={k.id} className="flex items-center justify-between gap-3 rounded-lg bg-dusk-800/80 p-3">
-              <span className="min-w-0 break-words">
+            <li key={k.id} className={`flex items-center justify-between gap-3 ${CARD_CLASS} !p-3 !shadow-none`}>
+              <span className={`min-w-0 break-words text-ink ${NUM_CLASS}`}>
                 {k.prefix}… {k.revoked_at ? "(revoked)" : ""} {k.last_used_at ? `last used ${k.last_used_at}` : ""}
               </span>
               {!k.revoked_at ? (
-                <button onClick={() => revoke(k.id)} className="shrink-0 px-2 py-2 text-red-300">
+                <button onClick={() => revoke(k.id)} className={buttonClass("danger", "sm", "shrink-0")}>
                   Revoke
                 </button>
               ) : null}
@@ -306,8 +311,8 @@ export function AgentSettings({ agentId }: { agentId: string }) {
       </section>
 
       <section className="mt-8">
-        <h2 className="font-display text-2xl text-lantern-300">MCP snippet</h2>
-        <pre className="mt-3 overflow-auto rounded-xl bg-black/40 p-4 text-xs text-lantern-300">
+        <h2 className={SECTION_TITLE_CLASS}>MCP snippet</h2>
+        <pre className="mt-3 overflow-auto rounded-gh-lg border border-line bg-tint p-4 font-brand-mono text-xs text-ink">
 {`{
   "mcpServers": {
     "grove": {
@@ -317,7 +322,7 @@ export function AgentSettings({ agentId }: { agentId: string }) {
   }
 }`}
         </pre>
-        <p className="mt-2 text-xs text-white/55">Placeholder only. The secret is already in the runtime.</p>
+        <p className="mt-2 text-xs text-muted">Placeholder only. The secret is already in the runtime.</p>
       </section>
     </div>
   );

@@ -26,6 +26,7 @@ import { LeaveMessage } from "@/components/LeaveMessage";
 import { Tabs, tabPanelProps } from "@/components/Tabs";
 import { roomHref } from "@/lib/world-url";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { LINK_CLASS, PAGE_TITLE_CLASS, SECTION_CLASS, buttonClass } from "@/lib/brand-ui";
 
 /* Owner-only pieces load when shown (#68): the day view and Settings (with its permission tree). */
 const none = () => null;
@@ -197,8 +198,8 @@ export default function AgentPage() {
   if (missing && claimMode) {
     return (
       <main className="mx-auto max-w-lg px-4 py-10 sm:px-6 sm:py-16">
-        <h1 className="font-display text-3xl text-lantern-300 sm:text-4xl">Claim this agent</h1>
-        <p className="mt-3 text-white/60">
+        <h1 className={PAGE_TITLE_CLASS}>Claim this agent</h1>
+        <p className="mt-3 text-muted">
           The runtime already holds the API key; Glasshouse never shows it here. Claiming binds the
           body to you and renames it <code>yourhandle/name</code>. You set what it may hear and say next.
         </p>
@@ -206,7 +207,7 @@ export default function AgentPage() {
           type="button"
           onClick={() => void claim()}
           disabled={claimBusy || signedIn === null}
-          className="mt-8 w-full rounded-full bg-lantern-400 px-6 py-3 font-semibold text-dusk-950 disabled:opacity-60 sm:w-auto sm:py-2"
+          className={buttonClass("primary", "md", "mt-8 w-full px-6 sm:w-auto")}
         >
           {claimBusy ? "Claiming…" : signedIn === false ? "Sign in to claim" : "Claim"}
         </button>
@@ -218,16 +219,16 @@ export default function AgentPage() {
   if (missing) {
     return (
       <main className="mx-auto max-w-lg px-4 py-10 sm:px-6 sm:py-16">
-        <h1 className="font-display text-3xl text-lantern-300">No agent here</h1>
-        <p className="mt-3 text-white/60">Nobody by that name, or it has not been claimed yet.</p>
-        <Link href="/" className="mt-6 inline-block text-lantern-300 underline">
+        <h1 className={PAGE_TITLE_CLASS}>No agent here</h1>
+        <p className="mt-3 text-muted">Nobody by that name, or it has not been claimed yet.</p>
+        <Link href="/" className={`mt-6 inline-block ${LINK_CLASS}`}>
           Back to the map
         </Link>
       </main>
     );
   }
 
-  if (!data) return <main className="p-8 text-white/50 sm:p-12">Loading…</main>;
+  if (!data) return <main className="p-8 text-muted sm:p-12">Loading…</main>;
 
   const a = data.agent;
   const badges = Object.entries(a.policy)
@@ -257,8 +258,8 @@ export default function AgentPage() {
 
       {claimMode ? (
         <div
-          className={`mb-6 flex flex-wrap items-center gap-3 rounded-2xl border p-4 text-sm ${
-            isOwner ? "border-lantern-400/30 bg-lantern-400/5 text-lantern-200" : "border-white/10 bg-dusk-800/60 text-white/60"
+          className={`mb-6 flex flex-wrap items-center gap-3 rounded-gh-lg border p-4 text-sm ${
+            isOwner ? "border-line-strong bg-tint text-ink" : "border-line bg-surface-raised text-muted"
           }`}
         >
           <span className="min-w-0 flex-1">
@@ -268,7 +269,7 @@ export default function AgentPage() {
                 ? "This agent is already yours. Its access is under Settings."
                 : "This agent already has an owner, so there is nothing to claim."}
           </span>
-          <button type="button" onClick={settleClaim} className="text-xs text-white/55 hover:text-white/70">
+          <button type="button" onClick={settleClaim} className={buttonClass("ghost", "sm", "text-muted")}>
             Dismiss
           </button>
         </div>
@@ -277,27 +278,27 @@ export default function AgentPage() {
       <div className="flex items-center gap-4">
         <GeoAvatar kind="agent" seed={a.id} size={48} />
         <div className="min-w-0">
-          <h1 className="break-words font-display text-3xl text-lantern-300 sm:text-4xl">{a.display_name}</h1>
-          <p className="break-all text-sm text-white/50">{a.slug}</p>
+          <h1 className={`break-words ${PAGE_TITLE_CLASS}`}>{a.display_name}</h1>
+          <p className="break-all text-sm text-muted">{a.slug}</p>
         </div>
       </div>
       {data.owner ? (
         <p className="mt-4 text-sm">
           {isOwner ? "Yours · " : "Owned by "}
-          <Link className="text-lantern-300 underline" href={`/u/${encodeURIComponent(data.owner.handle)}`}>
+          <Link className={LINK_CLASS} href={`/u/${encodeURIComponent(data.owner.handle)}`}>
             @{data.owner.handle}
           </Link>
         </p>
       ) : null}
-      {a.description ? <p className="mt-3 text-white/70">{a.description}</p> : null}
-      {a.status_text ? <p className="mt-2 italic text-white/50">{a.status_text}</p> : null}
+      {a.description ? <p className="mt-3 text-muted">{a.description}</p> : null}
+      {a.status_text ? <p className="mt-2 italic text-muted">{a.status_text}</p> : null}
       <div className="mt-4">
         <Badges badges={badges} />
       </div>
       <div className="mt-4 flex flex-wrap items-start gap-2">
         <Link
           href={`/?follow=${encodeURIComponent(a.slug)}`}
-          className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/70 hover:text-lantern-300 sm:py-1.5"
+          className={buttonClass("secondary", "md")}
         >
           Watch on the map
         </Link>
@@ -309,7 +310,7 @@ export default function AgentPage() {
 
       <Tabs label="Agent" tabs={tabs} current={tab} labels={TAB_LABEL} onChoose={chooseTab} />
 
-      {owned === null ? <p className="mt-6 text-sm text-white/55">Loading…</p> : null}
+      {owned === null ? <p className="mt-6 text-sm text-muted">Loading…</p> : null}
       <div {...tabPanelProps("Agent", tab)} hidden={owned === null} className="mt-6">
         {tab === "activity" && owned !== null ? (
           <Activity
@@ -323,7 +324,7 @@ export default function AgentPage() {
         {tab === "card" ? (
           <>
             <CardPanel target={{ subject: "agent", slug: a.slug }} saveId={a.id} title="Card" />
-            <p className="mt-4 text-xs text-white/50">
+            <p className="mt-4 text-xs text-muted">
               Working on and latest fill themselves from what {a.display_name} is doing, where you may see it.
             </p>
           </>
@@ -332,11 +333,11 @@ export default function AgentPage() {
         {tab === "settings" && isOwner ? (
           <>
             {claimed ? (
-              <section className="mb-6 rounded-2xl border border-lantern-400/30 bg-dusk-800/70 p-4 sm:p-6">
-                <div className="text-xs uppercase tracking-widest text-lantern-400">where it is</div>
-                <p className="mt-1 font-display text-2xl text-lantern-300">{where ? where.name : "Not in the world yet"}</p>
-                <p className="mt-2 text-sm text-white/60">{toastLine}</p>
-                <p className="mt-2 text-sm text-white/50">Next: choose what it may hear and say below. You can change it any time.</p>
+              <section className={`mb-6 ${SECTION_CLASS}`}>
+                <div className="gh-label text-muted">where it is</div>
+                <p className="mt-1 font-brand text-gh-2xl font-extrabold tracking-[-0.02em] text-ink">{where ? where.name : "Not in the world yet"}</p>
+                <p className="mt-2 text-sm text-muted">{toastLine}</p>
+                <p className="mt-2 text-sm text-muted">Next: choose what it may hear and say below. You can change it any time.</p>
               </section>
             ) : null}
             <AgentSettings agentId={a.id} />
