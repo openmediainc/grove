@@ -206,7 +206,9 @@ notices use `danger-ink` for text and border, and hazard triangles carry their o
   (`:root:not([data-mode])` in a media query), so a system switch applies live.
 - An inline script in `<head>` (`NO_FLASH_SCRIPT`) sets the attribute before paint from `?tv=1` or the
   stored choice (`localStorage["gh-mode"]`), inside try/catch; blocked storage just follows the system.
-- Resolution order (`resolveMode`): TV/kiosk → stored choice → system. TV and kiosk default to night-derived `tv`.
+- Resolution order (`resolveMode`): TV/kiosk → stored choice → system. TV and kiosk (`?tv=1`, `?kiosk=1`, or the
+  map's V/K keys via `enterWallMode`) default to night-derived `tv` (type ×1.25) unless the viewer explicitly chose
+  light; leaving puts the viewer's own choice back.
 - **Appearance: System · Light · Night** lives in the You menu (desktop), at the foot of the phone
   disclosure (everyone), and in the map's ⋯ (`components/Appearance.tsx`). `applyModeChoice` stores
   it and fires `MODE_EVENT` so every toggle and other tabs stay in step; `readModeChoice` reads it.
@@ -308,5 +310,11 @@ night (except tv), so dark-page classes never land on a light ground, and the le
 `lantern-*` fallbacks are Nightwatch values (`LEGACY_NIGHT`: night ground/surfaces/line, dusk-violet
 accents) instead of aoe amber. Inside the map a theme still sets `--g-*`. To migrate a page (#74–#75),
 move its classes to roles and add its route to `BRANDED_ROUTES` in `lib/appearance.ts`.
+
+**Done: map chrome (#74).** `/` is in `BRANDED_ROUTES`: the map's HUD, controls and menus, minimap frame, drawer
+frames, peek cards, first-visit card, walk-in sheet, TV caption, follow pill, bell, replay bar and recorder speak brand
+tokens in the viewer's mode (guarded by `apps/web/test/map-chrome.test.ts`); a theme's `--g-*` is set only on in-world
+DOM (the pixel room). `LeaveMessage`, `Reactions`, `AgentPrompt` and `Activity` moved to roles with it, so on pages
+still in the legacy frame they render night. Replay is marked in the sky pane (amber is a person now).
 
 When the last usage moves, delete `LEGACY_CHROME_COLORS` and the page-level Source Sans fallback (map themes keep their own display faces for in-world text).

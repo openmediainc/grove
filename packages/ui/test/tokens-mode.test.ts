@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODE_STORAGE_KEY, NO_FLASH_SCRIPT, applyModeChoice, readModeChoice, resolveMode } from "../tokens/index.js";
+import { MODE_STORAGE_KEY, NO_FLASH_SCRIPT, applyModeChoice, enterWallMode, readModeChoice, resolveMode } from "../tokens/index.js";
 
 describe("mode resolution", () => {
   it("follows the system when nothing is stored", () => {
@@ -20,8 +20,10 @@ describe("mode resolution", () => {
     expect(resolveMode({ stored: null })).toBe("light");
   });
 
-  it("TV/kiosk always resolves to tv", () => {
-    expect(resolveMode({ tv: true, stored: "light", systemDark: false })).toBe("tv");
+  it("TV/kiosk resolves to tv unless the viewer explicitly chose light", () => {
+    expect(resolveMode({ tv: true, systemDark: false })).toBe("tv");
+    expect(resolveMode({ tv: true, stored: "night", systemDark: false })).toBe("tv");
+    expect(resolveMode({ tv: true, stored: "light", systemDark: true })).toBe("light");
   });
 
   function fakeDoc(search = "", stored: string | null = null, throwing = false) {
@@ -62,9 +64,17 @@ describe("mode resolution", () => {
     runScript(stored);
     expect(stored.attrs.get("data-mode")).toBe("night");
 
-    const tv = fakeDoc("?x=1&tv=1", "light");
+    const tv = fakeDoc("?x=1&tv=1", "night");
     runScript(tv);
     expect(tv.attrs.get("data-mode")).toBe("tv");
+
+    const kiosk = fakeDoc("?kiosk=1");
+    runScript(kiosk);
+    expect(kiosk.attrs.get("data-mode")).toBe("tv");
+
+    const lightWall = fakeDoc("?tv=1", "light");
+    runScript(lightWall);
+    expect(lightWall.attrs.get("data-mode")).toBe("light");
 
     const junk = fakeDoc("?tv=10", "sepia");
     runScript(junk);
@@ -75,6 +85,32 @@ describe("mode resolution", () => {
     const blocked = fakeDoc("", "night", true);
     expect(() => runScript(blocked)).not.toThrow();
     expect(blocked.attrs.has("data-mode")).toBe(false);
+  });
+
+  it("enterWallMode switches to tv, keeps an explicit light, and restores the viewer's choice", () => {
+    const sys = fakeDoc();
+    const sysDoc = { documentElement: sys.documentElement } as unknown as Document;
+    const leave = enterWallMode(sysDoc, sys.localStorage as unknown as Storage);
+    expect(sys.attrs.get("data-mode")).toBe("tv");
+    leave();
+    expect(sys.attrs.has("data-mode")).toBe(false);
+
+    const night = fakeDoc("", "night");
+    const nightDoc = { documentElement: night.documentElement } as unknown as Document;
+    const back = enterWallMode(nightDoc, night.localStorage as unknown as Storage);
+    expect(night.attrs.get("data-mode")).toBe("tv");
+    back();
+    expect(night.attrs.get("data-mode")).toBe("night");
+
+    const light = fakeDoc("", "light");
+    const lightDoc = { documentElement: light.documentElement } as unknown as Document;
+    enterWallMode(lightDoc, light.localStorage as unknown as Storage);
+    expect(light.attrs.get("data-mode")).toBe("light");
+
+    const blocked = fakeDoc("", null, true);
+    const blockedDoc = { documentElement: blocked.documentElement } as unknown as Document;
+    expect(() => enterWallMode(blockedDoc, blocked.localStorage as unknown as Storage)).not.toThrow();
+    expect(blocked.attrs.get("data-mode")).toBe("tv");
   });
 
   it("applyModeChoice stores and sets, and system clears both", () => {

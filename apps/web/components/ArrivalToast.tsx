@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { buttonClass } from "@/lib/brand-ui";
+import { LitMark } from "./LitMark";
 
 /**
  * The one thing that just became true, said out loud at the top of the screen.
@@ -33,19 +35,19 @@ export function ArrivalToast({
       className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-3 sm:top-4 sm:px-4"
     >
       <div
-        className={`pointer-events-auto w-full max-w-xl rounded-2xl border border-lantern-400/40 bg-dusk-900/95 p-4 shadow-[0_18px_60px_-20px_rgba(232,184,109,0.55)] backdrop-blur transition duration-500 sm:p-5 ${
+        className={`pointer-events-auto w-full max-w-xl rounded-gh-lg border border-line bg-surface-raised p-4 font-brand text-ink shadow-gh-3 transition duration-gh-slow ease-gh sm:p-5 ${
           shown ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0"
         }`}
       >
         <div className="flex items-start gap-3 sm:gap-4">
-          <span className="lantern mt-1 shrink-0" aria-hidden />
+          <LitMark size={22} className="mt-1" />
           <div className="min-w-0 flex-1">
-            <p className="font-display text-xl leading-tight text-lantern-300 sm:text-2xl">{title}</p>
-            <p className="mt-1 text-sm text-white/70">{line}</p>
+            <p className="font-brand text-gh-xl font-extrabold leading-tight tracking-tight text-ink sm:text-gh-2xl">{title}</p>
+            <p className="mt-1 text-sm text-muted">{line}</p>
             {action ? (
               <Link
                 href={action.href}
-                className="mt-4 inline-flex rounded-full bg-lantern-400 px-5 py-2.5 text-sm font-semibold text-dusk-950 sm:py-1.5"
+                className={buttonClass("primary", "md", "mt-4")}
               >
                 {action.label}
               </Link>
@@ -55,7 +57,7 @@ export function ArrivalToast({
             <button
               onClick={onDismiss}
               aria-label="Dismiss"
-              className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/55 hover:text-white/80 sm:-mr-1 sm:-mt-1 sm:h-8 sm:w-8 sm:text-base"
+              className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-gh-pill text-xl text-muted hover:bg-tint hover:text-ink sm:-mr-1 sm:-mt-1 sm:h-8 sm:w-8 sm:text-base"
             >
               ×
             </button>

@@ -55,11 +55,11 @@ export function ReplayBadge({ controller }: { controller: ReplayController }) {
       <div
         role="status"
         aria-live="polite"
-        className="flex items-center gap-2 rounded-full border border-amber-300/70 bg-amber-400 px-4 py-1.5 text-sm font-semibold uppercase tracking-[0.2em] text-dusk-950 shadow-lg shadow-amber-900/40"
+        className="flex items-center gap-2 rounded-gh-pill border-2 border-pane bg-ink px-4 py-1.5 font-brand-mono text-gh-sm uppercase tracking-[0.12em] text-ground shadow-gh-3"
       >
-        <span aria-hidden className="h-2 w-2 rounded-full bg-dusk-950/80" />
+        <span aria-hidden className="h-2 w-2 rounded-[1px] bg-pane" />
         <span className="tabular-nums">{view.label}</span>
-        <span className="hidden text-[10px] font-medium tracking-widest text-dusk-950/70 sm:inline">UTC · not live</span>
+        <span className="hidden text-[10px] tracking-[0.08em] text-ground/80 sm:inline">UTC · not live</span>
       </div>
     </div>
   );
@@ -191,32 +191,32 @@ export function ReplayBar({ controller }: { controller: ReplayController }) {
   const windowMs = view.until - view.since;
 
   return (
-    <div className="pointer-events-auto w-full rounded-2xl border border-amber-300/50 bg-dusk-950/92 p-3 text-xs text-white/75 shadow-xl sm:p-4">
+    <div className="pointer-events-auto w-full rounded-gh-lg border border-pane/70 gh-frost p-3 font-brand text-gh-xs text-ink shadow-gh-2 sm:p-4">
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => (view.playing ? controller.pause() : controller.play())}
           disabled={view.loading}
           aria-label={view.playing ? "Pause replay" : "Play replay"}
-          className="h-10 w-10 shrink-0 rounded-full bg-amber-400 text-base font-bold text-dusk-950 disabled:opacity-40 sm:h-9 sm:w-9"
+          className="h-11 w-11 shrink-0 rounded-gh-pill border border-ink bg-ink text-base font-bold text-ground disabled:opacity-40 sm:h-9 sm:w-9"
         >
           {view.playing ? "❚❚" : "▶"}
         </button>
-        <div className="flex overflow-hidden rounded-full border border-white/15" role="group" aria-label="Playback speed">
+        <div className="flex overflow-hidden rounded-full border border-line-strong" role="group" aria-label="Playback speed">
           {REPLAY_SPEEDS.map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => controller.setSpeed(s)}
               aria-pressed={view.speed === s}
-              className={`px-3 py-2 tabular-nums sm:py-1 ${view.speed === s ? "bg-amber-400 text-dusk-950" : "text-white/70"}`}
+              className={`px-3 py-2 tabular-nums sm:py-1 ${view.speed === s ? "bg-ink text-ground" : "text-muted hover:bg-tint"}`}
             >
               {s}×
             </button>
           ))}
         </div>
-        <span className="tabular-nums text-amber-200">{replayClock(view.playhead)}</span>
-        <span className="text-white/50">
+        <span className="font-brand-mono tabular-nums text-ink">{replayClock(view.playhead)}</span>
+        <span className="text-muted">
           {replayWindowLabel(view.since, view.until)} UTC
         </span>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -224,7 +224,7 @@ export function ReplayBar({ controller }: { controller: ReplayController }) {
             type="button"
             onClick={hourAgo}
             aria-pressed={Math.abs(windowMs - 3600_000) < 1000}
-            className="rounded-full border border-white/15 px-3 py-2 sm:py-1"
+            className="rounded-gh-pill border border-line-strong bg-surface-raised px-3 py-2 hover:bg-tint sm:py-1"
           >
             Last hour
           </button>
@@ -232,7 +232,7 @@ export function ReplayBar({ controller }: { controller: ReplayController }) {
             type="button"
             onClick={dayAgo}
             aria-pressed={Math.abs(windowMs - MAX_WINDOW_MS) < 1000}
-            className="rounded-full border border-white/15 px-3 py-2 sm:py-1"
+            className="rounded-gh-pill border border-line-strong bg-surface-raised px-3 py-2 hover:bg-tint sm:py-1"
           >
             Last day
           </button>
@@ -241,14 +241,14 @@ export function ReplayBar({ controller }: { controller: ReplayController }) {
             onClick={sinceVisit}
             disabled={!visitUsable}
             title={visitUsable ? `Since ${replayClock(lastVisit!)} UTC` : "No earlier visit remembered in this browser"}
-            className="rounded-full border border-white/15 px-3 py-2 disabled:opacity-35 sm:py-1"
+            className="rounded-gh-pill border border-line-strong bg-surface-raised px-3 py-2 hover:bg-tint disabled:opacity-40 sm:py-1"
           >
             Since my last visit
           </button>
           <button
             type="button"
             onClick={() => controller.close()}
-            className="rounded-full bg-lantern-400 px-4 py-2 font-semibold text-dusk-950 sm:py-1"
+            className="rounded-gh-pill border border-signal bg-signal px-4 py-2 font-semibold text-signal-ink hover:brightness-[1.06] sm:py-1"
           >
             Back to live
           </button>
@@ -267,14 +267,14 @@ export function ReplayBar({ controller }: { controller: ReplayController }) {
         />
         {hover ? (
           <div
-            className="pointer-events-none absolute bottom-full mb-1 max-w-[80%] -translate-x-1/2 truncate rounded bg-black/85 px-2 py-1 text-[11px] text-white/85"
+            className="pointer-events-none absolute bottom-full mb-1 max-w-[80%] -translate-x-1/2 truncate rounded-gh-sm bg-ink px-2 py-1 text-[11px] text-ground"
             style={{ left: Math.max(60, hover.x) }}
           >
             {hover.label}
           </div>
         ) : null}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-white/55">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted">
         <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm" style={{ background: MARKER_COLOUR.fault }} />faults</span>
         <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm" style={{ background: MARKER_COLOUR.arrival }} />arrivals</span>
         <span className="inline-flex items-center gap-1"><i className="inline-block h-2 w-2 rounded-sm" style={{ background: MARKER_COLOUR.span }} />work spans</span>

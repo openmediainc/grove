@@ -67,6 +67,42 @@ export type ActivityProps = {
   inPanel?: boolean;
 };
 
+type ActivityTone = {
+  clock: string;
+  ink: string;
+  faint: string;
+  link: string;
+  accent: string;
+  quote: string;
+  withheld: string;
+  moderation: string;
+  pillOn: string;
+  pillOff: string;
+  note: string;
+  day: string;
+  rule: string;
+  kind: string;
+  button: string;
+};
+
+const TONE: ActivityTone = {
+  clock: "font-brand-mono text-muted",
+  ink: "text-ink",
+  faint: "text-muted",
+  link: "text-muted underline decoration-line-strong underline-offset-2 hover:text-ink",
+  accent: "text-ink underline decoration-line-strong underline-offset-2",
+  quote: "border-line-strong text-ink",
+  withheld: "border-line text-muted",
+  moderation: "border-danger-ink/60 text-danger-ink",
+  pillOn: "border-ink bg-tint text-ink",
+  pillOff: "border-line-strong bg-surface-raised text-muted hover:text-ink",
+  note: "border-line bg-surface-raised text-muted",
+  day: "gh-frost font-brand font-extrabold tracking-tight text-ink",
+  rule: "border-line",
+  kind: "border-line-strong font-brand-mono text-ink",
+  button: "border-line-strong bg-surface-raised text-ink hover:bg-tint",
+};
+
 function ActorFace({ entry }: { entry: ActivityEntry }) {
   const kind = entry.actor?.kind === "agent" ? "agent" : "human";
   return <GeoAvatar kind={kind} seed={entry.actor?.id ?? entry.id} size={22} label={false} />;
@@ -76,24 +112,26 @@ function Row({
   entry,
   onActor,
   signedIn,
+  t,
 }: {
   entry: ActivityEntry;
   onActor: ((ref: string) => void) | null;
   signedIn: boolean;
+  t: ActivityTone;
 }) {
   const chips = detailChips(entry);
   return (
     <li className="flex gap-3 py-2">
-      <span className="w-12 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-white/50">
+      <span className={`w-12 shrink-0 pt-0.5 text-right text-[11px] tabular-nums ${t.clock}`}>
         {clock(entry.created_at)}
       </span>
       <span className="shrink-0 pt-0.5">
         <ActorFace entry={entry} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="break-words text-sm text-white/85">
+        <p className={`break-words text-sm ${t.ink}`}>
           {entry.moderation ? (
-            <span className="mr-2 rounded-full border border-red-400/40 px-2 py-0.5 text-[10px] uppercase tracking-wider text-red-300">
+            <span className={`mr-2 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${t.moderation}`}>
               moderation
             </span>
           ) : null}
@@ -103,25 +141,25 @@ function Row({
               type="button"
               onClick={() => onActor(actorRef(entry.actor) ?? entry.actor!.id)}
               title="Only this actor"
-              className="ml-2 text-[11px] text-white/50 hover:text-lantern-300"
+              className={`ml-2 text-[11px] ${t.link}`}
             >
               only this
             </button>
           ) : null}
         </p>
         {entry.body ? (
-          <p className="mt-1 break-words border-l-2 border-lantern-400/30 pl-3 text-sm text-white/70">{entry.body}</p>
+          <p className={`mt-1 break-words border-l-2 pl-3 text-sm ${t.quote}`}>{entry.body}</p>
         ) : null}
         {entry.body_withheld ? (
-          <p className="mt-1 border-l-2 border-white/10 pl-3 text-xs italic text-white/50">
+          <p className={`mt-1 border-l-2 pl-3 text-xs italic ${t.withheld}`}>
             You were not among the recipients, so the line is not yours to read.
           </p>
         ) : null}
         {entry.reaction_target ? (
-          <Reactions target={entry.reaction_target} summary={entry.reactions} canReact asGuest={!signedIn} />
+          <Reactions target={entry.reaction_target} summary={entry.reactions} canReact asGuest={!signedIn}  />
         ) : null}
         {chips.length ? (
-          <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-white/50">
+          <p className={`mt-1 flex flex-wrap gap-x-3 text-[11px] ${t.faint}`}>
             {chips.map((c) => (
               <span key={c} className="break-all">
                 {c}
@@ -143,6 +181,9 @@ export function Activity({
   emptyText = "Nothing in this window.",
   inPanel = false,
 }: ActivityProps) {
+  // Brand chrome (DECISIONS #7): in the map's History drawer in the viewer's
+  // mode; on pages still in the legacy frame the tokens render night.
+  const t = TONE;
   const defaults = useMemo(() => ({ win: defaultWindow }), [defaultWindow]);
   const [filters, setFilters] = useState<ActivityFilters>({ win: defaultWindow, kinds: [], actor: null });
   // The first fetch waits until the URL has been read, so a shared link never
@@ -229,16 +270,14 @@ export function Activity({
             type="button"
             onClick={() => update({ ...filters, win: w.key })}
             className={`rounded-full border px-3 py-1.5 text-xs sm:py-1 ${
-              filters.win === w.key
-                ? "border-lantern-400/60 bg-lantern-400/10 text-lantern-300"
-                : "border-white/10 text-white/55 hover:text-white/70"
+              filters.win === w.key ? t.pillOn : t.pillOff
             }`}
           >
             {w.label}
           </button>
         ))}
         {meta ? (
-          <span className="ml-auto text-xs text-white/55">
+          <span className={`ml-auto text-xs ${t.faint}`}>
             {totals.events} {totals.events === 1 ? "event" : "events"}
           </span>
         ) : null}
@@ -254,16 +293,16 @@ export function Activity({
                 type="button"
                 onClick={() => toggleKind(k)}
                 className={`rounded-full border px-3 py-1.5 text-xs sm:py-1 ${
-                  on ? `bg-white/5 ${kindCopy(k).tint}` : "border-white/10 text-white/55 hover:text-white/70"
+                  on ? t.pillOn : t.pillOff
                 }`}
               >
                 {kindCopy(k).label}
-                <span className="ml-1.5 text-white/50">{totals.by_kind[k] ?? 0}</span>
+                <span className={`ml-1.5 tabular-nums ${t.faint}`}>{totals.by_kind[k] ?? 0}</span>
               </button>
             );
           })}
           {filters.kinds.length ? (
-            <button type="button" onClick={() => update({ ...filters, kinds: [] })} className="text-xs text-white/50 hover:text-white/60">
+            <button type="button" onClick={() => update({ ...filters, kinds: [] })} className={`text-xs ${t.link}`}>
               clear
             </button>
           ) : null}
@@ -271,19 +310,19 @@ export function Activity({
       ) : null}
 
       {!actorId && filters.actor ? (
-        <p className="mt-3 text-xs text-white/55">
-          Showing only <code className="break-all text-white/60">{filters.actor}</code>.{" "}
-          <button type="button" onClick={() => update({ ...filters, actor: null })} className="text-lantern-300">
+        <p className={`mt-3 text-xs ${t.faint}`}>
+          Showing only <code className={`break-all ${t.faint}`}>{filters.actor}</code>.{" "}
+          <button type="button" onClick={() => update({ ...filters, actor: null })} className={t.accent}>
             show everyone
           </button>
         </p>
       ) : null}
 
       {meta && !meta.viewer.signed_in ? (
-        <p className="mt-4 rounded-xl border border-white/10 bg-dusk-800/60 p-3 text-xs text-white/55">
+        <p className={`mt-4 rounded-xl border p-3 text-xs ${t.note}`}>
           Signed out, this is the public record only: arrivals, claims and permission changes. Talk,
           notices and moderation need a{" "}
-          <Link href="/login" className="text-lantern-300 underline underline-offset-2">
+          <Link href="/login" className={t.accent}>
             sign-in
           </Link>
           .
@@ -300,7 +339,7 @@ export function Activity({
             return (
               <DayHeading
                 key={b.key}
-                className={`sticky ${inPanel ? "top-0" : "top-14"} z-10 -mx-2 mb-1 mt-8 bg-dusk-950/80 px-2 py-1 font-display text-lg text-lantern-300/80 backdrop-blur first:mt-0`}
+                className={`sticky ${inPanel ? "top-0" : "top-14"} z-10 -mx-2 mb-1 mt-8 px-2 py-1 text-lg backdrop-blur first:mt-0 ${t.day}`}
               >
                 {b.label}
               </DayHeading>
@@ -312,30 +351,30 @@ export function Activity({
             const last = b.entries[0];
             const copy = kindCopy(b.kind);
             return (
-              <div key={b.key} className="border-t border-white/5 py-1">
+              <div key={b.key} className={`border-t py-1 ${t.rule}`}>
                 <button
                   type="button"
                   onClick={() => setExpanded((p) => ({ ...p, [b.key]: !open }))}
                   className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 py-1.5 text-left"
                 >
-                  <span className="w-12 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/50">
+                  <span className={`w-12 shrink-0 text-right text-[11px] tabular-nums ${t.clock}`}>
                     {first ? clock(first.created_at) : ""}
                   </span>
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${copy.tint}`}>
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${t.kind}`}>
                     {copy.label}
                   </span>
-                  <span className="min-w-0 flex-1 text-sm text-white/60">
+                  <span className={`min-w-0 flex-1 text-sm ${t.faint}`}>
                     {copy.plural(b.entries.length)}
                     {first && last && first.created_at !== last.created_at
                       ? ` between ${clock(first.created_at)} and ${clock(last.created_at)}`
                       : ""}
                   </span>
-                  <span className="text-[11px] text-white/50">{open ? "hide" : "show"}</span>
+                  <span className={`text-[11px] ${t.faint}`}>{open ? "hide" : "show"}</span>
                 </button>
                 {open ? (
                   <ul className="pl-2">
                     {b.entries.map((e) => (
-                      <Row key={e.id} entry={e} onActor={onActor} signedIn={signedIn} />
+                      <Row key={e.id} entry={e} onActor={onActor} signedIn={signedIn} t={t} />
                     ))}
                   </ul>
                 ) : null}
@@ -343,14 +382,14 @@ export function Activity({
             );
           }
           return (
-            <ul key={b.key} className="border-t border-white/5">
-              <Row entry={b.entry} onActor={onActor} signedIn={signedIn} />
+            <ul key={b.key} className={`border-t ${t.rule}`}>
+              <Row entry={b.entry} onActor={onActor} signedIn={signedIn} t={t} />
             </ul>
           );
         })}
       </section>
 
-      {!loading && urlRead && !entries.length && !err ? <p className="mt-6 text-sm text-white/55">{emptyText}</p> : null}
+      {!loading && urlRead && !entries.length && !err ? <p className={`mt-6 text-sm ${t.faint}`}>{emptyText}</p> : null}
 
       <div className="mt-6 flex items-center gap-4">
         {cursor ? (
@@ -358,12 +397,12 @@ export function Activity({
             type="button"
             onClick={() => void fetchPage(cursor)}
             disabled={loading}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/60 disabled:opacity-40 sm:py-1.5"
+            className={`rounded-full border px-4 py-2 text-sm disabled:opacity-40 sm:py-1.5 ${t.button}`}
           >
             {loading ? "Reading…" : "Older"}
           </button>
         ) : null}
-        {loading && !entries.length ? <span className="text-sm text-white/55">Reading the record…</span> : null}
+        {loading && !entries.length ? <span className={`text-sm ${t.faint}`}>Reading the record…</span> : null}
       </div>
 
       <ErrorNotice error={err} className="mt-4" />

@@ -16,8 +16,8 @@ export function AgentPrompt() {
   }, []);
 
   return (
-    <div className="mt-3 flex flex-col gap-2 rounded-lg border border-white/10 bg-dusk-950/60 p-3 sm:flex-row sm:items-center">
-      <code className="min-w-0 flex-1 break-all font-mono text-xs text-lantern-300/90">{text}</code>
+    <div className="mt-3 flex flex-col gap-2 rounded-gh-md border border-line bg-surface p-3 sm:flex-row sm:items-center">
+      <code className="min-w-0 flex-1 break-all font-brand-mono text-xs text-ink">{text}</code>
       <button
         type="button"
         onClick={() => {
@@ -26,7 +26,7 @@ export function AgentPrompt() {
             .then(() => setCopied(true))
             .catch(() => setCopied(false));
         }}
-        className="shrink-0 rounded-full border border-lantern-400/40 px-4 py-2 text-xs text-lantern-300 sm:py-1"
+        className="min-h-11 shrink-0 rounded-gh-pill border border-line-strong bg-surface-raised px-4 text-xs text-ink hover:bg-tint sm:min-h-8"
       >
         {copied ? "Copied" : "Copy"}
       </button>

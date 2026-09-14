@@ -70,29 +70,29 @@ export function ResourceBar({ signedIn }: { signedIn: boolean | null }) {
   };
 
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/10 pb-2 normal-case tracking-normal">
-      <span className="inline-flex items-center gap-1.5 text-sm text-white/85" title={`Today's ${terms.name} (UTC day, ${day.scope.label})`}>
+    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line pb-2 normal-case tracking-normal">
+      <span className="inline-flex items-center gap-1.5 text-sm text-ink" title={`Today's ${terms.name} (UTC day, ${day.scope.label})`}>
         <svg aria-hidden width="14" height="14" viewBox="0 0 14 14">
           <circle cx="7" cy="7" r="6" fill={t.cost_micros === null ? "#64748b" : terms.coin} stroke={terms.rim} strokeWidth="1.5" />
           <text x="7" y="10" textAnchor="middle" fontSize="8" fontWeight="700" fill={terms.rim}>
             {t.cost_micros === null ? "?" : "$"}
           </text>
         </svg>
-        <span className="tabular-nums">
+        <span className="font-brand-mono tabular-nums">
           {t.cost_micros !== null ? money(t.cost_micros) : t.reports ? `cost ${NOT_REPORTED}` : "no usage reported today"}
         </span>
       </span>
-      <span className="tabular-nums text-xs text-white/55" title="Input, output and cache tokens reported today">
+      <span className="tabular-nums text-xs text-muted" title="Input, output and cache tokens reported today">
         {tokens(totalTokens(t))} tokens
       </span>
       {t.uncosted_reports > 0 && t.cost_micros !== null ? (
-        <span className="text-[10px] text-white/55" title="Reports that carried tokens but no price">
+        <span className="text-[10px] text-muted" title="Reports that carried tokens but no price">
           + {t.uncosted_reports} unpriced
         </span>
       ) : null}
       {alerts.length ? (
         <span
-          className={`rounded-full px-2 py-0.5 text-[10px] ${over ? "bg-red-500/20 text-red-200" : "bg-amber-400/20 text-amber-200"}`}
+          className={`rounded-full px-2 py-0.5 text-[10px] ${over ? "border border-danger-ink/60 text-danger-ink" : "border border-line-strong bg-tint text-ink"}`}
           title={alerts.map((a) => `${a.display_name}: ${money(a.budget.month_to_date_micros)} of ${money(a.budget.monthly_micros)}`).join("\n")}
         >
           {alerts.length === 1 ? `${alerts[0]!.display_name} ${alerts[0]!.budget.state} budget` : `${alerts.length} near budget`}
@@ -103,7 +103,7 @@ export function ResourceBar({ signedIn }: { signedIn: boolean | null }) {
           aria-label="Whose spend"
           value={scope}
           onChange={(e) => choose(e.target.value)}
-          className="rounded bg-dusk-900/80 px-1 py-0.5 text-[10px] text-white/70 ring-1 ring-white/10"
+          className="rounded bg-surface-raised px-1 py-0.5 text-[10px] text-muted ring-1 ring-line-strong"
         >
           <option value="mine">mine</option>
           {day.orgs.map((o) => (
@@ -113,7 +113,7 @@ export function ResourceBar({ signedIn }: { signedIn: boolean | null }) {
           ))}
         </select>
       ) : null}
-      <Link href="/me#cost" className="text-[10px] text-lantern-300/80 underline-offset-2 hover:underline" title={costLine(t)}>
+      <Link href="/me#cost" className="text-[10px] text-ink underline decoration-line-strong underline-offset-2 hover:decoration-ink" title={costLine(t)}>
         what did today cost
       </Link>
     </div>

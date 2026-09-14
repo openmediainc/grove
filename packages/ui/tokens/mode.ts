@@ -10,23 +10,46 @@ export function isMode(value: unknown): value is Mode {
 }
 
 /**
- * Which mode the chrome shows. TV/kiosk wins (it defaults to night-derived
- * `tv`), then a stored manual choice, then the system preference.
+ * Which mode the chrome shows. TV/kiosk defaults to night-derived `tv` (a wall
+ * across a room) unless the viewer explicitly chose light, then a stored
+ * manual choice, then the system preference.
  */
 export function resolveMode(input: { stored?: string | null; systemDark?: boolean; tv?: boolean }): Mode {
-  if (input.tv) return "tv";
+  if (input.tv) return input.stored === "light" ? "light" : "tv";
   if (isMode(input.stored)) return input.stored;
   return input.systemDark ? "night" : "light";
 }
 
 /**
  * Runs inline in <head> before first paint. Sets `data-mode` only when a
- * choice exists (stored, or `?tv=1`); otherwise the CSS media query follows
- * the system with no attribute, so a system switch applies live. Never throws.
+ * choice exists (stored, or `?tv=1` / `?kiosk=1`, which default to `tv` unless
+ * the stored choice is light); otherwise the CSS media query follows the
+ * system with no attribute, so a system switch applies live. Never throws.
  */
-export const NO_FLASH_SCRIPT = `(function(){try{var d=document.documentElement,m=null;try{if(/[?&]tv=1(&|$)/.test(location.search))m="tv";}catch(e){}if(!m){try{var s=localStorage.getItem(${JSON.stringify(
+export const NO_FLASH_SCRIPT = `(function(){try{var d=document.documentElement,m=null,s=null;try{s=localStorage.getItem(${JSON.stringify(
   MODE_STORAGE_KEY,
-)});if(s==="light"||s==="night"||s==="tv")m=s;}catch(e){}}if(m)d.setAttribute("data-mode",m);}catch(e){}})();`;
+)});}catch(e){}try{if(/[?&](tv|kiosk)=1(&|$)/.test(location.search))m=s==="light"?"light":"tv";}catch(e){}if(!m&&(s==="light"||s==="night"||s==="tv"))m=s;if(m)d.setAttribute("data-mode",m);}catch(e){}})();`;
+
+/**
+ * The map's wall modes (TV and kiosk, entered by key or menu as well as by the
+ * URL): switch the page to `tv` unless the viewer chose light, and hand back a
+ * function that puts the viewer's own choice (or the system) back on leaving.
+ */
+export function enterWallMode(doc: Document = document, storage?: Storage): () => void {
+  let stored: string | null = null;
+  try {
+    stored = (storage ?? window.localStorage).getItem(MODE_STORAGE_KEY);
+  } catch {
+    stored = null;
+  }
+  const root = doc.documentElement;
+  const wall = resolveMode({ tv: true, stored });
+  root.setAttribute("data-mode", wall);
+  return () => {
+    if (isMode(stored)) root.setAttribute("data-mode", stored);
+    else root.removeAttribute("data-mode");
+  };
+}
 
 /** Fired on `window` after `applyModeChoice`, so every open toggle shows the new choice. */
 export const MODE_EVENT = "gh-mode-change";

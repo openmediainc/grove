@@ -184,7 +184,7 @@ export function MuteToggle({ muted, setMuted }: { muted: boolean; setMuted: (m: 
       aria-label="Mute all sound"
       title={muted ? "Sound is muted site-wide. Tap to unmute." : "Mute all sound: read aloud and the map soundscape"}
       className={`inline-flex h-8 w-8 items-center justify-center rounded-full sm:h-7 sm:w-7 ${
-        muted ? "bg-white/10 text-white/70" : "border border-white/15 text-white/50 hover:text-white/80"
+        muted ? "bg-tint text-muted" : "border border-line-strong text-muted hover:text-ink"
       }`}
     >
       <svg aria-hidden viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -207,8 +207,8 @@ export function ReadAloudControl({ state }: { state: ReadAloudState }) {
             onClick={() => update({ on: !settings.on })}
             aria-pressed={settings.on}
             title="Your browser reads new lines out loud, on this device only"
-            className={`rounded-full px-3 py-1.5 text-[11px] uppercase tracking-widest sm:py-1 ${
-              settings.on ? "bg-lantern-400 text-dusk-950" : "border border-lantern-400/40 text-lantern-300"
+            className={`min-h-8 rounded-gh-pill px-3 py-1.5 gh-label sm:py-1 ${
+              settings.on ? "border border-ink bg-tint text-ink" : "border border-line-strong bg-surface-raised text-ink hover:bg-tint"
             }`}
           >
             Read aloud
@@ -217,7 +217,7 @@ export function ReadAloudControl({ state }: { state: ReadAloudState }) {
         <MuteToggle muted={muted} setMuted={setMuted} />
       </div>
       {supported && settings.on ? (
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-white/60">
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-muted">
           <label className="flex min-h-[40px] items-center gap-1.5 sm:min-h-0">
             <input
               type="checkbox"
@@ -235,7 +235,7 @@ export function ReadAloudControl({ state }: { state: ReadAloudState }) {
             <select
               value={String(settings.rate)}
               onChange={(e) => update({ rate: Number(e.target.value) })}
-              className="min-h-[36px] rounded bg-dusk-800 px-1 py-0.5 ring-1 ring-white/10 sm:min-h-0"
+              className="min-h-[36px] rounded-gh-sm border border-line-strong bg-surface-raised px-1 py-0.5 text-ink sm:min-h-0"
             >
               {[0.8, 1, 1.2, 1.5, 1.8].map((r) => (
                 <option key={r} value={String(r)}>
@@ -244,7 +244,7 @@ export function ReadAloudControl({ state }: { state: ReadAloudState }) {
               ))}
             </select>
           </label>
-          <span className="w-full text-white/50">
+          <span className="w-full text-muted">
             {muted
               ? "Sound is muted site-wide, so nothing is read out."
               : "New lines only. Spoken by your browser; nothing leaves this device."}

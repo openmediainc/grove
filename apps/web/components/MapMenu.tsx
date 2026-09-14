@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { onMenuKeyDown, useDialogFocus, useMenuButton } from "./a11y";
+import { IdentityWord } from "./Identity";
 
 /**
  * The map's consolidated controls: Go to ▾, Watch ▾ and ⋯ are each one of
@@ -68,8 +69,8 @@ export function MapMenu({
         title={title}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={onButtonKey}
-        className={`flex h-11 items-center gap-1 rounded-full border px-4 text-xs uppercase tracking-widest sm:h-9 ${
-          open ? "border-lantern-400/60 bg-dusk-900/95 text-lantern-300" : "border-white/15 bg-dusk-950/80 text-white/80"
+        className={`flex h-11 items-center gap-1 rounded-gh-pill border px-4 gh-label text-ink shadow-gh-2 transition-colors duration-gh-fast sm:h-9 ${
+          open ? "border-line-strong bg-tint" : "border-line gh-frost hover:bg-tint"
         }`}
       >
         {label}
@@ -81,7 +82,7 @@ export function MapMenu({
           role="menu"
           aria-label={ariaLabel ?? title}
           onKeyDown={onMenuKeyDown}
-          className={`absolute bottom-full mb-2 max-h-[60svh] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-white/15 bg-dusk-950/[0.97] p-1.5 text-sm normal-case tracking-normal shadow-2xl ${
+          className={`absolute bottom-full mb-2 max-h-[60svh] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-gh-md border border-line bg-surface-raised p-1 font-brand text-gh-sm normal-case tracking-normal text-ink shadow-gh-3 ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >
@@ -92,8 +93,15 @@ export function MapMenu({
   );
 }
 
-const ITEM =
-  "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2";
+/**
+ * One row in a map menu (brand chrome, DESIGN.md §3): ink on the raised
+ * surface, tint on hover and keyboard focus. Toggle rows elsewhere on the map
+ * (depth, theme, sound) share it so every row in ⋯ reads the same.
+ */
+export const MENU_ROW =
+  "flex w-full min-h-11 items-center justify-between gap-3 rounded-gh-sm px-3 text-left text-ink hover:bg-tint focus-visible:bg-tint disabled:text-muted disabled:hover:bg-transparent sm:min-h-9";
+
+const ITEM = MENU_ROW;
 
 export function MenuItem({
   onSelect,
@@ -110,7 +118,7 @@ export function MenuItem({
     <button type="button" role="menuitem" tabIndex={-1} onClick={onSelect} title={title} className={ITEM}>
       <span className="min-w-0 truncate">{children}</span>
       {hint ? (
-        <kbd className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-sans text-[10px] uppercase leading-none text-white/55">
+        <kbd className="shrink-0 rounded-gh-sm border border-line bg-tint px-1.5 py-0.5 font-brand-mono text-[10px] uppercase leading-none text-muted">
           {hint}
         </kbd>
       ) : null}
@@ -128,7 +136,7 @@ export function MenuLink({ href, children, onSelect }: { href: string; children:
 
 export function MenuHeading({ children }: { children: ReactNode }) {
   return (
-    <p role="presentation" className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-[0.2em] text-white/50 first:pt-1">
+    <p role="presentation" className="px-3 pb-1 pt-2 gh-label text-muted first:pt-1">
       {children}
     </p>
   );
@@ -146,17 +154,17 @@ export function MapPanel({ title, onClose, children }: { title: string; onClose:
       role="dialog"
       aria-labelledby={titleId}
       data-speech-avoid
-      className="pointer-events-auto absolute inset-x-4 bottom-24 z-30 max-h-[60svh] overflow-y-auto rounded-2xl border border-white/15 bg-dusk-950/[0.97] p-4 text-sm shadow-2xl sm:inset-x-auto sm:left-6 sm:w-80"
+      className="pointer-events-auto absolute inset-x-4 bottom-24 z-30 max-h-[60svh] overflow-y-auto rounded-gh-lg border border-line gh-frost p-4 text-gh-sm text-ink shadow-gh-2 sm:inset-x-auto sm:left-6 sm:w-80"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 id={titleId} className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/80">
+        <h2 id={titleId} className="gh-label text-muted">
           {title}
         </h2>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="-mr-2 -mt-2 flex h-11 w-11 items-center justify-center rounded-full text-xl text-white/50 hover:text-white sm:h-8 sm:w-8 sm:text-base"
+          className="-mr-2 -mt-2 flex h-11 w-11 items-center justify-center rounded-gh-pill text-xl text-muted hover:bg-tint hover:text-ink sm:h-8 sm:w-8 sm:text-base"
         >
           ×
         </button>
@@ -191,25 +199,31 @@ export function FirstVisitCard({ onDismiss, howHref }: { onDismiss: () => void; 
   return (
     <div
       data-speech-avoid
-      className="pointer-events-auto w-full max-w-sm rounded-2xl border border-lantern-400/25 bg-dusk-950/90 p-3 text-sm shadow-xl sm:p-4"
+      className="pointer-events-auto w-full max-w-sm rounded-gh-lg border border-line gh-frost p-3 text-gh-sm text-ink shadow-gh-2 sm:p-4"
     >
       <div className="flex items-start justify-between gap-2">
-        <h2 className="font-display text-lg leading-tight text-lantern-300">What you&apos;re looking at</h2>
+        <div>
+          <p className="gh-label text-muted">First visit</p>
+          <h2 className="font-brand text-gh-lg font-extrabold leading-tight tracking-tight text-ink">What you&apos;re looking at</h2>
+        </div>
         <button
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss"
-          className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/50 hover:text-white sm:h-8 sm:w-8 sm:text-base"
+          className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-gh-pill text-xl text-muted hover:bg-tint hover:text-ink sm:h-8 sm:w-8 sm:text-base"
         >
           ×
         </button>
       </div>
-      <ul className="mt-1 space-y-1 text-[13px] leading-snug text-white/70">
-        <li>A live world. Every body is a person or an agent, and what an agent does is drawn where it does it.</li>
+      <ul className="mt-2 space-y-1 text-[13px] leading-snug text-muted">
+        <li>
+          A live world. Every body is a <IdentityWord kind="human">person</IdentityWord> or an{" "}
+          <IdentityWord kind="agent">agent</IdentityWord>, and what an agent does is drawn where it does it.
+        </li>
         <li>The ring and mark beside a body say what it is doing; a red triangle means it wants a human.</li>
         <li>Tap anyone, any room or any plot to see what is public. Double-click a body to follow it.</li>
       </ul>
-      <Link href={howHref} className="mt-2 inline-block text-xs text-lantern-300 underline-offset-2 hover:underline">
+      <Link href={howHref} className="mt-2 inline-flex min-h-11 items-center text-gh-xs font-medium text-ink underline decoration-line-strong underline-offset-2 hover:decoration-ink sm:min-h-0">
         How it works →
       </Link>
     </div>

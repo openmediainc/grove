@@ -23,6 +23,16 @@ import {
  * still reacts — the server gives this browser a guest pass on the first one —
  * and says so, quietly, beside the palette.
  */
+/** Brand chrome (DECISIONS #7); on pages still in the legacy frame the tokens render night. */
+const REACTIONS_BRAND = {
+  mine: "border-ink bg-tint text-ink",
+  chip: "border-line text-muted",
+  add: "border-line text-muted hover:text-ink",
+  menu: "border-line bg-surface-raised shadow-gh-3",
+  pick: "hover:bg-tint",
+  faint: "text-muted",
+};
+
 export function Reactions({
   target,
   summary,
@@ -36,6 +46,7 @@ export function Reactions({
   asGuest?: boolean;
   onChange?: (next: ReactionSummaryWire) => void;
 }) {
+  const t = REACTIONS_BRAND;
   const [state, setState] = useState<ReactionSummaryWire | null | undefined>(summary);
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -80,7 +91,7 @@ export function Reactions({
           aria-pressed={c.mine}
           title={c.mine ? `Remove your ${c.label}` : c.label}
           className={`rounded-full border px-1.5 py-px tabular-nums ${
-            c.mine ? "border-lantern-400/60 bg-lantern-400/10 text-lantern-300" : "border-white/10 text-white/60"
+            c.mine ? t.mine : t.chip
           } disabled:cursor-default`}
         >
           <span aria-hidden>{c.glyph}</span>
@@ -95,7 +106,7 @@ export function Reactions({
             aria-expanded={open}
             aria-haspopup="menu"
             aria-label="Add a reaction"
-            className="rounded-full border border-white/10 px-1.5 py-px text-white/50 hover:text-white/70"
+            className={`rounded-full border px-1.5 py-px ${t.add}`}
           >
             +
           </button>
@@ -112,7 +123,7 @@ export function Reactions({
                 }
                 onMenuKeyDown(e);
               }}
-              className="absolute left-0 top-full z-20 mt-1 flex gap-0.5 rounded-full border border-white/15 bg-dusk-900 px-1 py-0.5 shadow-lg"
+              className={`absolute left-0 top-full z-20 mt-1 flex gap-0.5 rounded-full border px-1 py-0.5 ${t.menu}`}
             >
               {REACTION_KEYS.map((key) => (
                 <button
@@ -122,7 +133,7 @@ export function Reactions({
                   title={REACTION_LABEL[key]}
                   aria-label={REACTION_LABEL[key]}
                   onClick={() => void toggle(key, true)}
-                  className="rounded-full px-1 text-sm hover:bg-white/10"
+                  className={`rounded-full px-1 text-sm ${t.pick}`}
                 >
                   {REACTION_GLYPH[key]}
                 </button>
@@ -132,11 +143,11 @@ export function Reactions({
         </span>
       ) : null}
       {canReact && asGuest && (open || (state?.mine.length ?? 0) > 0) ? (
-        <span className="text-white/50" title="Signed out: kept in this browser. Sign in and it moves to your account.">
+        <span className={t.faint} title="Signed out: kept in this browser. Sign in and it moves to your account.">
           as a guest
         </span>
       ) : null}
-      {note ? <span className="text-white/55">{note}</span> : null}
+      {note ? <span className={t.faint}>{note}</span> : null}
     </span>
   );
 }

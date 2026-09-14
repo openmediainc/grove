@@ -23,7 +23,6 @@ import {
   announceActiveTheme,
   hasOwnThemeChoice,
   readThemeChoice,
-  themeStyle,
   writeThemeChoice,
   type Theme,
   type ThemeId,
@@ -32,6 +31,9 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
 import { AppearanceMenuGroup } from "./Appearance";
 import { linkAtTile, viewedOwnerDefault, type ViewLink } from "@/lib/themes/owner-default";
 import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
+import { enterWallMode } from "@grove/ui/tokens";
+import { CHROME_WORDS } from "@/lib/themes/chrome-words";
+import { IDENTITY_TICK_W, drawIdentityTick, identityOf, type IdentityKind } from "@/lib/identity";
 import { gp } from "@/lib/base";
 import { startPoll } from "@/lib/poll";
 import { themedAccess } from "@/lib/access";
@@ -112,7 +114,7 @@ import { estateSignContent, estateSignVisible, layoutEstateSign, layoutSignboard
 import { estatePerimeter, estateSignTile, readEstates, type MapEstate } from "@/lib/estates";
 import { WATCH_HEADER, formatHeadcount, makeWatchToken } from "@/lib/headcount";
 import { AttentionBell } from "./AttentionBell";
-import { FirstVisitCard, MAP_KEYS, MapMenu, MapPanel, MenuHeading, MenuItem, MenuLink } from "./MapMenu";
+import { FirstVisitCard, MAP_KEYS, MENU_ROW, MapMenu, MapPanel, MenuHeading, MenuItem, MenuLink } from "./MapMenu";
 import type { RoomPublicView } from "./RoomDrawer";
 import type { Arrival } from "./WalkInSheet";
 import { ArrivalToast } from "./ArrivalToast";
@@ -402,6 +404,9 @@ type Plot = {
  * from the active theme's lexicon (lib/themes). Access level is public even
  * when the space's contents are not.
  */
+/** The default theme's plain access words, used by the chrome in every theme. */
+const DEFAULT_THEME_OBJ: Theme = THEMES[DEFAULT_THEME];
+
 function accessLabel(theme: Theme, preset: string): string {
   return themedAccess((theme.lexicon.access as Record<string, { label: string } | undefined>)[preset]?.label, preset);
 }
@@ -857,7 +862,7 @@ function WorldUrlSync({ onChange }: { onChange: (u: WorldUrl) => void }) {
 
 /** A button's shape in the bottom row. */
 const CONTROL =
-  "pointer-events-auto flex h-11 items-center rounded-full border border-white/15 bg-dusk-950/80 px-4 text-xs uppercase tracking-widest text-white/80 sm:h-9";
+  "pointer-events-auto flex h-11 items-center rounded-gh-pill border border-line gh-frost px-4 gh-label text-ink shadow-gh-2 hover:bg-tint sm:h-9";
 
 export function WorldMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -947,6 +952,8 @@ export function WorldMap() {
   const chosenRef = useRef<Theme>(THEMES[DEFAULT_THEME]);
   const theme = THEMES[themeId];
   const lex = theme.lexicon;
+  /** Chrome speaks plain words whatever the theme; `lex` is for in-world names only. */
+  const words = CHROME_WORDS;
   const controlsRef = useRef<{
     zoomBy: (f: number) => void;
     reset: () => void;
@@ -1337,6 +1344,18 @@ export function WorldMap() {
    * someone who walks up to the Mini and taps the screen is never trapped in a
    * mode they did not know they were in.
    * ------------------------------------------------------------------- */
+  // TV and kiosk are for a wall across a room: the chrome goes to the `tv`
+  // brand mode (night, larger type) unless this viewer chose light, and the
+  // viewer's own choice comes back when they leave (DECISIONS #7).
+  useEffect(() => {
+    if (!kiosk) return;
+    try {
+      return enterWallMode();
+    } catch {
+      return undefined;
+    }
+  }, [kiosk]);
+
   const setKioskMode = useCallback((on: boolean) => {
     kioskRef.current = on;
     tourStopRef.current = -1;
@@ -1698,8 +1717,8 @@ export function WorldMap() {
       label: lex.regions[region].title,
       title: lex.regions[region].bookmark,
     })),
-    { key: "b", label: lex.controls.busiest, title: lex.controls.busiestTitle },
-    ...(hasMySpace ? [{ key: "m", label: lex.controls.mySpace, title: lex.controls.mySpaceTitle }] : []),
+    { key: "b", label: words.controls.busiest, title: words.controls.busiestTitle },
+    ...(hasMySpace ? [{ key: "m", label: words.controls.mySpace, title: words.controls.mySpaceTitle }] : []),
   ];
 
   // Who is watching. Deliberately its own effect, deliberately not awaited by
@@ -2461,7 +2480,8 @@ export function WorldMap() {
         return {
           kind: "body",
           title: body.name,
-          subtitle: `${body.kind === "human" ? chosenRef.current.lexicon.aHuman : chosenRef.current.lexicon.anAgent} · ${body.detail ?? VERB_LABEL[body.verb]}`,
+          subtitle: `${body.kind === "human" ? CHROME_WORDS.aHuman : CHROME_WORDS.anAgent} · ${body.detail ?? VERB_LABEL[body.verb]}`,
+          identity: identityOf(body.kind),
           region: regionTitle(chosenRef.current, body.region),
           facts,
           org:
@@ -2496,16 +2516,17 @@ export function WorldMap() {
           name: plot.name,
           slug: plot.slug,
           plotIndex: plot.plotIndex,
-          access: accessLabel(chosenRef.current, plot.preset),
-          accessBlurb: accessBlurb(chosenRef.current, plot.preset),
+          // Access is chrome: Open · Watch only · Private in every theme (DECISIONS #7).
+          access: accessLabel(DEFAULT_THEME_OBJ, plot.preset),
+          accessBlurb: accessBlurb(DEFAULT_THEME_OBJ, plot.preset),
           ownerHandle: plot.ownerHandle,
           occupancy: plot.occupancy,
           orgs: plot.orgs,
           marks:
             plot.preset === "private"
               ? []
-              : plot.marks.map((m) => chosenRef.current.lexicon.marks[m]),
-          marksHeading: chosenRef.current.lexicon.marks.heading,
+              : plot.marks.map((m) => CHROME_WORDS.marks[m]),
+          marksHeading: CHROME_WORDS.marks.heading,
           district: inDistrict(chosenRef.current.lexicon.district.names, plot.plotIndex),
           share: { at: { tx: (plot.rect.x0 + plot.rect.x1) / 2, ty: (plot.rect.y0 + plot.rect.y1) / 2 } },
         };
@@ -2518,7 +2539,7 @@ export function WorldMap() {
         title: regionTitle(chosenRef.current, region),
         here: actorsRef.current
           .filter((a) => a.region === region)
-          .map((a) => ({ name: a.name, detail: a.detail ?? VERB_LABEL[a.verb] })),
+          .map((a) => ({ name: a.name, detail: a.detail ?? VERB_LABEL[a.verb], kind: identityOf(a.kind) })),
         recent: recentRef.current,
         share: { at: { tx, ty } },
       };
@@ -2755,6 +2776,8 @@ export function WorldMap() {
         detailFill: string;
         alpha: number;
         orgColour: string | null;
+        /** Person or agent: the small theme-invariant identity tick after the name (DECISIONS #7). */
+        identity: IdentityKind;
         /** Resting at plot: placed after every live caption, so it never hides one. */
         resting?: boolean;
       };
@@ -3352,6 +3375,7 @@ export function WorldMap() {
               detailFill: VERB_RING[a.verb],
               alpha,
               orgColour: a.orgColour ?? null,
+              identity: identityOf(a.kind),
             });
           }
         }
@@ -3398,6 +3422,7 @@ export function WorldMap() {
                 detailFill: RESTING_MARK_COLOUR,
                 alpha: 0.5,
                 orgColour: null,
+                identity: "agent",
                 resting: true,
               });
             }
@@ -3748,16 +3773,21 @@ export function WorldMap() {
           ctx.fillStyle = l.nameFill;
           // A dot in the org colour leads the nameplate. It shifts the name by
           // 4px rather than recolouring it: the name's colour already says
-          // whether this body is Grove's or Paperclip's.
-          const nameText = fitText(ctx, l.name, CAPTION_W - (l.orgColour ? 8 : 0));
-          ctx.fillText(nameText, l.x + (l.orgColour ? 4 : 0), l.y + 28);
+          // whether this body is Grove's or Paperclip's. The identity tick
+          // (person dot / agent diamond, DECISIONS #7) follows it, so the pair
+          // stays centred on the body.
+          const lead = l.orgColour ? 8 : 0;
+          const nameText = fitText(ctx, l.name, CAPTION_W - lead - IDENTITY_TICK_W);
+          const nameW = ctx.measureText(nameText).width;
+          const nameX = l.x + (lead - IDENTITY_TICK_W) / 2;
+          ctx.fillText(nameText, nameX, l.y + 28);
           if (l.orgColour) {
-            const nameW = ctx.measureText(nameText).width;
             ctx.fillStyle = l.orgColour;
             ctx.beginPath();
-            ctx.arc(l.x - nameW / 2, l.y + 24.5, 2.5, 0, Math.PI * 2);
+            ctx.arc(nameX - nameW / 2 - 4, l.y + 24.5, 2.5, 0, Math.PI * 2);
             ctx.fill();
           }
+          drawIdentityTick(ctx, nameX + nameW / 2 + IDENTITY_TICK_W / 2 + 0.5, l.y + 24.5, l.identity);
           ctx.font = "9px ui-sans-serif, system-ui, sans-serif";
           ctx.fillStyle = l.detailFill;
           ctx.fillText(fitText(ctx, l.detail, CAPTION_W), l.x, l.y + 40);
@@ -4218,7 +4248,7 @@ export function WorldMap() {
     ? {
         here: actorsRef.current
           .filter((a) => a.region === roomRegion)
-          .map((a) => ({ name: a.name, detail: a.detail ?? VERB_LABEL[a.verb] })),
+          .map((a) => ({ name: a.name, detail: a.detail ?? VERB_LABEL[a.verb], kind: identityOf(a.kind) })),
         recent: recentRef.current,
       }
     : null;
@@ -4234,8 +4264,12 @@ export function WorldMap() {
   return (
     <section
       data-grove-theme={theme.id}
-      style={themeStyle(theme)}
-      className={`relative overflow-hidden bg-dusk-950 ${
+      data-map-chrome
+      // Brand chrome over theme world (DECISIONS #7): the section is a
+      // .gh-chrome surface (ink, type, focus ring), and only its ground — what
+      // shows before the canvas paints — is the theme's world colour.
+      style={{ background: `rgb(${theme.palette.chrome.dusk950})` }}
+      className={`gh-chrome relative overflow-hidden ${
         bare ? "min-h-[100svh]" : "min-h-[calc(100svh-56px)]"
       }`}
     >
@@ -4243,7 +4277,7 @@ export function WorldMap() {
       <KioskChrome
         active={kiosk}
         onLeave={() => setKioskMode(false)}
-        label={tv ? `Leave ${lex.controls.tv}` : "Leave kiosk"}
+        label={tv ? `Leave ${words.controls.tv}` : "Leave kiosk"}
       />
       {/* Grove TV's caption: what the body on screen is doing, in one line.
           Top-centre, where kiosk mode has already cleared the heading away, so
@@ -4253,13 +4287,13 @@ export function WorldMap() {
           <div
             role="status"
             aria-live="polite"
-            className={`flex max-w-3xl items-start gap-3 rounded-2xl border bg-dusk-950/85 px-4 py-2.5 text-sm transition-opacity duration-500 sm:text-base ${
-              tvCaption.kind === "hazard" ? "border-red-400/50 text-red-100" : "border-lantern-400/25 text-white/85"
+            className={`flex max-w-3xl items-start gap-3 rounded-gh-xl border gh-frost px-4 py-2.5 text-gh-sm shadow-gh-2 transition-opacity duration-500 sm:text-gh-lg ${
+              tvCaption.kind === "hazard" ? "border-danger-ink/60 text-danger-ink" : "border-line-strong text-ink"
             } ${tvCaption.paused ? "opacity-50" : "opacity-100"}`}
           >
-            <span className="mt-0.5 shrink-0 rounded-full border border-lantern-400/40 px-2 py-0.5 text-[10px] uppercase tracking-widest text-lantern-300">
-              {tvCaption.kind === "hazard" ? <span aria-hidden className="mr-1 text-red-300">▲</span> : null}
-              {tvCaption.paused ? "paused" : lex.controls.onAir}
+            <span className="mt-0.5 shrink-0 rounded-gh-pill border border-line-strong px-2 py-0.5 gh-label text-ink">
+              {tvCaption.kind === "hazard" ? <span aria-hidden className="mr-1 text-danger-ink">▲</span> : null}
+              {tvCaption.paused ? "paused" : words.controls.onAir}
             </span>
             <span className="min-w-0 break-words">{tvCaption.caption}</span>
           </div>
@@ -4279,9 +4313,10 @@ export function WorldMap() {
         History. Keys: 1 to 6 go to a room, plus and minus zoom, full stop goes to the next body that wants attention, slash
         searches, Escape closes.
       </p>
-      {/* Replay frames the whole map in amber, so even a screenshot says it. */}
+      {/* Replay frames the whole map in the sky pane, so even a screenshot says it
+          (amber is a person now, DECISIONS #7). */}
       {replaying ? (
-        <div aria-hidden className="pointer-events-none absolute inset-0 z-10 border-4 border-amber-400/70" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-10 border-4 border-pane/70" />
       ) : null}
       <ReplayBadge controller={replay} />
       {/* Everything said on the map, as text. Visually hidden: the canvas
@@ -4308,18 +4343,18 @@ export function WorldMap() {
         <div
           data-speech-avoid
           data-headcount={hud.live ? "" : undefined}
-          className="pointer-events-auto flex max-w-full items-center gap-2 truncate rounded-full border border-lantern-400/20 bg-dusk-950/80 px-3 py-1.5 text-[11px] tabular-nums text-lantern-200 sm:text-xs"
+          className="pointer-events-auto flex max-w-full items-center gap-2 truncate rounded-gh-pill border border-line gh-frost px-3 py-1.5 font-brand-mono text-[11px] tabular-nums text-ink shadow-gh-2 sm:text-xs"
           title="Bodies on the map right now, how many open maps have checked in over the last minute (counted, never named), and the world clock in UTC."
         >
           {hud.live ? (
-            <span aria-hidden className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-400 motion-reduce:animate-none" />
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-[1px] bg-signal" />
           ) : null}
           <span className="truncate">
-            {hud.live ? formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, lex.hud) : status}
+            {hud.live ? formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, words.hud) : status}
             {sky ? (
               <>
                 {" · "}
-                {sky.clock} <span className="text-white/55">{sky.label}</span>
+                {sky.clock} <span className="text-muted">{sky.label}</span>
               </>
             ) : null}
           </span>
@@ -4348,7 +4383,7 @@ export function WorldMap() {
           ) : (
             <div
               data-speech-avoid
-              className="pointer-events-auto relative overflow-hidden rounded-xl border border-lantern-400/25 bg-dusk-950/85 shadow-xl"
+              className="pointer-events-auto relative overflow-hidden rounded-gh-lg border border-line gh-frost p-1 shadow-gh-2"
             >
               <canvas
                 ref={insetRef}
@@ -4379,7 +4414,7 @@ export function WorldMap() {
                 aria-expanded
                 aria-label="Hide minimap"
                 title="Hide the minimap"
-                className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center text-sm text-white/60 hover:text-white/85"
+                className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-gh-pill gh-frost text-sm text-ink hover:bg-tint"
               >
                 <span aria-hidden>×</span>
               </button>
@@ -4391,7 +4426,7 @@ export function WorldMap() {
         <SpectatorPeek
           peek={peek}
           signedIn={signedIn}
-          lex={lex.card}
+          lex={words.card}
           onClose={() => setPeek(null)}
           onOpenRoom={(slug) => openRoom(slug)}
         />
@@ -4435,38 +4470,38 @@ export function WorldMap() {
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
               {MAP_KEYS.map((k) => (
                 <div key={k.keys} className="contents">
-                  <dt className="text-right font-mono text-lantern-300/80">{k.keys}</dt>
-                  <dd className="text-white/70">{k.what}</dd>
+                  <dt className="text-right font-brand-mono text-ink">{k.keys}</dt>
+                  <dd className="text-muted">{k.what}</dd>
                 </div>
               ))}
             </dl>
           ) : (
-            <div className="space-y-2 text-xs text-white/65">
+            <div className="space-y-2 text-xs text-muted">
               <p className="flex flex-wrap gap-x-3 gap-y-1">
-                {lex.legend.map((word) => (
+                {words.legend.map((word) => (
                   <span key={word}>{word}</span>
                 ))}
               </p>
               {hud.orgs.length ? (
-                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-2">
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2">
                   {hud.orgs.map((o) => (
                     <span key={o.id} className="inline-flex items-center gap-1">
                       <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: o.colour }} />
                       {o.name}
                     </span>
                   ))}
-                  <span className="text-white/50">
+                  <span className="text-muted">
                     {hud.orgMode === "dedicated" ? "· everyone here flies it" : "· by membership"}
                   </span>
                 </p>
               ) : null}
-              <p className="border-t border-white/10 pt-2 tabular-nums">
-                {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep} · {lex.hud.fog} {hud.radius}
-                {hud.world ? ` · ${lex.hud.world} ${hud.world}` : ""}
-                {hud.spaces ? ` · ${hud.spaces} ${lex.hud.claimed}` : ""}
+              <p className="border-t border-line pt-2 tabular-nums">
+                {hud.awake} {words.hud.awake} · {hud.asleep} {words.hud.asleep} · {words.hud.fog} {hud.radius}
+                {hud.world ? ` · ${words.hud.world} ${hud.world}` : ""}
+                {hud.spaces ? ` · ${hud.spaces} ${words.hud.claimed}` : ""}
               </p>
-              <p className="text-white/55">{status}</p>
-              <p className="break-words text-white/55">{hud.lastHeard || lex.hud.quiet}</p>
+              <p className="text-muted">{status}</p>
+              <p className="break-words text-muted">{hud.lastHeard || words.hud.quiet}</p>
             </div>
           )}
         </MapPanel>
@@ -4483,40 +4518,42 @@ export function WorldMap() {
         } ${cinema ? "hidden" : ""}`}
         style={{ "--drawer-w": drawerWidth } as React.CSSProperties}
       >
-        {kiosk ? <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} /> : null}
+        {kiosk ? <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={words.bell} /> : null}
         <ReplayBar controller={replay} />
         {following && !tv ? (
-          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-lantern-400/40 bg-dusk-950/90 py-1.5 pl-4 pr-1.5 text-xs text-lantern-300">
+          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-gh-pill border border-line gh-frost py-1.5 pl-4 pr-1.5 text-gh-xs text-ink shadow-gh-2">
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-[1px] bg-signal" />
             <span className="truncate">
-              {lex.controls.following} {following}
+              {words.controls.following} {following}
             </span>
             <button
               type="button"
               onClick={stopFollowing}
-              className="shrink-0 rounded-full border border-white/20 px-4 py-2.5 text-white/80 sm:px-3 sm:py-1"
+              className="shrink-0 rounded-gh-pill border border-line-strong bg-surface-raised px-4 py-2.5 text-ink hover:bg-tint sm:px-3 sm:py-1"
             >
-              {lex.controls.release}
+              {words.controls.release}
             </button>
           </div>
         ) : null}
         <div className={`w-full flex-wrap items-center justify-between gap-2 ${kiosk ? "hidden" : "flex"}`}>
           <div className="pointer-events-auto flex gap-2 text-sm">
             {cta === "sign-in" ? (
-              <a href={gp("/login")} className="flex h-11 items-center rounded-full bg-lantern-400 px-5 font-semibold text-dusk-950 sm:h-9">
+              // The nav already carries Sign in as the one signal action, so the map's copy is secondary.
+              <a href={gp("/login")} className="flex h-11 items-center rounded-gh-pill border border-line-strong bg-surface-raised px-5 font-semibold text-ink shadow-gh-2 hover:bg-tint sm:h-9">
                 Sign in
               </a>
             ) : cta === "walk-in" ? (
               <button
                 type="button"
                 onClick={() => setWalkIn(true)}
-                className="flex h-11 items-center rounded-full bg-lantern-400 px-5 font-semibold text-dusk-950 sm:h-9"
+                className="flex h-11 items-center rounded-gh-pill border border-signal bg-signal px-5 font-semibold text-signal-ink shadow-gh-2 hover:brightness-[1.06] sm:h-9"
               >
                 Walk in
               </button>
             ) : null}
           </div>
           <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
-            <MapMenu label={<>{lex.controls.goTo} <span aria-hidden>▾</span></>} title="Move the camera to a room, the busiest room or your own ground" align="right">
+            <MapMenu label={<>{words.controls.goTo} <span aria-hidden>▾</span></>} title="Move the camera to a room, the busiest room or your own ground" align="right">
               {(close) => (
                 <>
                   <MenuHeading>Rooms</MenuHeading>
@@ -4573,7 +4610,7 @@ export function WorldMap() {
                 </>
               )}
             </MapMenu>
-            <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={lex.bell} />
+            <AttentionBell counts={hud.attn} position={attnPos} onCycle={cycleAttention} words={words.bell} />
             <MapMenu label={<>Watch <span aria-hidden>▾</span></>} title="TV, kiosk, the History with replay, and recorded sequences" align="right">
               {(close) => (
                 <>
@@ -4585,7 +4622,7 @@ export function WorldMap() {
                       setTvMode(true);
                     }}
                   >
-                    {lex.controls.tv}
+                    {words.controls.tv}
                   </MenuItem>
                   <MenuItem
                     hint="k"
@@ -4595,7 +4632,7 @@ export function WorldMap() {
                       setKioskMode(true);
                     }}
                   >
-                    {lex.controls.kiosk}
+                    {words.controls.kiosk}
                   </MenuItem>
                   <MenuItem
                     hint="h"
@@ -4629,15 +4666,15 @@ export function WorldMap() {
                     </div>
                   ) : null}
                   <MenuItem
-                    title={lex.postcard.buttonTitle}
+                    title={words.postcard.buttonTitle}
                     onSelect={() => {
                       close();
                       void savePostcard();
                     }}
                   >
-                    {lex.postcard.button}
+                    {words.postcard.button}
                   </MenuItem>
-                  <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={lex.controls.theme} />
+                  <ThemeSwitcher value={themeId} onChange={(id) => applyTheme(id, true)} label={words.controls.theme} />
                   <AppearanceMenuGroup />
                   <MenuItem
                     hint="0"
@@ -4646,7 +4683,7 @@ export function WorldMap() {
                       resetView();
                     }}
                   >
-                    {lex.controls.resetView}
+                    {words.controls.resetView}
                   </MenuItem>
                   <button
                     type="button"
@@ -4654,10 +4691,10 @@ export function WorldMap() {
                     aria-checked={depthOn}
                     title="Tilts the map for a sense of depth: layered height, soft shadows and a haze toward the far edge. A view preference for this browser; with reduced motion, tilt only."
                     onClick={toggleDepth}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
+                    className={MENU_ROW}
                   >
                     <span>Depth view</span>
-                    <span className={`text-xs ${depthOn ? "text-lantern-300" : "text-white/55"}`}>{depthOn ? "on" : "off"}</span>
+                    <span className={`font-brand-mono text-gh-xs ${depthOn ? "text-ink" : "text-muted"}`}>{depthOn ? "on" : "off"}</span>
                   </button>
                   <MenuItem
                     onSelect={() => {
@@ -4701,9 +4738,9 @@ export function WorldMap() {
           and how many bodies are up, in the corner, at the weight of a clock on
           a wall rather than of a heading on a page. */}
       {kiosk && sky ? (
-        <div className="pointer-events-none absolute bottom-4 left-4 text-[11px] tabular-nums tracking-wide text-white/50">
-          {sky.clock} UTC · {sky.label} · {hud.awake} {lex.hud.awake} · {hud.asleep} {lex.hud.asleep}
-          {hud.live ? ` · ${formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, lex.hud)}` : ""}
+        <div className="pointer-events-none absolute bottom-4 left-4 max-w-[calc(100%-12rem)] truncate rounded-gh-pill gh-frost px-3 py-1 font-brand-mono text-gh-xs tabular-nums text-muted sm:max-w-[calc(100%-16rem)]">
+          {sky.clock} UTC · {sky.label} · {hud.awake} {words.hud.awake} · {hud.asleep} {words.hud.asleep}
+          {hud.live ? ` · ${formatHeadcount({ here: hud.here, watching: hud.watching, cap: hud.watchCap }, words.hud)}` : ""}
         </div>
       ) : null}
       {recorder && !bare ? (

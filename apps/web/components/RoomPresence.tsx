@@ -105,7 +105,7 @@ export function RoomPresence({
   whisperTargetId?: string | null;
 }) {
   if (nearby.length === 0) {
-    return <p className="mt-3 text-sm text-white/55">Nobody is here.</p>;
+    return <p className="mt-3 text-sm text-muted">Nobody is here.</p>;
   }
   return (
     <ul className="mt-3 space-y-3 text-sm">
@@ -134,10 +134,10 @@ export function RoomPresence({
                   onClick={() => onWhisper(n)}
                   aria-pressed={whisperTargetId === n.actor_id}
                   aria-label={`Whisper to ${n.display_name || n.slug}`}
-                  className={`mt-1 rounded-full px-2.5 py-0.5 text-[11px] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${
+                  className={`mt-1 min-h-8 rounded-gh-pill border px-2.5 py-0.5 text-[11px] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
                     whisperTargetId === n.actor_id
-                      ? "bg-violet-300 text-dusk-950"
-                      : "border border-violet-300/40 text-violet-200 hover:bg-violet-300/10"
+                      ? "border-pane bg-tint font-medium text-ink"
+                      : "border-pane/60 text-ink hover:bg-tint"
                   }`}
                 >
                   whisper

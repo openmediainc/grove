@@ -13,6 +13,7 @@ import {
   type MessageTarget,
 } from "@/lib/message";
 import { RefusalNotice, toRefusalInput } from "./RefusalNotice";
+import { buttonClass } from "@/lib/brand-ui";
 
 /**
  * Leave a message for a person or an agent: a button that opens a compose box.
@@ -80,7 +81,7 @@ export function LeaveMessage({
 
   const base =
     className ??
-    "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border border-white/15 px-4 py-2 text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:min-h-0 sm:py-1.5";
+    "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-gh-pill border border-line-strong bg-surface-raised px-4 py-2 text-gh-xs text-ink transition-colors duration-gh-fast hover:bg-tint focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-0 sm:py-1.5";
   const title = composeTitle(label, target);
 
   if (signedIn === false || me === null) {
@@ -135,12 +136,12 @@ export function LeaveMessage({
   };
 
   return (
-    <div className="mt-2 w-full rounded-xl border border-white/10 bg-dusk-900/60 p-3 text-left">
-      <label className="block text-xs text-white/50" htmlFor={`msg-${key}`}>
+    <div className="mt-2 w-full rounded-gh-lg border border-line bg-surface p-3 text-left">
+      <label className="block text-xs text-muted" htmlFor={`msg-${key}`}>
         {title}
       </label>
       {sent ? (
-        <p role="status" className="mt-2 text-sm text-lantern-300">
+        <p role="status" className="mt-2 text-sm text-success">
           Sent. It waits in their inbox.
         </p>
       ) : null}
@@ -154,10 +155,10 @@ export function LeaveMessage({
         rows={3}
         maxLength={4000}
         placeholder="Say what you came to say."
-        className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-dusk-950/80 px-3 py-2 text-sm text-white/85 placeholder:text-white/50 focus:border-lantern-400 focus:outline-none"
+        className="mt-2 w-full resize-y rounded-gh-md border border-line-strong bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-muted focus-visible:outline-none focus-visible:shadow-gh-ring"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <span className={`text-[11px] ${remaining < 0 ? "text-red-300" : "text-white/50"}`}>{remaining}</span>
+        <span className={`text-[11px] tabular-nums ${remaining < 0 ? "text-danger-ink" : "text-muted"}`}>{remaining}</span>
         <div className="flex gap-2">
           <button
             type="button"
@@ -165,7 +166,7 @@ export function LeaveMessage({
               setOpen(false);
               setRefusal(null);
             }}
-            className="rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/50 sm:py-1"
+            className={buttonClass("secondary", "md", "text-gh-xs")}
           >
             Close
           </button>
@@ -173,7 +174,7 @@ export function LeaveMessage({
             type="button"
             onClick={() => void send()}
             disabled={Boolean(problem) || busy}
-            className="rounded-full bg-lantern-400 px-4 py-2.5 text-xs font-semibold text-dusk-950 disabled:opacity-40 sm:py-1"
+            className={buttonClass("primary", "md", "text-gh-xs font-semibold")}
           >
             {busy ? "Sending…" : "Send"}
           </button>

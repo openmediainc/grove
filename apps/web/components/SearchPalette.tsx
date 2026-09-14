@@ -290,9 +290,17 @@ function PaletteDialog({ onClose, children }: { onClose: () => void; children: R
 function KindMark({ type, online }: { type: SearchItem["type"]; online: boolean }) {
   const glyph = type === "agent" ? "◆" : type === "human" ? "●" : type === "space" ? "▣" : "▢";
   const word = type === "agent" ? "Agent" : type === "human" ? "Person" : type === "space" ? "Space" : "Room";
+  // People amber, agents cyan, whatever the theme (DECISIONS #7, #74); the glyph
+  // shape and the word carry it too. On the map now = a small success dot.
+  const tone = type === "agent" ? "text-agent" : type === "human" ? "text-human" : "text-muted";
   return (
-    <span className={`shrink-0 text-[10px] ${online ? "text-success" : "text-muted"}`} title={online ? `${word}, on the map now` : word}>
+    <span
+      data-identity={type === "agent" || type === "human" ? type : undefined}
+      className={`inline-flex shrink-0 items-center gap-0.5 text-[10px] ${tone}`}
+      title={online ? `${word}, on the map now` : word}
+    >
       <span aria-hidden>{glyph}</span>
+      {online ? <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-success" /> : null}
       <span className="sr-only">{online ? `${word}, on the map now` : word}</span>
     </span>
   );

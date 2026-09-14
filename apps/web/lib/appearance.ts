@@ -14,7 +14,7 @@ export const APPEARANCE_LABEL: Record<(typeof APPEARANCE_CHOICES)[number], strin
  * `[data-brand-legacy]` frame that keeps the tokens at night (rollout #74–#75
  * add routes here as they migrate; a prefix covers the subtree).
  */
-export const BRANDED_ROUTES: readonly string[] = ["/styleguide"];
+export const BRANDED_ROUTES: readonly string[] = ["/styleguide", "/"];
 
 export function isBrandedRoute(pathname: string | null | undefined, routes: readonly string[] = BRANDED_ROUTES): boolean {
   if (!pathname) return false;

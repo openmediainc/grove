@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useDialogFocus } from "@/components/a11y";
 import { Activity } from "@/components/Activity";
+import { buttonClass } from "@/lib/brand-ui";
 import { MAX_WINDOW_MS, previousVisit, replayClock, type ReplayController } from "@/lib/replay/controller";
 
 /**
@@ -46,7 +47,7 @@ export function HistoryDrawer({
     }
   };
 
-  const BTN = "rounded-full border border-white/15 px-3 py-2 text-xs text-white/75 hover:border-amber-300/50 disabled:opacity-35 sm:py-1";
+  const BTN = "min-h-11 rounded-gh-pill border border-line-strong bg-surface-raised px-3 text-gh-xs text-ink hover:bg-tint disabled:opacity-40 sm:min-h-8";
 
   return (
     <div
@@ -57,14 +58,14 @@ export function HistoryDrawer({
       role="dialog"
       aria-modal="false"
       aria-labelledby="grove-history-title"
-      className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex h-[86%] flex-col overflow-hidden rounded-t-2xl border-t border-lantern-400/25 bg-dusk-950/[0.97] text-sm shadow-2xl sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-0 sm:h-auto sm:w-[420px] sm:rounded-none sm:border-l sm:border-t-0"
+      className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex h-[86%] flex-col overflow-hidden rounded-t-gh-xl border-t border-line gh-frost font-brand text-gh-sm text-ink shadow-gh-3 sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-0 sm:h-auto sm:w-[420px] sm:rounded-none sm:border-l sm:border-t-0"
     >
-      <header className="shrink-0 border-b border-white/10 px-4 pb-3 pt-2 sm:pt-4">
-        <span aria-hidden className="mx-auto mb-2 block h-1 w-10 rounded-full bg-white/20 sm:hidden" />
+      <header className="shrink-0 border-b border-line px-4 pb-3 pt-2 sm:pt-4">
+        <span aria-hidden className="mx-auto mb-2 block h-1 w-10 rounded-full bg-line-strong sm:hidden" />
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/70">What happened</p>
-            <h2 id="grove-history-title" className="font-display text-2xl text-lantern-300">
+            <p className="gh-label text-muted">What happened</p>
+            <h2 id="grove-history-title" className="font-brand text-gh-2xl font-extrabold tracking-tight text-ink">
               History
             </h2>
           </div>
@@ -73,28 +74,28 @@ export function HistoryDrawer({
             onClick={onClose}
             aria-label="Close history"
             title="Close (Esc)"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/60 hover:text-white sm:h-8 sm:w-8 sm:text-base"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-gh-pill text-xl text-muted hover:bg-tint hover:text-ink sm:h-8 sm:w-8 sm:text-base"
           >
             ×
           </button>
         </div>
-        <div className="mt-2 rounded-xl border border-amber-300/25 bg-amber-400/5 p-3">
+        <div className="mt-2 rounded-gh-lg border border-pane/60 bg-surface-raised p-3">
           {view.active ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-amber-200">
+              <span className="text-gh-xs text-ink">
                 Replaying on the map · <span className="tabular-nums">{replayClock(view.playhead)}</span> UTC
               </span>
               <button
                 type="button"
                 onClick={() => controller.close()}
-                className="ml-auto rounded-full bg-lantern-400 px-4 py-2 text-xs font-semibold text-dusk-950 sm:py-1"
+                className={buttonClass("primary", "md", "ml-auto text-gh-xs font-semibold")}
               >
                 Back to live
               </button>
             </div>
           ) : (
             <>
-              <p className="text-xs text-white/60">Replay it on the map: the same bodies, in the same rooms, moving.</p>
+              <p className="text-xs text-muted">Replay it on the map: the same bodies, in the same rooms, moving.</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <button type="button" className={BTN} onClick={() => open(Date.now() - 3600_000)}>
                   Last hour

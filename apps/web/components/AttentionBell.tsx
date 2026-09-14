@@ -62,7 +62,7 @@ export function AttentionBell({
   if (total === 0) {
     return (
       <div
-        className="pointer-events-none flex items-center gap-2 rounded-full border border-white/10 bg-dusk-950/70 py-1.5 pl-3 pr-4 text-[11px] text-white/50"
+        className="pointer-events-none flex items-center gap-2 rounded-gh-pill border border-line gh-frost py-1.5 pl-3 pr-4 text-gh-xs text-muted shadow-gh-2"
         title="Nothing is idle, stalled or faulted."
       >
         <span aria-hidden>◇</span>
@@ -84,38 +84,38 @@ export function AttentionBell({
       ]
         .filter(Boolean)
         .join(", ")}${position ? `, ${position}` : ""}. Go to the next body that wants attention.`}
-      className={`pointer-events-auto flex max-w-full items-center gap-2 rounded-full border py-2 pl-3 pr-4 text-xs transition-colors sm:py-1.5 ${
+      className={`pointer-events-auto flex max-w-full items-center gap-2 rounded-gh-pill border py-2 pl-3 pr-4 text-gh-xs shadow-gh-2 transition-colors duration-gh-fast sm:py-1.5 ${
         alarming > 0
-          ? "border-red-400/50 bg-red-950/50 text-red-200 hover:bg-red-900/50"
-          : "border-lantern-400/30 bg-dusk-950/85 text-lantern-300/90 hover:bg-dusk-900/85"
+          ? "border-danger-ink/60 gh-frost text-danger-ink hover:bg-tint"
+          : "border-line gh-frost text-ink hover:bg-tint"
       }`}
     >
-      <span aria-hidden className={alarming > 0 ? "motion-safe:animate-pulse" : ""}>
+      <span aria-hidden>
         {alarming > 0 ? "▲" : "◆"}
       </span>
-      <span className="flex items-center gap-2 tabular-nums">
+      <span className="flex items-center gap-2 font-brand-mono tabular-nums">
         {counts.hazard > 0 ? (
-          <span className="text-red-300" title="Faulted, blocked, or flagged for prompt injection">
+          <span className="font-semibold text-danger-ink" title="Faulted, blocked, or flagged for prompt injection">
             {counts.hazard} {words.faulted}
           </span>
         ) : null}
         {counts.stalled > 0 ? (
-          <span className="text-orange-300" title="Says it is working, but has stopped reporting">
+          <span className="text-danger-ink" title="Says it is working, but has stopped reporting">
             {counts.stalled} {words.stalled}
           </span>
         ) : null}
         {counts.fading > 0 ? (
-          <span className="text-amber-300" title="Asleep and drifting: the world empties the seat at ten minutes of silence">
+          <span className="text-ink" title="Asleep and drifting: the world empties the seat at ten minutes of silence">
             {counts.fading} {words.fading}
           </span>
         ) : null}
         {counts.idle > 0 ? (
-          <span className={alarming > 0 ? "text-white/55" : ""} title="Idle or asleep">
+          <span className={alarming > 0 ? "text-muted" : ""} title="Idle or asleep">
             {counts.idle} {words.idle}
           </span>
         ) : null}
       </span>
-      {position ? <span className="truncate border-l border-white/15 pl-2 text-white/60">{position}</span> : null}
+      {position ? <span className="truncate border-l border-line-strong pl-2 text-muted">{position}</span> : null}
     </button>
   );
 }

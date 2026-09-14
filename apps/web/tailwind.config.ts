@@ -10,7 +10,7 @@ import { brandTheme } from "@grove/ui/tokens";
 const brand = brandTheme();
 
 export default {
-  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/brand-ui.ts"],
+  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/brand-ui.ts", "./lib/identity.ts"],
   theme: {
     extend: {
       ...brand,

@@ -109,11 +109,11 @@ export function facts(room: SignpostRoom, space?: SignpostSpace | null): string[
 }
 
 const STATE_DOT: Record<SignpostState["state"], string> = {
-  empty: "bg-white/15",
-  quiet: "bg-white/40",
-  busy: "bg-lantern-400/70",
-  posted: "bg-sky-300",
-  live: "bg-rose-400 motion-safe:animate-pulse",
+  empty: "bg-line",
+  quiet: "bg-line-strong",
+  busy: "bg-signal/60",
+  posted: "bg-pane",
+  live: "bg-signal ring-2 ring-signal/30",
 };
 
 function whenLabel(until: string | null): string | null {
@@ -140,19 +140,19 @@ export function RoomSignpost({
   const left = whenLabel(now?.until ?? null);
   return (
     <div className="mt-1 max-w-2xl">
-      <p className="text-sm leading-snug text-white/60">{customOf(room, space)}</p>
-      <p className="mt-1 text-[11px] leading-relaxed text-white/50">{facts(room, space).join(" · ")}</p>
+      <p className="text-sm leading-snug text-ink">{customOf(room, space)}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted">{facts(room, space).join(" · ")}</p>
       {now?.headline ? (
-        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/70">
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
           <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATE_DOT[now.state]}`} />
           {now.state === "live" ? (
-            <span className="uppercase tracking-widest text-rose-300">On now</span>
+            <span className="gh-label text-signal-text">On now</span>
           ) : now.state === "posted" ? (
-            <span className="uppercase tracking-widest text-sky-300">Pinned today</span>
+            <span className="gh-label text-muted">Pinned today</span>
           ) : null}
           <span>{now.headline}</span>
-          {now.byline ? <span className="text-white/50">— {now.byline}</span> : null}
-          {left ? <span className="text-white/50">({left} left)</span> : null}
+          {now.byline ? <span className="text-muted">— {now.byline}</span> : null}
+          {left ? <span className="text-muted">({left} left)</span> : null}
         </p>
       ) : null}
     </div>

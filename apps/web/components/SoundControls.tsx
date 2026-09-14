@@ -1,7 +1,7 @@
 "use client";
 
 import type { SoundControls } from "@/lib/sound/useSoundscape";
-import { MenuHeading } from "./MapMenu";
+import { MENU_ROW, MenuHeading } from "./MapMenu";
 
 /**
  * ⋯ Sound: the site-wide mute (#56, shared with read aloud in the room drawer),
@@ -12,7 +12,7 @@ import { MenuHeading } from "./MapMenu";
 export function SoundMenuSection({ sound }: { sound: SoundControls }) {
   const pct = Math.round(sound.volume * 100);
   return (
-    <div className="border-t border-white/10 pt-1">
+    <div className="border-t border-line pt-1">
       <MenuHeading>Sound</MenuHeading>
       <button
         type="button"
@@ -20,10 +20,10 @@ export function SoundMenuSection({ sound }: { sound: SoundControls }) {
         aria-checked={sound.muted}
         title="Silences everything on this site in this browser: the ambient soundscape and read aloud"
         onClick={() => sound.setMuted(!sound.muted)}
-        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
+        className={MENU_ROW}
       >
         <span>Mute all sound</span>
-        <span className={`text-xs ${sound.muted ? "text-lantern-300" : "text-white/55"}`}>{sound.muted ? "on" : "off"}</span>
+        <span className={`font-brand-mono text-gh-xs ${sound.muted ? "text-ink" : "text-muted"}`}>{sound.muted ? "on" : "off"}</span>
       </button>
       {sound.supported ? <AmbientRows sound={sound} pct={pct} /> : null}
     </div>
@@ -43,14 +43,14 @@ function AmbientRows({ sound, pct }: { sound: SoundControls; pct: number }) {
           sound.setEnabled(on);
           if (on) sound.begin();
         }}
-        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
+        className={MENU_ROW}
       >
         <span>Ambient sound</span>
-        <span className={`text-xs ${sound.enabled ? "text-lantern-300" : "text-white/55"}`}>
+        <span className={`font-brand-mono text-gh-xs ${sound.enabled ? "text-ink" : "text-muted"}`}>
           {sound.enabled ? (sound.muted ? "on · muted" : sound.needsGesture ? "on · tap to start" : "on") : "off"}
         </span>
       </button>
-      <div role="group" aria-label="Volume" className="flex items-center gap-3 px-3 py-2 text-white/70">
+      <div role="group" aria-label="Volume" className="flex items-center gap-3 px-3 py-2 text-muted">
         <span aria-hidden className="shrink-0 text-xs">Volume</span>
         <input
           type="range"
@@ -62,7 +62,7 @@ function AmbientRows({ sound, pct }: { sound: SoundControls; pct: number }) {
           aria-label="Sound volume"
           aria-valuetext={`${pct}%`}
           disabled={!sound.enabled}
-          className="min-w-0 flex-1 accent-lantern-400 disabled:opacity-40"
+          className="min-w-0 flex-1 accent-signal disabled:opacity-40"
         />
       </div>
       <button
@@ -72,10 +72,10 @@ function AmbientRows({ sound, pct }: { sound: SoundControls; pct: number }) {
         disabled={!sound.enabled}
         title="Keep the calm bed and drop the event sounds"
         onClick={() => sound.setBedOnly(!sound.bedOnly)}
-        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 disabled:opacity-40 sm:py-2"
+        className={`${MENU_ROW} disabled:opacity-60`}
       >
         <span>Reduce sound (bed only)</span>
-        <span className={`text-xs ${sound.bedOnly ? "text-lantern-300" : "text-white/55"}`}>{sound.bedOnly ? "on" : "off"}</span>
+        <span className={`font-brand-mono text-gh-xs ${sound.bedOnly ? "text-ink" : "text-muted"}`}>{sound.bedOnly ? "on" : "off"}</span>
       </button>
     </>
   );
@@ -92,7 +92,7 @@ export function TapForSound({ sound }: { sound: SoundControls }) {
     <button
       type="button"
       onClick={sound.begin}
-      className="pointer-events-auto fixed bottom-10 left-3 z-30 rounded-full border border-white/15 bg-dusk-950/70 px-3 py-1.5 text-[11px] uppercase tracking-widest text-white/55 hover:text-white/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lantern-400"
+      className="pointer-events-auto fixed bottom-14 left-3 z-30 rounded-gh-pill border border-line gh-frost px-3 py-1.5 gh-label text-ink shadow-gh-2 hover:bg-tint focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
     >
       <span aria-hidden className="mr-1">♪</span>Tap for sound
     </button>

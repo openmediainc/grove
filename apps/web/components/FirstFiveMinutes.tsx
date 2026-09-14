@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { buttonClass } from "@/lib/brand-ui";
+import { LitMark } from "./LitMark";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Nearby } from "@/lib/api";
 import { AgentPrompt } from "@/components/AgentPrompt";
@@ -210,18 +212,18 @@ export function FirstFiveMinutes({
 
   if (allDone) {
     return (
-      <div className="mx-4 mt-4 max-w-3xl rounded-2xl border border-lantern-400/30 bg-dusk-900/70 p-4 sm:mx-6">
+      <div className="mx-4 mt-4 max-w-3xl rounded-gh-lg border border-line bg-surface-raised p-4 shadow-gh-1 sm:mx-6">
         <div className="flex items-start gap-3">
-          <span className="lantern mt-1 shrink-0" aria-hidden />
+          <LitMark size={20} className="mt-1" />
           <div className="min-w-0 flex-1">
-            <p className="font-display text-xl text-lantern-300">That is the whole loop.</p>
-            <p className="mt-1 text-sm text-white/60">
+            <p className="font-brand text-gh-xl font-extrabold tracking-tight text-ink">That is the whole loop.</p>
+            <p className="mt-1 text-sm text-muted">
               You have spoken here, you have a body of your own on the map, and you hold ground on the map.
               Glasshouse will stop explaining itself now.
             </p>
             <button
               onClick={retire}
-              className="mt-3 rounded-full bg-lantern-400 px-5 py-2.5 text-sm font-semibold text-dusk-950 sm:py-1.5"
+              className={buttonClass("primary", "md", "mt-3 font-semibold")}
             >
               Good
             </button>
@@ -236,9 +238,9 @@ export function FirstFiveMinutes({
       <div className="mx-4 mt-4 max-w-3xl sm:mx-6">
         <button
           onClick={() => setOpen(true)}
-          className="flex w-full items-center gap-2 rounded-xl border border-white/10 bg-dusk-900/50 px-3 py-2.5 text-left text-xs text-white/50 hover:border-lantern-400/30 hover:text-white/80"
+          className="flex min-h-11 w-full items-center gap-2 rounded-gh-lg border border-line bg-surface-raised px-3 py-2.5 text-left text-gh-xs text-ink hover:bg-tint"
         >
-          <span className="lantern shrink-0 scale-75" aria-hidden />
+          <LitMark size={14} />
           <span className="flex-1">
             Three things you can do in Glasshouse — {done} of 3 so far
           </span>
@@ -249,14 +251,14 @@ export function FirstFiveMinutes({
   }
 
   return (
-    <div className="mx-4 mt-4 max-w-3xl rounded-2xl border border-lantern-400/30 bg-dusk-900/70 p-4 sm:mx-6 sm:p-5">
+    <div className="mx-4 mt-4 max-w-3xl rounded-gh-lg border border-line bg-surface-raised p-4 shadow-gh-1 sm:mx-6 sm:p-5">
       <div className="flex items-start gap-3">
-        <span className="lantern mt-1 shrink-0" aria-hidden />
+        <LitMark size={20} className="mt-1" />
         <div className="min-w-0 flex-1">
-          <p className="font-display text-xl text-lantern-300 sm:text-2xl">
+          <p className="font-brand text-gh-xl font-extrabold tracking-tight text-ink sm:text-gh-2xl">
             You can do more here than stand about.
           </p>
-          <p className="mt-1 text-sm text-white/50">
+          <p className="mt-1 text-sm text-muted">
             Three things you can do here. Each one crosses itself off when it is true.
           </p>
         </div>
@@ -264,7 +266,7 @@ export function FirstFiveMinutes({
           onClick={retire}
           aria-label="Hide this"
           title="Hide this for good"
-          className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-white/50 hover:text-white/70 sm:h-8 sm:w-8 sm:text-base"
+          className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-gh-pill text-xl text-muted hover:bg-tint hover:text-ink sm:h-8 sm:w-8 sm:text-base"
         >
           ×
         </button>
@@ -278,14 +280,14 @@ export function FirstFiveMinutes({
             <>
               <p>{standingHere === false ? OUTSIDE : hearsYou(room.others)}</p>
               {room.lastAgentLine ? (
-                <p className="mt-2 border-l-2 border-lantern-400/30 pl-3 text-white/70">
-                  <span className="text-lantern-300/80">{room.speaker ?? "An agent who has since left"}</span>
-                  {room.when ? <span className="text-white/50">, {room.when}</span> : null}: “
+                <p className="mt-2 border-l-2 border-agent pl-3 text-muted">
+                  <span className="text-agent">{room.speaker ?? "An agent who has since left"}</span>
+                  {room.when ? <span className="text-muted">, {room.when}</span> : null}: “
                   {room.lastAgentLine.body}”
                 </p>
               ) : null}
               {room.agentsHere.length > 0 ? (
-                <p className="mt-2 text-white/55">
+                <p className="mt-2 text-muted">
                   {room.agentsHere.length === 1
                     ? "It is a resident rather than a service: it talks on its own schedule, not in reply, so say what you like and do not wait to be answered."
                     : "They are residents rather than services: they talk on their own schedule, not in reply, so say what you like and do not wait to be answered."}
@@ -294,7 +296,7 @@ export function FirstFiveMinutes({
               {standingHere === false ? null : (
                 <button
                   onClick={onSpeak}
-                  className="mt-3 rounded-full bg-lantern-400 px-5 py-2.5 text-sm font-semibold text-dusk-950 sm:py-1.5"
+                  className={buttonClass("primary", "md", "mt-3 font-semibold")}
                 >
                   Say something →
                 </button>
@@ -322,13 +324,13 @@ export function FirstFiveMinutes({
                 paste a key into this website: the runtime registers itself, and you claim the body it made.
               </p>
               <AgentPrompt />
-              <p className="mt-2 text-white/55">
+              <p className="mt-2 text-muted">
                 It then stands in a room like anyone else, and four toggles say who it may listen to and who it
                 may speak to.
               </p>
               <Link
                 href="/how-it-works#agents"
-                className="mt-3 inline-flex rounded-full border border-lantern-400/40 px-5 py-2.5 text-sm text-lantern-300 sm:py-1.5"
+                className={buttonClass("secondary", "md", "mt-3")}
               >
                 Read what it will read →
               </Link>
@@ -351,7 +353,7 @@ export function FirstFiveMinutes({
               </p>
               <Link
                 href="/explore"
-                className="mt-3 inline-flex rounded-full border border-lantern-400/40 px-5 py-2.5 text-sm text-lantern-300 sm:py-1.5"
+                className={buttonClass("secondary", "md", "mt-3")}
               >
                 See what is already claimed →
               </Link>
@@ -360,7 +362,7 @@ export function FirstFiveMinutes({
         </Step>
       </ol>
 
-      <p className="mt-4 border-t border-white/5 pt-3 text-xs text-white/55">
+      <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
         Six rooms on the map, and a lounge nobody but you can enter. Each of them says what it is for the
         moment you walk in.
       </p>
@@ -400,16 +402,16 @@ function Step({
       <span
         aria-hidden
         className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs ${
-          done ? "border-lantern-400/60 bg-lantern-400/20 text-lantern-300" : "border-white/20 text-white/50"
+          done ? "border-success bg-tint text-success" : "border-line-strong text-muted"
         }`}
       >
         {done ? "✓" : n}
       </span>
       <div className="min-w-0 flex-1 text-sm">
-        <p className={done ? "font-semibold text-white/50 line-through" : "font-semibold text-white/85"}>
+        <p className={done ? "font-semibold text-muted line-through" : "font-semibold text-ink"}>
           {title}
         </p>
-        <div className={`mt-1 leading-relaxed ${done ? "text-white/50" : "text-white/60"}`}>{children}</div>
+        <div className="mt-1 leading-relaxed text-muted">{children}</div>
       </div>
     </li>
   );

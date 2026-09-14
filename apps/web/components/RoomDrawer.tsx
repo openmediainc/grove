@@ -43,6 +43,9 @@ import { themeStyle } from "@/lib/themes";
 import { useActiveTheme } from "@/lib/themes/useActiveTheme";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { useDialogFocus } from "@/components/a11y";
+import { buttonClass } from "@/lib/brand-ui";
+import { identityOf, identityTextClass, type IdentityKind } from "@/lib/identity";
+import { IdentityName, IdentityTick } from "@/components/Identity";
 
 /**
  * A room, as a drawer on the map (DECISIONS #1).
@@ -58,10 +61,13 @@ import { useDialogFocus } from "@/components/a11y";
  * transcript with live reaction counts, the room socket with the poll behind it.
  * The pixel room is an expandable mode: the drawer widens and draws it on top.
  *
- * Themed with the map (DECISIONS #3, #58): the drawer root carries the active
- * theme's chrome tokens itself (`useActiveTheme`, following the switcher, the T
- * key and `?theme=` live), and hands the theme to the pixel room (floor, walls,
- * furniture, bodies, speech) and the board tables. Pages stay neutral.
+ * Brand frame, themed world (DECISIONS #7, refining #3/#58): the drawer's
+ * frame — header, room strip, sections, transcript, composer — is brand chrome
+ * (`--gh-*` tokens, light/night/tv). The active theme (`useActiveTheme`,
+ * following the switcher, the T key and `?theme=` live) styles only what is IN
+ * the world: the pixel room (floor, walls, furniture, bodies, speech, wrapped
+ * in the theme's own tokens) and the board pieces on the tables. The title is
+ * the room's in-world name in the theme's words, with the plain name under it.
  *
  * A viewer with no body gets the public face of the room instead of a 401: the
  * sign, who the map shows standing there, what was heard, and "Sign in to speak".
@@ -108,18 +114,18 @@ type BoardView = {
 };
 
 const STATE_DOT: Record<RoomStatus["state"], string> = {
-  empty: "bg-white/15",
-  quiet: "bg-white/40",
-  busy: "bg-lantern-400/70",
-  posted: "bg-sky-300",
-  live: "bg-rose-400 motion-safe:animate-pulse",
+  empty: "bg-line",
+  quiet: "bg-line-strong",
+  busy: "bg-signal/60",
+  posted: "bg-pane",
+  live: "bg-signal ring-2 ring-signal/30",
 };
 
 type RoomWithWorld = RoomPayload["room"] & Partial<SignpostRoom> & { world_id?: string };
 
 /** What the map can say about a civic room without a body: public already. */
 export type RoomPublicView = {
-  here: Array<{ name: string; detail: string }>;
+  here: Array<{ name: string; detail: string; kind?: IdentityKind }>;
   recent: Array<{ who: string; body: string }>;
 };
 
@@ -592,7 +598,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
   });
   /** Captions: the line being read aloud is highlighted in the transcript. */
   const speakingClass = (key: string) =>
-    readAloud.speakingKey === key ? " rounded-md bg-lantern-400/10 ring-1 ring-lantern-400/50" : "";
+    readAloud.speakingKey === key ? " rounded-md bg-tint ring-1 ring-focus" : "";
 
   const mention = useMemo(
     () => (whisperTo ? null : leadingMention(draft, data?.nearby ?? [], me?.id)),
@@ -653,6 +659,8 @@ export function RoomDrawer(props: RoomDrawerProps) {
   const worldId = (data?.room as RoomWithWorld | undefined)?.world_id;
   const inSpace = Boolean(worldId && worldId !== CIVIC_CORE_WORLD_ID);
   const title = (inSpace ? data?.room.name : themedTitle) ?? data?.room.name ?? here?.name ?? room;
+  /** The room's plain name, under the in-world title when the theme renames it. */
+  const plainName = data?.room.name ?? here?.name ?? null;
   const slug = data?.room.slug ?? room;
 
   const toggleExpanded = () => {
@@ -687,27 +695,29 @@ export function RoomDrawer(props: RoomDrawerProps) {
       aria-modal="false"
       aria-label={`${title}, room`}
       data-theme-skin={theme.id}
-      style={themeStyle(theme)}
-      className={`pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex h-[86%] flex-col overflow-hidden rounded-t-2xl border-t border-lantern-400/25 bg-dusk-950/[0.97] text-sm shadow-2xl sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-0 sm:h-auto sm:rounded-none sm:border-l sm:border-t-0 ${
+      className={`pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex h-[86%] flex-col overflow-hidden rounded-t-gh-xl border-t border-line gh-frost font-brand text-gh-sm text-ink shadow-gh-3 sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-0 sm:h-auto sm:rounded-none sm:border-l sm:border-t-0 ${
         wide ? "sm:w-[min(880px,calc(100%-2rem))]" : "sm:w-[420px]"
       }`}
     >
       {/* The header never scrolls away: the close button is always the way out. */}
-      <header className="shrink-0 border-b border-white/10 px-4 pb-2 pt-2 sm:pt-4">
-        <span aria-hidden className="mx-auto mb-2 block h-1 w-10 rounded-full bg-white/20 sm:hidden" />
+      <header className="shrink-0 border-b border-line px-4 pb-2 pt-2 sm:pt-4">
+        <span aria-hidden className="mx-auto mb-2 block h-1 w-10 rounded-full bg-line-strong sm:hidden" />
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.25em] text-lantern-400/70">
+            <p className="gh-label text-muted">
               Room · {data ? `${data.nearby.length} here` : here ? `${here.occupancy} here` : "…"}
             </p>
-            <h2 className="font-display truncate text-2xl text-lantern-300">{title}</h2>
+            <h2 className="truncate font-brand text-gh-2xl font-extrabold tracking-tight text-ink">{title}</h2>
+            {plainName && plainName.toLowerCase() !== title.toLowerCase() ? (
+              <p className="truncate text-gh-xs text-muted">{plainName}</p>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => void copyLink()}
               title="Copy a link that opens the map with this room"
-              className="rounded-full border border-white/15 px-3 py-2 text-[11px] text-white/70 hover:text-lantern-300 sm:py-1"
+              className="min-h-11 rounded-gh-pill border border-line-strong bg-surface-raised px-3 text-[11px] font-medium text-ink hover:bg-tint sm:min-h-8"
             >
               <span aria-live="polite">{copied ? "Copied" : "Link"}</span>
             </button>
@@ -717,8 +727,8 @@ export function RoomDrawer(props: RoomDrawerProps) {
                 onClick={toggleExpanded}
                 aria-pressed={expanded}
                 title={expanded ? "Close the pixel room" : "Open the pixel room"}
-                className={`rounded-full px-3 py-2 text-[11px] uppercase tracking-widest sm:py-1 ${
-                  expanded ? "bg-lantern-400 text-dusk-950" : "border border-lantern-400/40 text-lantern-300"
+                className={`min-h-11 rounded-gh-pill border px-3 gh-label sm:min-h-8 ${
+                  expanded ? "border-ink bg-tint text-ink" : "border-line-strong bg-surface-raised text-ink hover:bg-tint"
                 }`}
               >
                 Pixel room
@@ -729,7 +739,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
               onClick={onClose}
               aria-label="Close the room"
               title="Close (Esc)"
-              className="flex h-11 w-11 items-center justify-center rounded-full text-xl text-white/60 hover:text-white sm:h-8 sm:w-8 sm:text-base"
+              className="flex h-11 w-11 items-center justify-center rounded-gh-pill text-xl text-muted hover:bg-tint hover:text-ink sm:h-8 sm:w-8 sm:text-base"
             >
               ×
             </button>
@@ -746,13 +756,13 @@ export function RoomDrawer(props: RoomDrawerProps) {
                   onClick={() => void goRoom(r.slug)}
                   aria-current={active ? "true" : undefined}
                   title={st?.headline ?? undefined}
-                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs ${
-                    active ? "bg-lantern-400/20 text-lantern-300" : "text-white/60 hover:bg-white/5"
+                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-gh-pill border px-3 py-1.5 text-gh-xs ${
+                    active ? "border-line-strong bg-tint font-medium text-ink" : "border-transparent text-muted hover:bg-tint hover:text-ink"
                   }`}
                 >
                   <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATE_DOT[st?.state ?? "empty"]}`} />
                   {r.name}
-                  {st?.occupancy ? <span className="text-[10px] text-white/50">{st.occupancy}</span> : null}
+                  {st?.occupancy ? <span className="font-brand-mono text-[10px] tabular-nums text-muted">{st.occupancy}</span> : null}
                 </button>
               </li>
             );
@@ -785,23 +795,24 @@ export function RoomDrawer(props: RoomDrawerProps) {
         ) : (
           <>
             {standingHere === false ? (
-              <div className="mx-4 mt-3 flex flex-col gap-3 rounded-2xl border border-lantern-400/40 bg-dusk-900/80 p-3">
-                <p className="text-sm text-white/70">
-                  <strong className="text-lantern-300">You are looking in from outside.</strong> Nobody in{" "}
+              <div className="mx-4 mt-3 flex flex-col gap-3 rounded-gh-lg border border-line bg-surface-raised p-3 shadow-gh-1">
+                <p className="text-sm text-muted">
+                  <strong className="text-ink">You are looking in from outside.</strong> Nobody in{" "}
                   {theRoom(data?.room.name ?? title)} can see or hear you, and nothing you type will reach them,
                   until you step in.
                 </p>
                 <button
                   onClick={stepIn}
                   disabled={stepping}
-                  className="self-start rounded-full bg-lantern-400 px-5 py-2.5 text-sm font-semibold text-dusk-950 disabled:opacity-60 sm:py-1.5"
+                  className={buttonClass("primary", "md", "self-start font-semibold")}
                 >
                   {stepping ? "Stepping in…" : `Step into ${theRoom(data?.room.name ?? title)} →`}
                 </button>
               </div>
             ) : null}
             {expanded ? (
-              <div className="flex justify-center px-3 pt-3">
+              // In-world: the pixel room keeps the theme's own tokens (DECISIONS #7).
+              <div className="flex justify-center px-3 pt-3" data-theme-world={theme.id} style={themeStyle(theme)}>
                 <PixelRoom
                   roomSlug={slug}
                   roomTitle={title}
@@ -832,16 +843,16 @@ export function RoomDrawer(props: RoomDrawerProps) {
               />
             ) : null}
             {slug === "board" && board ? (
-              <div className="mx-4 mt-3 rounded-xl border border-lantern-400/20 bg-dusk-950/40 p-3">
-                <h3 className="text-xs uppercase tracking-widest text-lantern-400">
+              <div className="mx-4 mt-3 rounded-gh-lg border border-line bg-surface-raised p-3">
+                <h3 className="gh-label text-muted">
                   Pinned {board.day}
-                  {board.pin ? null : <span className="ml-2 normal-case tracking-normal text-white/55">— open, first post takes it</span>}
+                  {board.pin ? null : <span className="ml-2 normal-case tracking-normal text-muted">— open, first post takes it</span>}
                 </h3>
                 {board.pin ? (
-                  <div className="mt-2 rounded-lg border border-sky-300/40 bg-sky-300/5 p-3">
-                    <div className="font-display text-lg text-sky-200">{board.pin.title}</div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">{board.pin.body}</p>
-                    <p className="mt-2 text-[11px] text-white/55">
+                  <div className="mt-2 rounded-lg border border-pane/60 bg-pane/5 p-3">
+                    <div className="font-brand font-extrabold tracking-tight text-lg text-ink">{board.pin.title}</div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{board.pin.body}</p>
+                    <p className="mt-2 text-[11px] text-muted">
                       {board.pin.author_slug ? `@${board.pin.author_slug}` : board.pin.author_name ?? "someone since departed"}
                       {whenLabel(board.pin_opens_at) ? ` · holds for ${whenLabel(board.pin_opens_at)}` : null}
                     </p>
@@ -850,22 +861,22 @@ export function RoomDrawer(props: RoomDrawerProps) {
                 {board.posts.length > 0 ? (
                   <ul className="mt-2 space-y-2">
                     {board.posts.map((n) => (
-                      <li key={n.id} className="rounded-lg border border-white/10 bg-dusk-800/60 p-2.5">
-                        <div className="font-semibold text-white/80">{n.title}</div>
-                        <p className="mt-1 text-sm text-white/60">{n.body}</p>
+                      <li key={n.id} className="rounded-lg border border-line bg-surface-raised p-2.5">
+                        <div className="font-semibold text-ink">{n.title}</div>
+                        <p className="mt-1 text-sm text-muted">{n.body}</p>
                       </li>
                     ))}
                   </ul>
                 ) : null}
                 {board.withheld > 0 ? (
-                  <p className="mt-2 text-[11px] text-white/50">
+                  <p className="mt-2 text-[11px] text-muted">
                     {board.withheld} {board.withheld === 1 ? "notice is" : "notices are"} not shown to you.
                   </p>
                 ) : null}
               </div>
             ) : null}
-            <section className="border-b border-white/10 px-4 py-3">
-              <h3 className="text-xs uppercase tracking-widest text-lantern-400">Who is here</h3>
+            <section className="border-b border-line px-4 py-3">
+              <h3 className="gh-label text-muted">Who is here</h3>
               {expanded || !data ? null : (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {data.nearby.slice(0, 24).map((n) => (
@@ -889,11 +900,11 @@ export function RoomDrawer(props: RoomDrawerProps) {
               />
             </section>
             <section className="flex-1 px-4 py-3">
-              <h3 className="text-xs uppercase tracking-widest text-lantern-400">Transcript</h3>
+              <h3 className="gh-label text-muted">Transcript</h3>
               <ReadAloudControl state={readAloud} />
               <ul className="mt-3 space-y-2 text-sm" role="log" aria-live="polite" aria-label="Transcript">
                 {lines.length === 0 ? (
-                  <li key="empty-log" className="text-white/50">
+                  <li key="empty-log" className="text-muted">
                     {data ? emptyLog(data) : err ? null : "Reading the room…"}
                   </li>
                 ) : null}
@@ -906,22 +917,22 @@ export function RoomDrawer(props: RoomDrawerProps) {
                       <li
                         key={`w-${w.id}`}
                         data-speaking={readAloud.speakingKey === `whisper:${w.id}` ? "true" : undefined}
-                        className={`rounded-lg border border-violet-300/30 bg-violet-400/5 px-2 py-1.5${speakingClass(`whisper:${w.id}`)}`}
+                        className={`rounded-lg border border-pane/60 bg-pane/10 px-2 py-1.5${speakingClass(`whisper:${w.id}`)}`}
                       >
-                        <span className="mr-1.5 rounded bg-violet-300/20 px-1 py-px text-[9px] font-bold uppercase tracking-widest text-violet-200">
+                        <span className="mr-1.5 rounded-gh-sm border border-pane/60 px-1 py-px gh-label text-ink">
                           {w.direction === "out" ? "whisper" : "whispered"}
                         </span>
-                        <span className="mr-1.5 font-semibold text-violet-200">
+                        <span className="mr-1.5 font-semibold text-ink">
                           {w.direction === "out" ? `you → ${other}` : `${other} → you`}
                         </span>
-                        <span className="break-words italic text-white/85">{w.body}</span>
-                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-white/55">
+                        <span className="break-words italic text-ink">{w.body}</span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-muted">
                           <span>only you two</span>
                           {w.direction === "in" && partner && whisperTo?.actor_id !== partner.actor_id ? (
                             <button
                               type="button"
                               onClick={() => startWhisper(partner)}
-                              className="rounded text-violet-200 underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+                              className="rounded text-ink underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                             >
                               whisper back
                             </button>
@@ -938,8 +949,14 @@ export function RoomDrawer(props: RoomDrawerProps) {
                       data-speaking={readAloud.speakingKey === `say:${l.id}` ? "true" : undefined}
                       className={`break-words${speakingClass(`say:${l.id}`)}`}
                     >
-                      <span className="grove-kind">{l.sender_kind === "agent" ? "AGENT" : "HUMAN"}</span>
-                      <span className="mr-1.5 font-semibold text-lantern-300/80">
+                      <span
+                        data-identity={identityOf(l.sender_kind)}
+                        className={`mr-1.5 inline-flex items-center gap-1 align-middle gh-label ${identityTextClass(identityOf(l.sender_kind))}`}
+                      >
+                        <IdentityTick kind={identityOf(l.sender_kind)} />
+                        {l.sender_kind === "agent" ? "AGENT" : "HUMAN"}
+                      </span>
+                      <span className="mr-1.5 font-semibold text-ink">
                         {l.sender_id === me?.id
                           ? "you"
                           : nameOf.get(l.sender_id) ??
@@ -964,7 +981,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
       </div>
 
       {asSpectator ? null : (
-        <footer className="shrink-0 border-t border-white/10 p-3">
+        <footer className="shrink-0 border-t border-line p-3">
           {whisperTo ? (
             <WhisperBar
               target={whisperTo}
@@ -975,7 +992,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
           ) : null}
           {slug === "board" && !whisperTo ? (
             <input
-              className="mb-2 w-full rounded-lg bg-dusk-800 px-3 py-2 ring-1 ring-white/10"
+              className="mb-2 w-full rounded-gh-md border border-line-strong bg-surface-raised px-3 py-2 text-ink placeholder:text-muted"
               value={noticeTitle}
               onChange={(e) => setNoticeTitle(e.target.value)}
               placeholder="Pin title"
@@ -984,7 +1001,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
           <div className="flex gap-2">
             <input
               ref={composeRef}
-              className={`min-w-0 flex-1 rounded-lg bg-dusk-800 px-3 py-2 ring-1 ${whisperTo ? "ring-violet-300/60" : "ring-white/10"}`}
+              className={`min-h-11 min-w-0 flex-1 rounded-gh-md border bg-surface-raised px-3 py-2 text-ink placeholder:text-muted ${whisperTo ? "border-pane" : "border-line-strong"}`}
               value={draft}
               aria-label={whisperTo ? `Whisper to ${nameFor(whisperTo)}` : "Speak in this room"}
               onChange={(e) => {
@@ -1017,7 +1034,9 @@ export function RoomDrawer(props: RoomDrawerProps) {
             <button
               onClick={say}
               disabled={Boolean(whisperTo) && (sending || whisperCheck.status === "refused" || whisperCheck.status === "checking")}
-              className={`shrink-0 rounded-full px-4 font-semibold text-dusk-950 disabled:cursor-not-allowed disabled:opacity-50 ${whisperTo ? "bg-violet-300" : "bg-lantern-400"}`}
+              className={`shrink-0 rounded-gh-pill border px-4 font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                whisperTo ? "border-pane bg-surface-raised text-ink hover:bg-tint" : "border-signal bg-signal text-signal-ink hover:brightness-[1.06]"
+              }`}
             >
               {whisperTo ? "Whisper" : "Say"}
             </button>
@@ -1029,19 +1048,19 @@ export function RoomDrawer(props: RoomDrawerProps) {
                     ? "Today's pin is taken — this goes on the board unpinned. The slot opens again at 00:00 UTC."
                     : "Nobody has claimed today's pin. First post takes it."
                 }
-                className="rounded-full border border-lantern-400/40 px-3 text-lantern-300"
+                className="rounded-gh-pill border border-line-strong bg-surface-raised px-3 text-ink hover:bg-tint"
               >
                 {board?.pin ? "Post" : "Claim pin"}
               </button>
             ) : null}
           </div>
           {mention ? (
-            <p className="mt-2 text-xs text-white/50">
+            <p className="mt-2 text-xs text-muted">
               That opens with @{mention.target.slug}, so the whole room hears it.{" "}
               <button
                 type="button"
                 onClick={() => startWhisper(mention.target, mention.rest)}
-                className="rounded text-violet-200 underline decoration-violet-300/50 underline-offset-2 hover:text-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+                className="rounded text-ink underline decoration-pane underline-offset-2 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               >
                 Whisper it to {nameFor(mention.target)} instead
               </button>
@@ -1071,7 +1090,7 @@ function SpectatorRoom({
     <div className="px-4 py-3">
       {publicView ? (
         <>
-          <p className="text-white/70">
+          <p className="text-muted">
             {here.length === 0
               ? "Nobody is standing here right now."
               : here.length === 1
@@ -1079,24 +1098,24 @@ function SpectatorRoom({
                 : `${here.length} bodies are here.`}
           </p>
           {here.length ? (
-            <ul className="mt-2 space-y-1 text-xs text-white/55">
+            <ul className="mt-2 space-y-1 text-xs text-muted">
               {here.slice(0, 12).map((b, i) => (
                 // Public snapshot rows carry no id, and two bodies can share a name.
                 <li key={`${i}:${b.name}`}>
-                  <span className="text-white/80">{b.name}</span> · {b.detail}
+                  {b.kind ? <IdentityName kind={b.kind} className="max-w-full align-middle text-ink">{b.name}</IdentityName> : <span className="text-ink">{b.name}</span>} · {b.detail}
                 </li>
               ))}
-              {here.length > 12 ? <li className="text-white/50">and {here.length - 12} more</li> : null}
+              {here.length > 12 ? <li className="text-muted">and {here.length - 12} more</li> : null}
             </ul>
           ) : null}
           {recent.length ? (
-            <div className="mt-3 border-t border-white/10 pt-3">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-lantern-400/70">Heard recently</p>
-              <ul className="mt-2 space-y-1 text-xs text-white/55">
+            <div className="mt-3 border-t border-line pt-3">
+              <p className="gh-label text-muted">Heard recently</p>
+              <ul className="mt-2 space-y-1 text-xs text-muted">
                 {recent.map((l, i) => (
                   // The same speaker can say the same line twice; the index keeps keys unique.
                   <li key={`${i}:${l.who}:${l.body}`} className="break-words">
-                    <span className="text-white/80">{l.who}:</span> {l.body}
+                    <span className="text-ink">{l.who}:</span> {l.body}
                   </li>
                 ))}
               </ul>
@@ -1104,15 +1123,15 @@ function SpectatorRoom({
           ) : null}
         </>
       ) : (
-        <p className="text-white/60">What happens inside {theRoom(title)} is for the bodies standing in it.</p>
+        <p className="text-muted">What happens inside {theRoom(title)} is for the bodies standing in it.</p>
       )}
       <a
         href={signInHref}
-        className="mt-4 block rounded-full bg-lantern-400 px-4 py-3 text-center font-semibold text-dusk-950 sm:py-2"
+        className={buttonClass("primary", "md", "mt-4 w-full font-semibold")}
       >
         Sign in to speak
       </a>
-      <p className="mt-2 text-center text-[11px] text-white/50">You can keep watching without one. Speaking needs a body.</p>
+      <p className="mt-2 text-center text-[11px] text-muted">You can keep watching without one. Speaking needs a body.</p>
     </div>
   );
 }

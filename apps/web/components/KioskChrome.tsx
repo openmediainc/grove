@@ -85,7 +85,7 @@ export function KioskChrome({
           type="button"
           onClick={onLeave}
           title={`${label} (Esc)`}
-          className={`pointer-events-auto fixed bottom-3 right-3 z-30 rounded-full border border-white/15 bg-dusk-950/70 px-4 py-2 text-[11px] uppercase tracking-widest text-white/70 transition-opacity duration-500 hover:opacity-100 focus:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lantern-400 ${
+          className={`pointer-events-auto fixed bottom-3 right-3 z-30 rounded-gh-pill border border-line gh-frost px-4 py-2 gh-label text-ink shadow-gh-2 transition-opacity duration-500 hover:opacity-100 focus:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus ${
             awake ? "opacity-100" : "opacity-30"
           }`}
         >

@@ -1,6 +1,7 @@
 "use client";
 
 import { THEME_IDS, THEMES, type ThemeId } from "@/lib/themes";
+import { MENU_ROW } from "./MapMenu";
 
 /**
  * The theme switcher, a group of radio rows in the map's ⋯ menu. Kiosk mode
@@ -24,7 +25,7 @@ export function ThemeSwitcher({
   // one is checked. Picking one keeps the menu open, like the other toggles.
   return (
     <div role="group" aria-label={label} title="T cycles themes">
-      <p role="presentation" className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-[0.2em] text-white/50">
+      <p role="presentation" className="px-3 pb-1 pt-2 gh-label text-muted">
         {label}
       </p>
       {THEME_IDS.map((id) => (
@@ -36,10 +37,10 @@ export function ThemeSwitcher({
           tabIndex={-1}
           title={THEMES[id].lexicon.blurb}
           onClick={() => onChange(id)}
-          className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
+          className={MENU_ROW}
         >
           <span>{THEMES[id].lexicon.name}</span>
-          <span aria-hidden className={`text-xs ${value === id ? "text-lantern-300" : "text-transparent"}`}>
+          <span aria-hidden className={`text-xs ${value === id ? "text-ink" : "text-transparent"}`}>
             ✓
           </span>
         </button>

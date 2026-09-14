@@ -1,7 +1,9 @@
 # Themes
 
-A theme re-skins the world map and its chrome. **It changes how a truth looks
-and what it is called, never what it says.**
+A theme re-skins the world map and what is in it. **It changes how a truth looks
+and what it is called, never what it says.** Since #74 (DECISIONS #7) it no
+longer re-skins chrome: the HUD, controls, menus, peek cards, drawer frames and
+their words are brand (`docs/design/DESIGN.md`).
 
 Code: `apps/web/lib/themes/` — `types.ts` (the contract), `kit.ts` (shared marks +
 procedural pixel toolkit), `index.ts` (registry + selection), one file per theme:
@@ -94,17 +96,31 @@ body in civic-region words — as a local PNG download; nothing is posted, and t
 caption never names a private plot. Room slugs in
 URLs (`/w/library`) never change.
 
-Chrome re-skins through CSS variables: the section sets `--g-dusk-*`,
-`--g-lantern-*`, `--g-font-display` from the palette, and Tailwind's `dusk`/`lantern`
-colours resolve through them (aoe values as fallback everywhere else). Note: a
-Tailwind config change needs `rm -rf apps/web/.next` and a web restart.
+**Chrome is not themed (#74, DECISIONS #7 boundary).** The map section is a
+`.gh-chrome` surface (`data-map-chrome`) styled by the brand `--gh-*` tokens in
+light, night and tv; only its ground (what shows before the canvas paints) is the
+theme's `dusk950`. `themeStyle()` (the palette's `--g-dusk-*`, `--g-lantern-*`,
+`--g-font-display`) is now set only on in-world DOM: the pixel room's wrapper in
+the drawer. The chrome's WORDS come from `lib/themes/chrome-words.ts`
+(`CHROME_WORDS`: Visit · Follow · Message · Watch; Open · Watch only · Private),
+never from the lexicon; the lexicon names in-world things only — room names (on
+signs, the Go to list and the drawer title, with the plain name under it),
+district names, the resting caption, the postcard's printed caption.
+People vs agents is a small theme-invariant identity tick after every nameplate
+(`lib/identity.ts`: amber dot / cyan diamond in the night brand values on a dark
+backing), never a replacement for a verb, hazard or outcome mark.
+`test/map-chrome.test.ts` fails on a legacy chrome class in a map chrome
+component. Note: a Tailwind config change needs `rm -rf apps/web/.next` and a web restart.
 
 ## The room drawer (#58)
 
-Themes reskin the map **and the room drawer only** (DECISIONS #3); pages
-(`/s`, `/a`, `/u`, `/explore`, the space page's Board) stay neutral, and the nav
-wordmark is always the neutral Glasshouse. The drawer root sets `themeStyle()`
-itself and reads the theme through `useActiveTheme()` (`?theme=` / stored choice
+Themes reskin the map and the room drawer's **in-world content** only
+(DECISIONS #3 as refined by #7): the drawer's frame (header, room strip,
+sections, transcript, composer) is brand chrome; the pixel room keeps the theme
+(its wrapper sets `themeStyle()`) and board pieces sit on the theme's own ground
+(`tableColours().ground`). Pages (`/s`, `/a`, `/u`, `/explore`, the space page's
+Board) stay neutral, and the nav wordmark is always the neutral Glasshouse. The
+drawer reads the theme through `useActiveTheme()` (`?theme=` / stored choice
 on mount, then `THEME_EVENT` from `writeThemeChoice` in this tab and `storage`
 from other tabs), so it follows the switcher and the T key live without the map
 passing the theme down. Its colours come from `themes/room-palette.ts`, a pure

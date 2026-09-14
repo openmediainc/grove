@@ -85,6 +85,8 @@ export type TableColours = {
   /** Column buttons over the four-in-a-row board. */
   control: string;
   controlEdge: string;
+  /** The in-world ground the board sits on inside the brand drawer (DECISIONS #7): the theme's darkest tone. */
+  ground: string;
 };
 
 export function tableColours(p: ThemePalette): TableColours {
@@ -104,5 +106,6 @@ export function tableColours(p: ThemePalette): TableColours {
     blackEdge: "rgba(255,255,255,0.45)",
     control: tokenColour(c.lantern300),
     controlEdge: tokenColour(c.lantern400, 0.4),
+    ground: tokenColour(c.dusk950),
   };
 }

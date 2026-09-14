@@ -155,17 +155,17 @@ export function RoomTables({
   const open = detail && detail.table.id === openId ? detail.table : null;
 
   return (
-    <section aria-label={`Tables in ${roomTitle}`} className="mx-4 mt-3 rounded-xl border border-white/10 bg-dusk-950/40 p-3">
+    <section aria-label={`Tables in ${roomTitle}`} className="mx-4 mt-3 rounded-gh-lg border border-line bg-surface-raised p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-[10px] uppercase tracking-widest text-lantern-400">
-          Tables{list.length ? <span className="ml-1 text-white/55">{list.length}</span> : null}
+        <h3 className="gh-label text-muted">
+          Tables{list.length ? <span className="ml-1 text-muted">{list.length}</span> : null}
         </h3>
         {signedIn === true ? (
           <button
             type="button"
             onClick={() => setComposing((v) => !v)}
             aria-expanded={composing}
-            className="rounded-full border border-lantern-400/40 px-3 py-1.5 text-[11px] text-lantern-300 hover:bg-lantern-400/10 sm:py-1"
+            className="min-h-9 rounded-gh-pill border border-line-strong bg-surface-raised px-3 py-1.5 text-[11px] text-ink hover:bg-tint sm:py-1"
           >
             Open a table
           </button>
@@ -181,24 +181,24 @@ export function RoomTables({
             void act("/api/v1/tables", { room: roomKey, game, clock });
           }}
         >
-          <label className="flex items-center gap-1 text-white/60">
+          <label className="flex items-center gap-1 text-muted">
             Game
-            <select value={game} onChange={(e) => setGame(e.target.value as "four" | "chess")} className="rounded border border-white/15 bg-dusk-900 px-2 py-1 text-white">
+            <select value={game} onChange={(e) => setGame(e.target.value as "four" | "chess")} className="rounded border border-line-strong bg-surface-raised px-2 py-1 text-ink">
               <option value="four">Four-in-a-row</option>
               <option value="chess">Chess</option>
             </select>
           </label>
-          <label className="flex items-center gap-1 text-white/60">
+          <label className="flex items-center gap-1 text-muted">
             Clock
-            <select value={clock} onChange={(e) => setClock(e.target.value as "async" | "live")} className="rounded border border-white/15 bg-dusk-900 px-2 py-1 text-white">
+            <select value={clock} onChange={(e) => setClock(e.target.value as "async" | "live")} className="rounded border border-line-strong bg-surface-raised px-2 py-1 text-ink">
               <option value="live">5 minutes a move</option>
               <option value="async">24 hours a move</option>
             </select>
           </label>
-          <button type="submit" disabled={busy} className="rounded-full bg-lantern-400 px-3 py-1.5 font-semibold text-dusk-950 disabled:opacity-60">
+          <button type="submit" disabled={busy} className="min-h-9 rounded-gh-pill border border-signal bg-signal px-3 py-1.5 font-semibold text-signal-ink disabled:opacity-60">
             Sit down
           </button>
-          <p className="basis-full text-[11px] text-white/55">
+          <p className="basis-full text-[11px] text-muted">
             Everyone who can watch {roomTitle} can watch the game. You move first; run out of time and you lose.
           </p>
         </form>
@@ -215,24 +215,24 @@ export function RoomTables({
                 onClick={() => setOpenId(openId === t.id ? null : t.id)}
                 aria-expanded={openId === t.id}
                 className={`flex w-full flex-wrap items-baseline justify-between gap-x-2 rounded-lg px-2 py-1.5 text-left text-sm ${
-                  openId === t.id ? "bg-lantern-400/10" : "hover:bg-white/5"
+                  openId === t.id ? "bg-tint" : "hover:bg-tint"
                 }`}
               >
-                <span className="text-white/85">
+                <span className="text-ink">
                   {gameName(t.game)}
-                  <span className="text-white/55">
+                  <span className="text-muted">
                     {" "}
                     · {playerAt(t, 0)?.display_name ?? "?"}
                     {playerAt(t, 1) ? ` vs ${playerAt(t, 1)!.display_name}` : ""}
                   </span>
                 </span>
-                <span className="text-[11px] text-white/55">{tableLine(t, now)}</span>
+                <span className="text-[11px] text-muted">{tableLine(t, now)}</span>
               </button>
             </li>
           ))}
         </ul>
       ) : signedIn === true && !composing ? (
-        <p className="mt-1 text-[11px] text-white/55">No games here yet. Open a table and someone can sit down.</p>
+        <p className="mt-1 text-[11px] text-muted">No games here yet. Open a table and someone can sit down.</p>
       ) : null}
 
       {open ? (
@@ -285,12 +285,12 @@ function TableBoard({
   useEffect(() => setFrom(null), [table.move_count]);
 
   return (
-    <div className="mt-3 border-t border-white/10 pt-3">
-      <p className="flex flex-wrap gap-x-3 text-xs text-white/60">
+    <div className="mt-3 border-t border-line pt-3">
+      <p className="flex flex-wrap gap-x-3 text-xs text-muted">
         {[0, 1].map((s) => {
           const p = playerAt(table, s as 0 | 1);
           return (
-            <span key={s} className={table.turn === s ? "text-lantern-300" : undefined}>
+            <span key={s} className={table.turn === s ? "text-ink" : undefined}>
               {seatWord(table.game, s as 0 | 1)}:{" "}
               {p ? (
                 p.slug ? (
@@ -301,18 +301,21 @@ function TableBoard({
                   p.display_name
                 )
               ) : (
-                <em className="text-white/50">empty seat</em>
+                <em className="text-muted">empty seat</em>
               )}
-              {p?.kind === "agent" ? <span className="text-white/50"> (agent)</span> : null}
+              {p?.kind === "agent" ? <span className="text-muted"> (agent)</span> : null}
             </span>
           );
         })}
       </p>
-      <p className="mt-1 text-[11px] text-white/55" aria-live="polite">
+      <p className="mt-1 text-[11px] text-muted" aria-live="polite">
         {tableLine(table, now)}
-        {myTurn ? <strong className="ml-1 text-lantern-300">Your move.</strong> : null}
+        {myTurn ? <strong className="ml-1 text-ink">Your move.</strong> : null}
       </p>
 
+      {/* In-world: the board and its pieces keep the theme, on the theme's own
+          ground, inside the brand frame (DECISIONS #7). */}
+      <div data-theme-world className="mt-2 inline-block max-w-full rounded-gh-md p-2" style={{ background: colours.ground }}>
       {table.game === "four" ? (
         <FourBoard rows={fourRows(state)} last={fourLastCell(state, table.moves)} legal={legal} onMove={move} disabled={busy || !myTurn} colours={colours} />
       ) : (
@@ -332,11 +335,12 @@ function TableBoard({
           }}
         />
       )}
+      </div>
 
       {myTurn && table.game === "chess" ? (
-        <label className="mt-2 flex items-center gap-1 text-[11px] text-white/50">
+        <label className="mt-2 flex items-center gap-1 text-[11px] text-muted">
           A pawn reaching the end becomes
-          <select value={promotion} onChange={(e) => setPromotion(e.target.value as "q" | "r" | "b" | "n")} className="rounded border border-white/15 bg-dusk-900 px-1 py-0.5 text-white">
+          <select value={promotion} onChange={(e) => setPromotion(e.target.value as "q" | "r" | "b" | "n")} className="rounded border border-line-strong bg-surface-raised px-1 py-0.5 text-ink">
             <option value="q">queen</option>
             <option value="r">rook</option>
             <option value="b">bishop</option>
@@ -347,18 +351,18 @@ function TableBoard({
 
       <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
         {table.status === "waiting" && seat === null && signedIn === true ? (
-          <button type="button" disabled={busy} onClick={() => void onAct(`${base}/join`)} className="rounded-full bg-lantern-400 px-3 py-1.5 font-semibold text-dusk-950 disabled:opacity-60">
+          <button type="button" disabled={busy} onClick={() => void onAct(`${base}/join`)} className="min-h-9 rounded-gh-pill border border-signal bg-signal px-3 py-1.5 font-semibold text-signal-ink disabled:opacity-60">
             Sit down and play
           </button>
         ) : null}
         {table.status === "waiting" && seat !== null ? (
-          <button type="button" disabled={busy} onClick={() => void onAct(`${base}/leave`)} className="rounded-full border border-white/15 px-3 py-1.5 text-white/70">
+          <button type="button" disabled={busy} onClick={() => void onAct(`${base}/leave`)} className="min-h-9 rounded-gh-pill border border-line-strong bg-surface-raised px-3 py-1.5 text-ink hover:bg-tint">
             Get up
           </button>
         ) : null}
         {table.status === "active" && seat !== null ? (
           <>
-            <button type="button" disabled={busy} onClick={() => void onAct(`${base}/draw`)} className="rounded-full border border-white/15 px-3 py-1.5 text-white/70">
+            <button type="button" disabled={busy} onClick={() => void onAct(`${base}/draw`)} className="min-h-9 rounded-gh-pill border border-line-strong bg-surface-raised px-3 py-1.5 text-ink hover:bg-tint">
               {table.draw_offer !== null && table.draw_offer !== seat ? "Accept the draw" : table.draw_offer === seat ? "Draw offered" : "Offer a draw"}
             </button>
             <button
@@ -367,13 +371,13 @@ function TableBoard({
               onClick={() => {
                 if (window.confirm("Resign this game?")) void onAct(`${base}/resign`);
               }}
-              className="rounded-full border border-rose-300/30 px-3 py-1.5 text-rose-200"
+              className="min-h-9 rounded-gh-pill border border-danger-ink/60 px-3 py-1.5 text-danger-ink hover:bg-danger-ink/10"
             >
               Resign
             </button>
           </>
         ) : null}
-        {signedIn === false && table.status === "waiting" ? <span className="text-white/55">Sign in to sit down.</span> : null}
+        {signedIn === false && table.status === "waiting" ? <span className="text-muted">Sign in to sit down.</span> : null}
       </div>
 
       {table.status === "ended" && table.ended_event_id ? (
@@ -387,8 +391,8 @@ function TableBoard({
 
       {table.moves?.length ? (
         <details className="mt-2" open={table.game === "chess"}>
-          <summary className="cursor-pointer text-[11px] uppercase tracking-widest text-white/55">Moves</summary>
-          <ol className="mt-1 max-h-32 overflow-y-auto font-mono text-[11px] leading-5 text-white/70">
+          <summary className="cursor-pointer gh-label text-muted">Moves</summary>
+          <ol className="mt-1 max-h-32 overflow-y-auto font-brand-mono text-[11px] leading-5 text-muted">
             {moveListLines(table.game, table.moves).map((line, i) => (
               <li key={i}>{line}</li>
             ))}
@@ -416,7 +420,7 @@ function FourBoard({
   colours: TableColours;
 }) {
   return (
-    <div className="mt-2 w-full max-w-[20rem]">
+    <div className="w-full max-w-[20rem]">
       {legal.length ? (
         <div className="grid grid-cols-7 gap-1 pb-1" role="group" aria-label="Drop a disc">
           {Array.from({ length: 7 }, (_, c) => String(c + 1)).map((col) => (
@@ -482,7 +486,7 @@ function ChessBoard({
   const last = table.moves?.length ? table.moves[table.moves.length - 1]!.move : null;
   const checked = table.status === "active" ? checkedKing(state) : null;
   return (
-    <div className="mt-2 grid w-full max-w-[20rem] grid-cols-8 overflow-hidden rounded-lg border border-white/10" role="grid" aria-label="Chess board">
+    <div className="grid w-[20rem] max-w-full grid-cols-8 overflow-hidden rounded-lg" role="grid" aria-label="Chess board">
       {squares.map((sq) => {
         const white = sq.piece !== "" && sq.piece === sq.piece.toUpperCase();
         const moved = Boolean(last && (last.slice(0, 2) === sq.name || last.slice(2, 4) === sq.name));
