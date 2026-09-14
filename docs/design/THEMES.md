@@ -9,6 +9,19 @@ Code: `apps/web/lib/themes/` — `types.ts` (the contract), `kit.ts` (shared mar
 procedural pixel toolkit), `index.ts` (registry + selection), one file per theme:
 `aoe.ts` (default; the PNG set, unchanged), `space.ts`, `city.ts`, `scifi.ts`.
 
+**Loading (#79).** Only aoe ships with the map. `meta.ts` holds what is known
+without the art (`THEME_IDS`, `DEFAULT_THEME`, each theme's name and blurb, which
+the lexicons take from it); `registry.ts` fetches the other three with `import()`
+through `loadTheme(id)` (cached; a failed fetch is retried), and `useTheme(id)`
+does the same for React previews. The map switches through `switch.ts`: the
+switcher's check moves at once, the in-world words when the theme has loaded,
+the canvas when its art is prepared too, and until then it keeps drawing the
+theme it had. Fetching starts ahead of need on hover or focus of a switcher row
+(and the Create preview's theme pills) and for the owner default of a plot the
+camera is closing in on or a link is gliding to. App code never imports
+`space.ts`/`city.ts`/`scifi.ts` or `all.ts` (the eager set, for tests);
+`test/theme-registry.test.ts` fails if it does.
+
 ## The renderer speaks in concepts; the theme draws them
 
 `WorldMap.tsx` never draws a PNG or a colour of its own choosing. Once per frame
@@ -186,7 +199,9 @@ own theme. Theme is a view preference, not a policy.
 
 1. Copy `space.ts`; fill every slot, palette token and lexicon key (the compiler
    lists what is missing).
-2. Add the id to `ThemeId` in `types.ts` and to `THEMES` in `index.ts`.
+2. Add the id to `ThemeId` in `types.ts`, its name and blurb to `THEME_META` in
+   `meta.ts`, a loader to `LOADERS` in `registry.ts`, and the theme to `THEMES` in
+   `all.ts`.
 3. If it needs a web font, add it to the Google Fonts import in `globals.css`,
    with a generic fallback in `displayFont`.
 4. Screenshot it on the fixture scene next to aoe and check the rules above:

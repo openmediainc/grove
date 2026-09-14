@@ -9,7 +9,7 @@ import {
   ringNumberLabel,
   searchDistrict,
 } from "../lib/districts";
-import { THEMES } from "../lib/themes";
+import { THEMES } from "../lib/themes/all";
 
 const plot = (plotIndex: number, preset = "public_write") => ({ plotIndex, preset, rect: plotForIndex(plotIndex) });
 

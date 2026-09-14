@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cardApiPath, cardRows, cardSavePath, draftFrom, draftToBody, walkOverTarget, type WireCard } from "../lib/card";
-import { THEMES } from "../lib/themes";
+import { THEMES } from "../lib/themes/all";
 
 const lex = THEMES.aoe.lexicon.card;
 

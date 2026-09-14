@@ -15,7 +15,8 @@ import {
   typeaheadIndex,
 } from "../lib/a11y";
 import { COLORS, LEGACY_NIGHT, MODES } from "@grove/ui/tokens";
-import { THEME_IDS, THEMES } from "../lib/themes";
+import { THEME_IDS } from "../lib/themes";
+import { THEMES } from "../lib/themes/all";
 import { HAZARD_COLOUR } from "../lib/themes/types";
 
 describe("nextRovingIndex", () => {

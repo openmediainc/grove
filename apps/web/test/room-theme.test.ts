@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { checkedKing, fourLastCell } from "../lib/boards";
-import { THEME_EVENT, THEME_IDS, THEME_STORAGE_KEY, THEMES, subscribeThemeChoice, writeThemeChoice } from "../lib/themes";
+import { THEME_EVENT, THEME_IDS, THEME_STORAGE_KEY, subscribeThemeChoice, writeThemeChoice } from "../lib/themes";
+import { THEMES } from "../lib/themes/all";
 import { aoe, ROOM_STYLE as AOE_ROOM } from "../lib/themes/aoe";
 import { city, ROOM_STYLE as CITY_ROOM } from "../lib/themes/city";
 import { AGENT_NAME, TABLE_MARKS, WHISPER_RING, roomColours, tableColours, tokenColour } from "../lib/themes/room-palette";

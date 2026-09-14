@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DECOR_LABEL, readStoredDecor, type DecorItem, type DecorPreset } from "@grove/protocol";
 import { api } from "@/lib/api";
 import { decorGrid, placeDecor, sameDecor } from "@/lib/decor";
-import { THEMES, readThemeChoice, type ThemeId } from "@/lib/themes";
+import { readThemeChoice, type ThemeId } from "@/lib/themes";
+import { useTheme } from "@/lib/themes/useTheme";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { SECTION_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
@@ -195,10 +196,12 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
 /** A preset drawn through the viewer's theme's own `decor` slot: the map's art, not a picture of it. */
 function DecorThumb({ preset, themeId, size }: { preset: DecorPreset; themeId: ThemeId; size: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // Loaded on demand (#79): draws once the viewer's theme is here, never another theme's art in its place.
+  const theme = useTheme(themeId);
   useEffect(() => {
     const c = ref.current;
     const ctx = c?.getContext("2d");
-    if (!c || !ctx) return;
+    if (!c || !ctx || theme.id !== themeId) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     c.width = size * dpr;
     c.height = size * dpr;
@@ -208,7 +211,7 @@ function DecorThumb({ preset, themeId, size }: { preset: DecorPreset; themeId: T
     const k = (size * dpr) / 84;
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(k, 0, 0, k, (size * dpr) / 2, size * dpr * 0.62);
-    THEMES[themeId].art.decor(ctx, preset, 0, 0);
-  }, [preset, themeId, size]);
+    theme.art.decor(ctx, preset, 0, 0);
+  }, [preset, theme, themeId, size]);
   return <canvas ref={ref} style={{ width: size, height: size }} aria-hidden />;
 }

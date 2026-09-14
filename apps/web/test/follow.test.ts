@@ -7,7 +7,7 @@ import {
   noticeText,
   type WireFollowNotice,
 } from "../lib/follow";
-import { THEMES } from "../lib/themes";
+import { THEMES } from "../lib/themes/all";
 
 const lex = THEMES.aoe.lexicon.card;
 

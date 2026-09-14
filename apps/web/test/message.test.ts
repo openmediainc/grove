@@ -10,7 +10,7 @@ import {
   replyTarget,
   type WireMessage,
 } from "../lib/message";
-import { THEMES } from "../lib/themes";
+import { THEMES } from "../lib/themes/all";
 
 function msg(over: Partial<WireMessage> = {}): WireMessage {
   return {

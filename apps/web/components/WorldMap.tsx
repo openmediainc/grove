@@ -17,19 +17,22 @@ import {
 } from "@/lib/art";
 import {
   DEFAULT_THEME,
+  DEFAULT_THEME_OBJECT,
   THEME_IDS,
   THEME_QUERY,
-  THEMES,
   announceActiveTheme,
   hasOwnThemeChoice,
+  loadTheme,
+  preloadTheme,
   readThemeChoice,
   writeThemeChoice,
   type Theme,
   type ThemeId,
 } from "@/lib/themes";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import { createThemeSwitch, type ThemeSwitch } from "@/lib/themes/switch";
 import { AppearanceMenuGroup } from "./Appearance";
-import { linkAtTile, viewedOwnerDefault, type ViewLink } from "@/lib/themes/owner-default";
+import { approachingOwnerDefault, linkAtTile, viewedOwnerDefault, type ViewLink } from "@/lib/themes/owner-default";
 import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { enterWallMode } from "@grove/ui/tokens";
 import { CHROME_WORDS } from "@/lib/themes/chrome-words";
@@ -405,7 +408,7 @@ type Plot = {
  * when the space's contents are not.
  */
 /** The default theme's plain access words, used by the chrome in every theme. */
-const DEFAULT_THEME_OBJ: Theme = THEMES[DEFAULT_THEME];
+const DEFAULT_THEME_OBJ: Theme = DEFAULT_THEME_OBJECT;
 
 function accessLabel(theme: Theme, preset: string): string {
   return themedAccess((theme.lexicon.access as Record<string, { label: string } | undefined>)[preset]?.label, preset);
@@ -942,15 +945,37 @@ export function WorldMap() {
    * The theme being DRAWN. Read once per frame by the renderer, so a switch
    * re-skins the next frame with no remount; see lib/themes for the contract.
    */
-  const themeRef = useRef<Theme>(THEMES[DEFAULT_THEME]);
+  const themeRef = useRef<Theme>(DEFAULT_THEME_OBJECT);
   /**
-   * The theme the viewer CHOSE. The chrome follows it at once; the canvas
-   * follows it as soon as its art is prepared, so a switch never paints a
-   * frame of missing sprites.
+   * The theme the viewer CHOSE. The switcher's check follows it at once. Only
+   * aoe ships with the map (#79): any other theme is fetched first, and until
+   * it arrives the map keeps its current theme's words and art. Its in-world
+   * words follow once it has loaded; the canvas once its art is prepared too,
+   * so a switch never paints a frame of missing sprites.
    */
   const [themeId, setThemeId] = useState<ThemeId>(DEFAULT_THEME);
-  const chosenRef = useRef<Theme>(THEMES[DEFAULT_THEME]);
-  const theme = THEMES[themeId];
+  /** The loaded theme whose in-world words are in use (the chosen one once it has arrived). */
+  const chosenRef = useRef<Theme>(DEFAULT_THEME_OBJECT);
+  const [theme, setWordsTheme] = useState<Theme>(DEFAULT_THEME_OBJECT);
+  /** When a theme last failed to load, so the owner-default tick does not hammer a dropped chunk. */
+  const themeFailedRef = useRef<Map<ThemeId, number>>(new Map());
+  /** chosen → words → drawn (lib/themes/switch). */
+  const themeSwitchRef = useRef<ThemeSwitch | null>(null);
+  if (!themeSwitchRef.current) {
+    themeSwitchRef.current = createThemeSwitch({
+      initial: DEFAULT_THEME_OBJECT,
+      load: loadTheme,
+      onChosen: setThemeId,
+      onWords: (t) => {
+        chosenRef.current = t;
+        setWordsTheme(t);
+      },
+      onDrawn: (t) => {
+        themeRef.current = t;
+      },
+      onFailed: (id) => themeFailedRef.current.set(id, Date.now()),
+    });
+  }
   const lex = theme.lexicon;
   /** Chrome speaks plain words whatever the theme; `lex` is for in-world names only. */
   const words = CHROME_WORDS;
@@ -1188,12 +1213,7 @@ export function WorldMap() {
    * disagrees with what is on screen.
    */
   const applyTheme = useCallback((id: ThemeId, persist: boolean) => {
-    const next = THEMES[id];
-    chosenRef.current = next;
-    setThemeId(id);
-    void next.art.prepare().then(() => {
-      if (chosenRef.current === next) themeRef.current = next;
-    });
+    void themeSwitchRef.current!.choose(id);
     if (!persist) {
       // The drawer follows what the map shows, owner default included (#59).
       announceActiveTheme(id);
@@ -1213,7 +1233,7 @@ export function WorldMap() {
   const themeKeyRef = useRef<() => void>(() => {});
   useEffect(() => {
     themeKeyRef.current = () => {
-      const i = THEME_IDS.indexOf(chosenRef.current.id);
+      const i = THEME_IDS.indexOf(themeSwitchRef.current!.chosen);
       applyTheme(THEME_IDS[(i + 1) % THEME_IDS.length]!, true);
     };
   }, [applyTheme]);
@@ -1263,8 +1283,15 @@ export function WorldMap() {
       ownerLinkRef.current = r.link;
       ownerPlotRef.current = r.plotIndex;
       if (hasOwnThemeChoice()) return;
+      // #79: fetch a space's default while the camera is still on its way, so it is here on arrival.
+      if (!wall) {
+        const soon = approachingOwnerDefault({ camera: cam, plots, memberDefaults: memberThemesRef.current, link: r.link });
+        if (soon) preloadTheme(soon);
+      }
       const want = readThemeChoice(wall ? null : r.theme);
-      if (want !== chosenRef.current.id) applyTheme(want, false);
+      const failedAt = themeFailedRef.current.get(want);
+      if (failedAt !== undefined && now - failedAt < 15_000) return;
+      if (want !== themeSwitchRef.current!.chosen) applyTheme(want, false);
     };
     const timer = window.setInterval(tick, 600);
     return () => window.clearInterval(timer);

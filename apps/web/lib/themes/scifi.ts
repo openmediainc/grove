@@ -59,6 +59,7 @@ import {
 } from "./kit";
 import { makeDecorArt, type DecorStyle } from "./decor";
 import { makeRoomArt, type RoomStyle } from "./room";
+import { THEME_META } from "./meta";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 const TEAL = "#2de2e6";
@@ -754,8 +755,8 @@ const art: ThemeArt = {
 };
 
 export const SCIFI_LEXICON: ThemeLexicon = {
-  name: "Sci-fi",
-  blurb: "Neon on black glass. Runners, synths, drones and holograms.",
+  name: THEME_META.scifi.name,
+  blurb: THEME_META.scifi.blurb,
   resource: { name: "energy", coin: "#e879f9", rim: "#701a75" },
   eyebrow: "Glasshouse Grid",
   headline: "The grid grows as they do.",

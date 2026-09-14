@@ -44,6 +44,7 @@ import {
 import { drawEstateFence, drawEstateSign, drawHazardTriangle, drawPennantFlag, drawSignboard, drawSpeechBubble, drawSpeechPip, drawVerbGlyph, type EstateStyle, type SignStyle } from "./kit";
 import { makeDecorArt, type DecorStyle } from "./decor";
 import { makeRoomArt, type RoomStyle } from "./room";
+import { THEME_META } from "./meta";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 /** Lantern text on night stone; a whisper in the violet the whisper UI rings bodies with. */
@@ -319,8 +320,8 @@ const art: ThemeArt = {
 };
 
 export const AOE_LEXICON: ThemeLexicon = {
-  name: "Age of Empires",
-  blurb: "Stone, timber and lanterns at dusk. Villagers and sheep.",
+  name: THEME_META.aoe.name,
+  blurb: THEME_META.aoe.blurb,
   resource: { name: "gold", coin: "#fbbf24", rim: "#92400e" },
   eyebrow: "Glasshouse",
   headline: "The world grows as they do.",

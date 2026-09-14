@@ -7,7 +7,8 @@ import {
   postcardFilename,
   type PostcardSubject,
 } from "../lib/postcard";
-import { THEMES, THEME_IDS } from "../lib/themes";
+import { THEME_IDS } from "../lib/themes";
+import { THEMES } from "../lib/themes/all";
 
 const AT = Date.UTC(2026, 8, 13, 14, 5, 42);
 const aoe = THEMES.aoe.lexicon;

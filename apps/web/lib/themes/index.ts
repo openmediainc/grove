@@ -13,32 +13,30 @@
  * Anything that is not a known id falls through to the next step rather than
  * erroring: a stale bookmark to a theme that has since been removed lands on the
  * default, not on a blank map.
+ *
+ * Only the ids and names are here synchronously (lib/themes/meta); the art is
+ * fetched per theme by lib/themes/registry (#79).
  */
 
 import type { CSSProperties } from "react";
-import { aoe } from "./aoe";
-import { city } from "./city";
-import { scifi } from "./scifi";
-import { space } from "./space";
+import { DEFAULT_THEME, isThemeId } from "./meta";
+import { DEFAULT_THEME_OBJECT, peekTheme } from "./registry";
 import type { Theme, ThemeId } from "./types";
 
 export type { Theme, ThemeId } from "./types";
-
-export const THEMES: Readonly<Record<ThemeId, Theme>> = { aoe, space, city, scifi };
-
-export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
-
-export const DEFAULT_THEME: ThemeId = "aoe";
+export { DEFAULT_THEME, THEME_IDS, THEME_META, isThemeId } from "./meta";
+export { DEFAULT_THEME_OBJECT, createThemeRegistry, isThemeLoaded, loadTheme, peekTheme, preloadTheme } from "./registry";
 
 export const THEME_STORAGE_KEY = "grove-theme";
 export const THEME_QUERY = "theme";
 
-export function isThemeId(s: unknown): s is ThemeId {
-  return typeof s === "string" && Object.prototype.hasOwnProperty.call(THEMES, s);
-}
-
+/**
+ * Synchronous: the theme if it is already loaded, else the default (#79). Only
+ * aoe is bundled, so for anything else call `loadTheme` (or `useTheme`) and
+ * use this for "whatever is here right now".
+ */
 export function getTheme(id: string | null | undefined): Theme {
-  return isThemeId(id) ? THEMES[id] : THEMES[DEFAULT_THEME];
+  return (isThemeId(id) ? peekTheme(id) : undefined) ?? DEFAULT_THEME_OBJECT;
 }
 
 /** Pure half of the resolution order, so it can be reasoned about without a window. */

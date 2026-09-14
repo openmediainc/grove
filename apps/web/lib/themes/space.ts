@@ -56,6 +56,7 @@ import {
 } from "./kit";
 import { makeDecorArt, type DecorStyle } from "./decor";
 import { makeRoomArt, type RoomStyle } from "./room";
+import { THEME_META } from "./meta";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 const HULL = "#8a94a8";
@@ -710,8 +711,8 @@ const art: ThemeArt = {
 };
 
 export const SPACE_LEXICON: ThemeLexicon = {
-  name: "Space",
-  blurb: "An orbital station on a rock. Crew in suits, robots, drifting satellites.",
+  name: THEME_META.space.name,
+  blurb: THEME_META.space.blurb,
   resource: { name: "credits", coin: "#67e8f9", rim: "#155e75" },
   eyebrow: "Glasshouse Station",
   headline: "The station grows as they do.",

@@ -1,6 +1,6 @@
 "use client";
 
-import { THEME_IDS, THEMES, type ThemeId } from "@/lib/themes";
+import { THEME_IDS, THEME_META, preloadTheme, type ThemeId } from "@/lib/themes";
 import { MENU_ROW } from "./MapMenu";
 
 /**
@@ -35,11 +35,15 @@ export function ThemeSwitcher({
           role="menuitemradio"
           aria-checked={value === id}
           tabIndex={-1}
-          title={THEMES[id].lexicon.blurb}
+          title={THEME_META[id].blurb}
           onClick={() => onChange(id)}
+          // Only the default theme ships with the map (#79): start fetching one
+          // the moment a pointer or the menu's arrow keys land on it.
+          onPointerEnter={() => preloadTheme(id)}
+          onFocus={() => preloadTheme(id)}
           className={MENU_ROW}
         >
-          <span>{THEMES[id].lexicon.name}</span>
+          <span>{THEME_META[id].name}</span>
           <span aria-hidden className={`text-xs ${value === id ? "text-ink" : "text-transparent"}`}>
             ✓
           </span>

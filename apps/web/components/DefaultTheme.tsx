@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { isSpaceThemeId, type SpaceBranding } from "@grove/protocol";
 import { api } from "@/lib/api";
 import { previewPlot } from "@/lib/branding";
-import { THEMES, THEME_IDS, type ThemeId } from "@/lib/themes";
+import { THEME_IDS, THEME_META, type ThemeId } from "@/lib/themes";
 import { SignPreview } from "./Branding";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { SECTION_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
@@ -109,7 +109,7 @@ export function DefaultThemePanel({
         </button>
         {saved ? (
           <span className="text-xs text-success" role="status">
-            Saved{stored ? ` as ${THEMES[stored].lexicon.name}` : ""}. The map picks it up on its next refresh.
+            Saved{stored ? ` as ${THEME_META[stored].name}` : ""}. The map picks it up on its next refresh.
           </span>
         ) : null}
       </div>

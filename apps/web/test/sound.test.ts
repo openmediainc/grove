@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ToolCallView } from "@grove/protocol";
-import { THEMES, THEME_IDS } from "../lib/themes";
+import { THEME_IDS } from "../lib/themes";
+import { THEMES } from "../lib/themes/all";
 import { SoundEngine, bedFrequencies, impulseSamples } from "../lib/sound/engine";
 import { VoiceLimiter, collapse } from "../lib/sound/limiter";
 import { SOUND_FRESH_MS, SOUND_REARRIVE_MS, SoundListener, activityLevel, toolVerb, type SoundActor, type SoundEvent } from "../lib/sound/listener";

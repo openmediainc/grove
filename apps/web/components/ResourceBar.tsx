@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { getTheme, readThemeChoice } from "@/lib/themes";
+import { loadTheme, readThemeChoice } from "@/lib/themes";
 import { startPoll } from "@/lib/poll";
 import { costLine, money, NOT_REPORTED, resourceTerms, tokens, totalTokens, type UsageDay, type UsageResponse } from "@/lib/cost";
 
@@ -38,7 +38,11 @@ export function ResourceBar({ signedIn }: { signedIn: boolean | null }) {
     if (!signedIn) return;
     let cancelled = false;
     const pull = async () => {
-      setTerms(resourceTerms(getTheme(readThemeChoice())));
+      void loadTheme(readThemeChoice())
+        .then((t) => {
+          if (!cancelled) setTerms(resourceTerms(t));
+        })
+        .catch(() => {});
       try {
         const r = await api<UsageResponse>(`/api/v1/usage?scope=${encodeURIComponent(scope)}`);
         if (!cancelled) setDay(r.usage);

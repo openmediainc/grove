@@ -16,7 +16,8 @@ import {
   type BrandingSuggestion,
 } from "@/lib/branding";
 import { layoutSignboard, signContent } from "@/lib/signboard";
-import { THEMES, THEME_IDS } from "@/lib/themes";
+import { THEME_IDS, THEME_META } from "@/lib/themes";
+import { useTheme } from "@/lib/themes/useTheme";
 import { drawBrandEmblem } from "@/lib/themes/kit";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { CARD_CLASS, INPUT_CLASS, NUM_CLASS, SECTION_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
@@ -314,11 +315,14 @@ function EmblemIcon({ emblem, colour }: { emblem: (typeof BRAND_EMBLEMS)[number]
 }
 
 export function SignPreview({ themeId, plot }: { themeId: (typeof THEME_IDS)[number]; plot: ReturnType<typeof previewPlot> }) {
-  const theme = THEMES[themeId];
+  // Loaded on demand (#79); the canvas stays blank until this tile's own theme is here.
+  const theme = useTheme(themeId);
+  const here = theme.id === themeId;
   const W = 220;
   const H = 84;
   const ref = useCanvas(
     (ctx, w, h) => {
+      if (!here) return;
       // The theme's own ground colour behind the sign, plus a hint of its plot tint.
       ctx.fillStyle = theme.palette.fog;
       ctx.fillRect(0, 0, w, h);
@@ -335,12 +339,12 @@ export function SignPreview({ themeId, plot }: { themeId: (typeof THEME_IDS)[num
     },
     W,
     H,
-    [themeId, JSON.stringify(plot)],
+    [themeId, here, JSON.stringify(plot)],
   );
   return (
     <figure className="overflow-hidden rounded-gh-md border border-line bg-surface-raised">
-      <canvas ref={ref} style={{ width: W, maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }} aria-label={`${theme.lexicon.name} sign preview`} />
-      <figcaption className="border-t border-line px-2 py-1 text-[11px] text-muted">{theme.lexicon.name}</figcaption>
+      <canvas ref={ref} style={{ width: W, maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }} aria-label={`${THEME_META[themeId].name} sign preview`} />
+      <figcaption className="border-t border-line px-2 py-1 text-[11px] text-muted">{THEME_META[themeId].name}</figcaption>
     </figure>
   );
 }

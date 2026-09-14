@@ -13,7 +13,7 @@ import {
   type CardTarget,
   type WireCard,
 } from "@/lib/card";
-import { getTheme, readThemeChoice } from "@/lib/themes";
+import { getTheme, loadTheme, readThemeChoice } from "@/lib/themes";
 import type { ThemeLexicon } from "@/lib/themes/types";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { CARD_CLASS, INPUT_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
@@ -95,11 +95,21 @@ export function CardFields({ card, lex, compact = false }: { card: WireCard | nu
 export function useCardLex(): CardLex {
   const [lex, setLex] = useState<CardLex>(() => getTheme(null).lexicon.card);
   useEffect(() => {
+    let live = true;
     try {
-      setLex(getTheme(readThemeChoice()).lexicon.card);
+      void loadTheme(readThemeChoice())
+        .then((t) => {
+          if (live) setLex(t.lexicon.card);
+        })
+        .catch(() => {
+          // Offline: the default words are fine.
+        });
     } catch {
       // Storage blocked: the default words are fine.
     }
+    return () => {
+      live = false;
+    };
   }, []);
   return lex;
 }

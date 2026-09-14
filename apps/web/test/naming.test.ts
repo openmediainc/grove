@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { THEMES, THEME_IDS, mapSubline } from "../lib/themes";
+import { THEME_IDS, mapSubline } from "../lib/themes";
+import { THEMES } from "../lib/themes/all";
 import { metadata } from "../app/layout";
 
 // DECISIONS.md #2: the visible product name is Glasshouse. "Grove", "Aetheria"

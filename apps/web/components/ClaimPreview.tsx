@@ -17,7 +17,8 @@ import {
 import { plotDistrictName } from "@/lib/districts";
 import { PLOT_COLS, PLOT_ROWS, isCoreTile, regionAt } from "@/lib/map-layout";
 import { LOD_SIGNBOARD, layoutSignboard } from "@/lib/signboard";
-import { DEFAULT_THEME, THEME_IDS, THEMES, readThemeChoice, type ThemeId } from "@/lib/themes";
+import { DEFAULT_THEME, THEME_IDS, THEME_META, preloadTheme, readThemeChoice, type ThemeId } from "@/lib/themes";
+import { useTheme } from "@/lib/themes/useTheme";
 import type { Theme } from "@/lib/themes/types";
 
 const TW = 64;
@@ -49,7 +50,8 @@ export function ClaimPreview({
 }) {
   const [themeId, setThemeId] = useState<ThemeId>(DEFAULT_THEME);
   useEffect(() => setThemeId(readThemeChoice()), []);
-  const theme = THEMES[themeId];
+  // Loaded on demand (#79): until the picked theme arrives the last one stays on the canvas.
+  const theme = useTheme(themeId);
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
@@ -71,15 +73,15 @@ export function ClaimPreview({
     void theme.art
       .prepare()
       .then(() => {
-        if (!cancelled) setReady(themeId);
+        if (!cancelled) setReady(theme.id);
       })
       .catch(() => {
-        if (!cancelled) setReady(themeId);
+        if (!cancelled) setReady(theme.id);
       });
     return () => {
       cancelled = true;
     };
-  }, [theme, themeId]);
+  }, [theme]);
 
   const scene = useMemo(() => previewScene(preview, draft, viewAs, theme.lexicon), [preview, draft, viewAs, theme]);
   const district = plotDistrictName(theme.lexicon.district.names, preview.plot_index);
@@ -88,12 +90,12 @@ export function ClaimPreview({
   useEffect(() => {
     const c = canvasRef.current;
     const ctx = c?.getContext("2d");
-    if (!c || !ctx || !width || ready !== themeId) return;
+    if (!c || !ctx || !width || ready !== theme.id) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     c.width = Math.floor(width * dpr);
     c.height = Math.floor(height * dpr);
     drawPreview(ctx, theme, scene, preview.plot_index, district, width, height, dpr);
-  }, [theme, themeId, ready, scene, preview.plot_index, district, width, height]);
+  }, [theme, ready, scene, preview.plot_index, district, width, height]);
 
   const priv = draft.preset === "private";
   return (
@@ -104,10 +106,12 @@ export function ClaimPreview({
             key={id}
             type="button"
             onClick={() => setThemeId(id)}
+            onPointerEnter={() => preloadTheme(id)}
+            onFocus={() => preloadTheme(id)}
             aria-pressed={id === themeId}
             className={toggleClass(id === themeId)}
           >
-            {THEMES[id].lexicon.name}
+            {THEME_META[id].name}
           </button>
         ))}
       </div>

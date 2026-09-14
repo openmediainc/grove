@@ -22,7 +22,8 @@
  * the plots it already has.
  */
 
-import { isThemeId, type ThemeId } from "./index";
+import { isThemeId } from "./meta";
+import type { ThemeId } from "./types";
 
 export type ViewPlotRect = { x0: number; y0: number; x1: number; y1: number };
 
@@ -134,6 +135,36 @@ export function viewedOwnerDefault(input: {
   }
   const p = cameraCentredPlot(camera, plots, input.current);
   return { plotIndex: p?.plotIndex ?? null, link: null, theme: p ? plotOwnerDefault(p, memberDefaults) : null };
+}
+
+/** Below this zoom the camera is not heading for any one plot, so nothing is fetched ahead (#79). */
+export const PRELOAD_THEME_ZOOM = 0.6;
+/** How far outside a plot (tiles) the camera centre may be for its default to be fetched ahead (#79). */
+export const PRELOAD_THEME_RADIUS = 4;
+
+/**
+ * The owner default worth fetching BEFORE it applies (#79): the target of a
+ * live link (the camera is gliding there), else the plot the camera is closing
+ * in on — nearer than `PRELOAD_THEME_RADIUS` at a zoom that is heading for
+ * plots. Only aoe ships with the map, so without this a space's default would
+ * arrive a beat after the camera does. Same privacy as the default itself: a
+ * private plot's comes only from the member list.
+ */
+export function approachingOwnerDefault(input: {
+  camera: ViewCamera;
+  plots: readonly ViewPlot[];
+  memberDefaults: ReadonlyMap<number, string>;
+  link: ViewLink | null;
+}): ThemeId | null {
+  const { camera, plots, memberDefaults, link } = input;
+  if (link) {
+    const target = plots.find((p) => p.plotIndex === link.plotIndex);
+    const t = target ? plotOwnerDefault(target, memberDefaults) : null;
+    if (t) return t;
+  }
+  if (camera.zoom < PRELOAD_THEME_ZOOM) return null;
+  const near = nearestPlot(camera.tx, camera.ty, plots, PRELOAD_THEME_RADIUS);
+  return near ? plotOwnerDefault(near, memberDefaults) : null;
 }
 
 /** The tile at the middle of a plot, for a link that should land on it (the space page's Visit). */

@@ -57,6 +57,7 @@ import {
 } from "./kit";
 import { makeDecorArt, type DecorStyle } from "./decor";
 import { makeRoomArt, type RoomStyle } from "./room";
+import { THEME_META } from "./meta";
 import type { AmbientPose, Theme, ThemeArt, ThemeLexicon, ThemePalette } from "./types";
 
 const TAXI = "#facc15";
@@ -691,8 +692,8 @@ const art: ThemeArt = {
 };
 
 export const CITY_LEXICON: ThemeLexicon = {
-  name: "City",
-  blurb: "A downtown block at dusk. Citizens, courier bots and pigeons.",
+  name: THEME_META.city.name,
+  blurb: THEME_META.city.blurb,
   resource: { name: "dollars", coin: "#86efac", rim: "#166534" },
   eyebrow: "Glasshouse City",
   headline: "The city grows as they do.",

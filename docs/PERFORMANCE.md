@@ -26,6 +26,37 @@ compares with `apps/web/perf-budget.json`.
 Over budget? Split the new weight (below). If the growth is deliberate,
 re-record and say why in the commit message.
 
+## Lazy map themes (#79)
+
+Only aoe (the default, and the fallback while another theme loads) ships with
+the map now. space, city and scifi are separate chunks fetched through
+`loadTheme` (lib/themes/registry) on a switch, on hover or focus of a switcher
+row, for the owner default of a plot the camera is nearing, and by the Manage
+and Create previews. Ids, names and blurbs stay synchronous in
+`lib/themes/meta.ts`. How the map swaps without a frame of missing art:
+`lib/themes/switch.ts` and docs/design/THEMES.md.
+
+Measured on `6852065` (#74, before) and the #79 branch, `VERCEL=1 next build`,
+Next's "First Load JS" with the budget script's page + layout gzip figure in
+brackets:
+
+| Route | Before | After | Change |
+|---|---|---|---|
+| `/` | 219 kB (233.5 KiB) | **207 kB** (221.2 KiB) | −12 kB, −5% |
+| `/explore` | 159 kB (171.5 KiB) | 145 kB (158.5 KiB) | −14 kB, −8% |
+| `/s/[slug]` | 163 kB (175.7 KiB) | 150 kB (162.7 KiB) | −13 kB, −8% |
+| `/a/[slug]` | 169 kB (184.3 KiB) | 156 kB (171.2 KiB) | −13 kB, −8% |
+| `/me` | 124 kB (177.6 KiB) | 125 kB (164.6 KiB) | −13 KiB with the layout (the themes left the root layout's chunks) |
+
+Also `/u/[handle]` 148→135 kB. The three chunks that left first load are
+~6.5–6.9 kB gz each (space, city, scifi), downloaded only when one is wanted.
+The remaining theme weight on `/` is aoe itself plus `kit.ts` (the procedural
+toolkit every theme shares), which the default needs anyway. The routes other
+than `/` shrank as much because `Card`, `ResourceBar` and the Manage/Create
+previews imported the full set too.
+
+`perf-budget.json` was re-recorded after rebasing onto #75 (page routes on brand tokens, which landed alongside): `/` is 221.5 KiB (207 kB), `/explore` 158.8, `/s/[slug]` 162.6, `/a/[slug]` 171.0, `/me` 165.8 KiB.
+
 ## Before and after (#68)
 
 ### First-load JS per route
@@ -171,9 +202,6 @@ It's pinned by `test/poll.test.ts`.
 
 ## Not done (next candidates)
 
-- **Map themes (30 kB gz on `/`):** all four themes ship with the map, although
-  one is drawn. Loading the non-default themes on switch needs the renderer to
-  tolerate a theme arriving a frame late.
 - **`WorldMap.tsx` itself:** most of the 66 kB page chunk. Splitting the draw
   loop is a refactor, not a boundary.
 - **Frame time on real devices:** the numbers above are headless. A pass on a
