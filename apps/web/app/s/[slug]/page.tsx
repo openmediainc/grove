@@ -33,11 +33,13 @@ import { CardFields, CardPanel, useCard, useCardLex } from "@/components/Card";
 import { BrandingPanel, type WireBranding } from "@/components/Branding";
 import { EstatePanel } from "@/components/EstateName";
 import { DecorPanel } from "@/components/Decor";
+import { DefaultThemePanel } from "@/components/DefaultTheme";
+import { visitHref } from "@/lib/visit-link";
+import { brandingDraft, checkDraft } from "@/lib/branding";
 import { RelocatePanel, TransferPanel } from "@/components/SpaceMoves";
 import { FollowButton } from "@/components/Follow";
 import { BoardSection } from "@/components/Board";
 import { Tabs } from "@/components/Tabs";
-import { roomHref } from "@/lib/world-url";
 
 /**
  * One space, one page: About · Activity · Manage (`?tab=`).
@@ -90,6 +92,8 @@ type Detail = {
   org_bodies: Array<{ human_id: string; org_id: string; colour: string }>;
   /** 035: the owner's accent, sign text and emblem. */
   branding?: WireBranding;
+  /** #59: the owner's default map theme, or null. Past the same door as the name. */
+  default_theme?: string | null;
 };
 
 type Invite = {
@@ -158,7 +162,7 @@ export default function SpacePage() {
         method: "POST",
         body: JSON.stringify(room ? { room } : {}),
       });
-      window.location.href = gp(roomHref(room ?? "plaza"));
+      window.location.href = gp(visitHref(room ?? "plaza", d!.world.plot_index));
     } catch (e) {
       if ((e as { status?: number }).status === 401) {
         window.location.href = gp(`/login?why=space&next=${encodeURIComponent(spaceHref(slug))}`);
@@ -391,8 +395,18 @@ function Manage({ detail, reload }: { detail: Detail; reload: () => Promise<void
       <AdmitByHandle detail={detail} reload={reload} />
       <OrgBindings detail={detail} reload={reload} />
       <BrandingPanel worldId={detail.world.id} space={detail.world} orgs={detail.orgs} branding={detail.branding ?? null} reload={reload} />
+      {detail.world.plot_index != null ? (
+        <DefaultThemePanel
+          worldId={detail.world.id}
+          space={detail.world}
+          orgs={detail.orgs}
+          branding={checkDraft(brandingDraft(detail.branding)).valid}
+          defaultTheme={detail.default_theme ?? null}
+          reload={reload}
+        />
+      ) : null}
       <EstatePanel orgs={detail.orgs} />
-      {detail.world.plot_index != null ? <DecorPanel worldId={detail.world.id} /> : null}
+      {detail.world.plot_index != null ? <DecorPanel worldId={detail.world.id} ownerDefault={detail.default_theme ?? null} /> : null}
       <CardPanel target={{ subject: "space", ref: detail.world.id }} saveId={detail.world.id} title="Card" />
       {detail.is_holder && detail.world.plot_index != null ? (
         <>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DEFAULT_THEME, THEMES, readThemeChoice, subscribeThemeChoice, type Theme } from "./index";
+import { DEFAULT_THEME, THEMES, readActiveTheme, subscribeThemeChoice, type Theme } from "./index";
 
 /**
  * The theme the viewer has chosen, followed live (#58): `?theme=` or the
@@ -14,7 +14,8 @@ import { DEFAULT_THEME, THEMES, readThemeChoice, subscribeThemeChoice, type Them
 export function useActiveTheme(): Theme {
   const [theme, setTheme] = useState<Theme>(THEMES[DEFAULT_THEME]);
   useEffect(() => {
-    setTheme(THEMES[readThemeChoice()]);
+    // readActiveTheme: what the map shows, including a space owner default (#59).
+    setTheme(THEMES[readActiveTheme()]);
     return subscribeThemeChoice((id) => setTheme(THEMES[id]));
   }, []);
   return theme;

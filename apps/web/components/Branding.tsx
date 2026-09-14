@@ -311,7 +311,7 @@ function EmblemIcon({ emblem, colour }: { emblem: (typeof BRAND_EMBLEMS)[number]
   return <canvas ref={ref} style={{ width: 20, height: 20 }} aria-hidden />;
 }
 
-function SignPreview({ themeId, plot }: { themeId: (typeof THEME_IDS)[number]; plot: ReturnType<typeof previewPlot> }) {
+export function SignPreview({ themeId, plot }: { themeId: (typeof THEME_IDS)[number]; plot: ReturnType<typeof previewPlot> }) {
   const theme = THEMES[themeId];
   const W = 220;
   const H = 84;

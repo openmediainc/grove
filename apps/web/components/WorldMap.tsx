@@ -20,6 +20,8 @@ import {
   THEME_IDS,
   THEME_QUERY,
   THEMES,
+  announceActiveTheme,
+  hasOwnThemeChoice,
   readThemeChoice,
   themeStyle,
   writeThemeChoice,
@@ -27,6 +29,7 @@ import {
   type ThemeId,
 } from "@/lib/themes";
 import { ThemeSwitcher } from "./ThemeSwitcher";
+import { linkAtTile, viewedOwnerDefault, type ViewLink } from "@/lib/themes/owner-default";
 import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
 import { themedAccess } from "@/lib/access";
@@ -361,6 +364,9 @@ type SpaceView = {
   branding?: unknown;
   /** Placed plot decor (#45). Empty for a redacted row. */
   decor?: unknown;
+  /** The owner's default theme (#59). Null for a redacted row. */
+  default_theme?: string | null;
+  defaultTheme?: string | null;
 };
 
 type Plot = {
@@ -381,6 +387,8 @@ type Plot = {
   estateId: string | null;
   /** Owner-placed decor (#45) on the plot's decor slots. Always empty on a private plot (lib/decor). */
   decor: DecorItem[];
+  /** The owner's default theme (#59), public plots only; members get a private plot's from their own list. */
+  defaultTheme: string | null;
 };
 
 /*
@@ -1167,7 +1175,11 @@ export function WorldMap() {
     void next.art.prepare().then(() => {
       if (chosenRef.current === next) themeRef.current = next;
     });
-    if (!persist) return;
+    if (!persist) {
+      // The drawer follows what the map shows, owner default included (#59).
+      announceActiveTheme(id);
+      return;
+    }
     writeThemeChoice(id);
     try {
       const url = new URL(window.location.href);
@@ -1190,6 +1202,53 @@ export function WorldMap() {
   // choice that differed would otherwise be a hydration mismatch.
   useEffect(() => {
     applyTheme(readThemeChoice(), false);
+  }, [applyTheme]);
+
+  /*
+   * Step 3 of the theme order (#59): the owner default of the space being
+   * viewed — a link that targets its plot, or the camera centred on it
+   * (lib/themes/owner-default). Soft: never while the viewer has a `?theme=`
+   * pin or a stored choice, and not in kiosk or TV, whose cuts would re-skin
+   * the wall every few seconds. Checked on a slow tick, not per frame.
+   */
+  const ownerLinkRef = useRef<ViewLink | null>(null);
+  const pendingOwnerLinkRef = useRef<{ tx: number; ty: number } | { bodyId: string; since: number } | null>(null);
+  const ownerPlotRef = useRef<number | null>(null);
+  const memberThemesRef = useRef<Map<number, string>>(new Map());
+  useEffect(() => {
+    const tick = () => {
+      const plots = plotRef.current;
+      const cam = controlsRef.current?.cameraKey();
+      if (!cam || !plots.length) return;
+      const now = Date.now();
+      const pending = pendingOwnerLinkRef.current;
+      if (pending && "tx" in pending) {
+        ownerLinkRef.current = linkAtTile(pending.tx, pending.ty, plots, now);
+        pendingOwnerLinkRef.current = null;
+      } else if (pending) {
+        const pos = lastPosRef.current.get(pending.bodyId);
+        if (pos) {
+          ownerLinkRef.current = linkAtTile(Math.round(pos.x), Math.round(pos.y), plots, now);
+          pendingOwnerLinkRef.current = null;
+        } else if (now - pending.since > 12_000) pendingOwnerLinkRef.current = null;
+      }
+      const wall = kioskRef.current || tvRef.current;
+      const r = viewedOwnerDefault({
+        camera: cam,
+        plots,
+        memberDefaults: memberThemesRef.current,
+        link: wall ? null : ownerLinkRef.current,
+        current: ownerPlotRef.current,
+        now,
+      });
+      ownerLinkRef.current = r.link;
+      ownerPlotRef.current = r.plotIndex;
+      if (hasOwnThemeChoice()) return;
+      const want = readThemeChoice(wall ? null : r.theme);
+      if (want !== chosenRef.current.id) applyTheme(want, false);
+    };
+    const timer = window.setInterval(tick, 600);
+    return () => window.clearInterval(timer);
   }, [applyTheme]);
 
   /** Postcard (lib/postcard): the canvas plus a caption, downloaded locally. Nothing is posted. */
@@ -1449,14 +1508,26 @@ export function WorldMap() {
       wantTv = on(params.get("tv"));
       const link = parseDeepLink(params);
       if (deepLinkApplies(params) && (link.follow || link.at)) deepLinkRef.current = { ...link, tries: 0 };
+      // #59: a link that lands on a plot shows that space's owner default.
+      if (deepLinkApplies(params) && link.at && !link.follow) pendingOwnerLinkRef.current = link.at;
       // ?seq=: a sequence inline, or a stored one by id (#39). Plays after the first poll.
       const ref = parseSequenceRef(params.get(SEQUENCE_QUERY));
-      if (ref?.kind === "inline") pendingSeqRef.current = ref.sequence;
+      const seqLink = (seq: Sequence) => {
+        const first = seq.shots[0];
+        if (first && !pendingOwnerLinkRef.current) pendingOwnerLinkRef.current = { tx: first.from.tx, ty: first.from.ty };
+      };
+      if (ref?.kind === "inline") {
+        pendingSeqRef.current = ref.sequence;
+        seqLink(ref.sequence);
+      }
       else if (ref?.kind === "id") {
         void api<{ sequence?: unknown }>(`/api/v1/sequences/${ref.id}`)
           .then((res) => {
             const r = validateSequence(toCamel(res.sequence ?? null));
-            if (r.ok) pendingSeqRef.current = r.sequence;
+            if (r.ok) {
+              pendingSeqRef.current = r.sequence;
+              seqLink(r.sequence);
+            }
           })
           .catch(() => {
             /* a stored sequence that is gone: the map simply opens */
@@ -1632,6 +1703,17 @@ export function WorldMap() {
         // a second endpoint for something the map already has.
         myHandleRef.current = res.human?.handle ?? null;
         setSignedIn(true);
+        // #59: private plots' owner defaults, for the spaces this viewer is inside only.
+        void api<{ plots?: Array<{ plot_index?: number; default_theme?: string }> }>("/api/v1/world/member-default-themes")
+          .then((m) => {
+            if (cancelled) return;
+            memberThemesRef.current = new Map(
+              (m.plots ?? []).flatMap((p) => (typeof p.plot_index === "number" && p.default_theme ? [[p.plot_index, p.default_theme] as const] : [])),
+            );
+          })
+          .catch(() => {
+            /* no member defaults: private plots show the viewer's own theme */
+          });
       })
       .catch(() => {
         if (cancelled) return;
@@ -1834,6 +1916,8 @@ export function WorldMap() {
             branding: plotBranding(sp.policy_preset ?? sp.policyPreset, sp.branding),
             estateId: null,
             decor: plotDecor(sp.policy_preset ?? sp.policyPreset, sp.decor),
+            // Never trusted for a private plot, whatever the payload says (lib/themes/owner-default).
+            defaultTheme: (sp.policy_preset ?? sp.policyPreset) === "private" ? null : (sp.default_theme ?? sp.defaultTheme ?? null),
           };
         });
         const estates = readEstates(data.estates, plots);
@@ -1944,6 +2028,7 @@ export function WorldMap() {
             followRef.current = body.id;
             setFollowing(body.name);
             link.follow = null;
+            pendingOwnerLinkRef.current = { bodyId: body.id, since: Date.now() };
           } else if (++link.tries >= 3) link.follow = null;
           if (!link.follow && !link.at) deepLinkRef.current = null;
         }

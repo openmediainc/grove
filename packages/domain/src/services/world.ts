@@ -1,4 +1,4 @@
-import { EMOTE_ENUM, normaliseMarks, publishedDecor, publicEstates, readStoredBranding, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
+import { EMOTE_ENUM, normaliseMarks, publishedDecor, publishedDefaultTheme, publicEstates, readStoredBranding, type Agent, type EmoteKind, type Human, type ToolCallView } from "@grove/protocol";
 import type { SupporterService } from "./supporters.js";
 import type { GroveStore } from "../store.js";
 import { visibleOccupancySql } from "../visibility.js";
@@ -322,6 +322,8 @@ export class WorldService {
               w.branding,
               -- #45: the owner's placed decor; re-checked against unlocks below.
               w.decor,
+              -- #59: the owner's default theme; redacted below for a private plot.
+              w.default_theme,
               -- #37 estates: the chosen names, and the primary org by id. Used
               -- to group and name estates here; never published per plot.
               h.estate_name AS owner_estate_name,
@@ -365,6 +367,9 @@ export class WorldService {
         decor: open
           ? publishedDecor(preset, r.decor, { marks: r.marks as unknown[] | null, supporter: supporterOwners.has(String(r.owner_human_id)) })
           : [],
+        // #59 owner default theme: never for a private plot (members read it
+        // through the member-gated detail instead).
+        defaultTheme: publishedDefaultTheme(preset, r.default_theme),
       };
     });
 

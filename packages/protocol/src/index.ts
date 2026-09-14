@@ -28,3 +28,4 @@ export * from "./chess.js";
 export * from "./boards.js";
 export * from "./decor.js";
 export * from "./claim-preview.js";
+export * from "./space-theme.js";

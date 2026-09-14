@@ -138,19 +138,32 @@ theme and are never a hazard colour.
 
 ## Selection
 
-Order: `?theme=<id>` → viewer's localStorage `grove-theme` → *(future)* owner
-default → `aoe`. Unknown ids fall through. The switcher sits in the map controls;
+Order: `?theme=<id>` → viewer's localStorage `grove-theme` → owner default of
+the space being viewed (#59) → `aoe`. Unknown ids fall through. The switcher sits in the map controls;
 **T** cycles themes (also in kiosk mode, where controls are hidden); a URL pin is
 moved along with a manual switch so the address bar never disagrees with the
 screen. The canvas keeps drawing the old theme until the new one's `prepare()`
 resolves; the chrome switches at once.
 
-**Owner default (designed, not built):** a space owner could store
-`theme_default` on their space; `resolveThemeId({ query, stored, ownerDefault })`
-already takes it as the third step, below the viewer's own choice. It would apply
-to that space's own pages (and could apply to the world map only for a dedicated
-campus). A viewer's explicit choice always wins — a theme is a view preference,
-not a policy, so it never needs server enforcement.
+**Owner default (#59):** a space owner sets `worlds.default_theme` (045) on
+Manage → Default theme, picking from the four themes via the Branding sign
+preview (or none). `PUT /api/v1/worlds/:id/default-theme` is owner-only (else 404);
+ids are `@grove/protocol` space-theme.ts, pinned to `THEME_IDS` by a web test.
+It is a SOFT default (`lib/themes/owner-default.ts`, pure): the map applies it
+only while the viewer has no URL pin and no stored choice, never in kiosk/TV,
+and only while that space is being viewed —
+- a link that targets its plot: the space page's Visit (`?room=` + `?at=` on the
+  plot), a `?at=`, a resolved `?follow=` standing on the plot, or a `?seq=` whose
+  first shot starts there; it holds while the camera travels there (≤ 12 s), and
+  is spent once the camera has arrived and left; or
+- the camera centred on the plot (nearest within 1 tile, zoom ≥ 0.9; kept with
+  slack to 1.5 tiles / 0.8x so an edge does not flicker).
+When the camera leaves, the viewer's normal default returns. The space page's
+own preview canvases (Decor) use it too. **Private plots:** the public minimap
+never carries the default (`default_theme` null, and the client ignores it for a
+private row anyway); members get their private plots' defaults from
+`GET /api/v1/world/member-default-themes`, so outsiders see a held plot in their
+own theme. Theme is a view preference, not a policy.
 
 ## Adding a theme
 

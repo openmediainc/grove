@@ -5,8 +5,9 @@
  *
  *   1. `?theme=<id>` in the URL — so a kiosk bookmark or a shared link pins one;
  *   2. this viewer's own choice, from localStorage;
- *   3. (designed for, not built) the default the owner of the space being
- *      viewed has set — see docs/design/THEMES.md;
+ *   3. the default the owner of the space being viewed has set (#59,
+ *      `worlds.default_theme`) — a soft default, applied only while neither of
+ *      the above exists; what counts as "being viewed" is lib/themes/owner-default;
  *   4. DEFAULT_THEME.
  *
  * Anything that is not a known id falls through to the next step rather than
@@ -62,14 +63,24 @@ export function readThemeQuery(): ThemeId | null {
   }
 }
 
-export function readThemeChoice(): ThemeId {
-  let stored: string | null = null;
+/** This viewer's own stored choice, if it is a known theme. */
+export function readStoredTheme(): ThemeId | null {
   try {
-    stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return isThemeId(stored) ? stored : null;
   } catch {
-    stored = null;
+    return null;
   }
-  return resolveThemeId({ query: readThemeQuery(), stored });
+}
+
+/** Whether the viewer has pinned or chosen a theme themselves (steps 1–2), so an owner default must not apply. */
+export function hasOwnThemeChoice(): boolean {
+  return readThemeQuery() !== null || readStoredTheme() !== null;
+}
+
+/** The full resolution order for this window, with the owner default of the space being viewed, if any. */
+export function readThemeChoice(ownerDefault: string | null = null): ThemeId {
+  return resolveThemeId({ query: readThemeQuery(), stored: readStoredTheme(), ownerDefault });
 }
 
 /**
@@ -87,11 +98,29 @@ export function writeThemeChoice(id: ThemeId): void {
   } catch {
     /* private mode: the choice lasts as long as the tab */
   }
+  announceActiveTheme(id);
+}
+
+/** What the map is showing right now in this tab, including a soft owner default (#59); null before the map says. */
+let activeThemeId: ThemeId | null = null;
+
+/**
+ * Tell the rest of the page what the map is showing without persisting it —
+ * the owner default of the space being viewed (#59) is not the viewer's
+ * choice, but the room drawer must still match the map (DECISIONS #3).
+ */
+export function announceActiveTheme(id: ThemeId): void {
+  activeThemeId = id;
   try {
     window.dispatchEvent(new CustomEvent<ThemeId>(THEME_EVENT, { detail: id }));
   } catch {
     /* no window (tests, server) */
   }
+}
+
+/** The theme on screen in this tab: what the map last announced, else the viewer's resolved choice. */
+export function readActiveTheme(): ThemeId {
+  return activeThemeId ?? readThemeChoice();
 }
 
 /**

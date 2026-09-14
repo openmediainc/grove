@@ -1,0 +1,18 @@
+-- Owner default theme per space (queue #59).
+--
+-- One nullable text on worlds: the map theme id ("aoe", "space", "city",
+-- "scifi") the owner set on Manage, or NULL for none. Checked by
+-- validateDefaultTheme() in @grove/protocol (space-theme.ts) on write and
+-- re-read leniently, so a theme that is later removed simply stops applying.
+-- Deliberately no CHECK constraint: the theme list lives in code.
+--
+-- It is step 3 of the web theme resolution order (a ?theme= pin and the
+-- viewer's own stored choice both win), applied only while the space is being
+-- viewed.
+--
+-- Privacy: a private plot publishes no default in the public minimap; members
+-- read it through the member-gated space detail.
+--
+-- Additive and re-runnable. Grants-not-RLS: grove_runtime already holds its
+-- grants on worlds.
+ALTER TABLE worlds ADD COLUMN IF NOT EXISTS default_theme TEXT;

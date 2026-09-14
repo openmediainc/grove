@@ -15,7 +15,7 @@ type WireDecor = { items: DecorItem[]; catalogue: WireEntry[]; max_items: number
  * space earns. Locked presets say what earns them; nothing is for sale and
  * nothing is counted. Pick a spot on the plot, then a preset.
  */
-export function DecorPanel({ worldId }: { worldId: string }) {
+export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; ownerDefault?: string | null }) {
   const [wire, setWire] = useState<WireDecor | null>(null);
   const [draft, setDraft] = useState<DecorItem[]>([]);
   const [slot, setSlot] = useState<number | null>(null);
@@ -26,14 +26,15 @@ export function DecorPanel({ worldId }: { worldId: string }) {
   const grid = useMemo(() => decorGrid(), []);
 
   useEffect(() => {
-    setThemeId(readThemeChoice());
+    // #59: the space page is "viewing" this space, so its owner default is step 3.
+    setThemeId(readThemeChoice(ownerDefault));
     api<{ decor: WireDecor }>(`/api/v1/worlds/${worldId}/decor`)
       .then((r) => {
         setWire(r.decor);
         setDraft(readStoredDecor(r.decor.items));
       })
       .catch((e: Error) => setErr(e.message));
-  }, [worldId]);
+  }, [worldId, ownerDefault]);
 
   if (!wire) return err ? <p className="text-xs text-red-300">{err}</p> : null;
   const stored = readStoredDecor(wire.items);
