@@ -63,7 +63,9 @@ export function boardImageCacheControl(cache: BoardImageCache): string {
  * A delete removes the post, so its URL is gone from every board and answers 404.
  */
 export function boardImageVersion(sha256: string, hiddenByMod: boolean, hiddenAt: unknown): string {
-  const at = hiddenAt ? new Date(String(hiddenAt)).getTime() : 0;
+  // `hiddenAt` is the hide time at full precision (microseconds as text from SQL,
+  // or any string/Date); two hides in the same second must still differ.
+  const at = hiddenAt == null ? "" : hiddenAt instanceof Date ? String(hiddenAt.getTime()) : String(hiddenAt);
   return createHash("sha256").update(`${sha256}|${hiddenByMod ? 1 : 0}|${at}`).digest("hex").slice(0, 12);
 }
 
@@ -110,7 +112,8 @@ const POST_FROM = `
 
 const POST_COLUMNS = `
   p.id, p.world_id, p.author_id, p.author_kind, p.kind, p.caption, p.link_url, p.link_preview,
-  p.image_mime, p.image_width, p.image_height, p.image_size, p.image_sha256, p.created_at, p.hidden_by_mod, p.hidden_at,
+  p.image_mime, p.image_width, p.image_height, p.image_size, p.image_sha256, p.created_at, p.hidden_by_mod,
+  (extract(epoch FROM p.hidden_at) * 1000000)::bigint::text AS hidden_at_us,
   w.slug::text AS world_slug, w.owner_human_id AS world_owner,
   COALESCE(ph.display_name, pa.display_name, 'Someone') AS author_name,
   COALESCE(ph.handle::text, pa.slug::text) AS author_handle`;
@@ -201,7 +204,7 @@ export class BoardService {
       image:
         kind === "image" && r.image_mime
           ? {
-              url: `/api/v1/board/posts/${encodeURIComponent(id)}/image?v=${boardImageVersion(String(r.image_sha256 ?? ""), Boolean(r.hidden_by_mod), r.hidden_at)}`,
+              url: `/api/v1/board/posts/${encodeURIComponent(id)}/image?v=${boardImageVersion(String(r.image_sha256 ?? ""), Boolean(r.hidden_by_mod), r.hidden_at_us)}`,
               mime: String(r.image_mime),
               width: Number(r.image_width),
               height: Number(r.image_height),
