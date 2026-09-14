@@ -60,7 +60,7 @@ describe("mailer selection", () => {
     expect(mailer.kind).toBe("smtp");
     await mailer.sendMagicLink("a@b.c", "http://localhost:3000/login?token=abc");
     expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ to: "a@b.c", subject: "Enter Glasshouse", text: expect.stringMatching(/^Enter Glasshouse: /) });
+    expect(sent[0]).toMatchObject({ to: "a@b.c", subject: "Enter Glasshouse", text: expect.stringMatching(/^Enter Glasshouse\n[\s\S]*http:\/\/localhost:3000\/login\?token=abc/) });
   });
 
   it("prefers Resend over SMTP", () => {

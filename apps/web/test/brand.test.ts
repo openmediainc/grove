@@ -28,6 +28,9 @@ describe("brand files (DECISIONS #7)", () => {
       "public/icons/icon-192.png",
       "public/icons/icon-512.png",
       "public/icons/icon-maskable-512.png",
+      "public/brand/email-mark-light.png",
+      "public/brand/email-mark-night.png",
+      "app/twitter-image.tsx",
       "lib/og/fonts/SchibstedGrotesk-ExtraBold.ttf",
       "lib/og/fonts/FragmentMono-Regular.ttf",
     ]) {

@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import type { GroveConfig } from "./config.js";
+import { renderMagicLinkEmail } from "./email-templates.js";
 
 export type MailTransport = "resend" | "smtp" | "stdout" | "noop";
 
@@ -63,23 +64,9 @@ export interface MailerDeps {
   createSmtp?: SmtpFactory;
 }
 
-/** The magic-link subject and button: visible copy, so it says Glasshouse (DECISIONS #2). */
-export const MAGIC_LINK_SUBJECT = "Enter Glasshouse";
-
-function magicHtml(url: string): string {
-  return `<!doctype html>
-<html><body style="margin:0;background:#070814;color:#f4efe4;font-family:Georgia,serif">
-  <div style="max-width:480px;margin:0 auto;padding:40px 24px">
-    <p style="letter-spacing:0.2em;text-transform:uppercase;color:#e8b86d;font-size:12px">Glasshouse</p>
-    <h1 style="font-size:28px;color:#e8b86d">Enter the world</h1>
-    <p>Tap the button to finish signing in. This link expires in 15 minutes.</p>
-    <p style="margin:28px 0">
-      <a href="${url}" style="background:#e8b86d;color:#070814;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:700">${MAGIC_LINK_SUBJECT}</a>
-    </p>
-    <p style="font-size:12px;color:#9ca3af">If you did not request this, you can ignore the email.</p>
-  </div>
-</body></html>`;
-}
+// Subject, HTML and text live in email-templates.ts (queue #76). The subject
+// and button are visible copy, so they say Glasshouse (DECISIONS #2).
+export { MAGIC_LINK_SUBJECT } from "./email-templates.js";
 
 /** Resend's `last_event` vocabulary mapped onto ours. Unknown / in-flight values map to null. */
 export function mapResendEvent(lastEvent: string | undefined | null): ProviderDeliveryState | null {
@@ -119,6 +106,7 @@ const requireCjs = createRequire(import.meta.url);
 
 export function createMailer(config: GroveConfig, deps: MailerDeps = {}): Mailer {
   const from = config.mailFrom ?? "Glasshouse <noreply@localhost>";
+  const magic = (url: string) => renderMagicLinkEmail({ url, siteUrl: config.publicUrl });
   if (config.resendApiKey) {
     const fetchFn = deps.fetch ?? (globalThis.fetch as FetchLike);
     const key = config.resendApiKey;
@@ -126,6 +114,7 @@ export function createMailer(config: GroveConfig, deps: MailerDeps = {}): Mailer
       kind: "resend",
       from,
       async sendMagicLink(to, url) {
+        const mail = magic(url);
         let res: Awaited<ReturnType<FetchLike>>;
         try {
           res = await fetchFn("https://api.resend.com/emails", {
@@ -137,9 +126,9 @@ export function createMailer(config: GroveConfig, deps: MailerDeps = {}): Mailer
             body: JSON.stringify({
               from,
               to: [to],
-              subject: MAGIC_LINK_SUBJECT,
-              html: magicHtml(url),
-              text: `${MAGIC_LINK_SUBJECT}: ${url}`,
+              subject: mail.subject,
+              html: mail.html,
+              text: mail.text,
             }),
           });
         } catch (err) {
@@ -184,14 +173,15 @@ export function createMailer(config: GroveConfig, deps: MailerDeps = {}): Mailer
       kind: "smtp",
       from,
       async sendMagicLink(to, url) {
+        const mail = magic(url);
         let info: { messageId?: string; rejected?: unknown[]; response?: string } | undefined;
         try {
           info = (await transport.sendMail({
             from,
             to,
-            subject: MAGIC_LINK_SUBJECT,
-            html: magicHtml(url),
-            text: `${MAGIC_LINK_SUBJECT}: ${url}`,
+            subject: mail.subject,
+            html: mail.html,
+            text: mail.text,
           })) as typeof info;
         } catch (err) {
           const e = err as Error & { responseCode?: number };

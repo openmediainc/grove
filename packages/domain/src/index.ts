@@ -235,6 +235,7 @@ export {
 export type { ProofViewer } from "./services/identity.js";
 export { signWebhookBody, verifyWebhookSignature } from "./webhook-sign.js";
 export { createMailer, MAGIC_LINK_SUBJECT, MailSendError, type Mailer, type MailTransport } from "./mailer.js";
+export { renderMagicLinkEmail, renderNoticeEmail, escapeHtml, brandAssetBase, EMAIL_COLORS, type RenderedEmail, type NoticeEmailInput } from "./email-templates.js";
 export {
   EmailDeliveryService,
   assessEmailHealth,

@@ -1,0 +1,188 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`magic-link email (#76) > renders the HTML exactly (snapshot) 1`] = `
+"<!doctype html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+<title>Glasshouse</title>
+<style>
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; }
+table { border-collapse: collapse; }
+img { border: 0; outline: none; text-decoration: none; }
+a.gh-link { word-break: break-all; }
+@media (max-width: 620px) { .gh-pad { padding-left: 24px !important; padding-right: 24px !important; } }
+@media (prefers-color-scheme: dark) {
+  :root .gh-bg { background-color: #0A0B14 !important; }
+  :root .gh-card { background-color: #12142A !important; border-color: #2A2E52 !important; }
+  :root .gh-ink { color: #E4E2F0 !important; }
+  :root .gh-muted { color: #A9A6C0 !important; }
+  :root .gh-line { border-color: #2A2E52 !important; }
+  :root .gh-link { color: #B7A6F2 !important; }
+  :root .gh-btn { background-color: #E2542B !important; border-color: #E2542B !important; color: #0A0B14 !important; }
+  :root .gh-mark-light { display: none !important; }
+  :root .gh-mark-night { display: block !important; width: 44px !important; height: 44px !important; max-height: none !important; overflow: visible !important; }
+}
+
+[data-ogsc] .gh-bg { background-color: #0A0B14 !important; }
+[data-ogsc] .gh-card { background-color: #12142A !important; border-color: #2A2E52 !important; }
+[data-ogsc] .gh-ink { color: #E4E2F0 !important; }
+[data-ogsc] .gh-muted { color: #A9A6C0 !important; }
+[data-ogsc] .gh-line { border-color: #2A2E52 !important; }
+[data-ogsc] .gh-link { color: #B7A6F2 !important; }
+[data-ogsc] .gh-btn { background-color: #E2542B !important; border-color: #E2542B !important; color: #0A0B14 !important; }
+[data-ogsc] .gh-mark-light { display: none !important; }
+[data-ogsc] .gh-mark-night { display: block !important; width: 44px !important; height: 44px !important; max-height: none !important; overflow: visible !important; }
+</style>
+</head>
+<body class="gh-bg" style="margin:0;padding:0;background-color:#F3F6F8;">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#F3F6F8;opacity:0;">Your sign-in link. It works once and expires in 15 minutes.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="gh-bg" style="background-color:#F3F6F8;">
+<tr><td align="center" style="padding:32px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="gh-card" style="width:100%;max-width:600px;background-color:#FFFFFF;border:1px solid #C9D4DD;border-radius:12px;">
+<tr><td class="gh-pad" style="padding:32px 40px 8px 40px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td style="vertical-align:middle;padding-right:12px;">
+<a href="https://glasshouse.rendrr.app" style="text-decoration:none;"><img class="gh-mark-light" src="https://glasshouse.rendrr.app/brand/email-mark-light.png" width="44" height="44" alt="Glasshouse" style="display:block;width:44px;height:44px;"><!--[if !mso]><!--><img class="gh-mark-night" src="https://glasshouse.rendrr.app/brand/email-mark-night.png" width="44" height="44" alt="" style="display:none;width:0;height:0;max-height:0;overflow:hidden;mso-hide:all;"><!--<![endif]--></a>
+</td>
+<td class="gh-ink" style="vertical-align:middle;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.02em;color:#0E1B2B;">glasshouse</td>
+</tr></table>
+</td></tr>
+<tr><td class="gh-pad gh-muted" style="padding:24px 40px 0 40px;font-family:'Fragment Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#4A5A6C;">Sign in</td></tr>
+<tr><td class="gh-pad gh-ink" style="padding:8px 40px 0 40px;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:30px;line-height:36px;font-weight:800;letter-spacing:-0.02em;color:#0E1B2B;">Enter Glasshouse</td></tr>
+<tr><td class="gh-pad gh-ink" style="padding:16px 40px 0 40px;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;color:#0E1B2B;">Use the button to sign in. It works once and expires in 15 minutes.</td></tr>
+<tr><td class="gh-pad" style="padding:28px 40px 0 40px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td class="gh-btn" bgcolor="#E2542B" style="border-radius:999px;background-color:#E2542B;">
+<a class="gh-btn" href="https://glasshouse.rendrr.app/login?token=tok_9f8e7d6c5b4a39281706f5e4d3c2b1a0" target="_blank" style="display:inline-block;padding:0;border:14px solid #E2542B;border-left-width:28px;border-right-width:28px;border-radius:999px;background-color:#E2542B;color:#0E1B2B;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:700;text-decoration:none;">Enter Glasshouse</a>
+</td>
+</tr></table>
+</td></tr>
+<tr><td class="gh-pad gh-muted" style="padding:24px 40px 0 40px;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#4A5A6C;">Button not working? Paste this link into your browser:</td></tr>
+<tr><td class="gh-pad" style="padding:6px 40px 0 40px;font-family:'Fragment Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:20px;word-break:break-all;"><a class="gh-link" href="https://glasshouse.rendrr.app/login?token=tok_9f8e7d6c5b4a39281706f5e4d3c2b1a0" target="_blank" style="color:#3E7CB1;text-decoration:underline;word-break:break-all;">https://glasshouse.rendrr.app/login?token=tok_9f8e7d6c5b4a39281706f5e4d3c2b1a0</a></td></tr>
+<tr><td class="gh-pad gh-muted" style="padding:24px 40px 0 40px;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#4A5A6C;">Didn&#39;t ask for this? Ignore this email. Nobody gets in without the link.</td></tr>
+<tr><td style="padding:24px 0 0 0;font-size:0;line-height:0;">&nbsp;</td></tr>
+<tr><td class="gh-pad" style="padding:8px 40px 32px 40px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="gh-line gh-muted" style="border-top:1px solid #C9D4DD;padding-top:16px;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#4A5A6C;">Someone asked to sign in to Glasshouse with this address.<br><a class="gh-link" href="https://glasshouse.rendrr.app" style="color:#3E7CB1;text-decoration:none;">Glasshouse</a> · a world you watch</td></tr></table>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+"
+`;
+
+exports[`magic-link email (#76) > renders the text exactly (snapshot) 1`] = `
+"Enter Glasshouse
+
+Open this link to sign in. It works once and expires in 15 minutes.
+
+https://glasshouse.rendrr.app/login?token=tok_9f8e7d6c5b4a39281706f5e4d3c2b1a0
+
+Didn't ask for this? Ignore this email. Nobody gets in without the link.
+
+--
+Glasshouse · a world you watch
+https://glasshouse.rendrr.app
+"
+`;
+
+exports[`notice email (#76, not sent yet) > renders HTML and text (snapshot) 1`] = `
+"<!doctype html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+<title>Glasshouse</title>
+<style>
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; }
+table { border-collapse: collapse; }
+img { border: 0; outline: none; text-decoration: none; }
+a.gh-link { word-break: break-all; }
+@media (max-width: 620px) { .gh-pad { padding-left: 24px !important; padding-right: 24px !important; } }
+@media (prefers-color-scheme: dark) {
+  :root .gh-bg { background-color: #0A0B14 !important; }
+  :root .gh-card { background-color: #12142A !important; border-color: #2A2E52 !important; }
+  :root .gh-ink { color: #E4E2F0 !important; }
+  :root .gh-muted { color: #A9A6C0 !important; }
+  :root .gh-line { border-color: #2A2E52 !important; }
+  :root .gh-link { color: #B7A6F2 !important; }
+  :root .gh-btn { background-color: #E2542B !important; border-color: #E2542B !important; color: #0A0B14 !important; }
+  :root .gh-mark-light { display: none !important; }
+  :root .gh-mark-night { display: block !important; width: 44px !important; height: 44px !important; max-height: none !important; overflow: visible !important; }
+}
+
+[data-ogsc] .gh-bg { background-color: #0A0B14 !important; }
+[data-ogsc] .gh-card { background-color: #12142A !important; border-color: #2A2E52 !important; }
+[data-ogsc] .gh-ink { color: #E4E2F0 !important; }
+[data-ogsc] .gh-muted { color: #A9A6C0 !important; }
+[data-ogsc] .gh-line { border-color: #2A2E52 !important; }
+[data-ogsc] .gh-link { color: #B7A6F2 !important; }
+[data-ogsc] .gh-btn { background-color: #E2542B !important; border-color: #E2542B !important; color: #0A0B14 !important; }
+[data-ogsc] .gh-mark-light { display: none !important; }
+[data-ogsc] .gh-mark-night { display: block !important; width: 44px !important; height: 44px !important; max-height: none !important; overflow: visible !important; }
+</style>
+</head>
+<body class="gh-bg" style="margin:0;padding:0;background-color:#F3F6F8;">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#F3F6F8;opacity:0;">read_file failed after 42s.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="gh-bg" style="background-color:#F3F6F8;">
+<tr><td align="center" style="padding:32px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="gh-card" style="width:100%;max-width:600px;background-color:#FFFFFF;border:1px solid #C9D4DD;border-radius:12px;">
+<tr><td class="gh-pad" style="padding:32px 40px 8px 40px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td style="vertical-align:middle;padding-right:12px;">
+<a href="https://glasshouse.rendrr.app" style="text-decoration:none;"><img class="gh-mark-light" src="https://glasshouse.rendrr.app/brand/email-mark-light.png" width="44" height="44" alt="Glasshouse" style="display:block;width:44px;height:44px;"><!--[if !mso]><!--><img class="gh-mark-night" src="https://glasshouse.rendrr.app/brand/email-mark-night.png" width="44" height="44" alt="" style="display:none;width:0;height:0;max-height:0;overflow:hidden;mso-hide:all;"><!--<![endif]--></a>
+</td>
+<td class="gh-ink" style="vertical-align:middle;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.02em;color:#0E1B2B;">glasshouse</td>
+</tr></table>
+</td></tr>
+<tr><td class="gh-pad gh-muted" style="padding:24px 40px 0 40px;font-family:'Fragment Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#4A5A6C;">Follow · agent</td></tr>
+<tr><td class="gh-pad gh-ink" style="padding:8px 40px 0 40px;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:30px;line-height:36px;font-weight:800;letter-spacing:-0.02em;color:#0E1B2B;">lantern hit an error</td></tr>
+<tr><td class="gh-pad gh-ink" style="padding:16px 40px 0 40px;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;color:#0E1B2B;">read_file failed after 42s.</td></tr>
+<tr><td class="gh-pad gh-ink" style="padding:8px 40px 0 40px;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;color:#0E1B2B;">Library · 14:02 UTC</td></tr>
+<tr><td class="gh-pad" style="padding:28px 40px 0 40px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td class="gh-btn" bgcolor="#E2542B" style="border-radius:999px;background-color:#E2542B;">
+<a class="gh-btn" href="https://glasshouse.rendrr.app/a/hello/lantern" target="_blank" style="display:inline-block;padding:0;border:14px solid #E2542B;border-left-width:28px;border-right-width:28px;border-radius:999px;background-color:#E2542B;color:#0E1B2B;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:700;text-decoration:none;">Watch</a>
+</td>
+</tr></table>
+</td></tr>
+<tr><td style="padding:24px 0 0 0;font-size:0;line-height:0;">&nbsp;</td></tr>
+<tr><td class="gh-pad" style="padding:8px 40px 32px 40px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="gh-line gh-muted" style="border-top:1px solid #C9D4DD;padding-top:16px;font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#4A5A6C;">You follow lantern.<br><a class="gh-link" href="https://glasshouse.rendrr.app" style="color:#3E7CB1;text-decoration:none;">Glasshouse</a> · a world you watch<br><a class="gh-link" href="https://glasshouse.rendrr.app/me" style="color:#3E7CB1;text-decoration:underline;">Manage notices</a></td></tr></table>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+"
+`;
+
+exports[`notice email (#76, not sent yet) > renders HTML and text (snapshot) 2`] = `
+"lantern hit an error
+
+read_file failed after 42s.
+Library · 14:02 UTC
+
+Watch: https://glasshouse.rendrr.app/a/hello/lantern
+
+--
+You follow lantern.
+Manage notices: https://glasshouse.rendrr.app/me
+Glasshouse · a world you watch
+https://glasshouse.rendrr.app
+"
+`;

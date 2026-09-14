@@ -10,7 +10,14 @@ import { COLORS, PALETTE, WORDMARK_HEIGHT, WORDMARK_PATH, WORDMARK_WIDTH, markBo
  */
 export const OG_SIZE = { width: 1200, height: 630 } as const;
 
-export type OgCardInput = { eyebrow: string; title: string; line?: string; mode?: "light" | "night" };
+export type OgCardInput = {
+  eyebrow: string;
+  title: string;
+  line?: string;
+  mode?: "light" | "night";
+  /** A space's branding accent: a stripe down the left edge, never text, never the lit pane. */
+  accent?: string | null;
+};
 
 export async function ogFonts() {
   const dir = join(process.cwd(), "lib/og/fonts");
@@ -28,7 +35,13 @@ function svgData(svg: string): string {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
-export function OgCard({ eyebrow, title, line, mode = "light" }: OgCardInput) {
+/** Long names step the heading down so two lines still fit beside the pane grid. */
+export function ogTitleSize(title: string): number {
+  const n = Array.from(title).length;
+  return n <= 44 ? 72 : 56;
+}
+
+export function OgCard({ eyebrow, title, line, mode = "light", accent = null }: OgCardInput) {
   const c = mode === "light" ? COLORS.light : COLORS.night;
   const ink = c.ink;
   const mark = svgData(
@@ -58,6 +71,9 @@ export function OgCard({ eyebrow, title, line, mode = "light" }: OgCardInput) {
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={grid} width={1200} height={630} alt="" style={{ position: "absolute", left: 0, top: 0 }} />
+      {accent ? (
+        <div style={{ position: "absolute", left: 0, top: 0, width: 20, height: 630, background: accent, borderRight: `2px solid ${c.line}` }} />
+      ) : null}
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={mark} width={64} height={64} alt="" />
@@ -68,7 +84,7 @@ export function OgCard({ eyebrow, title, line, mode = "light" }: OgCardInput) {
         <div style={{ fontFamily: "Fragment Mono", fontSize: 24, letterSpacing: 2, textTransform: "uppercase", color: c.muted }}>
           {eyebrow}
         </div>
-        <div style={{ fontSize: 72, fontWeight: 800, lineHeight: 1.02, letterSpacing: -2 }}>{title}</div>
+        <div style={{ fontSize: ogTitleSize(title), fontWeight: 800, lineHeight: 1.04, letterSpacing: -2 }}>{title}</div>
         {line ? <div style={{ fontFamily: "Fragment Mono", fontSize: 28, color: c.muted }}>{line}</div> : null}
       </div>
     </div>

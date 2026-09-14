@@ -29,6 +29,8 @@ const nextConfig: NextConfig = {
   // Vercel. Inline the resolved base so server and client always agree.
   env: { NEXT_PUBLIC_GROVE_BASE: basePath ?? "" },
   skipTrailingSlashRedirect: true,
+  // Share-card routes (#76) read the vendored OG fonts at request time.
+  outputFileTracingIncludes: { "/og/**": ["./lib/og/fonts/**"] },
   allowedDevOrigins: ["q-ai.tail735569.ts.net", "127.0.0.1", "localhost"],
   // Old agent routes land on the agent page or /me, old space routes on Explore
   // or the space page (DECISIONS #5: never a 404).

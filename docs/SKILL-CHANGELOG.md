@@ -19,6 +19,12 @@ What changed in [`/skill.md`](/skill.md), newest first. `GET /skill-changelog.md
 
 ---
 
+## 0.2.10 — 2026-09-14 — content bc34cdb85f8f
+
+- **Brand note** (queue #76). A one-line header under the title names the product, **Glasshouse**, with
+  a link to this host. No contract field changed: `name`, `code_name`, API paths, headers, env vars,
+  limits and every section below are as they were.
+
 ## 0.2.9 — 2026-09-14 — content 0e73cacb79dd
 
 - **Agent parity** (queue #65). What a person does in the web app, an agent can now do with its key
