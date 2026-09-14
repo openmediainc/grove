@@ -4,16 +4,35 @@ import type { SoundControls } from "@/lib/sound/useSoundscape";
 import { MenuHeading } from "./MapMenu";
 
 /**
- * ⋯ Sound: on/off, volume, bed only. The soundscape never carries anything the
- * map does not already draw, so every control here is a preference, not a
- * way to learn something.
+ * ⋯ Sound: the site-wide mute (#56, shared with read aloud in the room drawer),
+ * then the soundscape's on/off, volume and bed only. The soundscape never
+ * carries anything the map does not already draw, so every control here is a
+ * preference, not a way to learn something.
  */
 export function SoundMenuSection({ sound }: { sound: SoundControls }) {
-  if (!sound.supported) return null;
   const pct = Math.round(sound.volume * 100);
   return (
     <div className="border-t border-white/10 pt-1">
       <MenuHeading>Sound</MenuHeading>
+      <button
+        type="button"
+        role="menuitemcheckbox"
+        aria-checked={sound.muted}
+        title="Silences everything on this site in this browser: the ambient soundscape and read aloud"
+        onClick={() => sound.setMuted(!sound.muted)}
+        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-white/80 hover:bg-white/5 hover:text-lantern-300 sm:py-2"
+      >
+        <span>Mute all sound</span>
+        <span className={`text-xs ${sound.muted ? "text-lantern-300" : "text-white/45"}`}>{sound.muted ? "on" : "off"}</span>
+      </button>
+      {sound.supported ? <AmbientRows sound={sound} pct={pct} /> : null}
+    </div>
+  );
+}
+
+function AmbientRows({ sound, pct }: { sound: SoundControls; pct: number }) {
+  return (
+    <>
       <button
         type="button"
         role="menuitemcheckbox"
@@ -28,7 +47,7 @@ export function SoundMenuSection({ sound }: { sound: SoundControls }) {
       >
         <span>Ambient sound</span>
         <span className={`text-xs ${sound.enabled ? "text-lantern-300" : "text-white/45"}`}>
-          {sound.enabled ? (sound.needsGesture ? "on · tap to start" : "on") : "off"}
+          {sound.enabled ? (sound.muted ? "on · muted" : sound.needsGesture ? "on · tap to start" : "on") : "off"}
         </span>
       </button>
       <label className="flex items-center gap-3 px-3 py-2 text-white/70">
@@ -58,16 +77,17 @@ export function SoundMenuSection({ sound }: { sound: SoundControls }) {
         <span>Reduce sound (bed only)</span>
         <span className={`text-xs ${sound.bedOnly ? "text-lantern-300" : "text-white/45"}`}>{sound.bedOnly ? "on" : "off"}</span>
       </button>
-    </div>
+    </>
   );
 }
 
 /**
  * Kiosk and TV default sound ON, but a browser will not start audio without a
  * gesture. A quiet pill says so until somebody taps; the tap anywhere starts it.
+ * Muted site-wide, there is nothing to start, so the pill stays away.
  */
 export function TapForSound({ sound }: { sound: SoundControls }) {
-  if (!sound.needsGesture) return null;
+  if (sound.muted || !sound.needsGesture) return null;
   return (
     <button
       type="button"

@@ -4,11 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_SETTINGS,
   Reader,
-  SITE_MUTE_KEY,
   entryKey,
   loadSettings,
   saveSettings,
-  siteMuted,
   speakable,
   toUtterances,
   type HeardEntry,
@@ -16,6 +14,8 @@ import {
   type SpokenUtterance,
   type SynthLike,
 } from "@/lib/read-aloud";
+import { isSoundMuted, subscribeSoundMuted } from "@/lib/sound/prefs";
+import { useSoundMuted } from "@/lib/sound/useSoundMuted";
 
 /**
  * Read aloud in the room drawer (#44). The browser's own speech engine reads
@@ -39,7 +39,9 @@ export type ReadAloudState = {
   speakingKey: string | null;
   /** The viewer started typing: stop talking over them. */
   interrupt: () => void;
+  /** The site-wide mute (#56), shared with the map soundscape. */
   muted: boolean;
+  setMuted: (muted: boolean) => void;
 };
 
 export function useReadAloud(opts: {
@@ -55,7 +57,7 @@ export function useReadAloud(opts: {
   const [supported, setSupported] = useState(false);
   const [settings, setSettings] = useState<ReadAloudSettings>(DEFAULT_SETTINGS);
   const [speakingKey, setSpeakingKey] = useState<string | null>(null);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useSoundMuted();
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const readerRef = useRef<Reader | null>(null);
@@ -72,7 +74,6 @@ export function useReadAloud(opts: {
     }
     setSupported(ok);
     setSettings(loadSettings(store()));
-    setMuted(siteMuted(store()));
     if (!ok) return;
     const synth = window.speechSynthesis;
     // Some engines fill the voice list late; asking once starts the load.
@@ -130,19 +131,12 @@ export function useReadAloud(opts: {
     const onVisibility = () => {
       if (document.visibilityState !== "visible") readerRef.current?.stop();
     };
-    const onStorage = (ev: StorageEvent) => {
-      if (ev.key !== SITE_MUTE_KEY) return;
-      const m = siteMuted(store());
-      setMuted(m);
-      if (m) readerRef.current?.stop();
-    };
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("storage", onStorage);
-    };
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
+
+  // Muted anywhere (⋯, this drawer, another tab): cancel speech at once, not a render later.
+  useEffect(() => subscribeSoundMuted((m) => void (m && readerRef.current?.stop())), []);
 
   useEffect(() => {
     if (!ready) return;
@@ -164,10 +158,8 @@ export function useReadAloud(opts: {
     const reader = readerRef.current;
     if (!reader || !settings.on || fresh.length === 0) return;
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-    // Re-read each time: the soundscape's mute may have changed in this tab.
-    const m = siteMuted(store());
-    setMuted(m);
-    if (m) return;
+    // Checked at the moment of speaking too, in case the event has not landed yet.
+    if (isSoundMuted()) return;
     reader.enqueue(toUtterances(fresh));
   }, [entries, ready, roomKey, meId, hiddenIds, settings.on, settings.includeWhispers]);
 
@@ -176,27 +168,55 @@ export function useReadAloud(opts: {
     if (speakingKey && hiddenIds.has(speakingKey.slice(speakingKey.indexOf(":") + 1))) readerRef.current?.stop();
   }, [hiddenIds, speakingKey]);
 
-  return { supported, settings, update, speakingKey, interrupt, muted };
+  return { supported, settings, update, speakingKey, interrupt, muted, setMuted };
 }
 
-/** The toggle and its few settings, next to the Transcript heading. Hidden where the browser cannot speak. */
+/**
+ * The site-wide mute as a small speaker, bound to the same flag as ⋯ Mute all
+ * sound: it silences read aloud and the map soundscape together.
+ */
+export function MuteToggle({ muted, setMuted }: { muted: boolean; setMuted: (m: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => setMuted(!muted)}
+      aria-pressed={muted}
+      aria-label={muted ? "Unmute all sound" : "Mute all sound"}
+      title={muted ? "Sound is muted site-wide. Tap to unmute." : "Mute all sound: read aloud and the map soundscape"}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-full sm:h-7 sm:w-7 ${
+        muted ? "bg-white/10 text-white/70" : "border border-white/15 text-white/50 hover:text-white/80"
+      }`}
+    >
+      <svg aria-hidden viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z" fill="currentColor" stroke="none" />
+        {muted ? <path d="M11 6l3.5 4M14.5 6L11 10" /> : <path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4" />}
+      </svg>
+    </button>
+  );
+}
+
+/** The toggle and its few settings, next to the Transcript heading. Read aloud hides where the browser cannot speak; the mute stays. */
 export function ReadAloudControl({ state }: { state: ReadAloudState }) {
-  const { supported, settings, update, muted } = state;
-  if (!supported) return null;
+  const { supported, settings, update, muted, setMuted } = state;
   return (
     <div className="mt-2">
-      <button
-        type="button"
-        onClick={() => update({ on: !settings.on })}
-        aria-pressed={settings.on}
-        title="Your browser reads new lines out loud, on this device only"
-        className={`rounded-full px-3 py-1.5 text-[11px] uppercase tracking-widest sm:py-1 ${
-          settings.on ? "bg-lantern-400 text-dusk-950" : "border border-lantern-400/40 text-lantern-300"
-        }`}
-      >
-        Read aloud
-      </button>
-      {settings.on ? (
+      <div className="flex items-center gap-2">
+        {supported ? (
+          <button
+            type="button"
+            onClick={() => update({ on: !settings.on })}
+            aria-pressed={settings.on}
+            title="Your browser reads new lines out loud, on this device only"
+            className={`rounded-full px-3 py-1.5 text-[11px] uppercase tracking-widest sm:py-1 ${
+              settings.on ? "bg-lantern-400 text-dusk-950" : "border border-lantern-400/40 text-lantern-300"
+            }`}
+          >
+            Read aloud
+          </button>
+        ) : null}
+        <MuteToggle muted={muted} setMuted={setMuted} />
+      </div>
+      {supported && settings.on ? (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-white/60">
           <label className="flex items-center gap-1.5">
             <input

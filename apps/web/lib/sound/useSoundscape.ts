@@ -6,16 +6,20 @@
  * a stable `scape` to feed from its draw loop and poll, and the state the ⋯
  * menu and the kiosk "Tap for sound" prompt render.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveSoundPreset, type SoundPreset } from "./presets";
 import { readSoundSettings, SOUND_BED_ONLY_KEY, SOUND_KEY, SOUND_VOLUME_KEY, type SoundSettings } from "./settings";
 import { Soundscape } from "./soundscape";
+import { useSoundMuted } from "./useSoundMuted";
 
 export interface SoundControls {
   scape: Soundscape;
   enabled: boolean;
   volume: number;
   bedOnly: boolean;
+  /** The site-wide mute (#56): silences this and read aloud, whatever `enabled` says. */
+  muted: boolean;
+  setMuted: (muted: boolean) => void;
   /** Audio is actually playing (the context is running). */
   playing: boolean;
   /** Sound is on but the browser is waiting for a tap or key. */
@@ -55,6 +59,9 @@ export function useSoundscape({ kiosk, sound }: { kiosk: boolean; sound: Partial
   const [settings, setSettings] = useState<SoundSettings>({ enabled: false, volume: 0.5, bedOnly: false });
   const [loaded, setLoaded] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useSoundMuted();
+  /** On, and not muted site-wide. */
+  const audible = settings.enabled && !muted;
 
   // Read settings once we know whether this is kiosk/TV (its default differs).
   useEffect(() => {
@@ -72,18 +79,22 @@ export function useSoundscape({ kiosk, sound }: { kiosk: boolean; sound: Partial
     scape.setBedOnly(settings.bedOnly);
   }, [scape, settings.volume, settings.bedOnly]);
 
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
+
   const begin = useCallback(() => {
-    if (!audioContextCtor()) return;
+    // Nothing starts while muted site-wide, not even from a tap.
+    if (mutedRef.current || !audioContextCtor()) return;
     const started = scape.start();
     const ctx = scape.engine.context;
     if (ctx) ctx.onstatechange = () => setPlaying(scape.engine.running);
     started.then((ok) => setPlaying(ok)).catch(() => setPlaying(false));
   }, [scape]);
 
-  // On: start at the first gesture (a menu click already is one). Off: fade out.
+  // On: start at the first gesture (a menu click already is one). Off or muted: fade out.
   useEffect(() => {
     if (!loaded || !supported) return;
-    if (!settings.enabled) {
+    if (!audible) {
       if (scape.engine.context) void scape.stop();
       setPlaying(false);
       return;
@@ -100,11 +111,11 @@ export function useSoundscape({ kiosk, sound }: { kiosk: boolean; sound: Partial
       window.removeEventListener("pointerdown", onGesture);
       window.removeEventListener("keydown", onGesture);
     };
-  }, [loaded, supported, settings.enabled, scape, begin]);
+  }, [loaded, supported, audible, scape, begin]);
 
   // A hidden tab goes quiet; coming back picks up where it was.
   useEffect(() => {
-    if (!settings.enabled) return;
+    if (!audible) return;
     const onVis = () => {
       const ctx = scape.engine.context;
       if (!ctx) return;
@@ -113,7 +124,7 @@ export function useSoundscape({ kiosk, sound }: { kiosk: boolean; sound: Partial
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [settings.enabled, scape]);
+  }, [audible, scape]);
 
   useEffect(() => () => void scape.engine.close(), [scape]);
 
@@ -135,8 +146,10 @@ export function useSoundscape({ kiosk, sound }: { kiosk: boolean; sound: Partial
     enabled: settings.enabled,
     volume: settings.volume,
     bedOnly: settings.bedOnly,
+    muted,
+    setMuted,
     playing,
-    needsGesture: loaded && supported && settings.enabled && !playing,
+    needsGesture: loaded && supported && audible && !playing,
     supported,
     setEnabled,
     setVolume,

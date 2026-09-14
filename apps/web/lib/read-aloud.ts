@@ -13,10 +13,12 @@
  * testable without a browser.
  */
 
+import { parseMuted, SOUND_MUTED_KEY } from "./sound/prefs";
+
 /** Remembered per browser. */
 export const READ_ALOUD_KEY = "glasshouse-read-aloud";
-/** Shared site-wide master mute, owned by the soundscape (#43). Read only. */
-export const SITE_MUTE_KEY = "grove-sound-muted";
+/** The shared site-wide mute (#56, lib/sound/prefs). */
+export const SITE_MUTE_KEY = SOUND_MUTED_KEY;
 
 /** Longest line spoken, in characters. The transcript still shows all of it. */
 export const MAX_SPOKEN = 280;
@@ -71,11 +73,10 @@ export function saveSettings(store: Store | null | undefined, s: ReadAloudSettin
   }
 }
 
-/** The soundscape's master mute, if it has ever been set. Absent or unreadable = not muted. */
+/** The site-wide mute, if it has ever been set. Absent or unreadable = not muted. */
 export function siteMuted(store: Store | null | undefined): boolean {
   try {
-    const v = store?.getItem(SITE_MUTE_KEY);
-    return v === "1" || v === "true";
+    return parseMuted(store?.getItem(SITE_MUTE_KEY));
   } catch {
     return false;
   }
