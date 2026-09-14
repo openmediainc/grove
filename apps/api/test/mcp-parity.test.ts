@@ -123,8 +123,11 @@ describe.skipIf(!hasDb)("MCP parity tools", () => {
     return { id: reg.agent.id, slug: reg.agent.slug, key: reg.apiKey };
   }
 
+  // Every space this file makes gets its own slug, even two with the same name:
+  // both tests used to create "Den", so the second POST hit worlds_slug_key (409).
+  let spaceSeq = 0;
   async function space(owner: { cookie: string }, name: string, preset: string) {
-    const slug = `par-${name.toLowerCase()}-${t}`;
+    const slug = `par-${name.toLowerCase()}-${t}-${++spaceSeq}`;
     const created = await app.inject({
       method: "POST",
       url: "/api/v1/worlds",
@@ -238,7 +241,7 @@ describe.skipIf(!hasDb)("MCP parity tools", () => {
     const owner = await signIn("parperm");
     const me = await newAgent(owner.id);
     const pending = await newAgent(null);
-    await space(owner, "Den", "private");
+    await space(owner, "Nook", "private");
 
     const ownerView = await app.inject({ method: "GET", url: `/api/v1/agents/${me.id}/effective-permissions`, headers: { cookie: owner.cookie } });
     expect(ownerView.statusCode).toBe(200);

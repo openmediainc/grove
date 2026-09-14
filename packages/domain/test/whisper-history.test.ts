@@ -7,7 +7,7 @@
  * and whispers past retention are pruned with their delivery rows, unless
  * someone in them has an open report.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import Redis from "ioredis";
 import { GroveApp, WHISPER_RETENTION_DAYS } from "../src/index.js";
 import { createPool } from "../src/db.js";
@@ -47,6 +47,15 @@ describe.skipIf(!hasDb)("whisper history", () => {
     }
   });
 
+  // The library seats 40 and is shared with every file running alongside (and
+  // the api suite, in the same database). Holding 13 seats for the whole file
+  // made a parallel run ROOM_FULL now and then: each test gives its seats back.
+  const seated = new Set<string>();
+  afterEach(async () => {
+    for (const id of seated) await grove.presence.leave(id);
+    seated.clear();
+  });
+
   async function newHuman(prefix: string) {
     const email = `${prefix}-${tag()}@example.com`;
     await redis.del(`ratelimit:email:${email.toLowerCase()}:magic:hour`);
@@ -60,6 +69,7 @@ describe.skipIf(!hasDb)("whisper history", () => {
   const as = (h: H) => ({ kind: "human" as const, human: h });
 
   async function inRoom(h: H, room = "library") {
+    seated.add(h.id);
     await grove.presence.enter({ id: h.id, kind: "human" }, room, { connection: "live", mode: "active", activity: "idle" });
   }
 

@@ -139,7 +139,7 @@ export class SearchService {
     const roomName = new Map(map.rooms.map((r) => [r.id, r.name]));
     const onMap = new Map(map.bodies.map((b) => [`${b.kind}:${b.id}`, b]));
 
-    const online: SearchBody[] = map.bodies.slice(0, ONLINE_LIMIT).map((b) => ({
+    const online: SearchBody[] = map.bodies.map((b) => ({
       kind: b.kind,
       slug: b.slug,
       name: b.displayName,
@@ -149,7 +149,10 @@ export class SearchService {
       stalled: Boolean(b.stalled),
     }));
     // Online, agents first (they are the ones doing visible work), then by name.
+    // Sorted BEFORE the cap, so which bodies make the list never depends on the
+    // order rooms and seats happen to come back in.
     online.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "agent" ? -1 : 1));
+    online.length = Math.min(online.length, ONLINE_LIMIT);
 
     if (!query) return { query, agents: [], humans: [], spaces: [], rooms: [], online };
 

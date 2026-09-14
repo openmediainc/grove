@@ -14,7 +14,7 @@ import { GroveApp } from "../src/index.js";
 import { createPool } from "../src/db.js";
 import { loadConfig } from "../src/config.js";
 import { migrate } from "../src/migrate.js";
-import { likePattern, normaliseSearchQuery, SEARCH_QUERY_MAX } from "../src/services/search.js";
+import { likePattern, normaliseSearchQuery, ONLINE_LIMIT, SEARCH_QUERY_MAX, SearchService } from "../src/services/search.js";
 import {
   assertTestDatabase,
   clearRegisterLimiter,
@@ -36,6 +36,28 @@ describe("search query helpers", () => {
   it("escapes LIKE wildcards", () => {
     expect(likePattern("a%b_c\\")).toBe("%a\\%b\\_c\\\\%");
     expect(likePattern("lan", true)).toBe("lan%");
+  });
+  it("caps online now AFTER ordering it, agents first then by name", async () => {
+    // The commons map lists bodies room by room, seat by seat. An agent seated
+    // late (a crowded plaza, a parallel test run) must not fall off the list
+    // just because of where it sat.
+    const bodies = Array.from({ length: ONLINE_LIMIT + 10 }, (_, i) => ({
+      id: `hum_${i}`,
+      kind: "human" as const,
+      displayName: `Person ${String(i).padStart(3, "0")}`,
+      slug: `person${i}`,
+      roomId: "plaza",
+      roomSlug: "plaza",
+      activity: "idle",
+      verb: null,
+      stalled: false,
+    }));
+    bodies.push({ ...bodies[0]!, id: "agt_late", kind: "agent" as never, displayName: "Zed", slug: "zed" });
+    const search = new SearchService({} as never, {} as never, async () => ({ rooms: [{ id: "plaza", slug: "plaza", name: "Plaza" }], bodies }));
+    const { online } = await search.search(null, "");
+    expect(online).toHaveLength(ONLINE_LIMIT);
+    expect(online[0]).toMatchObject({ kind: "agent", slug: "zed", roomName: "Plaza" });
+    expect(online[1]!.name).toBe("Person 000");
   });
 });
 
@@ -118,6 +140,7 @@ describe.skipIf(!hasDb)("search across bodies, spaces and rooms", () => {
       const rooms = await grove.search.search(viewer, "plaza");
       expect(rooms.rooms.some((r) => r.spaceSlug === space.slug && r.slug === "plaza")).toBe(true);
     }
+    await grove.presence.leave(agent.id);
   });
 
   it("hides a public space's private-door room from non-members", async () => {
@@ -153,13 +176,22 @@ describe.skipIf(!hasDb)("search across bodies, spaces and rooms", () => {
       mode: "autonomous",
       activity: "idle",
     });
+    // The commons map is shared with every file running alongside, so "online
+    // now" may already be full of other agents that sort before this one: the
+    // capped list is pinned by the unit test above, and here the body must be in
+    // it only while there is room.
+    const listed = (online: Array<{ slug: string; kind: string; roomSlug: string | null }>) =>
+      online.length < ONLINE_LIMIT || online.some((b) => b.slug === agent.slug);
     const res = await grove.search.search(null, `plazabot${t}`);
     expect(res.agents[0]).toMatchObject({ slug: agent.slug, online: true, roomSlug: "workshop", ownerHandle: owner.handle });
-    expect(res.online.find((b) => b.slug === agent.slug)).toMatchObject({ kind: "agent", roomSlug: "workshop" });
+    expect(listed(res.online)).toBe(true);
+    const row = res.online.find((b) => b.slug === agent.slug);
+    if (row) expect(row).toMatchObject({ kind: "agent", roomSlug: "workshop" });
     // No query: only the online list.
     const idle = await grove.search.search(null, "   ");
     expect(idle).toMatchObject({ query: "", agents: [], humans: [], spaces: [], rooms: [] });
-    expect(idle.online.some((b) => b.slug === agent.slug)).toBe(true);
+    expect(listed(idle.online)).toBe(true);
+    await grove.presence.leave(agent.id);
 
     await clearRegisterLimiter(redis, REGISTER_IP);
     const pending = await grove.identity.registerAgent({ name: `pendingbot${t}`, description: "fixture" }, REGISTER_IP);
