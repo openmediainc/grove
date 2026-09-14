@@ -83,6 +83,12 @@ export {
   type MergeResult,
 } from "./services/guests.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
+export {
+  EffectivePermissionsService,
+  type EffectivePermissions,
+  type EffectiveSpace,
+  type EffectiveRoom,
+} from "./services/effective-permissions.js";
 export { BrandingService, normaliseSiteUrl } from "./services/branding.js";
 export { ClaimPreviewService } from "./services/claim-preview.js";
 export { SpaceMoveService } from "./services/space-moves.js";
@@ -305,6 +311,7 @@ import { ChronicleService } from "./services/chronicle.js";
 import { ReactionService } from "./services/reactions.js";
 import { GuestService } from "./services/guests.js";
 import { CardService } from "./services/cards.js";
+import { EffectivePermissionsService } from "./services/effective-permissions.js";
 import { BrandingService } from "./services/branding.js";
 import { ClaimPreviewService } from "./services/claim-preview.js";
 import { EstateService } from "./services/estates.js";
@@ -353,6 +360,8 @@ export class GroveApp {
   guests: GuestService;
   /** Working on / looking for / latest / links, for spaces and bodies (027). */
   cards: CardService;
+  /** #62: an agent's four capabilities per place, actor ∩ ceiling, for its owner's Settings. */
+  effectivePermissions: EffectivePermissionsService;
   branding: BrandingService;
   claimPreview: ClaimPreviewService;
   estates: EstateService;
@@ -422,6 +431,7 @@ export class GroveApp {
     // for the agent asking.
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);
     this.cards = new CardService(this.store, this.identity, this.campus);
+    this.effectivePermissions = new EffectivePermissionsService(this.store, this.identity, this.campus);
     this.branding = new BrandingService(this.store, this.campus, this.quota);
     this.claimPreview = new ClaimPreviewService(this.store, this.campus, this.quota);
     this.estates = new EstateService(this.store, this.campus);

@@ -407,6 +407,7 @@ export function sendError(reply: FastifyReply, err: unknown) {
     // renders all four branches — this allow-list was the last dark link.
     if (err.source) error.source = err.source;
     if (err.subject) error.subject = err.subject;
+    if (err.party) error.party = err.party;
     if (err.membership) error.membership = err.membership;
     if (err.suggestedRoom) error.suggested_room = err.suggestedRoom;
     if (err.code === "PERMISSION_DENIED" && err.capability) {

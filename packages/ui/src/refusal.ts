@@ -32,6 +32,13 @@ export interface RefusalInput {
   capability?: string;
   source?: RefusalSource;
   subject?: RefusalSubject;
+  /**
+   * #62: which side of the act the refusal is about. Unlike `subject` it is
+   * also set on a ceiling refusal, where "you are a visitor here" and "they are
+   * a visitor here" are otherwise the same `source: "space"`. Absent from older
+   * servers; every branch then reads as it always did (about the sender).
+   */
+  party?: RefusalSubject;
   /** Set with `source: "space" | "room"`: the members' ceiling or the visitors'. */
   membership?: RefusalMembership;
   /** The server's own prose. Used only as a last resort. */
@@ -217,9 +224,30 @@ const MEMBER_HEADLINE: Record<"room" | "space", Record<CapabilityWire, string>> 
   },
 };
 
+/**
+ * #62, party: "recipient" — the ceiling closed THEIR ear or mouth, not yours.
+ * Telling the speaker to "ask to be let in" when they are already inside, and
+ * it is the listener who is the visitor, sends them to a door that is open.
+ */
+const RECIPIENT_VISITOR_HEADLINE: Record<CapabilityWire, string> = {
+  listen_to_humans: "They are a visitor here, and visitors do not hear people here.",
+  listen_to_agents: "They are a visitor here, and visitors do not hear agents here.",
+  speak_to_humans: "They are a visitor here, and visitors cannot reply to people here.",
+  speak_to_agents: "They are a visitor here, and visitors cannot reply to agents here.",
+};
+
+const RECIPIENT_MEMBER_HEADLINE: Record<CapabilityWire, string> = {
+  listen_to_humans: "Nobody here hears people, members included, so this did not reach them.",
+  listen_to_agents: "Nobody here hears agents, members included, so this did not reach them.",
+  speak_to_humans: "Nobody here can reply to people, members included.",
+  speak_to_agents: "Nobody here can reply to agents, members included.",
+};
+
 /** Where a ceiling refusal sends the reader. Never their owner. */
 export const CEILING_RECOURSE = {
   visitor: "Ask whoever runs this space to let you in, or to open this room.",
+  /** #62: the listener is the visitor. */
+  theirVisit: "They would need to join this space, or whoever runs it would need to open this room.",
   member: "Only whoever runs this space can change that.",
 } as const;
 
@@ -258,6 +286,20 @@ export function describeRefusal(input: RefusalInput): Refusal {
 
   const cap = wire(input.capability);
 
+  // #62: a ceiling that closed the OTHER side. Checked before the sender-side
+  // ceiling branches, which are all written to the reader ("you").
+  if ((input.source === "room" || input.source === "space") && input.party === "recipient") {
+    const member = input.membership === "member";
+    return {
+      headline: member
+        ? (cap && RECIPIENT_MEMBER_HEADLINE[cap]) ?? `Nobody can do that in this ${input.source}, members included.`
+        : (cap && RECIPIENT_VISITOR_HEADLINE[cap]) ?? "They are a visitor here, and this is closed to visitors.",
+      recourse: member ? CEILING_RECOURSE.member : CEILING_RECOURSE.theirVisit,
+      attribution: "reported",
+      hint,
+    };
+  }
+
   if (input.source === "room" || (input.source === "space" && input.membership === "member")) {
     const member = input.membership === "member";
     const scope = input.source;
@@ -282,7 +324,7 @@ export function describeRefusal(input: RefusalInput): Refusal {
   }
 
   if (input.source === "actor") {
-    if (input.subject === "sender") {
+    if ((input.subject ?? input.party) === "sender") {
       return {
         headline: (cap && SENDER_HEADLINE[cap]) ?? "Your own settings stopped this, not theirs.",
         recourse: "Change it in your own settings.",

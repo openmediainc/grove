@@ -329,6 +329,7 @@ export function toolError(err: GroveError) {
   // off the kernel's decision, so an MCP client can say whose door refused.
   if (err.source) error.source = err.source;
   if (err.subject) error.subject = err.subject;
+  if (err.party) error.party = err.party;
   if (err.membership) error.membership = err.membership;
   const resetMs = (err.details as { resetMs?: unknown } | undefined)?.resetMs;
   if (typeof resetMs === "number") error.retry_after = Math.max(1, Math.ceil(resetMs / 1000));

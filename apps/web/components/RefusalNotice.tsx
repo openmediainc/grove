@@ -21,6 +21,8 @@ type ApiErrorShape = {
       hint?: string;
       source?: string;
       subject?: string;
+      /** #62: sender or recipient, on ceiling refusals too. */
+      party?: string;
       membership?: string;
       /** Seconds, on a 429: the refusing limiter's own TTL (http.ts). */
       retry_after?: number;
@@ -52,6 +54,7 @@ export function toRefusalInput(
     source: source === "actor" || source === "space" || source === "room" ? source : undefined,
     membership: body?.membership === "member" || body?.membership === "non_member" ? body.membership : undefined,
     subject: subject === "sender" || subject === "recipient" ? subject : undefined,
+    party: body?.party === "sender" || body?.party === "recipient" ? body.party : undefined,
     message: body?.message ?? e.message,
     hint: body?.hint ?? retry,
     senderKind,

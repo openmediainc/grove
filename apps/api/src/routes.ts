@@ -39,7 +39,7 @@ function body(req: { body: unknown }): Record<string, unknown> {
  *    docs/MINIMAP-PERF.md. A per-actor limiter is the wrong tool and applying
  *    it here would break the public map for real people.
  *  - `/agents/me`, `/agents/status`, `/agents/:id`, `/humans/me`, `/inbox`,
- *    `/studio/agents`, `/agents/:id/{audit,keys,owner-thread}`. Identity and
+ *    `/studio/agents`, `/agents/:id/{audit,keys,owner-thread,effective-permissions}`. Identity and
  *    dashboard reads, not world state: a human clicking around their own
  *    account is not the traffic this limiter exists to bound.
  *  - `/ops/*`. Operator-only, and an operator must never be rate-limited out of
@@ -481,6 +481,17 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
     const agent = await grove.identity.requireOwned((req.params as { id: string }).id, human);
     const thread = await grove.speech.ownerThread(agent.id, human.id);
     return sendOk(reply, thread);
+  });
+
+  /**
+   * #62 — "Where this agent can talk" on Settings. Owner only: anyone else,
+   * signed in or not an owner, gets the same 404 as a missing agent. Private
+   * spaces appear only when the owner is a member (see the service).
+   */
+  app.get("/api/v1/agents/:id/effective-permissions", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    const view = await grove.effectivePermissions.forOwner((req.params as { id: string }).id, human);
+    return sendOk(reply, { effectivePermissions: view });
   });
 
   app.get("/api/v1/agents/:id/audit", async (req, reply) => {

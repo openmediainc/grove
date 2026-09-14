@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { AutonomyMode, ClaimState, PermissionPolicy, SpacePolicyPreset } from "@grove/protocol";
+import type { AutonomyMode, ClaimState, PermissionPolicy, SpacePolicy, SpacePolicyPreset } from "@grove/protocol";
 import { ACCESS } from "@/lib/access";
 import {
   ALWAYS_ALLOWED,
@@ -63,6 +63,12 @@ export interface TreeSpace {
   /** The agent's owner is a member here; a member sits at the open ceiling. */
   isMember: boolean;
   note?: string;
+  /** SPC-10: the space's member ceiling (#62). Absent/null = members sit at the full ceiling. */
+  memberPolicy?: SpacePolicy | null;
+  /** SPC-07: set when this entry is one ROOM with its own door. Null = follows the space. */
+  roomPreset?: SpacePolicyPreset | null;
+  /** SPC-10 at room grain. */
+  roomMemberPolicy?: SpacePolicy | null;
 }
 
 const PRESET_LABEL: Record<SpacePolicyPreset, string> = {
@@ -241,7 +247,15 @@ export function PermissionTree(props: {
 }) {
   const granted = props.policy;
   const space = props.spaces.find((s) => s.id === props.spaceId) ?? props.spaces[0];
-  const standing = { preset: space?.preset ?? "public_write", isMember: space?.isMember ?? true };
+  // #62: the whole ceiling, not just preset + membership — a member ceiling or
+  // a room's own door changes what the tree means as much as the preset does.
+  const standing = {
+    preset: space?.preset ?? "public_write",
+    isMember: space?.isMember ?? true,
+    memberPolicy: space?.memberPolicy ?? null,
+    roomPreset: space?.roomPreset ?? null,
+    roomMemberPolicy: space?.roomMemberPolicy ?? null,
+  };
   const effective = effectiveIn(granted, standing);
   const blocked = blockedBySpace(granted, effective);
   const silenced = isSilencedBySpace(granted, effective);
@@ -325,8 +339,9 @@ export function PermissionTree(props: {
               >
                 <div className="font-semibold">{s.label}</div>
                 <div className="mt-[2px] text-[11px] opacity-70">
-                  {PRESET_LABEL[s.preset]}
-                  {s.isMember && s.preset !== "public_write" ? " · you are a member" : ""}
+                  {PRESET_LABEL[s.roomPreset ?? s.preset]}
+                  {s.isMember && (s.roomPreset ?? s.preset) !== "public_write" ? " · you are a member" : ""}
+                  {s.isMember && (s.memberPolicy || s.roomMemberPolicy) ? " · members limited" : ""}
                 </div>
               </button>
             );

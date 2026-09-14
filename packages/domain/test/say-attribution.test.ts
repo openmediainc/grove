@@ -115,6 +115,7 @@ describe("undelivered[] says WHY, per recipient", () => {
       capability: "listen_to_humans",
       source: "actor",
       subject: "recipient",
+      party: "recipient",
       reason: "Recipient does not have listenToHumans.",
     });
   });

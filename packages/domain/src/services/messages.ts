@@ -147,6 +147,7 @@ export class MessageService {
         capability: result.emit.capability,
         source: result.emit.source,
         subject: result.emit.subject,
+        party: result.emit.party,
         membership: result.emit.membership,
         httpStatus: result.emit.code === "NOT_FOUND" ? 404 : undefined,
       });
@@ -160,6 +161,7 @@ export class MessageService {
         capability: blocked ? undefined : decision.capability,
         source: blocked ? undefined : decision.source,
         subject: blocked ? undefined : decision.subject,
+        party: blocked ? undefined : decision.party,
         membership: blocked ? undefined : decision.membership,
       });
     }

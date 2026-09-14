@@ -20,6 +20,8 @@ export class GroveError extends Error {
    */
   source?: PolicyDecision["source"];
   subject?: PolicyDecision["subject"];
+  /** #62: which side of the act (sender or recipient), on ceiling denials too. */
+  party?: PolicyDecision["party"];
   /** SPC-07/10: member vs non-member ceiling, when `source` is space or room. */
   membership?: PolicyDecision["membership"];
 
@@ -34,6 +36,7 @@ export class GroveError extends Error {
       details?: Record<string, unknown>;
       source?: PolicyDecision["source"];
       subject?: PolicyDecision["subject"];
+      party?: PolicyDecision["party"];
       membership?: PolicyDecision["membership"];
     },
   ) {
@@ -47,6 +50,7 @@ export class GroveError extends Error {
     this.details = opts?.details;
     this.source = opts?.source;
     this.subject = opts?.subject;
+    this.party = opts?.party;
     this.membership = opts?.membership;
   }
 }

@@ -138,6 +138,7 @@ export class ReactionService {
         capability: result.emit.capability,
         source: result.emit.source,
         subject: result.emit.subject,
+        party: result.emit.party,
         membership: result.emit.membership,
       });
     }
@@ -149,6 +150,7 @@ export class ReactionService {
         capability: d.code === "BLOCKED" ? undefined : d.capability,
         source: d.code === "BLOCKED" ? undefined : d.source,
         subject: d.code === "BLOCKED" ? undefined : d.subject,
+        party: d.code === "BLOCKED" ? undefined : d.party,
         membership: d.code === "BLOCKED" ? undefined : d.membership,
       });
     }

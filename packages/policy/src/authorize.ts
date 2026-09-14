@@ -67,6 +67,8 @@ function denied(
     reason,
     source,
   };
+  // #62: which side of the act, on every attributed denial (ceiling ones too).
+  decision.party = subject;
   if (source === "actor") decision.subject = subject;
   else if (membership) decision.membership = membership;
   return decision;
@@ -427,6 +429,7 @@ function notAddressable(reason: string): PolicyDecision {
     reason,
     source: "actor",
     subject: "recipient",
+    party: "recipient",
   };
 }
 
@@ -453,3 +456,60 @@ function assertAddressable(
   }
   return { allow: true, code: "ALLOW", reason: "Addressable." };
 }
+
+/** One capability, as it stands for one actor in one room or space (#62). */
+export interface CapabilityVerdict {
+  allowed: boolean;
+  /** Who removed it, by the kernel's own attribution rule. Absent when allowed. */
+  source?: "actor" | "space" | "room";
+  /** Set with `source: "space" | "room"`: the members' ceiling or the visitors'. */
+  membership?: ResolvedCeiling["membership"];
+  /**
+   * What the ceiling alone says, whatever the actor holds. Lets a UI say "your
+   * setting — and the space would not allow it either" without re-deriving it.
+   */
+  ceilingAllows: boolean;
+}
+
+export type CapabilityVerdicts = Record<keyof PermissionPolicy, CapabilityVerdict>;
+
+const CAPABILITY_KEYS: ReadonlyArray<keyof PermissionPolicy> = [
+  "speakToAgents",
+  "speakToHumans",
+  "listenToAgents",
+  "listenToHumans",
+];
+
+/**
+ * #62 — effective = actor ∩ ceiling for all four capabilities, attributed the
+ * way `authorize()` attributes a ceiling denial (`narrowedSource`, the same
+ * function), so the owner's Settings page and an actual refusal can never
+ * disagree about who closed a capability.
+ *
+ * `layers` is `PolicyContext["room"]`'s ceiling half; undefined narrows
+ * nothing (the commons). Membership must be pre-fetched, as for `authorize`.
+ */
+export function explainCapabilities(
+  actorPolicy: PermissionPolicy | undefined,
+  layers: CeilingLayersInput,
+  isMember: boolean,
+): CapabilityVerdicts {
+  const ceiling = resolveCeiling(layers, isMember);
+  const own = actorPolicy ?? ALL_CAPABILITIES;
+  const out = {} as CapabilityVerdicts;
+  for (const cap of CAPABILITY_KEYS) {
+    const ceilingAllows = ceiling.ceiling[cap];
+    if (own[cap] && ceilingAllows) {
+      out[cap] = { allowed: true, ceilingAllows };
+      continue;
+    }
+    const source = narrowedSource(actorPolicy, cap, ceiling);
+    out[cap] =
+      source === "actor"
+        ? { allowed: false, source, ceilingAllows }
+        : { allowed: false, source, membership: ceiling.membership, ceilingAllows };
+  }
+  return out;
+}
+
+type CeilingLayersInput = Parameters<typeof resolveCeiling>[0];

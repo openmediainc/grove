@@ -120,6 +120,7 @@ export function undeliveredFor(recipientId: ActorId, decision: PolicyDecision): 
   if (decision.capability) entry.capability = capabilityWire(decision.capability);
   if (decision.source) entry.source = decision.source;
   if (decision.subject) entry.subject = decision.subject;
+  if (decision.party) entry.party = decision.party;
   if (decision.membership) entry.membership = decision.membership;
   if (decision.reason) entry.reason = decision.reason;
   return entry;
@@ -263,6 +264,7 @@ export class SpeechService {
         capability: result.emit.capability,
         source: result.emit.source,
         subject: result.emit.subject,
+        party: result.emit.party,
         membership: result.emit.membership,
         // The owner_reply hint sends the reader to their OWNER; that is the
         // wrong door when a room or space ceiling refused (SPC-07).

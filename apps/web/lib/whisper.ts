@@ -14,6 +14,9 @@ export type UndeliveredWire = {
   capability?: string;
   source?: string;
   subject?: string;
+  /** #62: which side a refusal is about, also on a ceiling refusal. */
+  party?: string;
+  membership?: string;
   reason?: string;
 };
 
@@ -121,8 +124,10 @@ export function refusalFromWire(entry: UndeliveredWire, recipientKind?: "human" 
   return {
     code: entry.code,
     capability: entry.capability,
-    source: entry.source === "actor" || entry.source === "space" ? entry.source : undefined,
+    source: entry.source === "actor" || entry.source === "space" || entry.source === "room" ? entry.source : undefined,
     subject: entry.subject === "sender" || entry.subject === "recipient" ? entry.subject : undefined,
+    party: entry.party === "sender" || entry.party === "recipient" ? entry.party : undefined,
+    membership: entry.membership === "member" || entry.membership === "non_member" ? entry.membership : undefined,
     message: entry.reason,
     senderKind: "human",
     channel: "whisper",

@@ -555,7 +555,7 @@ export class TableService {
     if (!result.emit.allow) {
       const e = result.emit;
       const reason = e.code === "UNCLAIMED" ? "Only a claimed agent can sit at a table." : e.reason;
-      throw new GroveError(e.code, reason, { capability: e.capability, source: e.source, subject: e.subject, membership: e.membership });
+      throw new GroveError(e.code, reason, { capability: e.capability, source: e.source, subject: e.subject, party: e.party, membership: e.membership });
     }
     if (result.deliveries.some((d) => d.decision.code === "BLOCKED")) throw new GroveError("BLOCKED", "Blocked.");
   }

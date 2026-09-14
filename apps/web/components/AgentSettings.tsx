@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import { gp, publicUrl } from "@/lib/base";
 import { PermissionTree, type TreeSpace } from "@/components/PermissionTree";
 import { AgentBudget } from "@/components/AgentBudget";
+import { WhereAgentCanTalk } from "@/components/WhereAgentCanTalk";
+import { effectivePermissionsPath, treeCeilings, type WireEffectivePermissions } from "@/lib/effective-permissions";
 
 /** Wire JSON is snake_case (see @grove/protocol codec); the tree speaks the type. */
 type WirePolicy = {
@@ -73,7 +75,9 @@ export function AgentSettings({ agentId }: { agentId: string }) {
     autonomy_mode: AutonomyMode;
   } | null>(null);
   const [ownerHandle, setOwnerHandle] = useState<string | undefined>(undefined);
-  const [spaces, setSpaces] = useState<TreeSpace[]>([COMMONS]);
+  const [directory, setDirectory] = useState<TreeSpace[]>([COMMONS]);
+  const [effective, setEffective] = useState<WireEffectivePermissions | null>(null);
+  const [effectiveError, setEffectiveError] = useState(false);
   const [spaceId, setSpaceId] = useState(COMMONS.id);
   const [saving, setSaving] = useState(false);
   // The MCP snippet names the origin this page was served from, read after mount.
@@ -94,6 +98,19 @@ export function AgentSettings({ agentId }: { agentId: string }) {
     setKeys(k.keys);
     const hb = await api<{ hosted_brain: typeof brain }>(`/api/v1/agents/${agentId}/hosted-brain`);
     setBrain(hb.hosted_brain);
+    await loadEffective();
+  }
+
+  // #62: the real ceilings (member limits, rooms with their own door) and the
+  // per-place answer. Owner-only; reloaded after every policy change.
+  async function loadEffective() {
+    try {
+      const r = await api<{ effective_permissions: WireEffectivePermissions }>(effectivePermissionsPath(agentId));
+      setEffective(r.effective_permissions);
+      setEffectiveError(false);
+    } catch {
+      setEffectiveError(true);
+    }
   }
 
   useEffect(() => {
@@ -117,7 +134,7 @@ export function AgentSettings({ agentId }: { agentId: string }) {
           preset: s.policy_preset as SpacePolicyPreset,
           isMember: Boolean(s.is_member || s.is_owner),
         }));
-        setSpaces([COMMONS, ...rows]);
+        setDirectory([COMMONS, ...rows]);
       } catch {
         // The directory is optional furniture. Without it the tree still shows
         // the commons, which is where an agent stands by default.
@@ -186,6 +203,8 @@ export function AgentSettings({ agentId }: { agentId: string }) {
 
   if (!agent) return <p className="mt-6 text-sm text-white/50">Loading settings…</p>;
 
+  const spaces = treeCeilings(directory, effective);
+
   return (
     <div>
       <PermissionTree
@@ -202,6 +221,8 @@ export function AgentSettings({ agentId }: { agentId: string }) {
         onPolicy={(patch) => void setPolicy(patch)}
         onAutonomy={(mode) => void setAutonomy(mode)}
       />
+
+      <WhereAgentCanTalk data={effective} error={effectiveError && !effective} />
 
       <section className="mt-8">
         <h2 className="font-display text-2xl text-lantern-300">Standing orders</h2>

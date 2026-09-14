@@ -332,6 +332,24 @@ export interface PolicyDecision {
    * absent on every other code, including `ALLOW`.
    */
   subject?: "sender" | "recipient";
+  /**
+   * #62: WHICH SIDE OF THE ACT the refusal is about, whoever refused. `subject`
+   * answers "whose stored setting" and so is (by design, and for back-compat)
+   * absent on a ceiling denial — which left a UI unable to tell "you are a
+   * visitor here and cannot speak" from "they are a visitor here and cannot
+   * hear". Both are `source: "space"`, often at the same capability.
+   *
+   * - On `source: "actor"` it always equals `subject`.
+   * - On `source: "space" | "room"` it names the actor whose ceiling (and
+   *   whose `membership`) was read: `"sender"` for the speaker's mouth,
+   *   `"recipient"` for the listener's ear.
+   *
+   * Derived from the same branch that produced the refusal, never guessed. Set
+   * exactly when `source` is set; absent on every other code, including ALLOW.
+   * The counterfactual it guarantees: opening every setting and membership of
+   * the OTHER party leaves the decision unchanged.
+   */
+  party?: "sender" | "recipient";
   reason: string;
   visibleInUi?: boolean;
 }
