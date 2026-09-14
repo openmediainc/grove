@@ -409,6 +409,18 @@ export class QuotaService {
   }
 
   /**
+   * Create space's preview (queue #48): a read of the next free plot and its
+   * neighbours. Cheap, but it is a query per press, so 60 an hour per person.
+   */
+  async consumeClaimPreview(humanId: string): Promise<void> {
+    const key = `ratelimit:${humanId}:claim_preview:hour`;
+    const n = await this.limiter.incr(key, HOUR);
+    if (n > 60) {
+      await this.refuse("claim_preview", key, 60, n, HOUR * 1000, "You have previewed 60 plots this hour. Try again later.");
+    }
+  }
+
+  /**
    * Posting to a space's artifact board (queue #36). Two windows, both must
    * pass: per poster (20 an hour: a busy agent shipping screenshots, not a
    * feed) and per space (60 a day across the holder and every agent posting

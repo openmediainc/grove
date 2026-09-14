@@ -1,7 +1,16 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { GroveApp } from "@grove/domain";
 import { GroveError, isFirst24h } from "@grove/domain";
-import { SPACE_POLICY_PRESETS, WORLD_ID, toCamel, type SpacePolicyPreset } from "@grove/protocol";
+import {
+  EMPTY_BRANDING,
+  SPACE_POLICY_PRESETS,
+  WORLD_ID,
+  mergeBranding,
+  normaliseBrandingPatch,
+  toCamel,
+  type SpaceBranding,
+  type SpacePolicyPreset,
+} from "@grove/protocol";
 import { assertWorldAccess, optionalHuman, requireActor, requireHuman, requireOperator } from "./auth.js";
 import { WORLD_COOKIE, sendOk } from "./http.js";
 import { countAction } from "./analytics.js";
@@ -49,16 +58,54 @@ export async function registerPlatform(app: FastifyInstance, grove: GroveApp) {
     return sendOk(reply, { worlds });
   });
 
+  // #48: Create space may send the branding it previewed and the plot index
+  // the preview showed. Both are re-checked here: branding through the same
+  // rules as the Manage PUT (before anything is written, so a bad colour
+  // creates nothing), and the plot is whatever is free at the INSERT — if that
+  // is not the previewed one, the response says so.
   app.post("/api/v1/worlds", async (req, reply) => {
     const human = await requireHuman(req, grove);
     const b = body(req);
+    const preset = b.policyPreset === undefined ? undefined : readPreset(b.policyPreset);
+    const brandingRaw = rawField(req, "branding");
+    let branding: SpaceBranding | null = null;
+    if (brandingRaw !== undefined && brandingRaw !== null) {
+      if (typeof brandingRaw !== "object" || Array.isArray(brandingRaw)) {
+        throw new GroveError("INVALID", "branding must be an object.");
+      }
+      const r = normaliseBrandingPatch(toCamel(brandingRaw));
+      if (!r.ok) throw new GroveError("INVALID", r.message);
+      branding = mergeBranding(EMPTY_BRANDING, r.patch);
+    }
+    const expectedRaw = rawField(req, "expected_plot_index");
+    const expected =
+      typeof expectedRaw === "number" && Number.isInteger(expectedRaw) && expectedRaw >= 0 ? expectedRaw : null;
     const world = await grove.campus.createWorld(human, {
       name: String(b.name ?? ""),
       slug: String(b.slug ?? ""),
-      ...(b.policyPreset === undefined ? {} : { preset: readPreset(b.policyPreset) }),
+      ...(preset === undefined ? {} : { preset }),
+      ...(branding ? { branding } : {}),
     });
-    return sendOk(reply, { world }, 201);
+    return sendOk(
+      reply,
+      {
+        world,
+        ...(expected === null ? {} : { expectedPlotIndex: expected, plotChanged: world.plotIndex !== expected }),
+      },
+      201,
+    );
   });
+
+  // #48 Preview before claiming: the plot a space created now would get, and
+  // its neighbours as the public map shows them. Read-only, nothing reserved,
+  // signed in and metered (claim_preview, 60 an hour).
+  const claimPreview = async (req: FastifyRequest, reply: FastifyReply) => {
+    const human = await requireHuman(req, grove);
+    const preview = await grove.claimPreview.preview(human);
+    return sendOk(reply, { preview });
+  };
+  app.get("/api/v1/worlds/claim-preview", claimPreview);
+  app.get("/api/v1/spaces/claim-preview", claimPreview);
 
   // The space directory. Deliberately readable signed-out: a claimed plot is
   // public knowledge (the minimap already shows it). listDirectory() does the

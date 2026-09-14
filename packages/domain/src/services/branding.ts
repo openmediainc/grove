@@ -70,6 +70,19 @@ export class BrandingService {
     const world = await this.campus.requireWorld(ref);
     if (world.archivedAt) throw NOT_FOUND();
     await this.campus.assertOperate(human, world);
+    return this.readSite(human, rawUrl);
+  }
+
+  /**
+   * The same suggestion before a space exists (#48 Create space): signed in,
+   * the same 10-an-hour meter, and it saves nothing either — Create space
+   * sends the branding with the create request, which validates it again.
+   */
+  async suggestForNewSpace(human: Human, rawUrl: unknown): Promise<SiteBrandingSuggestion> {
+    return this.readSite(human, rawUrl);
+  }
+
+  private async readSite(human: Human, rawUrl: unknown): Promise<SiteBrandingSuggestion> {
     const url = normaliseSiteUrl(rawUrl);
     if (!url) throw new GroveError("INVALID", "Enter a website address, like https://example.com.");
     await this.quota.consumeBrandingSuggest(human.id);

@@ -9,6 +9,7 @@ import {
   type CeilingLayers,
   type Human,
   type Room,
+  type SpaceBranding,
   type SpacePolicy,
   type SpacePolicyPreset,
 } from "@grove/protocol";
@@ -736,9 +737,23 @@ export class CampusService {
     return roomAdmitsVisitors(room.roomPreset, spaceCeilingOf(rows[0] as Record<string, unknown>)) ? room : null;
   }
 
+  /**
+   * The plot a space created right now would get (#48 preview). READ-ONLY: the
+   * same "smallest free index" rule as the INSERT below, with nothing held, so
+   * a claim that lands first can still take it.
+   */
+  async nextPlotIndex(): Promise<number> {
+    const { rows } = await this.store.pg.query<{ i: string | number }>(
+      `SELECT coalesce(min(g.i), 0) AS i FROM generate_series(
+         0, (SELECT count(*) FROM worlds WHERE plot_index IS NOT NULL)) AS g(i)
+       WHERE NOT EXISTS (SELECT 1 FROM worlds w WHERE w.plot_index = g.i)`,
+    );
+    return Number(rows[0]?.i ?? 0);
+  }
+
   async createWorld(
     owner: Human,
-    input: { name: string; slug: string; preset?: SpacePolicyPreset },
+    input: { name: string; slug: string; preset?: SpacePolicyPreset; branding?: SpaceBranding | null },
   ): Promise<WorldRow> {
     const name = input.name.trim().slice(0, 64);
     const slug = input.slug
@@ -762,7 +777,11 @@ export class CampusService {
       // number and one loses on `worlds_plot_index`. The plot is allocated by us,
       // not chosen by them, so losing that race is our problem to absorb — retry
       // and they get the next one. Only a genuine slug clash is theirs to fix.
-      const rows = await this.insertWorldWithPlot({ id, slug, name, ownerId: owner.id, preset });
+      // #48: branding chosen in Create space lands with the row, already
+      // validated by the caller (normaliseBrandingPatch); empty stores NULL.
+      const b = input.branding ?? null;
+      const branding = b && (b.accent || b.signText || b.emblem) ? JSON.stringify(b) : null;
+      const rows = await this.insertWorldWithPlot({ id, slug, name, ownerId: owner.id, preset, branding });
       await this.store.pg.query(
         `INSERT INTO world_members (world_id, human_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
         [id, owner.id],
@@ -804,18 +823,19 @@ export class CampusService {
     name: string;
     ownerId: string;
     preset: SpacePolicyPreset;
+    branding?: string | null;
   }): Promise<Array<Record<string, unknown>>> {
     for (let attempt = 0; ; attempt++) {
       try {
         const { rows } = await this.store.pg.query(
-          `INSERT INTO worlds (id, slug, name, owner_human_id, plot_index, policy_preset)
+          `INSERT INTO worlds (id, slug, name, owner_human_id, plot_index, policy_preset, branding)
            SELECT $1,$2,$3,$4,
                   (SELECT coalesce(min(g.i), 0) FROM generate_series(
                      0, (SELECT count(*) FROM worlds WHERE plot_index IS NOT NULL)) AS g(i)
                    WHERE NOT EXISTS (SELECT 1 FROM worlds w WHERE w.plot_index = g.i)),
-                  $5
+                  $5, $6::jsonb
            RETURNING *`,
-          [w.id, w.slug, w.name, w.ownerId, w.preset],
+          [w.id, w.slug, w.name, w.ownerId, w.preset, w.branding ?? null],
         );
         return rows as Array<Record<string, unknown>>;
       } catch (err) {

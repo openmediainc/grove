@@ -4,18 +4,19 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { gp } from "@/lib/base";
-import { ACCESS_ORDER, accessCopy, accessTint, type SpacePolicyPreset } from "@/lib/access";
+import { accessCopy, accessTint } from "@/lib/access";
 import { groupResults, jumpHref, resultPath, searchApiPath, type WireSearch } from "@/lib/search";
-import { exploreOrder, spaceHref, suggestSlug, type DirectorySpace } from "@/lib/space-page";
+import { exploreOrder, spaceHref, type DirectorySpace } from "@/lib/space-page";
 import { hasSignedInHint } from "@/lib/unread";
 import { GeoAvatar } from "@/components/Avatar";
 import { DiscoveryShelves } from "@/components/Discovery";
+import { CreateSpaceFlow } from "@/components/CreateSpaceFlow";
 import { roomHref } from "@/lib/world-url";
 
 /**
  * Explore: the discovery shelves (Busiest plots, Most-watched agents, Just
  * arrived; queue #40), every space on the world, who is online right now, and
- * Create space.
+ * Create space (two steps: details, then a preview of the plot on the map; #48).
  *
  * The directory is public and redacted by the server (listDirectory): a private
  * plot you are not inside comes back with no slug, name, owner or orgs, and is
@@ -84,7 +85,7 @@ export default function ExplorePage() {
         ) : null}
       </div>
 
-      {creating && signedIn ? <CreateSpace onClose={() => setCreating(false)} /> : null}
+      {creating && signedIn ? <CreateSpaceFlow onClose={() => setCreating(false)} /> : null}
 
       <DiscoveryShelves online={online} signedIn={signedIn} />
 
@@ -238,114 +239,5 @@ function LobbyDoors({ space }: { space: DirectorySpace }) {
       ))}
       {err ? <span className="text-xs text-red-300">{err}</span> : null}
     </div>
-  );
-}
-
-function CreateSpace({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [preset, setPreset] = useState<SpacePolicyPreset>("public_write");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function submit() {
-    setErr(null);
-    setBusy(true);
-    try {
-      const created = await api<{ world: { slug: string } }>("/api/v1/worlds", {
-        method: "POST",
-        body: JSON.stringify({ name, slug: slug || suggestSlug(name), policy_preset: preset }),
-      });
-      window.location.href = gp(spaceHref(created.world.slug));
-    } catch (e) {
-      const code = (e as { code?: string }).code;
-      setErr(code === "SLUG_TAKEN" ? `${(e as Error).message} Try another slug.` : (e as Error).message);
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section id="create" className="mt-8 space-y-4 rounded-2xl border border-white/10 bg-dusk-800/70 p-4 sm:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-2xl text-lantern-300">Create a space</h2>
-          <p className="mt-1 text-sm text-white/50">
-            You get the next free plot on the shared world, and it stays yours. Six rooms come with it.
-          </p>
-        </div>
-        <button type="button" onClick={onClose} className="shrink-0 text-xs text-white/40 hover:text-white/70">
-          Close
-        </button>
-      </div>
-
-      <label className="block">
-        <span className="text-sm text-white/70">Name</span>
-        <input
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            if (!slugTouched) setSlug(suggestSlug(e.target.value));
-          }}
-          placeholder="Harbour workshop"
-          className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 outline-none focus:border-lantern-400/50"
-        />
-      </label>
-
-      <label className="block">
-        <span className="text-sm text-white/70">Slug</span>
-        <input
-          value={slug}
-          onChange={(e) => {
-            setSlugTouched(true);
-            setSlug(e.target.value);
-          }}
-          onBlur={() => setSlug(suggestSlug(slug))}
-          placeholder="harbour-workshop"
-          className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 font-mono text-sm outline-none focus:border-lantern-400/50"
-        />
-        <span className="mt-1 block text-xs text-white/40">
-          Lowercase and dashes. Its page will be <code>/s/{slug || suggestSlug(name) || "your-slug"}</code>.
-        </span>
-      </label>
-
-      <fieldset className="space-y-2">
-        <legend className="text-sm text-white/70">Access</legend>
-        {ACCESS_ORDER.map((p) => {
-          const copy = accessCopy(p);
-          return (
-            <label
-              key={p}
-              className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${
-                preset === p ? "border-lantern-400/50 bg-lantern-400/5" : "border-white/10"
-              }`}
-            >
-              <input
-                type="radio"
-                name="access"
-                className="mt-1 h-4 w-4 shrink-0 accent-lantern-400"
-                checked={preset === p}
-                onChange={() => setPreset(p)}
-              />
-              <span>
-                <strong>{copy.word}</strong>
-                <span className="block text-sm text-white/50">{copy.line}</span>
-              </span>
-            </label>
-          );
-        })}
-        <p className="text-xs text-white/35">You can change it later under Manage on the space&apos;s page.</p>
-      </fieldset>
-
-      <button
-        type="button"
-        onClick={() => void submit()}
-        disabled={busy || !name.trim()}
-        className="w-full rounded-full bg-lantern-400 py-3 font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
-      >
-        {busy ? "Creating…" : "Create space"}
-      </button>
-      {err ? <p className="text-sm text-red-300">{err}</p> : null}
-    </section>
   );
 }

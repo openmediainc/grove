@@ -12,6 +12,8 @@ import { sendOk } from "./http.js";
  *   POST /api/v1/spaces/:id/branding/suggest   (also /worlds/:id/...) the owner; { url }
  *        -> { name, accent, source, notes }. Reads the website, saves nothing:
  *        the owner reviews it in the Manage preview and saves with the PUT.
+ *   POST /api/v1/spaces/branding/suggest   signed in; { url } — the same, for
+ *        Create space before the space exists (#48).
  *
  * Every visibility and validation rule lives in BrandingService and
  * @grove/protocol branding.ts; this file parses and delegates.
@@ -34,23 +36,35 @@ export async function registerBranding(app: FastifyInstance, grove: GroveApp) {
     const human = await requireHuman(req, grove);
     const body = (req.body ?? {}) as { url?: unknown };
     const s = await grove.branding.suggestFromWebsite(human, (req.params as { id: string }).id, body.url);
-    return sendOk(reply, {
-      name: s.name,
-      accent: s.accent
-        ? { accent: s.accent.accent, original: s.accent.original, substituted: s.accent.substituted, note: s.accent.note }
-        : null,
-      source: {
-        url: s.source.url,
-        site_name: s.source.siteName,
-        title: s.source.title,
-        theme_color: s.source.themeColor,
-        favicon: s.source.favicon,
-        favicon_colour: s.source.faviconColour,
-        accent_from: s.source.accentFrom,
-      },
-      notes: s.notes,
-    });
+    return sendOk(reply, wireSuggestion(s));
   };
   app.post("/api/v1/spaces/:id/branding/suggest", suggest);
   app.post("/api/v1/worlds/:id/branding/suggest", suggest);
+
+  // #48: Create space's "Use my website", before there is a space to own.
+  // Signed in, the same meter, saves nothing.
+  app.post("/api/v1/spaces/branding/suggest", async (req, reply) => {
+    const human = await requireHuman(req, grove);
+    const body = (req.body ?? {}) as { url?: unknown };
+    return sendOk(reply, wireSuggestion(await grove.branding.suggestForNewSpace(human, body.url)));
+  });
+}
+
+function wireSuggestion(s: Awaited<ReturnType<GroveApp["branding"]["suggestFromWebsite"]>>) {
+  return {
+    name: s.name,
+    accent: s.accent
+      ? { accent: s.accent.accent, original: s.accent.original, substituted: s.accent.substituted, note: s.accent.note }
+      : null,
+    source: {
+      url: s.source.url,
+      site_name: s.source.siteName,
+      title: s.source.title,
+      theme_color: s.source.themeColor,
+      favicon: s.source.favicon,
+      favicon_colour: s.source.faviconColour,
+      accent_from: s.source.accentFrom,
+    },
+    notes: s.notes,
+  };
 }

@@ -84,6 +84,7 @@ export {
 } from "./services/guests.js";
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
 export { BrandingService, normaliseSiteUrl } from "./services/branding.js";
+export { ClaimPreviewService } from "./services/claim-preview.js";
 export { SpaceMoveService } from "./services/space-moves.js";
 export {
   BoardService,
@@ -304,6 +305,7 @@ import { ReactionService } from "./services/reactions.js";
 import { GuestService } from "./services/guests.js";
 import { CardService } from "./services/cards.js";
 import { BrandingService } from "./services/branding.js";
+import { ClaimPreviewService } from "./services/claim-preview.js";
 import { EstateService } from "./services/estates.js";
 import { DecorService } from "./services/decor.js";
 import { SequenceService } from "./services/sequences.js";
@@ -350,6 +352,7 @@ export class GroveApp {
   /** Working on / looking for / latest / links, for spaces and bodies (027). */
   cards: CardService;
   branding: BrandingService;
+  claimPreview: ClaimPreviewService;
   estates: EstateService;
   /** Transfer a space to a member or bound org, or move it to a free plot (039). */
   spaceMoves: SpaceMoveService;
@@ -416,6 +419,7 @@ export class GroveApp {
     this.notices = new NoticeService(this.store, this.presence, this.speech, this.flags);
     this.cards = new CardService(this.store, this.identity, this.campus);
     this.branding = new BrandingService(this.store, this.campus, this.quota);
+    this.claimPreview = new ClaimPreviewService(this.store, this.campus, this.quota);
     this.estates = new EstateService(this.store, this.campus);
     this.spaceMoves = new SpaceMoveService(this.store, this.campus);
     this.board = new BoardService(this.store, this.campus, this.quota);
