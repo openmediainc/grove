@@ -15,6 +15,7 @@ import {
   type TransferPick,
 } from "@/lib/space-moves";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { CARD_CLASS, CHECKBOX_CLASS, EMPTY_CLASS, INPUT_CLASS, LINK_CLASS, NUM_CLASS, SECTION_CLASS, SECTION_TITLE_CLASS, SELECT_CLASS, buttonClass } from "@/lib/brand-ui";
 
 /**
  * Transfer & relocate (queue #35): two Manage sections for the space's holder,
@@ -51,15 +52,15 @@ type Space = { id: string; slug: string; name: string };
 
 function Confirm({ slug, value, onChange, id }: { slug: string; value: string; onChange: (v: string) => void; id: string }) {
   return (
-    <label htmlFor={id} className="mt-3 block text-xs text-white/50">
-      Type <span className="font-mono text-white/80">{slug}</span> to confirm
+    <label htmlFor={id} className="mt-3 block text-xs text-muted">
+      Type <span className="font-brand-mono text-ink">{slug}</span> to confirm
       <input
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete="off"
         spellCheck={false}
-        className="mt-1 block w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 font-mono text-sm text-white outline-none focus:border-lantern-400"
+        className={`mt-1 ${INPUT_CLASS} font-brand-mono text-gh-sm`}
       />
     </label>
   );
@@ -120,23 +121,23 @@ export function TransferPanel({ space, reload }: { space: Space; reload: () => P
   const orgs = state?.candidates.orgs ?? [];
 
   return (
-    <div>
-      <h3 className="font-display text-xl text-lantern-300">Transfer ownership</h3>
-      <p className="mt-1 text-xs text-white/55">
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Transfer ownership</h3>
+      <p className="mt-1 text-xs text-muted">
         Hand this space to one of its members, or to an org bound to it. They have 7 days to accept. The name, card,
         branding, marks, rooms and plot stay with the space; you stay a member unless you choose to leave.
       </p>
 
       {pending ? (
-        <div className="mt-3 flex flex-col gap-3 rounded-lg border border-lantern-400/30 bg-lantern-400/5 p-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="min-w-0 text-sm text-white/80">
-            Offered to <strong>{recipientLabel(pending)}</strong>. {timeLeft(pending.expires_at)} left
+        <div className="mt-3 flex flex-col gap-3 rounded-gh-md border border-line-strong bg-tint p-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="min-w-0 text-sm text-ink">
+            Offered to <strong>{recipientLabel(pending)}</strong>. <span className={NUM_CLASS}>{timeLeft(pending.expires_at)}</span> left
             {pending.from_leaves ? "; you leave when they accept" : ""}.
           </p>
           <button
             disabled={busy}
             onClick={() => void run(() => api(`/api/v1/worlds/${space.id}/transfer`, { method: "DELETE" }))}
-            className="shrink-0 rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/70 disabled:opacity-40 sm:py-1"
+            className={buttonClass("secondary", "sm", "min-h-11 shrink-0 sm:min-h-8")}
           >
             Cancel offer
           </button>
@@ -144,12 +145,12 @@ export function TransferPanel({ space, reload }: { space: Space; reload: () => P
       ) : state ? (
         members.length || orgs.length ? (
           <div className="mt-3">
-            <label className="block text-xs text-white/50">
+            <label className="block text-xs font-medium text-ink">
               Hand it to
               <select
                 value={pickKey}
                 onChange={(e) => setPickKey(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white"
+                className={`mt-1 ${SELECT_CLASS} text-gh-sm font-normal`}
               >
                 <option value="">Pick a member or org…</option>
                 {members.length ? (
@@ -172,8 +173,8 @@ export function TransferPanel({ space, reload }: { space: Space; reload: () => P
                 ) : null}
               </select>
             </label>
-            <label className="mt-2 flex items-center gap-2 py-1 text-sm text-white/60">
-              <input type="checkbox" className="h-5 w-5 shrink-0 accent-lantern-400" checked={leave} onChange={(e) => setLeave(e.target.checked)} />
+            <label className="mt-2 flex min-h-11 items-center gap-2 text-sm text-ink sm:min-h-8">
+              <input type="checkbox" className={CHECKBOX_CLASS} checked={leave} onChange={(e) => setLeave(e.target.checked)} />
               Leave the space once they accept
             </label>
             <Confirm id="transfer-confirm" slug={space.slug} value={typed} onChange={setTyped} />
@@ -185,25 +186,25 @@ export function TransferPanel({ space, reload }: { space: Space; reload: () => P
                   api(`/api/v1/worlds/${space.id}/transfer`, { method: "POST", body: JSON.stringify(transferBody(pick, typed, leave)) }),
                 )
               }
-              className="mt-3 rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+              className={buttonClass("danger", "md", "mt-3")}
             >
               {busy ? "Sending…" : "Offer the space"}
             </button>
           </div>
         ) : (
-          <p className="mt-3 text-sm text-white/55">
+          <p className={`mt-3 ${EMPTY_CLASS}`}>
             Nobody to hand it to yet. Admit a member or bind an org someone else owns first.
           </p>
         )
       ) : null}
 
       {!pending && state?.last ? (
-        <p className="mt-3 text-xs text-white/55">
+        <p className="mt-3 text-xs text-muted">
           Last offer, to {recipientLabel(state.last)}: {STATUS_LINE[state.last.status]}.
         </p>
       ) : null}
       <ErrorNotice error={err} className="mt-2" />
-    </div>
+    </section>
   );
 }
 
@@ -217,13 +218,15 @@ type RelocationPlan = {
   anchors: number[];
 };
 
+// Brand tokens, so the preview reads on a light or a night page: ink for land,
+// amber (you) for your plots, the sky accent for plots on offer.
 const CELL_FILL: Record<PreviewCell["role"], string> = {
-  core: "rgba(255,255,255,0.10)",
-  taken: "rgba(255,255,255,0.22)",
-  anchor: "rgba(250,204,120,0.45)",
-  current: "rgba(250,204,120,0.95)",
-  option: "rgba(140,200,255,0.18)",
-  target: "rgba(140,200,255,0.95)",
+  core: "rgb(var(--gh-ink-rgb) / 0.10)",
+  taken: "rgb(var(--gh-ink-rgb) / 0.28)",
+  anchor: "rgb(var(--gh-human-rgb) / 0.45)",
+  current: "rgb(var(--gh-human-rgb) / 1)",
+  option: "rgb(var(--gh-sky-rgb) / 0.25)",
+  target: "rgb(var(--gh-sky-rgb) / 1)",
 };
 
 function MiniPlots({ plan, target }: { plan: RelocationPlan; target: number | null }) {
@@ -241,7 +244,7 @@ function MiniPlots({ plan, target }: { plan: RelocationPlan; target: number | nu
       role="img"
       aria-label={target === null ? `Plot ${plan.current} on the world` : `Moving from plot ${plan.current} to plot ${target}`}
       viewBox={`0 0 ${view.cols * w} ${view.rows * h}`}
-      className="mt-3 block h-auto w-full max-w-xs rounded-lg border border-white/10 bg-dusk-950/60"
+      className="mt-3 block h-auto w-full max-w-xs rounded-gh-md border border-line bg-surface-raised"
     >
       {view.cells.map((c) => (
         <rect
@@ -251,7 +254,7 @@ function MiniPlots({ plan, target }: { plan: RelocationPlan; target: number | nu
           width={w - 2}
           height={h - 2}
           rx={2}
-          fill={CELL_FILL[c.role]}
+          style={{ fill: CELL_FILL[c.role] }}
         />
       ))}
     </svg>
@@ -300,20 +303,20 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
   const cooling = plan.next_allowed_at && new Date(plan.next_allowed_at).getTime() > Date.now();
 
   return (
-    <div>
-      <h3 className="font-display text-xl text-lantern-300">Move to another plot</h3>
-      <p className="mt-1 text-xs text-white/55">
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Move to another plot</h3>
+      <p className="mt-1 text-xs text-muted">
         The space keeps everything; only its place on the map changes, and the old plot is freed. A space can move once a
         week. Plots next to your other plots come first.
       </p>
       <MiniPlots plan={plan} target={target} />
-      <p className="mt-1 text-[11px] text-white/50">
-        Now on plot {plan.current}
-        {plan.anchors.length ? " · gold: your other plots" : ""} · blue: free plots on offer
+      <p className="mt-1 text-xs text-muted">
+        Now on plot <span className={NUM_CLASS}>{plan.current}</span>
+        {plan.anchors.length ? " · amber: your other plots" : ""} · accent: free plots on offer
       </p>
 
       {cooling ? (
-        <p className="mt-3 text-sm text-white/50">
+        <p className="mt-3 text-sm text-ink">
           This space moved recently. It can move again after {new Date(plan.next_allowed_at!).toLocaleString()}.
         </p>
       ) : plan.options.length ? (
@@ -324,12 +327,12 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
                 key={o.plot_index}
                 onClick={() => setTarget(target === o.plot_index ? null : o.plot_index)}
                 aria-pressed={target === o.plot_index}
-                className={`rounded-full border px-3 py-2 text-xs sm:py-1 ${
-                  target === o.plot_index ? "border-sky-300/70 bg-sky-300/10 text-sky-200" : "border-white/15 text-white/70"
+                className={`min-h-11 rounded-gh-pill border px-3 py-2 text-xs focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-8 sm:py-1 ${
+                  target === o.plot_index ? "border-signal bg-tint font-medium text-ink" : "border-line-strong bg-surface-raised text-muted hover:bg-tint"
                 }`}
               >
                 plot {o.plot_index}
-                {o.near ? <span className="ml-1 text-lantern-300">· next to {o.next_to}</span> : null}
+                {o.near ? <span className="ml-1 text-muted">· next to {o.next_to}</span> : null}
               </button>
             ))}
           </div>
@@ -339,7 +342,7 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
               <button
                 disabled={!canRelocate({ target, current: plan.current, typed, slug: space.slug, nextAllowedAt: plan.next_allowed_at, busy })}
                 onClick={() => void move()}
-                className="mt-3 rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+                className={buttonClass("danger", "md", "mt-3")}
               >
                 {busy ? "Moving…" : `Move to plot ${target}`}
               </button>
@@ -347,11 +350,11 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
           ) : null}
         </>
       ) : (
-        <p className="mt-3 text-sm text-white/55">No free plot to move to right now.</p>
+        <p className={`mt-3 ${EMPTY_CLASS}`}>No free plot to move to right now.</p>
       )}
-      {done ? <p className="mt-2 text-sm text-lantern-300">{done}</p> : null}
+      {done ? <p className="mt-2 text-sm text-success" role="status">{done}</p> : null}
       <ErrorNotice error={err} className="mt-2" />
-    </div>
+    </section>
   );
 }
 
@@ -388,21 +391,21 @@ export function TransferOffers({ onChange }: { onChange?: () => void }) {
   if (!offers?.length) return <ErrorNotice error={err} className="mt-4" />;
   return (
     <section className="mt-10">
-      <h2 className="font-display text-2xl text-lantern-300">
-        Transfer offers <span className="text-white/55">({offers.length})</span>
+      <h2 className={SECTION_TITLE_CLASS}>
+        Transfer offers <span className={`text-muted ${NUM_CLASS}`}>({offers.length})</span>
       </h2>
       <ul className="mt-3 space-y-3">
         {offers.map((t) => (
-          <li key={t.id} className="rounded-xl border border-lantern-400/20 bg-dusk-800/60 p-4">
+          <li key={t.id} className={CARD_CLASS}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 text-sm">
                 <span className="font-semibold">{t.from.display_name}</span>
-                <span className="ml-1 text-xs text-white/55">@{t.from.handle}</span> offers you{" "}
-                <Link href={spaceHref(t.world_slug)} className="font-semibold text-lantern-300">
+                <span className="ml-1 text-xs text-muted">@{t.from.handle}</span> offers you{" "}
+                <Link href={spaceHref(t.world_slug)} className={`font-semibold ${LINK_CLASS}`}>
                   {t.world_name}
                 </Link>
                 {t.to_org ? <> for your org {t.to_org.name}</> : null}.
-                <div className="mt-1 text-xs text-white/55">
+                <div className="mt-1 text-xs text-muted">
                   plot {t.plot_index ?? "—"} · {timeLeft(t.expires_at)} left to answer
                   {t.from_leaves ? ` · @${t.from.handle} leaves when you accept` : ` · @${t.from.handle} stays a member`}
                 </div>
@@ -411,14 +414,14 @@ export function TransferOffers({ onChange }: { onChange?: () => void }) {
                 <button
                   onClick={() => void answer(t, "accept")}
                   disabled={busy === t.id}
-                  className="flex-1 rounded-full bg-lantern-400 px-4 py-2.5 text-xs font-semibold text-dusk-950 disabled:opacity-40 sm:flex-none sm:px-3 sm:py-1"
+                  className={buttonClass("primary", "sm", "min-h-11 flex-1 sm:min-h-8 sm:flex-none")}
                 >
                   Accept
                 </button>
                 <button
                   onClick={() => void answer(t, "decline")}
                   disabled={busy === t.id}
-                  className="flex-1 rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/60 disabled:opacity-40 sm:flex-none sm:px-3 sm:py-1"
+                  className={buttonClass("secondary", "sm", "min-h-11 flex-1 sm:min-h-8 sm:flex-none")}
                 >
                   Decline
                 </button>

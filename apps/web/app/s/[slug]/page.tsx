@@ -36,6 +36,22 @@ import { brandingDraft, checkDraft } from "@/lib/branding";
 import { FollowButton } from "@/components/Follow";
 import { Tabs, tabPanelProps } from "@/components/Tabs";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import {
+  CARD_CLASS,
+  EMPTY_CLASS,
+  INPUT_CLASS,
+  LINK_CLASS,
+  NUM_CLASS,
+  PAGE_TITLE_CLASS,
+  PILL_CLASS,
+  SECTION_CLASS,
+  SECTION_TITLE_CLASS,
+  SELECT_CLASS,
+  CHECKBOX_CLASS,
+  TEXTAREA_CLASS,
+  buttonClass,
+  optionClass,
+} from "@/lib/brand-ui";
 
 /*
  * Code-split (#68, docs/PERFORMANCE.md): the board (lightbox + composer), the
@@ -185,9 +201,9 @@ export default function SpacePage() {
   if (missing) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-        <h1 className="font-display text-3xl text-lantern-300">No space here</h1>
-        <p className="mt-3 text-white/60">Nothing by that name that you can see.</p>
-        <Link href={EXPLORE_PATH} className="mt-6 inline-block text-lantern-300 underline">
+        <h1 className={PAGE_TITLE_CLASS}>No space here</h1>
+        <p className="mt-3 text-muted">Nothing by that name that you can see.</p>
+        <Link href={EXPLORE_PATH} className={`mt-6 inline-block ${LINK_CLASS}`}>
           Explore spaces
         </Link>
       </main>
@@ -197,13 +213,13 @@ export default function SpacePage() {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
         <ErrorNotice error={err} onRetry={() => void load()} />
-        <Link href={EXPLORE_PATH} className="mt-4 inline-block text-lantern-300">
+        <Link href={EXPLORE_PATH} className={`mt-4 inline-block ${LINK_CLASS}`}>
           ← Explore
         </Link>
       </main>
     );
   }
-  if (!d) return <main className="mx-auto max-w-3xl px-4 py-8 text-white/55 sm:px-6 sm:py-12">Loading…</main>;
+  if (!d) return <main className="mx-auto max-w-3xl px-4 py-8 text-muted sm:px-6 sm:py-12">Loading…</main>;
 
   const copy = accessCopy(d.world.policy_preset);
   // A non-member walks in as a visitor through an open door: the plaza when it
@@ -214,24 +230,24 @@ export default function SpacePage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href={EXPLORE_PATH} className="inline-block py-2 text-sm text-white/55">
+      <Link href={EXPLORE_PATH} className="inline-block rounded-gh-sm py-2 text-gh-sm text-muted hover:text-ink">
         ← Explore
       </Link>
 
       <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="break-words font-display text-3xl text-lantern-300 sm:text-4xl">{d.world.name}</h1>
-          <p className="mt-2 flex flex-wrap items-center gap-2 text-white/60">
-            <span className={`rounded-full border px-2 py-0.5 text-xs ${accessTint(d.world.policy_preset)}`}>{copy.word}</span>
+          <h1 className={`break-words ${PAGE_TITLE_CLASS}`}>{d.world.name}</h1>
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-muted">
+            <span className={`${PILL_CLASS} ${accessTint(d.world.policy_preset)}`}>{copy.word}</span>
             {d.world.plot_index != null ? (
-              <span className="text-sm text-white/55">plot {d.world.plot_index}</span>
+              <span className="text-sm text-muted">plot <span className={NUM_CLASS}>{d.world.plot_index}</span></span>
             ) : (
-              <span className="text-sm text-white/55">the civic core</span>
+              <span className="text-sm text-muted">the civic core</span>
             )}
-            {d.holder_org ? <span className="text-sm text-white/50">held for {d.holder_org.name}</span> : null}
-            {isOwner ? <span className="text-sm text-lantern-300/80">yours</span> : d.is_member ? <span className="text-sm text-white/50">member</span> : null}
+            {d.holder_org ? <span className="text-sm text-muted">held for {d.holder_org.name}</span> : null}
+            {isOwner ? <span className="text-sm font-medium text-ink">yours</span> : d.is_member ? <span className="text-sm text-muted">member</span> : null}
           </p>
-          <p className="mt-1 text-sm text-white/55">{copy.line}</p>
+          <p className="mt-1 text-sm text-muted">{copy.line}</p>
           <OrgChips orgs={d.orgs} mode={d.org_render_mode} />
         </div>
         <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
@@ -239,7 +255,7 @@ export default function SpacePage() {
             <button
               type="button"
               onClick={() => void enter()}
-              className="rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 sm:py-2"
+              className={buttonClass("primary")}
             >
               Visit
             </button>
@@ -247,7 +263,7 @@ export default function SpacePage() {
             <button
               type="button"
               onClick={() => void enter(visitRoom.slug)}
-              className="rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 sm:py-2"
+              className={buttonClass("primary")}
             >
               {accessWordFor(visitRoom.room_preset ?? d.world.policy_preset) === "Watch only" ? "Visit and watch" : "Visit"}
             </button>
@@ -258,7 +274,7 @@ export default function SpacePage() {
             ) : (
               <Link
                 href={`/login?why=space&what=${encodeURIComponent(d.world.name)}&next=${encodeURIComponent(spaceHref(d.world.slug))}`}
-                className="rounded-full border border-lantern-400/40 px-4 py-2.5 text-center text-sm text-lantern-300 sm:py-2"
+                className={buttonClass("secondary")}
               >
                 Sign in to ask to join
               </Link>
@@ -301,14 +317,14 @@ function About({ detail: d, signedIn }: { detail: Detail; signedIn: boolean | nu
     <>
       {loaded && card && (hasCard || card.editable.length === 0) ? (
         <section>
-          <h2 className="font-display text-2xl text-lantern-300">Card</h2>
-          <div className="mt-3 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
+          <h2 className={SECTION_TITLE_CLASS}>Card</h2>
+          <div className={`mt-3 ${CARD_CLASS}`}>
             <CardFields card={card} lex={lex} />
           </div>
         </section>
       ) : null}
       {loaded && card && !hasCard && card.editable.length > 0 ? (
-        <p className="text-sm text-white/55">
+        <p className={EMPTY_CLASS}>
           No card yet. Say what this space is working on under <em>Manage</em>.
         </p>
       ) : null}
@@ -316,43 +332,43 @@ function About({ detail: d, signedIn }: { detail: Detail; signedIn: boolean | nu
       {d.world.plot_index != null ? <BoardSection worldId={d.world.id} signedIn={signedIn} /> : null}
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl text-lantern-300">Rooms</h2>
+        <h2 className={SECTION_TITLE_CLASS}>Rooms</h2>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {d.rooms.map((r) => (
-            <li key={r.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
+            <li key={r.id} className={`flex items-center justify-between gap-3 ${CARD_CLASS} py-3`}>
               <div className="min-w-0">
                 <div className="truncate font-semibold">{r.name}</div>
-                <div className="text-xs text-white/55">
+                <div className="text-xs text-muted">
                   {r.kind} ·{" "}
                   <span className={accessTint(r.room_preset ?? spacePreset).split(" ").pop()}>
                     {roomDoorWord(r.room_preset, spacePreset)}
                   </span>
                 </div>
               </div>
-              <div className="shrink-0 text-xs text-white/50">
+              <div className={`shrink-0 text-xs text-muted ${NUM_CLASS}`}>
                 {r.occupancy}/{r.capacity}
               </div>
             </li>
           ))}
         </ul>
-        {d.rooms.length === 0 ? <p className="mt-3 text-white/55">No rooms here yet.</p> : null}
+        {d.rooms.length === 0 ? <p className={`mt-3 ${EMPTY_CLASS}`}>No rooms here yet.</p> : null}
       </section>
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl text-lantern-300">Members</h2>
+        <h2 className={SECTION_TITLE_CLASS}>Members</h2>
         {d.is_member ? (
           <ul className="mt-3 space-y-2">
             {d.members.map((m) => {
               const tint = d.org_bodies.find((b) => b.human_id === m.human_id);
               return (
-                <li key={m.human_id} className="flex items-center justify-between rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
-                  <Link href={`/u/${encodeURIComponent(m.handle)}`} className="flex min-w-0 flex-wrap items-center gap-x-2">
+                <li key={m.human_id} className={`flex items-center justify-between gap-3 ${CARD_CLASS} py-3`}>
+                  <Link href={`/u/${encodeURIComponent(m.handle)}`} className="flex min-w-0 flex-wrap items-center gap-x-2 rounded-gh-sm hover:underline">
                     {tint ? <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tint.colour }} /> : null}
                     <span className="truncate font-semibold">{m.display_name}</span>
-                    <span className="truncate text-xs text-white/55">@{m.handle}</span>
+                    <span className="truncate text-xs text-muted">@{m.handle}</span>
                   </Link>
                   {m.is_owner ? (
-                    <span className="rounded-full bg-lantern-400/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-lantern-300">
+                    <span className="gh-label rounded-gh-pill bg-tint px-2 py-0.5 text-ink">
                       owner
                     </span>
                   ) : null}
@@ -361,7 +377,7 @@ function About({ detail: d, signedIn }: { detail: Detail; signedIn: boolean | nu
             })}
           </ul>
         ) : (
-          <p className="mt-3 text-white/55">Who is inside is for members. The access above is public; the roster is not.</p>
+          <p className={`mt-3 ${EMPTY_CLASS}`}>Who is inside is for members. The access above is public; the roster is not.</p>
         )}
       </section>
     </>
@@ -386,15 +402,15 @@ function Manage({ detail, reload }: { detail: Detail; reload: () => Promise<void
       {waiting ? (
         <Link
           href="/inbox"
-          className="flex items-center justify-between gap-3 rounded-2xl border border-lantern-400/40 bg-lantern-400/10 px-4 py-3 text-sm text-lantern-200"
+          className="flex items-center justify-between gap-3 rounded-gh-lg border border-line-strong bg-tint px-4 py-3 text-sm text-ink hover:bg-surface-raised"
         >
           <span>{waitingLine(waiting)}</span>
           <span aria-hidden>→</span>
         </Link>
       ) : (
-        <p className="text-sm text-white/55">
+        <p className="text-sm text-muted">
           Nobody is waiting to join. Asks land in your{" "}
-          <Link href="/inbox" className="text-lantern-300 underline">
+          <Link href="/inbox" className={LINK_CLASS}>
             Inbox
           </Link>
           .
@@ -448,9 +464,9 @@ function AccessPicker({ detail, reload }: { detail: Detail; reload: () => Promis
   }
 
   return (
-    <section>
-      <h3 className="font-display text-xl text-lantern-300">Access</h3>
-      <p className="mt-1 text-xs text-white/55">
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Access</h3>
+      <p className="mt-1 text-xs text-muted">
         Who may come in, listen and speak across the whole space. A room door below can differ.
       </p>
       <div className="mt-3 space-y-2">
@@ -464,14 +480,12 @@ function AccessPicker({ detail, reload }: { detail: Detail; reload: () => Promis
               onClick={() => void choose(p)}
               disabled={saving !== null}
               aria-pressed={current}
-              className={`block w-full rounded-lg border p-3 text-left ${
-                current ? "border-lantern-400/50 bg-lantern-400/5" : "border-white/10"
-              } disabled:opacity-50`}
+              className={`block w-full ${optionClass(current)} disabled:opacity-50`}
             >
               <strong>{c.word}</strong>
-              {current ? <span className="ml-2 text-xs text-lantern-300">current</span> : null}
-              {saving === p ? <span className="ml-2 text-xs text-white/55">saving…</span> : null}
-              <span className="block text-sm text-white/50">{c.line}</span>
+              {current ? <span className="gh-label ml-2 text-muted">current</span> : null}
+              {saving === p ? <span className="ml-2 text-xs text-muted">saving…</span> : null}
+              <span className="block text-sm text-muted">{c.line}</span>
             </button>
           );
         })}
@@ -503,25 +517,26 @@ function AdmitByHandle({ detail, reload }: { detail: Detail; reload: () => Promi
   }
 
   return (
-    <section>
-      <h3 className="font-display text-xl text-lantern-300">Admit by handle</h3>
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Admit by handle</h3>
       <div className="mt-2 flex flex-wrap gap-2">
         <input
           value={handle}
           onChange={(e) => setHandle(e.target.value)}
           placeholder="@handle"
-          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 outline-none focus:border-lantern-400"
+          aria-label="Handle to admit"
+          className={`${INPUT_CLASS} min-w-0 flex-1 basis-40`}
         />
         <button
           type="button"
           onClick={() => void admit()}
           disabled={!handle.trim()}
-          className="shrink-0 rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+          className={buttonClass("secondary", "md", "shrink-0")}
         >
           Admit
         </button>
       </div>
-      {admitted ? <p className="mt-2 text-sm text-lantern-300">@{admitted} is now a member.</p> : null}
+      {admitted ? <p className="mt-2 text-sm text-success" role="status">@{admitted} is now a member.</p> : null}
       <ErrorNotice error={err} className="mt-2" />
     </section>
   );
@@ -530,12 +545,12 @@ function AdmitByHandle({ detail, reload }: { detail: Detail; reload: () => Promi
 function OrgChips({ orgs, mode }: { orgs: Org[]; mode: "shared" | "dedicated" }) {
   if (!orgs.length) return null;
   return (
-    <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/55">
+    <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
       {mode === "dedicated" ? "home of" : "shared by"}
       {orgs.map((o) => (
         <span
           key={o.id}
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-0.5 text-white/70"
+          className="inline-flex items-center gap-1.5 rounded-gh-pill border border-line bg-surface-raised px-2 py-0.5 text-ink"
         >
           <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: o.colour }} />
           {o.name}
@@ -574,7 +589,7 @@ function AskToJoin({ worldId }: { worldId: string }) {
 
   if (sent) {
     return (
-      <p className="shrink-0 text-sm text-lantern-300">
+      <p className="shrink-0 text-sm text-ink">
         Asked. The owner decides; you will appear as a member if they say yes.
       </p>
     );
@@ -583,19 +598,20 @@ function AskToJoin({ worldId }: { worldId: string }) {
   return (
     <div className="w-full sm:w-auto sm:shrink-0">
       {open ? (
-        <div className="w-full space-y-2 rounded-xl border border-white/10 bg-dusk-800/70 p-3 sm:w-72">
+        <div className={`w-full space-y-2 ${CARD_CLASS} p-3 sm:w-72`}>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
             maxLength={280}
             placeholder="Optional: say who you are."
-            className="w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm outline-none focus:border-lantern-400"
+            aria-label="Note to the owner"
+            className={`${TEXTAREA_CLASS} text-gh-sm`}
           />
           <button
             onClick={() => void ask()}
             disabled={busy}
-            className="w-full rounded-full bg-lantern-400 py-3 text-sm font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+            className={buttonClass("secondary", "md", "w-full")}
           >
             {busy ? "Asking…" : "Send the request"}
           </button>
@@ -604,7 +620,7 @@ function AskToJoin({ worldId }: { worldId: string }) {
       ) : (
         <button
           onClick={() => setOpen(true)}
-          className="rounded-full border border-lantern-400/40 px-4 py-2.5 text-sm text-lantern-300 sm:py-2"
+          className={buttonClass("secondary", "md", "w-full sm:w-auto")}
         >
           Ask to join
         </button>
@@ -668,15 +684,15 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
   const spaceMemberKey = choiceKey(detail.world.member_policy);
 
   return (
-    <div>
-      <h3 className="font-display text-xl text-lantern-300">Room doors</h3>
-      <p className="mt-1 text-xs text-white/55">
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Room doors</h3>
+      <p className="mt-1 text-xs text-muted">
         A room can differ from the space. Open one as a lobby and only that room is listed publicly; the rest of the
         space stays behind the door. Members are never held below visitors in the same room.
       </p>
 
       <label className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-white/60">Across the space,</span>
+        <span className="text-muted">Across the space,</span>
         <select
           value={spaceMemberKey === "inherit" ? "full" : spaceMemberKey}
           disabled={busy !== null}
@@ -684,7 +700,7 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
             const c = MEMBER_CHOICES.find((x) => x.key === e.target.value);
             void patch(`/api/v1/worlds/${detail.world.id}`, { member_policy: c?.key === "full" ? null : c?.value ?? null }, "space");
           }}
-          className="rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1.5"
+          className={`${SELECT_CLASS} w-auto`}
         >
           <option value="full">members speak and listen</option>
           <option value="listen">members listen only</option>
@@ -702,19 +718,19 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
           });
           const memberKey = choiceKey(r.member_policy);
           return (
-            <li key={r.id} className="rounded-lg border border-white/10 bg-dusk-950/40 p-3">
+            <li key={r.id} className={`${CARD_CLASS} p-3`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <strong>{r.name}</strong>
                 <span className="flex flex-wrap items-center gap-1.5">
-                  <span className={`rounded-full border px-2 py-0.5 text-[11px] ${accessTint(r.room_preset ?? spacePreset)}`}>
+                  <span className={`${PILL_CLASS} ${accessTint(r.room_preset ?? spacePreset)}`}>
                     {roomDoorWord(r.room_preset, spacePreset)}
                   </span>
-                  {view.isLobby ? <span className="text-[11px] text-lantern-300/80">lobby</span> : null}
-                  {!r.room_preset && !r.member_policy ? <span className="text-[11px] text-white/50">same as the space</span> : null}
+                  {view.isLobby ? <span className="gh-label text-ink">lobby</span> : null}
+                  {!r.room_preset && !r.member_policy ? <span className="text-[11px] text-muted">same as the space</span> : null}
                 </span>
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <label className="text-xs text-white/50">
+                <label className="text-xs text-muted">
                   Door for non-members
                   <select
                     value={r.room_preset ?? "inherit"}
@@ -723,7 +739,7 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
                       const c = ROOM_DOOR_CHOICES.find((x) => x.key === e.target.value);
                       void patch(`/api/v1/worlds/${detail.world.id}/rooms/${encodeURIComponent(r.slug)}`, { room_preset: c?.value ?? null }, r.id);
                     }}
-                    className="mt-1 block w-full rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1.5 text-sm text-white"
+                    className={`mt-1 ${SELECT_CLASS} text-gh-sm`}
                   >
                     {ROOM_DOOR_CHOICES.map((c) => (
                       <option key={c.key} value={c.key}>
@@ -732,7 +748,7 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
                     ))}
                   </select>
                 </label>
-                <label className="text-xs text-white/50">
+                <label className="text-xs text-muted">
                   Members
                   <select
                     value={memberKey}
@@ -741,7 +757,7 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
                       const c = MEMBER_CHOICES.find((x) => x.key === e.target.value);
                       void patch(`/api/v1/worlds/${detail.world.id}/rooms/${encodeURIComponent(r.slug)}`, { member_policy: c?.value ?? null }, r.id);
                     }}
-                    className="mt-1 block w-full rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1.5 text-sm text-white"
+                    className={`mt-1 ${SELECT_CLASS} text-gh-sm`}
                   >
                     {MEMBER_CHOICES.map((c) => (
                       <option key={c.key} value={c.key}>
@@ -754,26 +770,26 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
               </div>
               {/* The preview: what each audience gets, in the kernel's own terms. */}
               <div className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
-                <p className="text-white/70">
-                  <span className="text-white/55">A member sees: </span>
+                <p className="text-ink">
+                  <span className="text-muted">A member sees: </span>
                   {view.member.line}
-                  {view.member.decidedBy === "room" ? <span className="text-white/50"> (this room)</span> : null}
+                  {view.member.decidedBy === "room" ? <span className="text-muted"> (this room)</span> : null}
                 </p>
-                <p className="text-white/70">
-                  <span className="text-white/55">A non-member sees: </span>
+                <p className="text-ink">
+                  <span className="text-muted">A non-member sees: </span>
                   {view.visitor.line}
                   {view.isLobby && spacePreset === "private" ? (
-                    <span className="block text-white/50">On the map: this room only, never the space's name or other rooms.</span>
+                    <span className="block text-muted">On the map: this room only, never the space's name or other rooms.</span>
                   ) : null}
                 </p>
               </div>
-              {busy === r.id ? <p className="mt-1 text-xs text-white/55">saving…</p> : null}
+              {busy === r.id ? <p className="mt-1 text-xs text-muted">saving…</p> : null}
             </li>
           );
         })}
       </ul>
       <ErrorNotice error={err} className="mt-2" />
-    </div>
+    </section>
   );
 }
 
@@ -828,17 +844,17 @@ function InviteLinks({ detail }: { detail: Detail }) {
   }
 
   return (
-    <div>
-      <h3 className="font-display text-xl text-lantern-300">Invite links</h3>
-      <p className="mt-1 text-xs text-white/55">
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Invite links</h3>
+      <p className="mt-1 text-xs text-muted">
         A link admits whoever holds it. Every link expires; revoking one stops it immediately.
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 py-1 text-sm text-white/60">
-          <input type="checkbox" className="h-5 w-5 shrink-0 accent-lantern-400" checked={singleUse} onChange={(e) => setSingleUse(e.target.checked)} />
+        <label className="flex min-h-11 items-center gap-2 text-sm text-ink sm:min-h-8">
+          <input type="checkbox" className={CHECKBOX_CLASS} checked={singleUse} onChange={(e) => setSingleUse(e.target.checked)} />
           single use
         </label>
-        <label className="flex items-center gap-2 py-1 text-sm text-white/60">
+        <label className="flex items-center gap-2 py-1 text-sm text-ink">
           expires in
           <input
             type="number"
@@ -846,14 +862,14 @@ function InviteLinks({ detail }: { detail: Detail }) {
             max={720}
             value={hours}
             onChange={(e) => setHours(Number(e.target.value))}
-            className="w-20 rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1 text-sm outline-none focus:border-lantern-400"
+            className={`${INPUT_CLASS} w-20 ${NUM_CLASS}`}
           />
           hours
         </label>
         <button
           onClick={() => void mint()}
           disabled={busy}
-          className="rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 disabled:opacity-40 sm:py-1.5"
+          className={buttonClass("secondary")}
         >
           {busy ? "Minting…" : "Mint a link"}
         </button>
@@ -864,11 +880,11 @@ function InviteLinks({ detail }: { detail: Detail }) {
           {invites.map((i) => (
             <li
               key={i.code}
-              className="flex flex-col gap-3 rounded-lg border border-white/10 bg-dusk-950/40 p-3 sm:flex-row sm:items-center sm:justify-between"
+              className={`flex flex-col gap-3 ${CARD_CLASS} p-3 sm:flex-row sm:items-center sm:justify-between`}
             >
               <div className="min-w-0">
-                <div className="truncate font-mono text-xs text-white/60">{linkFor(i.code)}</div>
-                <div className="text-xs text-white/50">
+                <div className="truncate font-brand-mono text-xs text-ink">{linkFor(i.code)}</div>
+                <div className="text-xs text-muted">
                   {i.revoked_at
                     ? "revoked"
                     : !i.active
@@ -884,14 +900,14 @@ function InviteLinks({ detail }: { detail: Detail }) {
                     void navigator.clipboard?.writeText(linkFor(i.code));
                     setCopied(i.code);
                   }}
-                  className="flex-1 rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/60 sm:flex-none sm:px-3 sm:py-1"
+                  className={buttonClass("secondary", "sm", "min-h-11 flex-1 sm:min-h-8 sm:flex-none")}
                 >
                   {copied === i.code ? "Copied" : "Copy"}
                 </button>
                 {i.revoked_at ? null : (
                   <button
                     onClick={() => void revoke(i.code)}
-                    className="flex-1 rounded-full border border-red-400/30 px-4 py-2.5 text-xs text-red-300 sm:flex-none sm:px-3 sm:py-1"
+                    className={buttonClass("danger", "sm", "min-h-11 flex-1 sm:min-h-8 sm:flex-none")}
                   >
                     Revoke
                   </button>
@@ -900,9 +916,11 @@ function InviteLinks({ detail }: { detail: Detail }) {
             </li>
           ))}
         </ul>
-      ) : null}
+      ) : (
+        <p className={`mt-3 ${EMPTY_CLASS}`}>No invite links yet.</p>
+      )}
       <ErrorNotice error={err} className="mt-2" />
-    </div>
+    </section>
   );
 }
 
@@ -945,9 +963,9 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
   const bindable = mine.filter((o) => !bound.has(o.id));
 
   return (
-    <div>
-      <h3 className="font-display text-xl text-lantern-300">Orgs</h3>
-      <p className="mt-1 text-xs text-white/55">
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Orgs</h3>
+      <p className="mt-1 text-xs text-muted">
         Bring several projects into one space, or keep a space per org. Same control either way — the mode
         below decides how bodies are tinted.
       </p>
@@ -957,12 +975,12 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
           {detail.orgs.map((o) => (
             <li
               key={o.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-dusk-950/40 px-3 py-2"
+              className={`flex items-center justify-between gap-3 ${CARD_CLASS} px-3 py-2`}
             >
               <span className="flex min-w-0 flex-wrap items-center gap-x-2">
                 <span aria-hidden className="h-3 w-3 rounded-full" style={{ background: o.colour }} />
                 <span className="truncate font-semibold">{o.name}</span>
-                <span className="truncate text-xs text-white/50">@{o.slug}</span>
+                <span className="truncate text-xs text-muted">@{o.slug}</span>
               </span>
               <button
                 disabled={busy}
@@ -973,7 +991,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
                     }),
                   )
                 }
-                className="shrink-0 rounded-full border border-white/15 px-4 py-2.5 text-xs text-white/60 disabled:opacity-40 sm:px-3 sm:py-1"
+                className={buttonClass("ghost", "sm", "min-h-11 shrink-0 sm:min-h-8")}
               >
                 Unbind
               </button>
@@ -981,7 +999,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-white/55">No org is bound here.</p>
+        <p className={`mt-2 ${EMPTY_CLASS}`}>No org is bound here.</p>
       )}
 
       {bindable.length ? (
@@ -989,7 +1007,8 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
           <select
             value={pick}
             onChange={(e) => setPick(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm outline-none focus:border-lantern-400"
+            aria-label="Bind one of your orgs"
+            className={`${SELECT_CLASS} min-w-0 flex-1 basis-40`}
           >
             <option value="">Bind one of your orgs…</option>
             {bindable.map((o) => (
@@ -1008,7 +1027,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
                 }),
               )
             }
-            className="shrink-0 rounded-full bg-lantern-400 px-4 py-2.5 text-sm font-semibold text-dusk-950 disabled:opacity-40 sm:py-2"
+            className={buttonClass("secondary", "md", "shrink-0")}
           >
             Bind
           </button>
@@ -1020,13 +1039,15 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           placeholder="New org name"
-          className="min-w-0 flex-1 basis-40 rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm outline-none focus:border-lantern-400"
+          aria-label="New org name"
+          className={`${INPUT_CLASS} min-w-0 flex-1 basis-40`}
         />
         <input
           type="color"
           value={newColour}
           onChange={(e) => setNewColour(e.target.value)}
-          className="h-11 w-12 shrink-0 rounded-lg border border-white/10 bg-dusk-950/60"
+          aria-label="Org colour"
+          className="h-11 w-12 shrink-0 rounded-gh-md border border-line-strong bg-surface-raised sm:h-9"
         />
         <button
           disabled={!newName.trim() || busy}
@@ -1039,7 +1060,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
               setNewName("");
             })
           }
-          className="shrink-0 rounded-full border border-lantern-400/40 px-4 py-2.5 text-sm text-lantern-300 disabled:opacity-40 sm:py-2"
+          className={buttonClass("secondary", "md", "shrink-0")}
         >
           Create org
         </button>
@@ -1065,19 +1086,17 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
                   }),
                 )
               }
-              className={`block w-full rounded-lg border p-3 text-left ${
-                current ? "border-lantern-400/50 bg-lantern-400/5" : "border-white/10"
-              } disabled:opacity-50`}
+              className={`block w-full ${optionClass(current)} disabled:opacity-50`}
             >
               <strong>{label}</strong>
-              {current ? <span className="ml-2 text-xs text-lantern-300">current</span> : null}
-              <span className="block text-sm text-white/50">{blurb}</span>
+              {current ? <span className="gh-label ml-2 text-muted">current</span> : null}
+              <span className="block text-sm text-muted">{blurb}</span>
             </button>
           );
         })}
       </div>
 
       <ErrorNotice error={err} className="mt-2" />
-    </div>
+    </section>
   );
 }

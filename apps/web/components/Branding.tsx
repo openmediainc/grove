@@ -19,6 +19,7 @@ import { layoutSignboard, signContent } from "@/lib/signboard";
 import { THEMES, THEME_IDS } from "@/lib/themes";
 import { drawBrandEmblem } from "@/lib/themes/kit";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { CARD_CLASS, INPUT_CLASS, NUM_CLASS, SECTION_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
 export type WireBranding = { accent: string | null; sign_text: string | null; emblem: string | null } | null;
 
@@ -100,14 +101,14 @@ export function BrandingPanel({
   }
 
   return (
-    <section>
-      <h3 className="font-display text-xl text-lantern-300">Branding</h3>
-      <p className="mt-1 text-xs text-white/55">
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Branding</h3>
+      <p className="mt-1 text-xs text-muted">
         A colour, a short line and an emblem for this space&apos;s sign and fence on the map, in every theme.
       </p>
 
       <div className="mt-4 space-y-5">
-        <div className="rounded-lg border border-white/10 p-3">
+        <div className={`${CARD_CLASS} p-3 shadow-none`}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -115,7 +116,7 @@ export function BrandingPanel({
             }}
             className="flex flex-wrap items-end gap-2"
           >
-            <label className="block min-w-0 flex-1 text-xs text-white/50">
+            <label className="block min-w-0 flex-1 text-xs text-muted">
               Use my website
               <input
                 value={siteUrl}
@@ -124,49 +125,49 @@ export function BrandingPanel({
                 inputMode="url"
                 autoComplete="url"
                 maxLength={2048}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white/85"
+                className={`mt-1 ${INPUT_CLASS} text-gh-sm`}
               />
             </label>
             <button
               type="submit"
               disabled={suggesting || !siteUrl.trim()}
-              className="rounded-full border border-lantern-400/50 px-4 py-2 text-sm text-lantern-200 disabled:opacity-50"
+              className={buttonClass("secondary")}
             >
               {suggesting ? "Reading…" : "Suggest"}
             </button>
           </form>
-          <p className="mt-1 text-[11px] text-white/50">
+          <p className="mt-1 text-xs text-muted">
             Glasshouse reads only the site&apos;s name, theme colour and icon colour. Nothing is saved until you apply and save.
           </p>
           <ErrorNotice error={suggestErr} size="xs" className="mt-2" />
           {suggestion ? (
-            <div className="mt-3 space-y-1 text-xs text-white/70" aria-live="polite">
-              <p className="text-white/50">From {suggestion.source.url}</p>
+            <div className="mt-3 space-y-1 text-xs text-ink" aria-live="polite">
+              <p className="break-all text-muted">From {suggestion.source.url}</p>
               {suggestion.name ? <p>Sign text: {suggestion.name}</p> : null}
               {suggestion.accent ? (
                 <p className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 rounded-full border border-white/20" style={{ background: suggestion.accent.accent }} aria-hidden />
+                  <span className="inline-block h-3 w-3 rounded-full border border-line-strong" style={{ background: suggestion.accent.accent }} aria-hidden />
                   {suggestionColourLine(suggestion)}
                 </p>
               ) : null}
               {suggestion.notes.map((n) => (
-                <p key={n} className="text-white/55">
+                <p key={n} className="text-muted">
                   {n}
                 </p>
               ))}
-              <p className="text-white/55">The preview below shows the suggestion.</p>
+              <p className="text-muted">The preview below shows the suggestion.</p>
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
                   onClick={applyWebsite}
-                  className="rounded-full bg-lantern-400 px-3 py-1 text-xs font-medium text-dusk-950"
+                  className={buttonClass("secondary", "sm", "min-h-11 sm:min-h-8")}
                 >
                   Apply
                 </button>
                 <button
                   type="button"
                   onClick={() => setSuggestion(null)}
-                  className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/60"
+                  className={buttonClass("ghost", "sm", "min-h-11 sm:min-h-8")}
                 >
                   Dismiss
                 </button>
@@ -176,13 +177,13 @@ export function BrandingPanel({
         </div>
 
         <div>
-          <p className="text-xs text-white/50">Accent colour</p>
+          <p className="text-xs font-medium text-ink">Accent colour</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => edit({ accent: "" })}
               aria-pressed={!d.accent.trim()}
-              className={`h-7 rounded-full border px-3 text-xs ${!d.accent.trim() ? "border-lantern-400/60 text-lantern-200" : "border-white/15 text-white/60"}`}
+              className={`h-7 rounded-gh-pill border px-3 text-xs focus-visible:outline-none focus-visible:shadow-gh-ring ${!d.accent.trim() ? "border-signal bg-tint text-ink" : "border-line-strong bg-surface-raised text-muted hover:bg-tint"}`}
             >
               None
             </button>
@@ -194,17 +195,17 @@ export function BrandingPanel({
                 aria-label={p.label}
                 aria-pressed={swatch === p.key}
                 onClick={() => edit({ accent: p.hex })}
-                className={`h-7 w-7 rounded-full border-2 ${swatch === p.key ? "border-white" : "border-white/10"}`}
+                className={`h-7 w-7 rounded-gh-pill border-2 focus-visible:outline-none focus-visible:shadow-gh-ring ${swatch === p.key ? "border-ink ring-2 ring-focus ring-offset-2 ring-offset-surface" : "border-line"}`}
                 style={{ background: p.hex }}
               />
             ))}
-            <label className="flex items-center gap-2 text-xs text-white/50">
+            <label className="flex items-center gap-2 text-xs text-muted">
               <span className="sr-only">Custom colour</span>
               <input
                 type="color"
                 value={/^#[0-9a-f]{6}$/i.test(d.accent.trim()) ? d.accent.trim() : "#7dd3fc"}
                 onChange={(e) => edit({ accent: e.target.value })}
-                className="h-7 w-9 cursor-pointer rounded border border-white/10 bg-transparent"
+                className="h-7 w-9 cursor-pointer rounded-gh-sm border border-line-strong bg-transparent"
               />
               <input
                 value={d.accent}
@@ -212,34 +213,34 @@ export function BrandingPanel({
                 placeholder="#rrggbb"
                 maxLength={7}
                 aria-label="Accent hex"
-                className="w-24 rounded-lg border border-white/10 bg-dusk-950/60 px-2 py-1 font-mono text-xs text-white/85"
+                className={`${INPUT_CLASS} w-24 font-brand-mono text-gh-xs`}
               />
             </label>
           </div>
-          {check.accentError ? <p className="mt-1 text-xs text-red-300">{check.accentError}</p> : null}
+          {check.accentError ? <p className="mt-1 text-xs text-danger-ink">{check.accentError}</p> : null}
         </div>
 
-        <label className="block text-xs text-white/50">
+        <label className="block text-xs font-medium text-ink">
           Sign text
           <input
             value={d.signText}
             onChange={(e) => edit({ signText: e.target.value })}
             placeholder="Open late on Fridays"
-            className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white/85"
+            className={`mt-1 ${INPUT_CLASS} text-gh-sm`}
           />
-          <span className={`mt-1 block ${check.signTextCount > SIGN_TEXT_MAX ? "text-red-300" : "text-white/50"}`}>
+          <span className={`mt-1 block font-normal ${check.signTextError ? "" : NUM_CLASS} ${check.signTextCount > SIGN_TEXT_MAX ? "text-danger-ink" : "text-muted"}`}>
             {check.signTextError ?? `${check.signTextCount}/${SIGN_TEXT_MAX}`}
           </span>
         </label>
 
         <div>
-          <p className="text-xs text-white/50">Emblem</p>
+          <p className="text-xs font-medium text-ink">Emblem</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={() => edit({ emblem: null })}
               aria-pressed={d.emblem === null}
-              className={`h-9 rounded-lg border px-3 text-xs ${d.emblem === null ? "border-lantern-400/60 text-lantern-200" : "border-white/10 text-white/60"}`}
+              className={`h-9 rounded-gh-md border px-3 text-xs focus-visible:outline-none focus-visible:shadow-gh-ring ${d.emblem === null ? "border-signal bg-tint text-ink" : "border-line-strong bg-surface-raised text-muted hover:bg-tint"}`}
             >
               None
             </button>
@@ -251,7 +252,7 @@ export function BrandingPanel({
                 aria-label={BRAND_EMBLEM_LABEL[key]}
                 aria-pressed={d.emblem === key}
                 onClick={() => edit({ emblem: key })}
-                className={`grid h-9 w-9 place-items-center rounded-lg border ${d.emblem === key ? "border-lantern-400/60 bg-lantern-400/10" : "border-white/10"}`}
+                className={`grid h-9 w-9 place-items-center rounded-gh-md border focus-visible:outline-none focus-visible:shadow-gh-ring ${d.emblem === key ? "border-signal bg-tint" : "border-line-strong bg-surface-raised hover:bg-tint"}`}
               >
                 <EmblemIcon emblem={key} colour={check.valid.accent ?? "#f4d19a"} />
               </button>
@@ -260,9 +261,9 @@ export function BrandingPanel({
         </div>
 
         <div>
-          <p className="text-xs text-white/50">{suggestion ? "Preview of the website suggestion" : "Preview"}</p>
+          <p className="text-xs font-medium text-ink">{suggestion ? "Preview of the website suggestion" : "Preview"}</p>
           {space.policy_preset === "private" ? (
-            <p className="mt-1 text-xs text-white/55">
+            <p className="mt-1 text-xs text-muted">
               This space is Private, so the map shows a held sign with none of this on it. This is how it will look once it is Watch only or Open.
             </p>
           ) : null}
@@ -278,11 +279,11 @@ export function BrandingPanel({
             type="button"
             onClick={() => void save()}
             disabled={busy || invalid}
-            className="rounded-full bg-lantern-400 px-4 py-1.5 text-sm font-medium text-dusk-950 disabled:opacity-50"
+            className={buttonClass("secondary")}
           >
             {busy ? "Saving…" : "Save branding"}
           </button>
-          {saved ? <span className="text-xs text-white/50">Saved. The map picks it up on its next refresh.</span> : null}
+          {saved ? <span className="text-xs text-success" role="status">Saved. The map picks it up on its next refresh.</span> : null}
         </div>
         <ErrorNotice error={err} />
       </div>
@@ -337,9 +338,9 @@ export function SignPreview({ themeId, plot }: { themeId: (typeof THEME_IDS)[num
     [themeId, JSON.stringify(plot)],
   );
   return (
-    <figure className="overflow-hidden rounded-lg border border-white/10">
+    <figure className="overflow-hidden rounded-gh-md border border-line bg-surface-raised">
       <canvas ref={ref} style={{ width: W, maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }} aria-label={`${theme.lexicon.name} sign preview`} />
-      <figcaption className="border-t border-white/10 px-2 py-1 text-[11px] text-white/55">{theme.lexicon.name}</figcaption>
+      <figcaption className="border-t border-line px-2 py-1 text-[11px] text-muted">{theme.lexicon.name}</figcaption>
     </figure>
   );
 }

@@ -21,6 +21,7 @@ import {
 } from "@/lib/board";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { useDialogFocus } from "@/components/a11y";
+import { CARD_CLASS, EMPTY_CLASS, INPUT_CLASS, SECTION_TITLE_CLASS, SELECT_CLASS, TEXTAREA_CLASS, buttonClass, chipClass } from "@/lib/brand-ui";
 
 /**
  * The artifact board on a space's About tab (queue #36): images, link cards
@@ -53,11 +54,11 @@ export function BoardSection({ worldId, signedIn }: { worldId: string; signedIn:
 
   return (
     <section className="mt-10">
-      <h2 className="font-display text-2xl text-lantern-300">Board</h2>
-      <p className="mt-1 text-sm text-white/55">What this space and its agents have made, posted for anyone who can see the space.</p>
+      <h2 className={SECTION_TITLE_CLASS}>Board</h2>
+      <p className="mt-1 text-sm text-muted">What this space and its agents have made, posted for anyone who can see the space.</p>
       {board.can_post ? <Composer worldId={worldId} onPosted={(p) => setBoard({ ...board, posts: [p, ...posts] })} /> : null}
       {posts.length === 0 ? (
-        <p className="mt-3 text-white/55">
+        <p className={`mt-3 ${EMPTY_CLASS}`}>
           {board.can_post ? "Nothing on the board yet. Post a screenshot, a link or a note." : "Nothing on the board yet."}
         </p>
       ) : (
@@ -81,20 +82,20 @@ export function BoardSection({ worldId, signedIn }: { worldId: string; signedIn:
 
 function AuthorLine({ post }: { post: WireBoardPost }) {
   const href = authorHref(post.author);
-  const name = <span className="truncate font-semibold text-white/80">{post.author.name}</span>;
+  const name = <span className="truncate font-semibold text-ink">{post.author.name}</span>;
   return (
-    <span className="flex min-w-0 items-center gap-1.5 text-xs text-white/55">
+    <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
       {href ? (
-        <Link href={href} className="min-w-0 truncate hover:text-lantern-300">
+        <Link href={href} className="min-w-0 truncate rounded-gh-sm hover:underline">
           {name}
         </Link>
       ) : (
         name
       )}
       {post.author.kind === "agent" ? (
-        <span className="shrink-0 rounded-full border border-sky-400/40 px-1.5 py-px text-[10px] uppercase tracking-wide text-sky-200">agent</span>
+        <span className={`shrink-0 ${chipClass("agent")} px-2 text-gh-xs`}>agent</span>
       ) : null}
-      <span className="shrink-0">· {postedAgo(post.created_at)}</span>
+      <span className="shrink-0 font-brand-mono tabular-nums">· {postedAgo(post.created_at)}</span>
     </span>
   );
 }
@@ -135,16 +136,16 @@ function PostCard({
 
   return (
     <article
-      className="flex h-full flex-col overflow-hidden rounded-xl border border-white/10 bg-dusk-800/60"
+      className="flex h-full flex-col overflow-hidden rounded-gh-lg border border-line bg-surface-raised shadow-gh-1"
       style={accent ? { borderLeftColor: accent, borderLeftWidth: 4 } : undefined}
     >
       {post.hidden_by_mod ? (
-        <p className="border-b border-red-400/30 bg-red-500/10 px-4 py-1.5 text-xs text-red-200">
+        <p className="border-b border-danger-ink/60 bg-danger-ink/5 px-4 py-1.5 text-xs text-danger-ink">
           Hidden by moderators. Only you can see it.
         </p>
       ) : null}
       {post.image ? (
-        <button type="button" onClick={onOpen} className="block w-full bg-dusk-950/60" aria-label={`Open image${post.caption ? `: ${post.caption}` : ""}`}>
+        <button type="button" onClick={onOpen} className="block w-full bg-tint focus-visible:outline-none focus-visible:shadow-gh-ring" aria-label={`Open image${post.caption ? `: ${post.caption}` : ""}`}>
           {/* eslint-disable-next-line @next/next/no-img-element -- served by the API with an access check; next/image would proxy it */}
           <img
             src={gp(post.image.url)}
@@ -159,20 +160,20 @@ function PostCard({
       {post.link ? (
         <div className="px-4 pt-3">
           {href ? (
-            <a href={href} target="_blank" rel="noopener noreferrer nofollow ugc" className="group block min-w-0">
-              <span className="block truncate text-xs text-white/55">{preview?.host || new URL(href).hostname}</span>
-              <span className="mt-0.5 block break-words font-semibold text-lantern-300 group-hover:underline">
+            <a href={href} target="_blank" rel="noopener noreferrer nofollow ugc" className="group block min-w-0 rounded-gh-sm">
+              <span className="block truncate text-xs text-muted">{preview?.host || new URL(href).hostname}</span>
+              <span className="mt-0.5 block break-words font-semibold text-ink group-hover:underline">
                 {preview?.title ?? href}
               </span>
-              {preview?.description ? <span className="mt-1 block break-words text-sm text-white/60">{preview.description}</span> : null}
+              {preview?.description ? <span className="mt-1 block break-words text-sm text-muted">{preview.description}</span> : null}
             </a>
           ) : (
-            <span className="block break-all text-sm text-white/60">{post.link.url}</span>
+            <span className="block break-all text-sm text-muted">{post.link.url}</span>
           )}
         </div>
       ) : null}
       {post.caption ? (
-        <p className={`whitespace-pre-line break-words px-4 pt-3 ${post.kind === "text" ? "text-base text-white/85" : "text-sm text-white/70"}`}>
+        <p className={`whitespace-pre-line break-words px-4 pt-3 ${post.kind === "text" ? "text-base text-ink" : "text-sm text-muted"}`}>
           {post.caption}
         </p>
       ) : null}
@@ -180,14 +181,14 @@ function PostCard({
         <AuthorLine post={post} />
         <span className="flex shrink-0 gap-3 text-xs">
           {post.deletable ? (
-            <button type="button" onClick={() => void remove()} disabled={busy} className="min-h-11 text-white/55 hover:text-red-300 sm:min-h-0">
+            <button type="button" onClick={() => void remove()} disabled={busy} className="min-h-11 rounded-gh-sm text-muted hover:text-danger-ink sm:min-h-0">
               Delete
             </button>
           ) : signedIn ? (
             <button
               type="button"
               onClick={() => setReporting((v) => !v)}
-              className="min-h-11 text-white/55 hover:text-lantern-300 sm:min-h-0"
+              className="min-h-11 rounded-gh-sm text-muted hover:text-ink sm:min-h-0"
               aria-expanded={reporting}
             >
               Report
@@ -204,7 +205,7 @@ function PostCard({
           }}
         />
       ) : null}
-      {note ? <p className="px-4 pb-3 text-xs text-white/55">{note}</p> : null}
+      {note ? <p className="px-4 pb-3 text-xs text-muted">{note}</p> : null}
       <ErrorNotice error={removeErr} size="xs" className="mx-4 mb-3" />
     </article>
   );
@@ -233,13 +234,13 @@ function ReportForm({ postId, onDone }: { postId: string; onDone: (message: stri
   }
 
   return (
-    <div className="border-t border-white/10 px-4 py-3">
-      <label className="block text-xs text-white/50">
+    <div className="border-t border-line px-4 py-3">
+      <label className="block text-xs text-muted">
         What is wrong with it?
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-white/15 bg-dusk-950 px-2 py-2 text-sm text-white"
+          className={`mt-1 ${SELECT_CLASS} text-gh-sm`}
         >
           {REPORT_CHOICES.map(([value, label]) => (
             <option key={value} value={value}>
@@ -248,14 +249,14 @@ function ReportForm({ postId, onDone }: { postId: string; onDone: (message: stri
           ))}
         </select>
       </label>
-      <label className="mt-2 block text-xs text-white/50">
+      <label className="mt-2 block text-xs text-muted">
         Anything the operators should know (optional)
         <textarea
           value={details}
           maxLength={1000}
           onChange={(e) => setDetails(e.target.value)}
           rows={2}
-          className="mt-1 block w-full rounded-lg border border-white/15 bg-dusk-950 px-2 py-2 text-sm text-white"
+          className={`mt-1 ${TEXTAREA_CLASS} text-gh-sm`}
         />
       </label>
       <div className="mt-2 flex items-center gap-3">
@@ -263,7 +264,7 @@ function ReportForm({ postId, onDone }: { postId: string; onDone: (message: stri
           type="button"
           onClick={() => void send()}
           disabled={busy}
-          className="rounded-full bg-lantern-400 px-4 py-2 text-xs font-semibold text-dusk-950 disabled:opacity-50"
+          className={buttonClass("secondary", "sm", "min-h-11 sm:min-h-8")}
         >
           Send report
         </button>
@@ -324,7 +325,7 @@ function Composer({ worldId, onPosted }: { worldId: string; onPosted: (post: Wir
   }
 
   return (
-    <div className="mt-4 rounded-xl border border-white/10 bg-dusk-800/60 px-4 py-3">
+    <div className={`mt-4 ${CARD_CLASS}`}>
       <div role="radiogroup" aria-label="What to post" className="flex flex-wrap gap-2">
         {(["image", "link", "text"] as const).map((k) => (
           <button
@@ -336,8 +337,8 @@ function Composer({ worldId, onPosted }: { worldId: string; onPosted: (post: Wir
               setKind(k);
               setErr(null);
             }}
-            className={`min-h-11 rounded-full border px-3 py-1.5 text-xs sm:min-h-0 ${
-              kind === k ? "border-lantern-400/60 bg-lantern-400/15 text-lantern-300" : "border-white/15 text-white/60"
+            className={`min-h-11 rounded-gh-pill border px-3 py-1.5 text-xs transition-colors duration-gh-fast focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-0 ${
+              kind === k ? "border-signal bg-tint font-medium text-ink" : "border-line-strong bg-surface-raised text-muted hover:bg-tint hover:text-ink"
             }`}
           >
             {KIND_LABEL[k]}
@@ -345,19 +346,19 @@ function Composer({ worldId, onPosted }: { worldId: string; onPosted: (post: Wir
         ))}
       </div>
       {kind === "image" ? (
-        <label className="mt-3 block text-xs text-white/50">
+        <label className="mt-3 block text-xs text-muted">
           PNG, JPEG, WebP or GIF, up to 2 MB. Location and camera details are removed.
           <input
             ref={fileInput}
             type="file"
             accept="image/png,image/jpeg,image/webp,image/gif"
             onChange={(e) => pick(e.target.files?.[0] ?? null)}
-            className="mt-1 block w-full text-sm text-white/70 file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-white"
+            className="mt-1 block w-full text-sm text-muted file:mr-3 file:rounded-gh-pill file:border file:border-line-strong file:bg-surface-raised file:px-3 file:py-1.5 file:text-ink"
           />
         </label>
       ) : null}
       {kind === "link" ? (
-        <label className="mt-3 block text-xs text-white/50">
+        <label className="mt-3 block text-xs text-muted">
           Link. It shows as a card with the page&apos;s title and colours, never embedded.
           <input
             type="url"
@@ -365,27 +366,27 @@ function Composer({ worldId, onPosted }: { worldId: string; onPosted: (post: Wir
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://"
-            className="mt-1 block w-full rounded-lg border border-white/15 bg-dusk-950 px-3 py-2 text-sm text-white"
+            className={`mt-1 ${INPUT_CLASS} text-gh-sm`}
           />
         </label>
       ) : null}
-      <label className="mt-3 block text-xs text-white/50">
+      <label className="mt-3 block text-xs text-muted">
         {kind === "text" ? "Note" : "Caption (optional)"}
         <textarea
           value={caption}
           onChange={(e) => setCaption(e.target.value)}
           rows={kind === "text" ? 3 : 2}
-          className="mt-1 block w-full rounded-lg border border-white/15 bg-dusk-950 px-3 py-2 text-sm text-white"
+          className={`mt-1 ${TEXTAREA_CLASS} text-gh-sm`}
         />
       </label>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <span className={`text-xs ${left < 0 ? "text-red-300" : "text-white/50"}`}>{left} characters left</span>
+        <span className={`text-xs ${left < 0 ? "text-danger-ink" : "text-muted"}`}><span className="font-brand-mono tabular-nums">{left}</span> characters left</span>
         <button
           type="button"
           onClick={() => void post()}
           disabled={Boolean(problem) || busy}
           title={problem ?? undefined}
-          className="min-h-11 rounded-full bg-lantern-400 px-4 py-2 text-sm font-semibold text-dusk-950 disabled:opacity-40 sm:min-h-0"
+          className={buttonClass("primary")}
         >
           {busy ? "Posting…" : "Post to board"}
         </button>
@@ -416,14 +417,16 @@ function Lightbox({ post, onClose }: { post: WireBoardPost; onClose: () => void 
       role="dialog"
       aria-modal="true"
       aria-label={post.caption ?? "Image"}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 px-4 py-6"
+      // A dark scrim in every mode: the tokens inside resolve to night.
+      data-mode="night"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-ground/95 px-4 py-6 font-brand text-ink"
       onClick={onClose}
     >
       <button
         ref={close}
         type="button"
         onClick={onClose}
-        className="absolute right-4 top-4 min-h-11 rounded-full border border-white/20 px-4 text-sm text-white/80"
+        className={buttonClass("secondary", "md", "absolute right-4 top-4")}
       >
         Close
       </button>
@@ -431,12 +434,12 @@ function Lightbox({ post, onClose }: { post: WireBoardPost; onClose: () => void 
       <img
         src={gp(post.image.url)}
         alt={post.caption ?? `Image posted by ${post.author.name}`}
-        className="max-h-[80vh] max-w-full rounded-lg object-contain"
+        className="max-h-[80vh] max-w-full rounded-gh-md object-contain"
         onClick={(e) => e.stopPropagation()}
       />
       <div className="mt-3 max-w-2xl text-center" onClick={(e) => e.stopPropagation()}>
-        {post.caption ? <p className="whitespace-pre-line break-words text-white/85">{post.caption}</p> : null}
-        <p className="mt-1 text-xs text-white/55">
+        {post.caption ? <p className="whitespace-pre-line break-words text-ink">{post.caption}</p> : null}
+        <p className="mt-1 text-xs text-muted">
           {post.author.name}
           {post.author.kind === "agent" ? " (agent)" : ""} · {postedAgo(post.created_at)}
         </p>

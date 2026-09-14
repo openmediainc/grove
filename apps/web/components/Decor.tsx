@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { decorGrid, placeDecor, sameDecor } from "@/lib/decor";
 import { THEMES, readThemeChoice, type ThemeId } from "@/lib/themes";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { SECTION_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
 type WireEntry = { preset: DecorPreset; label: string; unlocked: boolean; unlock: string; hint: string | null };
 type WireDecor = { items: DecorItem[]; catalogue: WireEntry[]; max_items: number; slot_count: number; hidden_while_private: boolean };
@@ -77,36 +78,36 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
   const current = slot === null ? null : at(slot);
 
   return (
-    <section>
-      <h3 className="font-display text-xl text-lantern-300">Decor</h3>
-      <p className="mt-1 text-xs text-white/55">
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Decor</h3>
+      <p className="mt-1 text-xs text-muted">
         Small things round your building on the map. Every plot starts with three; each mark this space earns from real
         work unlocks two more. Up to {wire.max_items} items, on the marked spots, which never block the door. Nothing here
         is for sale.
       </p>
       {wire.hidden_while_private ? (
-        <p className="mt-2 text-xs text-white/55">This space is private, so the map shows none of it: held land stays plain.</p>
+        <p className="mt-2 text-xs text-muted">This space is private, so the map shows none of it: held land stays plain.</p>
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-start gap-5">
         <div
           role="grid"
           aria-label="Your plot, north at the top"
-          className="grid w-fit gap-0.5 rounded-lg border border-white/10 bg-dusk-950/60 p-1.5"
+          className="grid w-fit max-w-full gap-0.5 overflow-x-auto rounded-gh-md border border-line bg-surface-raised p-1.5"
           style={{ gridTemplateColumns: "repeat(8, 2.25rem)" }}
         >
           {grid.flatMap((row, y) =>
             row.map((cell, x) => {
               const key = `${x},${y}`;
               if (cell.kind === "building")
-                return <div key={key} className="h-9 rounded-sm bg-white/15" aria-hidden title="Building" />;
+                return <div key={key} className="h-9 rounded-gh-sm bg-line-strong/40" aria-hidden title="Building" />;
               if (cell.kind === "door")
                 return (
-                  <div key={key} className="flex h-9 items-center justify-center rounded-sm bg-white/5 text-[9px] text-white/55" title="Door (kept clear)">
+                  <div key={key} className="flex h-9 items-center justify-center rounded-sm bg-tint text-[9px] text-muted" title="Door (kept clear)">
                     door
                   </div>
                 );
-              if (cell.kind === "ground") return <div key={key} className="h-9 rounded-sm bg-white/[0.03]" aria-hidden />;
+              if (cell.kind === "ground") return <div key={key} className="h-9 rounded-gh-sm bg-tint" aria-hidden />;
               const item = at(cell.slot);
               const selected = slot === cell.slot;
               return (
@@ -116,11 +117,11 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
                   onClick={() => setSlot(selected ? null : cell.slot)}
                   aria-pressed={selected}
                   aria-label={item ? `Spot ${cell.slot + 1}: ${DECOR_LABEL[item.preset]}` : `Spot ${cell.slot + 1}: empty`}
-                  className={`flex h-9 items-center justify-center rounded-sm border ${
-                    selected ? "border-lantern-300 bg-lantern-400/20" : "border-dashed border-lantern-400/40 bg-transparent"
+                  className={`flex h-9 items-center justify-center rounded-gh-sm border focus-visible:outline-none focus-visible:shadow-gh-ring ${
+                    selected ? "border-signal bg-tint" : "border-dashed border-line-strong bg-transparent hover:bg-tint"
                   }`}
                 >
-                  {item ? <DecorThumb preset={item.preset} themeId={themeId} size={34} /> : <span className="text-xs text-white/50">+</span>}
+                  {item ? <DecorThumb preset={item.preset} themeId={themeId} size={34} /> : <span className="text-xs text-muted">+</span>}
                 </button>
               );
             }),
@@ -129,10 +130,10 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
 
         <div className="min-w-0 flex-1 basis-60">
           {slot === null ? (
-            <p className="text-xs text-white/55">Pick a dashed spot on the plot to place something there.</p>
+            <p className="text-xs text-muted">Pick a dashed spot on the plot to place something there.</p>
           ) : (
             <>
-              <p className="text-xs text-white/55">
+              <p className="text-xs font-medium text-ink">
                 Spot {slot + 1}
                 {current ? `: ${DECOR_LABEL[current.preset]}` : ""}
               </p>
@@ -143,12 +144,12 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
                       type="button"
                       disabled={!e.unlocked}
                       onClick={() => put(e.preset)}
-                      className={`flex w-full items-center gap-2 rounded-lg border px-2 py-1 text-left text-xs ${
+                      className={`flex min-h-11 w-full items-center gap-2 rounded-gh-md border px-2 py-1 text-left text-xs focus-visible:outline-none focus-visible:shadow-gh-ring sm:min-h-0 ${
                         current?.preset === e.preset
-                          ? "border-lantern-300 text-lantern-200"
+                          ? "border-signal bg-tint text-ink"
                           : e.unlocked
-                            ? "border-white/10 text-white/80"
-                            : "border-white/5 text-white/50"
+                            ? "border-line-strong bg-surface-raised text-ink hover:bg-tint"
+                            : "border-line bg-surface text-muted"
                       } disabled:cursor-not-allowed`}
                     >
                       <span className={e.unlocked ? "" : "opacity-40 grayscale"}>
@@ -156,14 +157,14 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate">{e.label}</span>
-                        {e.hint ? <span className="block truncate text-[10px] text-white/50">{e.hint}</span> : null}
+                        {e.hint ? <span className="block truncate text-[10px] text-muted">{e.hint}</span> : null}
                       </span>
                     </button>
                   </li>
                 ))}
               </ul>
               {current ? (
-                <button type="button" onClick={() => put(null)} className="mt-2 text-xs text-white/50 underline">
+                <button type="button" onClick={() => put(null)} className="mt-2 min-h-11 rounded-gh-sm text-xs text-ink underline decoration-line-strong underline-offset-2 hover:decoration-ink sm:min-h-0">
                   Clear this spot
                 </button>
               ) : null}
@@ -177,13 +178,13 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
           type="button"
           onClick={save}
           disabled={busy || !dirty || draft.some((d) => !unlocked.has(d.preset))}
-          className="rounded-full border border-lantern-400/40 px-3 py-1 text-xs text-lantern-200 disabled:opacity-40"
+          className={buttonClass("secondary", "sm", "min-h-11 sm:min-h-8")}
         >
           {busy ? "Saving…" : "Save decor"}
         </button>
-        {saved ? <span className="text-xs text-white/55">Saved.</span> : null}
+        {saved ? <span className="text-xs text-success" role="status">Saved.</span> : null}
         {draft.some((d) => !unlocked.has(d.preset)) ? (
-          <span className="text-xs text-white/55">Some placed decor is no longer unlocked; clear it to save.</span>
+          <span className="text-xs text-muted">Some placed decor is no longer unlocked; clear it to save.</span>
         ) : null}
         <ErrorNotice error={err} inline />
       </div>

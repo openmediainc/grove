@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ESTATE_NAME_MAX, graphemeCount, readEstateName } from "@grove/protocol";
 import { api } from "@/lib/api";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { INPUT_CLASS, NUM_CLASS, SECTION_CLASS, SECTION_TITLE_CLASS, buttonClass } from "@/lib/brand-ui";
 
 type WireNames = { mine: string | null; handle: string; orgs: Array<{ id: string; name: string; estate_name: string | null }> };
 
@@ -28,9 +29,9 @@ export function EstatePanel({ orgs }: { orgs: ReadonlyArray<{ id: string; name: 
   const ownOrgs = names.orgs.filter((o) => bound.has(o.id));
 
   return (
-    <section>
-      <h3 className="font-display text-xl text-lantern-300">Estate</h3>
-      <p className="mt-1 text-xs text-white/55">
+    <section className={SECTION_CLASS}>
+      <h3 className={SECTION_TITLE_CLASS}>Estate</h3>
+      <p className="mt-1 text-xs text-muted">
         Plots of yours (or of one org) that sit next to each other on the map join as one estate, with a fence round
         the whole and one shared sign. Each plot keeps its own access and its own sign. Private plots never join.
       </p>
@@ -100,7 +101,7 @@ function NameField({
 
   return (
     <div>
-      <label className="block text-xs text-white/50">
+      <label className="block text-xs font-medium text-ink">
         {label}
         <input
           value={draft}
@@ -109,23 +110,23 @@ function NameField({
             setDraft(e.target.value);
           }}
           placeholder={placeholder}
-          className="mt-1 w-full rounded-lg border border-white/10 bg-dusk-950/60 px-3 py-2 text-sm text-white/85"
+          className={`mt-1 ${INPUT_CLASS} text-gh-sm font-normal`}
         />
       </label>
       <div className="mt-1 flex flex-wrap items-center gap-3">
-        <span className={`text-xs ${count > ESTATE_NAME_MAX ? "text-red-300" : "text-white/50"}`}>
+        <span className={`text-xs ${NUM_CLASS} ${count > ESTATE_NAME_MAX ? "text-danger-ink" : "text-muted"}`}>
           {count}/{ESTATE_NAME_MAX}
         </span>
         <button
           type="button"
           onClick={submit}
           disabled={busy || !check.ok || !dirty}
-          className="rounded-full border border-lantern-400/40 px-3 py-1 text-xs text-lantern-200 disabled:opacity-40"
+          className={buttonClass("secondary", "sm", "min-h-11 sm:min-h-8")}
         >
           {busy ? "Saving…" : "Save"}
         </button>
-        {saved ? <span className="text-xs text-white/55">Saved.</span> : null}
-        {!check.ok ? <span className="text-xs text-red-300">{check.message}</span> : null}
+        {saved ? <span className="text-xs text-success" role="status">Saved.</span> : null}
+        {!check.ok ? <span className="text-xs text-danger-ink">{check.message}</span> : null}
         <ErrorNotice error={err} inline />
       </div>
     </div>
