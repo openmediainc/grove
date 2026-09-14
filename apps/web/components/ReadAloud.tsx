@@ -218,7 +218,7 @@ export function ReadAloudControl({ state }: { state: ReadAloudState }) {
       </div>
       {supported && settings.on ? (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-white/60">
-          <label className="flex items-center gap-1.5">
+          <label className="flex min-h-[40px] items-center gap-1.5 sm:min-h-0">
             <input
               type="checkbox"
               checked={settings.includeWhispers}
@@ -226,16 +226,16 @@ export function ReadAloudControl({ state }: { state: ReadAloudState }) {
             />
             Include whispers to me
           </label>
-          <label className="flex items-center gap-1.5">
+          <label className="flex min-h-[40px] items-center gap-1.5 sm:min-h-0">
             <input type="checkbox" checked={settings.oneVoice} onChange={(e) => update({ oneVoice: e.target.checked })} />
             One voice for all
           </label>
-          <label className="flex items-center gap-1.5">
+          <label className="flex min-h-[40px] items-center gap-1.5 sm:min-h-0">
             Speed
             <select
               value={String(settings.rate)}
               onChange={(e) => update({ rate: Number(e.target.value) })}
-              className="rounded bg-dusk-800 px-1 py-0.5 ring-1 ring-white/10"
+              className="min-h-[36px] rounded bg-dusk-800 px-1 py-0.5 ring-1 ring-white/10 sm:min-h-0"
             >
               {[0.8, 1, 1.2, 1.5, 1.8].map((r) => (
                 <option key={r} value={String(r)}>

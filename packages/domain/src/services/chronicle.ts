@@ -1098,6 +1098,9 @@ function summaryFor(
       const space = typeof payload.space === "string" && payload.space ? payload.space : "a space";
       return `${who(actor)} posted ${what} to the board in ${space}.`;
     }
+    // Unclassified, so operators-only (rule 6); still read as a sentence, not a type key.
+    case "board.removed":
+      return `${who(actor)} deleted a post from a space's board.`;
     // Rule 11. A game's end names both players: the winner as the actor (seat 0
     // on a draw) and the other as targetId.
     case "table.created":
