@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { gp } from "@/lib/base";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /** Where the visitor was heading when we asked them to sign in. */
 const AFTER_LOGIN = "grove-after-login";
@@ -56,6 +57,7 @@ function LoginForm() {
   const [invite, setInvite] = useState("grove-alpha");
   const [age, setAge] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [sendErr, setSendErr] = useState<unknown>(null);
   const [url, setUrl] = useState<string | null>(null);
   // ONB-07: the "check your email" state. What the server said happened to the
   // link, where it came from, and when another may be asked for.
@@ -126,6 +128,7 @@ function LoginForm() {
 
   async function requestLink() {
     setMsg(null);
+    setSendErr(null);
     setBusy(true);
     try {
       const res = await api<{ dev_login_url?: string; delivery?: SentState["delivery"] | "screen"; mail_from?: string }>(
@@ -150,7 +153,7 @@ function LoginForm() {
       setCooldownUntil(Date.now() + (RESEND_COOLDOWN_S[Math.min(n, RESEND_COOLDOWN_S.length) - 1] ?? 300) * 1000);
       setNow(Date.now());
     } catch (err) {
-      setMsg((err as Error).message);
+      setSendErr(err);
     } finally {
       setBusy(false);
     }
@@ -213,12 +216,14 @@ function LoginForm() {
           onClick={() => {
             setSent(null);
             setMsg(null);
+            setSendErr(null);
           }}
           className="mt-3 block w-full py-2 text-sm text-white/50 hover:text-white/80"
         >
           Use a different address
         </button>
         {msg ? <p className="mt-4 text-sm text-lantern-300">{msg}</p> : null}
+        <ErrorNotice error={sendErr} className="mt-4" />
         <a href={gp("/")} className="mt-8 block py-2 text-sm text-white/40 hover:text-white/70">
           ← Keep watching the world instead
         </a>
@@ -277,6 +282,7 @@ function LoginForm() {
         </button>
       </form>
       {msg ? <p className="mt-4 text-sm text-lantern-300">{msg}</p> : null}
+      <ErrorNotice error={sendErr} className="mt-4" />
       {url ? (
         <a className="mt-3 block break-all text-sm underline text-lantern-400" href={url}>
           {url}

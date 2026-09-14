@@ -1,6 +1,7 @@
 "use client";
 
 import { UNATTRIBUTED_NOTE, describeRefusal, type RefusalInput } from "@grove/ui";
+import { toRefusalInput } from "@/lib/api-error";
 
 /**
  * §5.5 at the point of failure. A refused `say` used to land here as
@@ -9,57 +10,8 @@ import { UNATTRIBUTED_NOTE, describeRefusal, type RefusalInput } from "@grove/ui
  * can say which; @grove/ui turns that into the sentence and the door.
  */
 
-type ApiErrorShape = {
-  status?: number;
-  code?: string;
-  message?: string;
-  body?: {
-    error?: {
-      code?: string;
-      message?: string;
-      capability?: string;
-      hint?: string;
-      source?: string;
-      subject?: string;
-      /** #62: sender or recipient, on ceiling refusals too. */
-      party?: string;
-      membership?: string;
-      /** Seconds, on a 429: the refusing limiter's own TTL (http.ts). */
-      retry_after?: number;
-    };
-  };
-};
-
-/** Pull the decision out of whatever `api()` threw, without trusting any of it. */
-export function toRefusalInput(
-  err: unknown,
-  senderKind: "human" | "agent",
-  extra: Pick<RefusalInput, "channel" | "recipientKind"> = {},
-): RefusalInput {
-  const e = (err ?? {}) as ApiErrorShape;
-  const body = e.body?.error;
-  const source = body?.source;
-  const subject = body?.subject;
-  const code = body?.code ?? e.code;
-  // The server already says how long the limiter holds; "wait a moment" is
-  // kinder with the moment attached.
-  const retry =
-    code === "RATE_LIMITED" && typeof body?.retry_after === "number" && body.retry_after > 0
-      ? `Try again in ${body.retry_after}s.`
-      : undefined;
-  return {
-    ...extra,
-    code,
-    capability: body?.capability,
-    source: source === "actor" || source === "space" || source === "room" ? source : undefined,
-    membership: body?.membership === "member" || body?.membership === "non_member" ? body.membership : undefined,
-    subject: subject === "sender" || subject === "recipient" ? subject : undefined,
-    party: body?.party === "sender" || body?.party === "recipient" ? body.party : undefined,
-    message: body?.message ?? e.message,
-    hint: body?.hint ?? retry,
-    senderKind,
-  };
-}
+// Moved to lib/api-error.ts (pure, unit tested); re-exported so callers keep their import.
+export { toRefusalInput };
 
 export function RefusalNotice({ input }: { input: RefusalInput }) {
   const refusal = describeRefusal(input);

@@ -26,6 +26,7 @@ import { FollowButton } from "@/components/Follow";
 import { LeaveMessage } from "@/components/LeaveMessage";
 import { Tabs } from "@/components/Tabs";
 import { roomHref } from "@/lib/world-url";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * One agent, one page: Activity · Card · Settings (`?tab=`).
@@ -89,7 +90,7 @@ export default function AgentPage() {
   const [tab, setTab] = useState<AgentTab>("activity");
   const [claimMode, setClaimMode] = useState(false);
   const [claimBusy, setClaimBusy] = useState(false);
-  const [claimMsg, setClaimMsg] = useState<string | null>(null);
+  const [claimMsg, setClaimMsg] = useState<unknown>(null);
   const [claimed, setClaimed] = useState<{ name: string; where: Whereabouts | null } | null>(null);
   const [searchRead, setSearchRead] = useState(false);
 
@@ -176,7 +177,7 @@ export default function AgentPage() {
       const err = e as { status?: number; message: string };
       if (err.status === 401) {
         window.location.href = gp(`/login?why=claim&next=${encodeURIComponent(`/a/${ref}?claim=1`)}`);
-      } else setClaimMsg(err.message);
+      } else setClaimMsg(e);
     } finally {
       setClaimBusy(false);
     }
@@ -205,7 +206,7 @@ export default function AgentPage() {
         >
           {claimBusy ? "Claiming…" : signedIn === false ? "Sign in to claim" : "Claim"}
         </button>
-        {claimMsg ? <p className="mt-4 text-red-300">{claimMsg}</p> : null}
+        <ErrorNotice error={claimMsg} className="mt-4" />
       </main>
     );
   }

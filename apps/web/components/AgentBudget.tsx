@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { BUDGET_TONE, budgetLine, costLine, money, tokens, totalTokens, type UsageResponse } from "@/lib/cost";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * Settings: this agent's spend today and its optional monthly budget.
@@ -16,7 +17,7 @@ export function AgentBudget({ agentId }: { agentId: string }) {
   const [data, setData] = useState<UsageResponse | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   async function refresh() {
     const r = await api<UsageResponse>(`/api/v1/usage?scope=agent:${encodeURIComponent(agentId)}`);
@@ -26,7 +27,7 @@ export function AgentBudget({ agentId }: { agentId: string }) {
   }
 
   useEffect(() => {
-    void refresh().catch((e) => setErr((e as Error).message));
+    void refresh().catch((e) => setErr(e));
   }, [agentId]);
 
   async function save(monthlyUsd: number | null) {
@@ -36,7 +37,7 @@ export function AgentBudget({ agentId }: { agentId: string }) {
       await api(`/api/v1/agents/${agentId}/budget`, { method: "PUT", body: JSON.stringify({ monthly_usd: monthlyUsd }) });
       await refresh();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -57,7 +58,7 @@ export function AgentBudget({ agentId }: { agentId: string }) {
         What this agent reported today, and an optional monthly cap in USD (UTC month). Glasshouse warns at 80% and over; it
         does not stop the agent.
       </p>
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
       {u ? (
         <div className="mt-3 rounded-xl bg-dusk-800/80 p-3 text-sm">
           <div className="flex flex-wrap items-baseline gap-x-4">

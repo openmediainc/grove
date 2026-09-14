@@ -17,6 +17,7 @@ import { api } from "@/lib/api";
 import { money } from "@/lib/cost";
 import { dmarcApplied } from "@/components/mod/EmailHealth";
 import { cohortPercent, countText, weekLabel } from "@/lib/analytics";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 type Anomaly = {
   metric: string;
@@ -120,7 +121,7 @@ function Spark({ m }: { m: Metric }) {
 
 export function OverviewPanel() {
   const [data, setData] = useState<Overview | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     try {
@@ -128,7 +129,7 @@ export function OverviewPanel() {
       setData(res.overview);
       setErr(null);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     }
   }, []);
 
@@ -138,7 +139,7 @@ export function OverviewPanel() {
     return () => clearInterval(t);
   }, [load]);
 
-  if (err && !data) return <p className="mt-4 text-red-300">{err}</p>;
+  if (err && !data) return <ErrorNotice error={err} onRetry={() => void load()} className="mt-4" />;
   if (!data) return <p className="mt-4 text-white/40">Loading…</p>;
 
   const { health, schema, cost, email } = data;
@@ -302,7 +303,12 @@ export function OverviewPanel() {
         </div>
       ) : null}
 
-      {err ? <p className="text-xs text-red-300">Last refresh failed: {err}</p> : null}
+      {err ? (
+        <div>
+          <p className="text-xs text-white/45">Last refresh failed; these numbers are from the one before.</p>
+          <ErrorNotice error={err} live="polite" size="xs" onRetry={() => void load()} className="mt-1" />
+        </div>
+      ) : null}
     </section>
   );
 }

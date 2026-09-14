@@ -5,6 +5,7 @@ import { DECOR_LABEL, readStoredDecor, type DecorItem, type DecorPreset } from "
 import { api } from "@/lib/api";
 import { decorGrid, placeDecor, sameDecor } from "@/lib/decor";
 import { THEMES, readThemeChoice, type ThemeId } from "@/lib/themes";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 type WireEntry = { preset: DecorPreset; label: string; unlocked: boolean; unlock: string; hint: string | null };
 type WireDecor = { items: DecorItem[]; catalogue: WireEntry[]; max_items: number; slot_count: number; hidden_while_private: boolean };
@@ -20,7 +21,7 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
   const [draft, setDraft] = useState<DecorItem[]>([]);
   const [slot, setSlot] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
   const [themeId, setThemeId] = useState<ThemeId>("aoe");
   const grid = useMemo(() => decorGrid(), []);
@@ -33,10 +34,10 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
         setWire(r.decor);
         setDraft(readStoredDecor(r.decor.items));
       })
-      .catch((e: Error) => setErr(e.message));
+      .catch((e: unknown) => setErr(e));
   }, [worldId, ownerDefault]);
 
-  if (!wire) return err ? <p className="text-xs text-red-300">{err}</p> : null;
+  if (!wire) return <ErrorNotice error={err} size="xs" />;
   const stored = readStoredDecor(wire.items);
   const dirty = !sameDecor(draft, stored);
   const at = (s: number) => draft.find((d) => d.slot === s) ?? null;
@@ -67,7 +68,7 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
       setDraft(readStoredDecor(r.decor.items));
       setSaved(true);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -184,7 +185,7 @@ export function DecorPanel({ worldId, ownerDefault = null }: { worldId: string; 
         {draft.some((d) => !unlocked.has(d.preset)) ? (
           <span className="text-xs text-white/45">Some placed decor is no longer unlocked; clear it to save.</span>
         ) : null}
-        {err ? <span className="text-xs text-red-300">{err}</span> : null}
+        <ErrorNotice error={err} inline />
       </div>
     </section>
   );

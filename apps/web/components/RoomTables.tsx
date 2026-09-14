@@ -23,6 +23,7 @@ import {
 } from "@/lib/boards";
 import type { Theme } from "@/lib/themes";
 import { TABLE_MARKS, tableColours, type TableColours } from "@/lib/themes/room-palette";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /** The open table refreshes this often while the drawer is open and the tab is visible. */
 const TABLE_POLL_MS = 4_000;
@@ -67,7 +68,7 @@ export function RoomTables({
   const [tables, setTables] = useState<TableWire[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [composing, setComposing] = useState(false);
   const [game, setGame] = useState<"four" | "chess">("four");
@@ -143,7 +144,7 @@ export function RoomTables({
       setDetail((cur) => ({ table: r.table, reactions: cur?.table.id === r.table.id ? cur.reactions : undefined }));
       void loadList();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -203,11 +204,7 @@ export function RoomTables({
         </form>
       ) : null}
 
-      {err ? (
-        <p role="alert" className="mt-2 text-xs text-rose-300">
-          {err}
-        </p>
-      ) : null}
+      <ErrorNotice error={err} tone="drawer" size="xs" className="mt-2" />
 
       {list.length ? (
         <ul className="mt-2 flex flex-col gap-1">

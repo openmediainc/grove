@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 type Reason = { code: string; severity: "critical" | "warning" | "info"; message: string };
 
@@ -147,7 +148,7 @@ export function dmarcApplied(d: {
 export function EmailHealthPanel() {
   const [health, setHealth] = useState<Health | null>(null);
   const [recent, setRecent] = useState<Row[]>([]);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   const load = useCallback(async (refreshDns = false) => {
     try {
@@ -156,7 +157,7 @@ export function EmailHealthPanel() {
       setRecent(res.recent);
       setErr(null);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     }
   }, []);
 
@@ -164,7 +165,7 @@ export function EmailHealthPanel() {
     void load();
   }, [load]);
 
-  if (err) return <p className="mt-4 text-red-300">{err}</p>;
+  if (err) return <ErrorNotice error={err} onRetry={() => void load()} className="mt-4" />;
   if (!health) return <p className="mt-4 text-white/40">Loading…</p>;
   const day = health.windows.day;
   const week = health.windows.week;

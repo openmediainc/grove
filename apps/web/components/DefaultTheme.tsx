@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { previewPlot } from "@/lib/branding";
 import { THEMES, THEME_IDS, type ThemeId } from "@/lib/themes";
 import { SignPreview } from "./Branding";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * Manage → Default theme (#59). The owner picks how this space's part of the
@@ -32,7 +33,7 @@ export function DefaultThemePanel({
   const stored: ThemeId | null = isSpaceThemeId(defaultTheme) ? defaultTheme : null;
   const [choice, setChoice] = useState<ThemeId | null>(stored);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => setChoice(stored), [stored]);
   const plot = previewPlot(space, orgs, branding);
@@ -46,7 +47,7 @@ export function DefaultThemePanel({
       await reload();
       setSaved(true);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -111,7 +112,7 @@ export function DefaultThemePanel({
           </span>
         ) : null}
       </div>
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </section>
   );
 }

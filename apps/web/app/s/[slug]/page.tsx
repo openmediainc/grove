@@ -40,6 +40,7 @@ import { RelocatePanel, TransferPanel } from "@/components/SpaceMoves";
 import { FollowButton } from "@/components/Follow";
 import { BoardSection } from "@/components/Board";
 import { Tabs } from "@/components/Tabs";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * One space, one page: About · Activity · Manage (`?tab=`).
@@ -109,7 +110,7 @@ export default function SpacePage() {
   const { slug } = useParams<{ slug: string }>();
   const [d, setD] = useState<Detail | null>(null);
   const [missing, setMissing] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [tab, setTab] = useState<SpaceTab>("about");
   const lex = useCardLex();
@@ -129,7 +130,7 @@ export default function SpacePage() {
       }
     } catch (e) {
       if ((e as { status?: number }).status === 404) setMissing(true);
-      else setErr((e as Error).message);
+      else setErr(e);
     }
   }, [slug]);
 
@@ -166,7 +167,7 @@ export default function SpacePage() {
     } catch (e) {
       if ((e as { status?: number }).status === 401) {
         window.location.href = gp(`/login?why=space&next=${encodeURIComponent(spaceHref(slug))}`);
-      } else setErr((e as Error).message);
+      } else setErr(e);
     }
   }
 
@@ -184,7 +185,7 @@ export default function SpacePage() {
   if (err && !d) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-        <p className="text-red-300">{err}</p>
+        <ErrorNotice error={err} onRetry={() => void load()} />
         <Link href={EXPLORE_PATH} className="mt-4 inline-block text-lantern-300">
           ← Explore
         </Link>
@@ -268,7 +269,7 @@ export default function SpacePage() {
         {tab === "manage" && isOwner ? <Manage detail={d} reload={load} /> : null}
       </div>
 
-      {err ? <p className="mt-6 text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-6" />
     </main>
   );
 }
@@ -419,7 +420,7 @@ function Manage({ detail, reload }: { detail: Detail; reload: () => Promise<void
 }
 
 function AccessPicker({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [saving, setSaving] = useState<string | null>(null);
   async function choose(p: SpacePolicyPreset) {
     if (p === detail.world.policy_preset) return;
@@ -429,7 +430,7 @@ function AccessPicker({ detail, reload }: { detail: Detail; reload: () => Promis
       await api(`/api/v1/worlds/${detail.world.id}`, { method: "PATCH", body: JSON.stringify({ policy_preset: p }) });
       await reload();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setSaving(null);
     }
@@ -464,14 +465,14 @@ function AccessPicker({ detail, reload }: { detail: Detail; reload: () => Promis
           );
         })}
       </div>
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </section>
   );
 }
 
 function AdmitByHandle({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
   const [handle, setHandle] = useState("");
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [admitted, setAdmitted] = useState<string | null>(null);
 
   async function admit() {
@@ -486,7 +487,7 @@ function AdmitByHandle({ detail, reload }: { detail: Detail; reload: () => Promi
       setHandle("");
       await reload();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     }
   }
 
@@ -510,7 +511,7 @@ function AdmitByHandle({ detail, reload }: { detail: Detail; reload: () => Promi
         </button>
       </div>
       {admitted ? <p className="mt-2 text-sm text-lantern-300">@{admitted} is now a member.</p> : null}
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </section>
   );
 }
@@ -541,7 +542,7 @@ function AskToJoin({ worldId }: { worldId: string }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
   async function ask() {
@@ -554,7 +555,7 @@ function AskToJoin({ worldId }: { worldId: string }) {
       });
       setSent(true);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -587,7 +588,7 @@ function AskToJoin({ worldId }: { worldId: string }) {
           >
             {busy ? "Asking…" : "Send the request"}
           </button>
-          {err ? <p className="text-xs text-red-300">{err}</p> : null}
+          <ErrorNotice error={err} size="xs" />
         </div>
       ) : (
         <button
@@ -634,7 +635,7 @@ function toCeiling(v: WireCeiling | null) {
 }
 
 function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const isCore = detail.world.plot_index == null;
   const spacePreset: SpacePolicyPreset = isPreset(detail.world.policy_preset) ? detail.world.policy_preset : "private";
@@ -646,7 +647,7 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
       await api(url, { method: "PATCH", body: JSON.stringify(payload) });
       await reload();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(null);
     }
@@ -760,7 +761,7 @@ function RoomAccess({ detail, reload }: { detail: Detail; reload: () => Promise<
           );
         })}
       </ul>
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </div>
   );
 }
@@ -769,7 +770,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [singleUse, setSingleUse] = useState(true);
   const [hours, setHours] = useState(168);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -779,7 +780,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
   }, [detail.world.id]);
 
   useEffect(() => {
-    void load().catch((e) => setErr((e as Error).message));
+    void load().catch((e) => setErr(e));
   }, [load]);
 
   const linkFor = (code: string) =>
@@ -797,7 +798,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
       });
       await load();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -811,7 +812,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
       });
       await load();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     }
   }
 
@@ -889,7 +890,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
           ))}
         </ul>
       ) : null}
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </div>
   );
 }
@@ -902,7 +903,7 @@ function InviteLinks({ detail }: { detail: Detail }) {
 function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
   const [mine, setMine] = useState<Org[]>([]);
   const [pick, setPick] = useState("");
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [newName, setNewName] = useState("");
   const [newColour, setNewColour] = useState("#7c5cff");
@@ -923,7 +924,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
       await fn();
       await Promise.all([loadMine(), reload()]);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -1065,7 +1066,7 @@ function OrgBindings({ detail, reload }: { detail: Detail; reload: () => Promise
         })}
       </div>
 
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </div>
   );
 }

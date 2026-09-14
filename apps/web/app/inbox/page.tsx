@@ -13,6 +13,7 @@ import { partyHref, replyTarget, type WireMessage, type WireMessages } from "@/l
 import { LeaveMessage } from "@/components/LeaveMessage";
 import { TransferOffers } from "@/components/SpaceMoves";
 import { INBOX_SEEN_EVENT, seenBody, seenPlan } from "@/lib/unread";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 type Item = {
   agent: { id: string; slug: string; display_name: string; claim_state: string };
@@ -59,7 +60,7 @@ type Inbox = {
 
 export default function InboxPage() {
   const [inbox, setInbox] = useState<Inbox | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notices, setNotices] = useState<{ items: WireFollowNotice[]; unread: number } | null>(null);
   const [messages, setMessages] = useState<WireMessages | null>(null);
@@ -91,7 +92,7 @@ export default function InboxPage() {
   useEffect(() => {
     void load().catch((e) => {
       if ((e as { status?: number }).status === 401) window.location.href = gp("/login");
-      else setErr((e as Error).message);
+      else setErr(e);
     });
   }, [load]);
 
@@ -105,7 +106,7 @@ export default function InboxPage() {
       });
       await load();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(null);
     }
@@ -118,7 +119,7 @@ export default function InboxPage() {
       await api("/api/v1/join-requests/seen", { method: "POST", body: JSON.stringify({ ids: [id] }) });
       await load();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(null);
     }
@@ -354,7 +355,7 @@ export default function InboxPage() {
       {inbox && !requests.length && !answers.length && !items.length && !notices?.items.length && !messages?.received.length ? (
         <p className="mt-8 text-white/40">Nothing waiting.</p>
       ) : null}
-      {err ? <p className="mt-4 text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-4" />
     </main>
   );
 }

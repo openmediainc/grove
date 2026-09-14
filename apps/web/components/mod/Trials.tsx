@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { entrantLine, timeLeft, trialKindLine, type TrialWire } from "@/lib/trials";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 type OperatorTrial = TrialWire & { entrant_count: number; finisher_count: number; created_at: string };
 
@@ -19,7 +20,7 @@ const DEFAULT_MINUTES = 30;
 
 export function TrialsPanel() {
   const [trials, setTrials] = useState<OperatorTrial[]>([]);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState("");
@@ -35,7 +36,7 @@ export function TrialsPanel() {
       const r = await api<{ trials: OperatorTrial[] }>("/api/v1/mod/trials");
       setTrials(r.trials);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     }
   }, []);
 
@@ -62,7 +63,7 @@ export function TrialsPanel() {
       setMsg(`Posted “${r.trial.title}” (${r.trial.status}).`);
       await load();
     } catch (e2) {
-      setErr((e2 as Error).message);
+      setErr(e2);
     } finally {
       setBusy(false);
     }
@@ -80,7 +81,7 @@ export function TrialsPanel() {
       setMsg(`“${r.trial.title}” is ${r.trial.status}.`);
       await load();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -159,7 +160,7 @@ export function TrialsPanel() {
           Post trial
         </button>
         {msg ? <p className="text-sm text-lantern-300">{msg}</p> : null}
-        {err ? <p className="text-sm text-red-300">{err}</p> : null}
+        <ErrorNotice error={err} />
       </form>
 
       <div>

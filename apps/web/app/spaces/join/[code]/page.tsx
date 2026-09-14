@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { spaceHref } from "@/lib/space-page";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * The landing page for an invite link. Redemption is a POST, so it happens here
@@ -20,7 +21,7 @@ export default function RedeemInvite() {
   const { code } = useParams<{ code: string }>();
   const [state, setState] = useState<"idle" | "working" | "done" | "error">("idle");
   const [world, setWorld] = useState<{ id: string; slug: string; name: string } | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export default function RedeemInvite() {
       setWorld(r.world);
       setState("done");
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
       setState("error");
     }
   }
@@ -94,9 +95,10 @@ export default function RedeemInvite() {
       ) : null}
 
       {err ? (
-        <p className="mt-6 text-red-300">
-          {err} An invite stops working once it is revoked, spent, or past its expiry.
-        </p>
+        <div className="mt-6">
+          <ErrorNotice error={err} action="accept this invite" />
+          <p className="mt-2 text-sm text-white/50">An invite stops working once it is revoked, spent, or past its expiry.</p>
+        </div>
       ) : null}
 
       <Link href="/explore" className="mt-10 block py-2 text-sm text-white/40">

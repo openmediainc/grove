@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { supportState, type SupporterWire } from "@/lib/supporter";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * "Support Glasshouse" on /me (queue #47). Renders nothing unless the API has
@@ -13,7 +14,7 @@ import { supportState, type SupporterWire } from "@/lib/supporter";
 export function SupportSection() {
   const [wire, setWire] = useState<SupporterWire | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [thanks, setThanks] = useState(false);
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export function SupportSection() {
       const r = await api<{ checkout: { url: string } }>("/api/v1/supporter/checkout", { method: "POST", body: "{}" });
       window.location.href = r.checkout.url;
     } catch (e) {
-      setError((e as Error).message || "Couldn't open checkout. Try again in a moment.");
+      setError(e);
       setBusy(false);
     }
   }
@@ -61,7 +62,7 @@ export function SupportSection() {
       ) : (
         <p className={`mt-4 text-sm ${state.kind === "attention" ? "text-amber-300/90" : "text-white/70"}`}>{state.line}</p>
       )}
-      {error ? <p className="mt-2 text-sm text-red-300/90">{error}</p> : null}
+      <ErrorNotice error={error} className="mt-2" />
     </section>
   );
 }

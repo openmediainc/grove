@@ -12,6 +12,7 @@ import { GeoAvatar } from "@/components/Avatar";
 import { DiscoveryShelves } from "@/components/Discovery";
 import { CreateSpaceFlow } from "@/components/CreateSpaceFlow";
 import { roomHref } from "@/lib/world-url";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * Explore: the discovery shelves (Busiest plots, Most-watched agents, Just
@@ -27,7 +28,7 @@ export default function ExplorePage() {
   const [spaces, setSpaces] = useState<DirectorySpace[] | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [online, setOnline] = useState<WireSearch | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
@@ -36,7 +37,7 @@ export default function ExplorePage() {
   }, []);
 
   useEffect(() => {
-    void load().catch((e) => setErr((e as Error).message));
+    void load().catch((e) => setErr(e));
     void api<WireSearch>(searchApiPath(""))
       .then(setOnline)
       .catch(() => setOnline(null));
@@ -137,7 +138,7 @@ export default function ExplorePage() {
         {spaces && spaces.length === 0 ? (
           <p className="mt-3 text-white/40">No plot has been claimed yet. The world is bare ground.</p>
         ) : null}
-        {err ? <p className="mt-4 text-red-300">{err}</p> : null}
+        <ErrorNotice error={err} className="mt-4" />
       </section>
     </main>
   );
@@ -212,7 +213,7 @@ function SpaceRow({ space }: { space: DirectorySpace }) {
 
 /** A non-member's way into a held plot: only the rooms the owner opened, entered as a visitor. */
 function LobbyDoors({ space }: { space: DirectorySpace }) {
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   if (space.is_member || !space.open_rooms?.length) return null;
   async function visit(slug: string) {
     setErr(null);
@@ -222,7 +223,7 @@ function LobbyDoors({ space }: { space: DirectorySpace }) {
     } catch (e) {
       const status = (e as { status?: number }).status;
       if (status === 401) window.location.href = gp(`/login?next=${encodeURIComponent("/explore")}`);
-      else setErr((e as Error).message);
+      else setErr(e);
     }
   }
   return (
@@ -237,7 +238,7 @@ function LobbyDoors({ space }: { space: DirectorySpace }) {
           Visit the {r.name} · {accessCopy(r.room_preset).word}
         </button>
       ))}
-      {err ? <span className="text-xs text-red-300">{err}</span> : null}
+      <ErrorNotice error={err} inline />
     </div>
   );
 }

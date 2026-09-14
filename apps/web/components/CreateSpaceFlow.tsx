@@ -30,6 +30,7 @@ import {
 import { spaceHref, suggestSlug } from "@/lib/space-page";
 import { drawBrandEmblem } from "@/lib/themes/kit";
 import { ClaimPreview } from "@/components/ClaimPreview";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * Create space (queue #26), as two steps (queue #48):
@@ -51,13 +52,13 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
   const [siteUrl, setSiteUrl] = useState("");
   const [suggesting, setSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<BrandingSuggestion | null>(null);
-  const [suggestErr, setSuggestErr] = useState<string | null>(null);
+  const [suggestErr, setSuggestErr] = useState<unknown>(null);
   const [preview, setPreview] = useState<WireClaimPreview | null>(null);
-  const [previewErr, setPreviewErr] = useState<string | null>(null);
+  const [previewErr, setPreviewErr] = useState<unknown>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [viewAs, setViewAs] = useState<ViewAs>("owner");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [moved, setMoved] = useState<Extract<CreateOutcome, { kind: "moved" }> | null>(null);
   const topRef = useRef<HTMLElement>(null);
 
@@ -82,7 +83,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
       const r = await api<{ preview: WireClaimPreview }>("/api/v1/spaces/claim-preview");
       setPreview(r.preview);
     } catch (e) {
-      setPreviewErr((e as Error).message);
+      setPreviewErr(e);
     } finally {
       setLoadingPreview(false);
     }
@@ -110,7 +111,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
       if (!r.name && !r.accent) setSuggestErr(r.notes.join(" ") || "Nothing on that website could be used.");
       else setSuggestion(r);
     } catch (e) {
-      setSuggestErr((e as Error).message);
+      setSuggestErr(e);
     } finally {
       setSuggesting(false);
     }
@@ -149,7 +150,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
       scrollTop();
     } catch (e) {
       const code = (e as { code?: string }).code;
-      setErr(code === "SLUG_TAKEN" ? `${(e as Error).message} Go back and pick another slug.` : (e as Error).message);
+      setErr(code === "SLUG_TAKEN" ? `${(e as Error).message} Go back and pick another slug.` : e);
       setBusy(false);
     }
   }
@@ -237,7 +238,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
         ) : loadingPreview ? (
           <p className="text-sm text-white/40">Finding your plot…</p>
         ) : null}
-        {previewErr ? <p className="text-sm text-red-300">{previewErr}</p> : null}
+        <ErrorNotice error={previewErr} />
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
           <button
@@ -259,7 +260,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
             {busy ? "Claiming…" : "Confirm and create"}
           </button>
         </div>
-        {err ? <p className="text-sm text-red-300">{err}</p> : null}
+        <ErrorNotice error={err} />
       </section>
     );
   }
@@ -361,7 +362,7 @@ export function CreateSpaceFlow({ onClose }: { onClose: () => void }) {
             <p className="mt-1 text-[11px] text-white/35">
               Glasshouse reads only the site&apos;s name, theme colour and icon colour. Nothing is saved.
             </p>
-            {suggestErr ? <p className="mt-2 text-xs text-red-300">{suggestErr}</p> : null}
+            <ErrorNotice error={suggestErr} size="xs" className="mt-2" />
             {suggestion ? (
               <div className="mt-3 space-y-1 text-xs text-white/70" aria-live="polite">
                 <p className="break-all text-white/50">From {suggestion.source.url}</p>

@@ -24,6 +24,7 @@ import { gp } from "@/lib/base";
 import { EmailHealthPanel } from "@/components/mod/EmailHealth";
 import { OverviewPanel } from "@/components/mod/Overview";
 import { TrialsPanel } from "@/components/mod/Trials";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 type Actor = {
   id: string;
@@ -188,7 +189,7 @@ export default function ModPage() {
   const [log, setLog] = useState<ActionEntry[]>([]);
   const [actorId, setActorId] = useState("");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
 
@@ -220,7 +221,7 @@ export default function ModPage() {
     if (tab !== "log") return;
     void api<{ entries: ActionEntry[] }>("/api/v1/mod/log")
       .then((r) => setLog(r.entries))
-      .catch((e) => setErr((e as Error).message));
+      .catch((e) => setErr(e));
   }, [tab]);
 
   /** Every mutation funnels through here so one place clears errors and reloads. */
@@ -233,7 +234,7 @@ export default function ModPage() {
       setMsg(what);
       await load();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -250,7 +251,7 @@ export default function ModPage() {
       const r = await api<{ report: ReportDetail }>(`/api/v1/mod/reports/${id}`);
       setDetail((d) => ({ ...d, [id]: r.report }));
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     }
   }
 
@@ -714,7 +715,7 @@ export default function ModPage() {
       {tab === "trials" ? <TrialsPanel /> : null}
 
       {msg ? <p className="mt-6 text-lantern-300">{msg}</p> : null}
-      {err ? <p className="mt-6 text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-6" />
     </main>
   );
 }

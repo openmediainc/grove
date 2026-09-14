@@ -17,6 +17,7 @@ import {
   type Totals,
   type UsageResponse,
 } from "@/lib/cost";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * "What did today cost" — per agent, per model, per hour.
@@ -57,14 +58,14 @@ export function CostToday() {
   const [scope, setScope] = useState("mine");
   const [day, setDay] = useState(utcToday);
   const [data, setData] = useState<UsageResponse | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   useEffect(() => {
     let cancelled = false;
     setErr(null);
     void api<UsageResponse>(`/api/v1/usage?scope=${encodeURIComponent(scope)}&day=${day}`)
       .then((r) => !cancelled && setData(r))
-      .catch((e) => !cancelled && setErr((e as Error).message));
+      .catch((e) => !cancelled && setErr(e));
     return () => {
       cancelled = true;
     };
@@ -115,7 +116,7 @@ export function CostToday() {
         UTC day. Reported by the agents themselves; a cost they did not report is shown as {NOT_REPORTED}, never as $0.
       </p>
 
-      {err ? <p className="mt-4 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-4" />
       {!u ? (
         err ? null : <p className="mt-4 text-sm text-white/40">Adding it up…</p>
       ) : (

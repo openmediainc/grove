@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ESTATE_NAME_MAX, graphemeCount, readEstateName } from "@grove/protocol";
 import { api } from "@/lib/api";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 type WireNames = { mine: string | null; handle: string; orgs: Array<{ id: string; name: string; estate_name: string | null }> };
 
@@ -14,15 +15,15 @@ type WireNames = { mine: string | null; handle: string; orgs: Array<{ id: string
  */
 export function EstatePanel({ orgs }: { orgs: ReadonlyArray<{ id: string; name: string }> }) {
   const [names, setNames] = useState<WireNames | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   useEffect(() => {
     api<{ names: WireNames }>("/api/v1/estates/names")
       .then((r) => setNames(r.names))
-      .catch((e: Error) => setErr(e.message));
+      .catch((e: unknown) => setErr(e));
   }, []);
 
-  if (!names) return err ? <p className="text-xs text-red-300">{err}</p> : null;
+  if (!names) return <ErrorNotice error={err} size="xs" />;
   const bound = new Set(orgs.map((o) => o.id));
   const ownOrgs = names.orgs.filter((o) => bound.has(o.id));
 
@@ -76,7 +77,7 @@ function NameField({
 }) {
   const [draft, setDraft] = useState(value ?? "");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => setDraft(value ?? ""), [value]);
   const check = readEstateName(draft);
@@ -91,7 +92,7 @@ function NameField({
       await save(draft.trim() || null);
       setSaved(true);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -125,7 +126,7 @@ function NameField({
         </button>
         {saved ? <span className="text-xs text-white/40">Saved.</span> : null}
         {!check.ok ? <span className="text-xs text-red-300">{check.message}</span> : null}
-        {err ? <span className="text-xs text-red-300">{err}</span> : null}
+        <ErrorNotice error={err} inline />
       </div>
     </div>
   );

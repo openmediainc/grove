@@ -24,6 +24,7 @@ import {
 import { actorRef } from "@/lib/chronicle-link";
 import { GeoAvatar } from "@/components/Avatar";
 import { Reactions } from "@/components/Reactions";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * <Activity> — the ledger as a readable list. ONE component for every place
@@ -170,7 +171,7 @@ export function Activity({
   const [cursor, setCursor] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   // Recomputed per filter change only, so "today" does not creep while paging.
   const since = useMemo(() => activitySince(filters.win), [filters.win]);
@@ -195,7 +196,7 @@ export function Activity({
         setCursor(r.next_cursor);
         setErr(null);
       } catch (e) {
-        setErr((e as Error).message);
+        setErr(e);
       } finally {
         setLoading(false);
       }
@@ -363,7 +364,7 @@ export function Activity({
         {loading && !entries.length ? <span className="text-sm text-white/40">Reading the record…</span> : null}
       </div>
 
-      {err ? <p className="mt-4 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-4" />
     </div>
   );
 }

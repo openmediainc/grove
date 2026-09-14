@@ -18,6 +18,7 @@ import {
 import { layoutSignboard, signContent } from "@/lib/signboard";
 import { THEMES, THEME_IDS } from "@/lib/themes";
 import { drawBrandEmblem } from "@/lib/themes/kit";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 export type WireBranding = { accent: string | null; sign_text: string | null; emblem: string | null } | null;
 
@@ -42,12 +43,12 @@ export function BrandingPanel({
 }) {
   const [d, setD] = useState<BrandingDraft>(() => brandingDraft(branding));
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
   const [siteUrl, setSiteUrl] = useState("");
   const [suggesting, setSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<BrandingSuggestion | null>(null);
-  const [suggestErr, setSuggestErr] = useState<string | null>(null);
+  const [suggestErr, setSuggestErr] = useState<unknown>(null);
   useEffect(() => setD(brandingDraft(branding)), [branding]);
   const check = useMemo(() => checkDraft(d), [d]);
   // While a website suggestion is waiting, the preview shows it laid over the draft.
@@ -73,7 +74,7 @@ export function BrandingPanel({
       if (!r.name && !r.accent) setSuggestErr(r.notes.join(" ") || "Nothing on that website could be used.");
       else setSuggestion(r);
     } catch (e) {
-      setSuggestErr((e as Error).message);
+      setSuggestErr(e);
     } finally {
       setSuggesting(false);
     }
@@ -92,7 +93,7 @@ export function BrandingPanel({
       await reload();
       setSaved(true);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -137,7 +138,7 @@ export function BrandingPanel({
           <p className="mt-1 text-[11px] text-white/35">
             Glasshouse reads only the site&apos;s name, theme colour and icon colour. Nothing is saved until you apply and save.
           </p>
-          {suggestErr ? <p className="mt-2 text-xs text-red-300">{suggestErr}</p> : null}
+          <ErrorNotice error={suggestErr} size="xs" className="mt-2" />
           {suggestion ? (
             <div className="mt-3 space-y-1 text-xs text-white/70" aria-live="polite">
               <p className="text-white/50">From {suggestion.source.url}</p>
@@ -283,7 +284,7 @@ export function BrandingPanel({
           </button>
           {saved ? <span className="text-xs text-white/50">Saved. The map picks it up on its next refresh.</span> : null}
         </div>
-        {err ? <p className="text-sm text-red-300">{err}</p> : null}
+        <ErrorNotice error={err} />
       </div>
     </section>
   );

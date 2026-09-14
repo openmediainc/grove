@@ -14,6 +14,7 @@ import {
   type PreviewCell,
   type TransferPick,
 } from "@/lib/space-moves";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * Transfer & relocate (queue #35): two Manage sections for the space's holder,
@@ -82,14 +83,14 @@ export function TransferPanel({ space, reload }: { space: Space; reload: () => P
   const [typed, setTyped] = useState("");
   const [leave, setLeave] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     setState(await api<TransferState>(`/api/v1/worlds/${space.id}/transfer`));
   }, [space.id]);
 
   useEffect(() => {
-    void load().catch((e) => setErr((e as Error).message));
+    void load().catch((e) => setErr(e));
   }, [load]);
 
   const pick: TransferPick = pickKey.startsWith("m:")
@@ -108,7 +109,7 @@ export function TransferPanel({ space, reload }: { space: Space; reload: () => P
       await load();
       await reload();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -201,7 +202,7 @@ export function TransferPanel({ space, reload }: { space: Space; reload: () => P
           Last offer, to {recipientLabel(state.last)}: {STATUS_LINE[state.last.status]}.
         </p>
       ) : null}
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </div>
   );
 }
@@ -262,7 +263,7 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
   const [target, setTarget] = useState<number | null>(null);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [done, setDone] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -270,7 +271,7 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
   }, [space.id]);
 
   useEffect(() => {
-    void load().catch((e) => setErr((e as Error).message));
+    void load().catch((e) => setErr(e));
   }, [load]);
 
   async function move() {
@@ -288,14 +289,14 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
       await load();
       await reload();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
       await load().catch(() => undefined);
     } finally {
       setBusy(false);
     }
   }
 
-  if (!plan) return err ? <p className="text-sm text-red-300">{err}</p> : null;
+  if (!plan) return <ErrorNotice error={err} />;
   const cooling = plan.next_allowed_at && new Date(plan.next_allowed_at).getTime() > Date.now();
 
   return (
@@ -349,7 +350,7 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
         <p className="mt-3 text-sm text-white/40">No free plot to move to right now.</p>
       )}
       {done ? <p className="mt-2 text-sm text-lantern-300">{done}</p> : null}
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </div>
   );
 }
@@ -358,7 +359,7 @@ export function RelocatePanel({ space, reload }: { space: Space; reload: () => P
 export function TransferOffers({ onChange }: { onChange?: () => void }) {
   const [offers, setOffers] = useState<WireTransfer[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     const r = await api<{ offers: WireTransfer[] }>("/api/v1/transfers/incoming");
@@ -377,14 +378,14 @@ export function TransferOffers({ onChange }: { onChange?: () => void }) {
       await load();
       onChange?.();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
       await load().catch(() => undefined);
     } finally {
       setBusy(null);
     }
   }
 
-  if (!offers?.length) return err ? <p className="mt-4 text-sm text-red-300">{err}</p> : null;
+  if (!offers?.length) return <ErrorNotice error={err} className="mt-4" />;
   return (
     <section className="mt-10">
       <h2 className="font-display text-2xl text-lantern-300">
@@ -426,7 +427,7 @@ export function TransferOffers({ onChange }: { onChange?: () => void }) {
           </li>
         ))}
       </ul>
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </section>
   );
 }

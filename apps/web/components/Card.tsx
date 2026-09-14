@@ -15,6 +15,7 @@ import {
 } from "@/lib/card";
 import { getTheme, readThemeChoice } from "@/lib/themes";
 import type { ThemeLexicon } from "@/lib/themes/types";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 type CardLex = ThemeLexicon["card"];
 
@@ -162,7 +163,7 @@ function CardEditor({
 }) {
   const [d, setD] = useState<CardDraft>(() => draftFrom(card));
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const can = (f: string) => (card.editable as string[]).includes(f);
 
   async function save() {
@@ -172,7 +173,7 @@ function CardEditor({
       await api(cardSavePath(subject, saveId), { method: "PUT", body: JSON.stringify(draftToBody(subject, d)) });
       onDone();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -242,7 +243,7 @@ function CardEditor({
           ) : null}
         </fieldset>
       ) : null}
-      {err ? <p className="text-xs text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} size="xs" />
       <div className="flex gap-2">
         <button
           type="button"

@@ -19,6 +19,7 @@ import {
   type WireBoard,
   type WireBoardPost,
 } from "@/lib/board";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * The artifact board on a space's About tab (queue #36): images, link cards
@@ -110,17 +111,19 @@ function PostCard({
 }) {
   const [reporting, setReporting] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [removeErr, setRemoveErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const accent = post.link ? cardAccent(post.link.preview) : null;
 
   async function remove() {
     if (busy || !window.confirm("Delete this post from the board? This cannot be undone.")) return;
     setBusy(true);
+    setRemoveErr(null);
     try {
       await api(`/api/v1/board/posts/${encodeURIComponent(post.id)}`, { method: "DELETE" });
       onRemoved();
     } catch (e) {
-      setNote((e as Error).message);
+      setRemoveErr(e);
     } finally {
       setBusy(false);
     }
@@ -201,6 +204,7 @@ function PostCard({
         />
       ) : null}
       {note ? <p className="px-4 pb-3 text-xs text-white/55">{note}</p> : null}
+      <ErrorNotice error={removeErr} size="xs" className="mx-4 mb-3" />
     </article>
   );
 }
@@ -208,7 +212,7 @@ function PostCard({
 function ReportForm({ postId, onDone }: { postId: string; onDone: (message: string) => void }) {
   const [category, setCategory] = useState<string>("spam");
   const [details, setDetails] = useState("");
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
   async function send() {
@@ -221,7 +225,7 @@ function ReportForm({ postId, onDone }: { postId: string; onDone: (message: stri
       });
       onDone("Reported. The operators will take a look.");
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -262,7 +266,7 @@ function ReportForm({ postId, onDone }: { postId: string; onDone: (message: stri
         >
           Send report
         </button>
-        {err ? <span className="text-xs text-red-300">{err}</span> : null}
+        <ErrorNotice error={err} inline />
       </div>
     </div>
   );
@@ -275,7 +279,7 @@ function Composer({ worldId, onPosted }: { worldId: string; onPosted: (post: Wir
   const [caption, setCaption] = useState("");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -312,7 +316,7 @@ function Composer({ worldId, onPosted }: { worldId: string; onPosted: (post: Wir
       setFile(null);
       if (fileInput.current) fileInput.current.value = "";
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -385,7 +389,7 @@ function Composer({ worldId, onPosted }: { worldId: string; onPosted: (post: Wir
           {busy ? "Posting…" : "Post to board"}
         </button>
       </div>
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </div>
   );
 }

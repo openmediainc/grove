@@ -7,6 +7,7 @@ import { followApiPath, followTargetKey, heartLabel, type FollowTarget, type Wir
 import { createFollowStateLoader, followStatePath, type HeartState } from "@/lib/follow-state";
 import { GUEST_EVENT } from "@/lib/guest";
 import type { ThemeLexicon } from "@/lib/themes/types";
+import { describeApiError } from "@/lib/api-error";
 
 type CardLex = ThemeLexicon["card"];
 
@@ -112,7 +113,9 @@ export function FollowButton({
       else if (status === 401) window.location.href = loginPath();
       else {
         setState(state);
-        setErr((e as Error).message);
+        // A tooltip, so one line: the same cause + fix every error notice says.
+        const v = describeApiError(e);
+        setErr(v ? [v.cause, v.fix].filter(Boolean).join(" ") : null);
       }
     } finally {
       setBusy(false);

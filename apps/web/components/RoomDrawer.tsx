@@ -41,6 +41,7 @@ import { fetchWhisperHistory, mergeWhisperLines } from "@/lib/whisper-history";
 import { roomHref } from "@/lib/world-url";
 import { themeStyle } from "@/lib/themes";
 import { useActiveTheme } from "@/lib/themes/useActiveTheme";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * A room, as a drawer on the map (DECISIONS #1).
@@ -149,7 +150,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
   const [noticeTitle, setNoticeTitle] = useState("");
   const [board, setBoard] = useState<BoardView | null>(null);
   const [civic, setCivic] = useState<RoomStatus[]>([]);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [refusal, setRefusal] = useState<RefusalInput | null>(null);
   const [space, setSpace] = useState<SpaceSilenceSource | null>(null);
   const [me, setMe] = useState<{ id: string; handle?: string } | null>(null);
@@ -255,7 +256,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
         setSpectator(true);
         return;
       }
-      setErr((e as Error).message);
+      setErr(e);
     });
   }, [room, signedIn]);
 
@@ -531,7 +532,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
       await api(`/api/v1/rooms/${data?.room.slug ?? room}/enter`, { method: "POST", body: "{}" });
       await load();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e);
     } finally {
       setStepping(false);
     }
@@ -1027,7 +1028,7 @@ export function RoomDrawer(props: RoomDrawerProps) {
             </p>
           ) : null}
           {refusal ? <RefusalNotice input={refusal} /> : null}
-          {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+          <ErrorNotice error={err} tone="drawer" className="mt-2" />
         </footer>
       )}
     </aside>

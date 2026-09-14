@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, type RoomPayload } from "@/lib/api";
 import { describeArrival, perceptionFromMe } from "@/lib/walk-in";
+import { ErrorNotice } from "@/components/ErrorNotice";
 
 /**
  * Walking in: what `/enter` was, as a small sheet on the map.
@@ -31,7 +32,7 @@ export function WalkInSheet({
   const [overhear, setOverhear] = useState(true);
   const [meId, setMeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   // Start from the choices this person already made, not from the defaults.
   useEffect(() => {
@@ -60,7 +61,7 @@ export function WalkInSheet({
       onArrived({ slug, title: `You're in the ${name}.`, line: describeArrival(payload?.nearby ?? [], meId, { lurk, overhear }) });
     } catch (e) {
       setBusy(false);
-      setErr((e as Error).message);
+      setErr(e);
     }
   }
 
@@ -120,7 +121,7 @@ export function WalkInSheet({
       >
         {busy ? "Stepping through…" : `Walk into the ${placeName}`}
       </button>
-      {err ? <p className="mt-2 text-sm text-red-300">{err}</p> : null}
+      <ErrorNotice error={err} className="mt-2" />
     </div>
   );
 }
