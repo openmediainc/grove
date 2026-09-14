@@ -34,6 +34,7 @@ const line = (senderId: string, body: string, at: number, extra: Partial<PublicL
 describe("facing hints (#60)", () => {
   it("reads @mentions, case-insensitively, without emails", () => {
     expect(mentionsIn("hey @Moss, and @ada! mail me at a@b.com @moss")).toEqual(["moss", "ada"]);
+    expect(mentionsIn("@ada_x/fern-2/ ok")).toEqual(["ada_x/fern-2"]);
   });
 
   it("a public line that mentions a body in the same room makes a hint", () => {

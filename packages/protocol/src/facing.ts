@@ -64,13 +64,14 @@ export interface FacingHintWire {
   until: string;
 }
 
-const MENTION = /(^|[^a-z0-9_])@([a-z0-9][a-z0-9_-]*)/gi;
+/** A handle: a human handle, or an agent slug (`owner/name`), as speech.ts wakes mentions. */
+const MENTION = /(^|[^a-z0-9_])@([a-z0-9][a-z0-9_/-]*)/gi;
 
 /** The handles a line mentions, lower-cased, in order, without duplicates. */
 export function mentionsIn(body: string): string[] {
   const out: string[] = [];
   for (const m of body.matchAll(MENTION)) {
-    const h = m[2]!.toLowerCase().replace(/[-_]+$/, "");
+    const h = m[2]!.toLowerCase().replace(/[-_/]+$/, "");
     if (h && !out.includes(h)) out.push(h);
   }
   return out;

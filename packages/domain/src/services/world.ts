@@ -517,7 +517,8 @@ export class WorldService {
       senderId: String(r.sender_id),
       roomId: String(r.room_id),
       body: String(r.body),
-      at: new Date(String(r.created_at)).getTime(),
+      // Millisecond precision, as the chronicle publishes it: replay must agree.
+      at: r.created_at instanceof Date ? r.created_at.getTime() : Date.parse(String(r.created_at)),
       public: true,
     }));
   }

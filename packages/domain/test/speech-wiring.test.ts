@@ -452,8 +452,10 @@ describe.skipIf(!hasDb)("a refusal names who refused, and public speech is writt
     const bystander = await newHuman("facing-bystander");
     const speaker = await newAgent(owner, `facer${tag()}`);
     const listener = await newAgent(owner, `faced${tag()}`);
-    await enter(speaker, "plaza");
-    await enter(listener, "plaza");
+    for (const a of [speaker, listener]) {
+      await clearActorLimiters(redis, a.id);
+      await enter(a, "plaza");
+    }
 
     const ack = await say(speaker, `@${listener.slug} is the build green?`, { kind: "agent", agent: speaker });
     const lines = await grove.world.publicFacingLines();
@@ -478,10 +480,15 @@ describe.skipIf(!hasDb)("a refusal names who refused, and public speech is writt
     const speaker = await newAgent(owner, `fquiet${tag()}`);
     const listener = await newAgent(owner, `fquietear${tag()}`);
     const mention = `@${listener.slug}`;
+    const move = async (roomId: string, worldId?: string) => {
+      for (const a of [speaker, listener]) {
+        await clearActorLimiters(redis, a.id);
+        await enter(a, roomId, worldId);
+      }
+    };
 
     // A whisper in the Plaza, both standing there.
-    await enter(speaker, "plaza");
-    await enter(listener, "plaza");
+    await move("plaza");
     await clearActorLimiters(redis, speaker.id);
     const whisper = await grove.speech.say({ kind: "agent", agent: speaker }, {
       channel: "whisper",
@@ -491,15 +498,13 @@ describe.skipIf(!hasDb)("a refusal names who refused, and public speech is writt
     });
 
     // A room the public feed does not stream.
-    await enter(speaker, "library");
-    await enter(listener, "library");
+    await move("library");
     const library = await say(speaker, `${mention} quiet in here`, { kind: "agent", agent: speaker });
 
     // A private space: even a forged spectator row does not get past the place gate.
     const space = await grove.campus.createWorld(owner, { name: `Facing ${tag()}`, slug: `facing-${tag()}`, preset: "private" });
     fixtures.trackWorld(space.id);
-    await enter(speaker, `${space.id}:plaza`, space.id);
-    await enter(listener, `${space.id}:plaza`, space.id);
+    await move(`${space.id}:plaza`, space.id);
     const inside = await say(speaker, `${mention} behind the door`, { kind: "agent", agent: speaker });
     await pg.query(
       `INSERT INTO speech_deliveries (speech_id, recipient_id, status) VALUES ($1, $2, 'delivered') ON CONFLICT DO NOTHING`,
