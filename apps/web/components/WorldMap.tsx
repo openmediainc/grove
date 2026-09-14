@@ -150,7 +150,7 @@ import {
   type Timeline,
 } from "@/lib/sequence";
 import { resourceTerms } from "@/lib/cost";
-import { skyAt, type Sky } from "./skyClock";
+import { bodyWashErase, skyAt, type Sky } from "./skyClock";
 import {
   DEPART_MS,
   ELSEWHERE,
@@ -2630,8 +2630,25 @@ export function WorldMap() {
        * ---------------------------------------------------------------- */
       await themeRef.current.art.prepare();
       if (cancelled || !canvasRef.current) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+      const mainCtx = canvas.getContext("2d");
+      if (!mainCtx) return;
+      /**
+       * The context every draw below paints into. It is the map canvas except
+       * for one synchronous pass a frame at night, when the depth list is run
+       * again into the body mask (#54) — the scene closures read `ctx` when they
+       * run, so repointing it for that pass needs no second set of closures.
+       */
+      let ctx: CanvasRenderingContext2D = mainCtx;
+
+      /* ---- bodies through the night (#54) ---------------------------
+       * Two offscreen canvases the size of the map, made once and resized
+       * with it: the MASK holds what is visible of every body (bodies drawn,
+       * everything in front of them erased by its own silhouette), and the
+       * WASH is the hour's tint with the mask cut out of it down to
+       * BODY_WASH_CAP. Only used while the wash is past the cap.
+       * ---------------------------------------------------------------- */
+      const nightLayers: { mask: HTMLCanvasElement; wash: HTMLCanvasElement } | null =
+        typeof document === "undefined" ? null : { mask: document.createElement("canvas"), wash: document.createElement("canvas") };
 
       /* ---- one lamp, drawn once -------------------------------------
        * A radial gradient is an allocation, and the campus has forty-odd lamps
@@ -2880,7 +2897,7 @@ export function WorldMap() {
          * the world has grown: a few dozen entries, sorted once.
          * ------------------------------------------------------------- */
         /** `ax`/`ay`: the ground anchor, for Depth view's far-art shrink. */
-        type Scene = { s: number; draw: () => void; ax?: number; ay?: number };
+        type Scene = { s: number; draw: () => void; ax?: number; ay?: number; body?: true };
         const scene: Scene[] = [];
         /** Depth view's soft ground shadows, painted on the ground before the depth list. */
         const shadows: Array<{ x: number; y: number; rx: number; ry: number; dx: number; dy: number; alpha: number }> = [];
@@ -3228,6 +3245,7 @@ export function WorldMap() {
             s: at.x + at.y - 0.5,
             ax: x,
             ay: feet,
+            body: true,
             draw: () => {
               ctx.save();
               ctx.globalAlpha = alpha;
@@ -3319,6 +3337,7 @@ export function WorldMap() {
               s: tx + ty - 0.5,
               ax: x,
               ay: y + 18,
+              body: true,
               draw: () => {
                 ctx.save();
                 ctx.globalAlpha = AWAY_ALPHA;
@@ -3378,6 +3397,7 @@ export function WorldMap() {
           const startAlpha = gone.alpha;
           scene.push({
             s: gone.x + gone.y - 0.5,
+            body: true,
             draw: () => {
               ctx.save();
               // The seat empties: a ring opening outward where the body stood,
@@ -3411,22 +3431,28 @@ export function WorldMap() {
           }
           ctx.restore();
         }
-        if (deep) {
-          for (const item of scene) {
-            // Far upright art is drawn a touch smaller, about its own ground
-            // anchor. Never larger than 1, so the #52 body boxes and decor
-            // cut-aways (computed unscaled) still contain it.
-            const sc = item.ay === undefined ? 1 : perspectiveScale(item.ay * z + v.py, cssH, 1);
-            if (sc > 0.999) {
-              item.draw();
-              continue;
-            }
-            const ax = item.ax ?? 0;
-            const ay = item.ay ?? 0;
-            ctx.setTransform(dpr * z * sc, 0, 0, dpr * z * sc, dpr * (ax * z * (1 - sc) + v.px), dpr * (ay * z * (1 - sc) + v.py));
+        /** One depth-list entry, with Depth view's far-art shrink. Paints into whatever `ctx` is now. */
+        const paintItem = (item: Scene) => {
+          if (!deep) {
             item.draw();
-            upright();
+            return;
           }
+          // Far upright art is drawn a touch smaller, about its own ground
+          // anchor. Never larger than 1, so the #52 body boxes and decor
+          // cut-aways (computed unscaled) still contain it.
+          const sc = item.ay === undefined ? 1 : perspectiveScale(item.ay * z + v.py, cssH, 1);
+          if (sc > 0.999) {
+            item.draw();
+            return;
+          }
+          const ax = item.ax ?? 0;
+          const ay = item.ay ?? 0;
+          ctx.setTransform(dpr * z * sc, 0, 0, dpr * z * sc, dpr * (ax * z * (1 - sc) + v.px), dpr * (ay * z * (1 - sc) + v.py));
+          item.draw();
+          upright();
+        };
+        if (deep) {
+          for (const item of scene) paintItem(item);
           // A faint haze toward the far edge: one fill over the top of the view, gradient cached.
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
           ctx.fillStyle = hazeFor(theme, cssH);
@@ -3443,7 +3469,9 @@ export function WorldMap() {
          * heartbeat rings and the hover card. That is what "legibility beats
          * atmosphere" means in practice rather than as a promise, and it is
          * why the deepest hour can be a third of an alpha without any hour
-         * making anything unreadable.
+         * making anything unreadable. Bodies are the exception that proves it:
+         * they are in the tinted layer, so they take a lighter wash, capped at
+         * BODY_WASH_CAP (#54, MOTION.md §10) — the work stays visible at 03:00.
          *
          * Two fillRects for the sky, however far out you are zoomed.
          *
@@ -3466,8 +3494,70 @@ export function WorldMap() {
             ctx.restore();
           }
           if (hour.wash) {
-            ctx.fillStyle = hour.wash;
-            ctx.fillRect(0, 0, cssW, cssH);
+            // Bodies take a lighter wash (#54): the mask of what is visible of
+            // them is cut out of the tint down to BODY_WASH_CAP, so a body is
+            // never dimmed by more than that at any hour.
+            const erase = bodyWashErase(hour.washAlpha);
+            const firstBody = erase > 0 && bodyBoxes.length && nightLayers ? scene.findIndex((it) => it.body) : -1;
+            if (firstBody >= 0 && nightLayers) {
+              const { mask, wash } = nightLayers;
+              for (const c of [mask, wash]) {
+                if (c.width !== el.width || c.height !== el.height) {
+                  c.width = el.width;
+                  c.height = el.height;
+                }
+              }
+              const m = mask.getContext("2d");
+              const w = wash.getContext("2d");
+              if (m && w) {
+                m.setTransform(1, 0, 0, 1, 0, 0);
+                m.globalCompositeOperation = "source-over";
+                m.globalAlpha = 1;
+                m.clearRect(0, 0, mask.width, mask.height);
+                m.save();
+                // Only the ground round a body can hold one: clip there so the
+                // second run of the list rasterises almost nothing.
+                m.setTransform(dpr, 0, 0, dpr, 0, 0);
+                m.beginPath();
+                for (const r of bodyBoxes) m.rect(r.x0 - 4, r.y0 - 4, r.x1 - r.x0 + 8, r.y1 - r.y0 + 8);
+                m.clip();
+                m.imageSmoothingEnabled = false;
+                ctx = m;
+                try {
+                  upright();
+                  // Nothing earlier in the list than the first body can stand in front of one.
+                  for (let i = firstBody; i < scene.length; i++) {
+                    const item = scene[i]!;
+                    // Bodies paint the mask; anything nearer erases what it covers of them.
+                    m.globalCompositeOperation = item.body ? "source-over" : "destination-out";
+                    paintItem(item);
+                  }
+                } finally {
+                  ctx = mainCtx;
+                }
+                m.restore();
+                w.setTransform(1, 0, 0, 1, 0, 0);
+                w.globalCompositeOperation = "source-over";
+                w.globalAlpha = 1;
+                w.clearRect(0, 0, wash.width, wash.height);
+                w.fillStyle = hour.wash;
+                w.fillRect(0, 0, wash.width, wash.height);
+                w.globalCompositeOperation = "destination-out";
+                w.globalAlpha = erase;
+                w.drawImage(mask, 0, 0);
+                w.globalCompositeOperation = "source-over";
+                w.globalAlpha = 1;
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.drawImage(wash, 0, 0);
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+              } else {
+                ctx.fillStyle = hour.wash;
+                ctx.fillRect(0, 0, cssW, cssH);
+              }
+            } else {
+              ctx.fillStyle = hour.wash;
+              ctx.fillRect(0, 0, cssW, cssH);
+            }
           }
           ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * v.px, dpr * v.py);
         }

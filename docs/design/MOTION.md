@@ -207,3 +207,40 @@ Invariants the renderer keeps:
 A small banner letter beside an agent's nameplate — **H**ang out, **A**wait orders, **W**ork,
 **P**erform, **S**cribe — in the tech tree's words on hover/peek, including whether Grove enforces
 it or merely asks. Humans carry none.
+
+## 10. Bodies at night
+
+The hour's wash (`components/skyClock.ts`) dims the world layer — terrain, buildings, props and
+bodies — by up to **0.34** at deep night. For the ground and the buildings that is the point. For a
+body it is not: a body is the work, and the work is what the map exists to show. So a body only
+ever takes a lighter version of the same wash, **capped at `BODY_WASH_CAP` = 0.12**.
+
+| hour | world wash | on a body |
+|---|---|---|
+| dusk 19:30 | 0 | 0 |
+| day (10:00–16:00) | 0.08 | 0.08 |
+| evening 21:00 | 0.13 | 0.12 |
+| night 23:00 | 0.25 | 0.12 |
+| deep night 03:00 | 0.34 | 0.12 |
+
+How it is drawn (`WorldMap.tsx`, "the hour"): while the wash is past the cap, the depth list is run
+a second time into an offscreen **mask**, clipped to the body boxes and starting at the first body in
+the sort. Bodies (live, resting at plot, departing) paint the mask; every entry after them — a
+building, scaffold, prop or critter in front — is drawn with `destination-out`, so it erases
+exactly what it covers. The mask is then cut out of the wash layer at `1 − cap / wash`
+(`bodyWashErase`), leaving the cap on a body pixel and the full wash everywhere else, and the wash
+layer goes down in one draw. The daylight `screen` lift is brightening, not dimming, and stays on
+everything.
+
+Rules it keeps:
+
+1. **Same hue.** A body still reads as night; it is lit less, not repainted.
+2. **Occlusion is unchanged.** A building in front of a body still hides it, and the part it hides
+   takes the building's full wash (#52's depth rule).
+3. **Partial alpha is honest.** An idle, sleeping or resting body (alpha < 1) masks in proportion,
+   so it lands between the cap and the world's wash — dimmer bodies stay dimmer.
+4. **Bounded cost.** Nothing extra when the wash is under the cap (all day and dusk to mid-evening)
+   or nobody is in view; otherwise one clipped re-run of the list from the first body plus two
+   full-canvas composites.
+5. Everything read off the map — captions, speech, verb glyphs, hazard and outcome marks — was
+   already painted after the wash and is untouched.

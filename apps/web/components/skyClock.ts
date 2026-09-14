@@ -15,7 +15,8 @@
  *     laid over the terrain and the sprites ONLY — never over speech,
  *     nameplates, hazard marks or the hover card, which the renderer draws after
  *     it. There is no hour at which the map stops being readable, because the
- *     things you read are not in the tinted layer.
+ *     things you read are not in the tinted layer. Bodies ARE in it, so they
+ *     take a lighter wash: never more than BODY_WASH_CAP (below, #54).
  *  2. NO SHIMMER. Pure function of wall-clock UTC. Two tabs at the same instant
  *     paint the same colour, a reload changes nothing, and nothing here consults
  *     Math.random, array order or poll order.
@@ -54,6 +55,8 @@ export type Sky = {
   lift: number;
   /** Hue wash laid over the world layer as normal alpha, or null when there is none. */
   wash: string | null;
+  /** The wash's alpha alone, 0..0.34 (0 when `wash` is null). */
+  washAlpha: number;
   /** 0..1, how hard the lanterns and lit windows are burning. */
   lamp: number;
 };
@@ -137,6 +140,36 @@ export function skyAt(nowMs: number): Sky {
     label: a.label,
     lift,
     wash: al < 0.004 ? null : `rgba(${r},${g},${bl},${al.toFixed(3)})`,
+    washAlpha: al < 0.004 ? 0 : Number(al.toFixed(3)),
     lamp,
   };
+}
+
+/* --- bodies through the night (#54) --------------------------------- *
+ * The wash dims everything under it by its alpha, and the deepest hour is
+ * 0.34: a third. That is right for the ground and the buildings and wrong for
+ * the bodies, because a body is the work, and the work is the thing Glasshouse
+ * exists to show. So a body only ever takes a lighter version of the same
+ * wash, capped at BODY_WASH_CAP. It still reads as night — same hue, and dusk
+ * to mid-evening is untouched because the wash is under the cap there — but a
+ * body at 03:00 is never a third darker than it is at dusk.
+ * ------------------------------------------------------------------- */
+
+/** The most the hour's wash may dim a body. */
+export const BODY_WASH_CAP = 0.12;
+
+/** The wash alpha a body actually takes at a world wash of `washAlpha`. */
+export function bodyWashAlpha(washAlpha: number): number {
+  return Math.max(0, Math.min(washAlpha, BODY_WASH_CAP));
+}
+
+/**
+ * How much of the wash to cut out where a body is, as a `destination-out`
+ * alpha over the wash layer: 0 when the wash is already under the cap (no
+ * body pass at all), else 1 − cap / wash, which leaves exactly the cap
+ * (`wash · (1 − erase) = cap`) on a fully opaque body pixel.
+ */
+export function bodyWashErase(washAlpha: number): number {
+  if (!(washAlpha > BODY_WASH_CAP)) return 0;
+  return 1 - BODY_WASH_CAP / washAlpha;
 }
