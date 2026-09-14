@@ -154,7 +154,7 @@ describe.skipIf(!hasDb)("board routes", () => {
     expect(image.statusCode).toBe(201);
     const post = (image.json() as { post: { id: string; author: { kind: string }; image: { url: string; mime: string } } }).post;
     expect(post.author.kind).toBe("agent");
-    expect(post.image.url).toBe(`/api/v1/board/posts/${post.id}/image`);
+    expect(post.image.url).toMatch(new RegExp(`^/api/v1/board/posts/${post.id}/image\\?v=[0-9a-f]{12}$`));
 
     const mcp = await app.inject({
       method: "POST",
@@ -180,7 +180,7 @@ describe.skipIf(!hasDb)("board routes", () => {
     expect(img.statusCode).toBe(200);
     expect(img.headers["content-type"]).toBe("image/png");
     expect(img.headers["x-content-type-options"]).toBe("nosniff");
-    expect(String(img.headers["cache-control"])).toMatch(/^private/);
+    expect(img.headers["cache-control"]).toBe("private, max-age=60, must-revalidate");
     expect(String(img.headers["content-security-policy"])).toContain("sandbox");
     expect(img.rawPayload.subarray(1, 4).toString("latin1")).toBe("PNG");
     const again = await app.inject({ method: "GET", url: post.image.url, headers: { "if-none-match": String(img.headers.etag) } });
@@ -260,7 +260,8 @@ describe.skipIf(!hasDb)("board routes", () => {
     expect((await app.inject({ method: "GET", url: `/api/v1/mod/board/posts/${id}/image`, headers: { cookie: reader.cookie } })).statusCode).toBe(404);
     const opImage = await app.inject({ method: "GET", url: `/api/v1/mod/board/posts/${id}/image`, headers: { cookie: op.cookie } });
     expect(opImage.statusCode).toBe(200);
-    expect(opImage.headers["cache-control"]).toBe("no-store");
+    expect(opImage.headers["cache-control"]).toBe("private, no-store");
+    expect(opImage.headers.etag).toBeUndefined();
 
     const hide = await app.inject({
       method: "POST",
@@ -278,5 +279,68 @@ describe.skipIf(!hasDb)("board routes", () => {
     const del = await app.inject({ method: "DELETE", url: `/api/v1/board/posts/${id}`, headers: { cookie: owner.cookie } });
     expect(del.statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: `/api/v1/mod/board/posts/${id}/image`, headers: { cookie: op.cookie } })).statusCode).toBe(404);
+  });
+  it("caches board images per access level, and a hide changes the URL (#53)", async () => {
+    const owner = await signIn("bdcown");
+    const member = await signIn("bdcmem");
+    const op = await signIn("bdcop");
+    await pg.query(`UPDATE humans SET role = 'operator' WHERE id = $1`, [op.id]);
+    const png = tinyPng().toString("base64");
+
+    // Public (Open and Watch only): private cache, short max-age, ETag revalidation.
+    for (const preset of ["public_write", "public_view"]) {
+      const w = await createSpace(owner, preset);
+      const posted = await app.inject({ method: "POST", url: `/api/v1/spaces/${w.id}/board`, headers: { cookie: owner.cookie }, payload: { kind: "image", image_base64: png } });
+      const url = (posted.json() as { post: { image: { url: string } } }).post.image.url;
+      for (const headers of [{}, { cookie: member.cookie }, { cookie: owner.cookie }]) {
+        const r = await app.inject({ method: "GET", url, headers });
+        expect(r.statusCode).toBe(200);
+        expect(r.headers["cache-control"]).toBe("private, max-age=60, must-revalidate");
+        expect(r.headers.etag).toMatch(/^"[0-9a-f]{64}"$/);
+        expect(String(r.headers.vary)).toContain("cookie");
+      }
+    }
+
+    // Private: no-store for the people inside, no ETag, never a 304; 404 to everyone else.
+    const shut = await createSpace(owner, "private");
+    const posted = await app.inject({ method: "POST", url: `/api/v1/spaces/${shut.id}/board`, headers: { cookie: owner.cookie }, payload: { kind: "image", image_base64: png } });
+    const shutPost = (posted.json() as { post: { id: string; image: { url: string } } }).post;
+    const mine = await app.inject({ method: "GET", url: shutPost.image.url, headers: { cookie: owner.cookie } });
+    expect(mine.statusCode).toBe(200);
+    expect(mine.headers["cache-control"]).toBe("private, no-store");
+    expect(mine.headers.etag).toBeUndefined();
+    const withTag = await app.inject({ method: "GET", url: shutPost.image.url, headers: { cookie: owner.cookie, "if-none-match": `"${"0".repeat(64)}"` } });
+    expect(withTag.statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: shutPost.image.url, headers: { cookie: member.cookie } })).statusCode).toBe(404);
+    const opShut = await app.inject({ method: "GET", url: `/api/v1/mod/board/posts/${shutPost.id}/image`, headers: { cookie: op.cookie } });
+    expect(opShut.headers["cache-control"]).toBe("private, no-store");
+
+    // A hide bumps the version: the holder's board now names a different URL, served no-store.
+    const open = await createSpace(owner, "public_write");
+    const p2 = await app.inject({ method: "POST", url: `/api/v1/spaces/${open.id}/board`, headers: { cookie: owner.cookie }, payload: { kind: "image", image_base64: png } });
+    const post = (p2.json() as { post: { id: string; image: { url: string } } }).post;
+    const hide = await app.inject({ method: "POST", url: `/api/v1/mod/board/posts/${post.id}/hide`, headers: { cookie: op.cookie }, payload: { hidden: true, reason: "check" } });
+    expect(hide.statusCode).toBe(200);
+    const ownerBoard = await app.inject({ method: "GET", url: `/api/v1/spaces/${open.id}/board`, headers: { cookie: owner.cookie } });
+    const hiddenUrl = (ownerBoard.json() as { posts: Array<{ id: string; image: { url: string } }> }).posts.find((p) => p.id === post.id)!.image.url;
+    expect(hiddenUrl).not.toBe(post.image.url);
+    const asHolder = await app.inject({ method: "GET", url: hiddenUrl, headers: { cookie: owner.cookie } });
+    expect(asHolder.statusCode).toBe(200);
+    expect(asHolder.headers["cache-control"]).toBe("private, no-store");
+    // Revalidating the old public copy now fails for everyone else.
+    expect((await app.inject({ method: "GET", url: post.image.url, headers: { cookie: member.cookie, "if-none-match": "\"x\"" } })).statusCode).toBe(404);
+    // Unhide then hide again: a newer URL still.
+    await app.inject({ method: "POST", url: `/api/v1/mod/board/posts/${post.id}/hide`, headers: { cookie: op.cookie }, payload: { hidden: false } });
+    const reopened = await app.inject({ method: "GET", url: `/api/v1/spaces/${open.id}/board` });
+    const visibleUrl = (reopened.json() as { posts: Array<{ id: string; image: { url: string } }> }).posts.find((p) => p.id === post.id)!.image.url;
+    expect(visibleUrl).toBe(post.image.url);
+    await app.inject({ method: "POST", url: `/api/v1/mod/board/posts/${post.id}/hide`, headers: { cookie: op.cookie }, payload: { hidden: true, reason: "again" } });
+    const again = await app.inject({ method: "GET", url: `/api/v1/spaces/${open.id}/board`, headers: { cookie: owner.cookie } });
+    const againUrl = (again.json() as { posts: Array<{ id: string; image: { url: string } }> }).posts.find((p) => p.id === post.id)!.image.url;
+    expect(new Set([post.image.url, hiddenUrl, againUrl]).size).toBe(3);
+
+    // Delete: the URL answers 404, whatever version it carries.
+    expect((await app.inject({ method: "DELETE", url: `/api/v1/board/posts/${post.id}`, headers: { cookie: owner.cookie } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: againUrl, headers: { cookie: owner.cookie } })).statusCode).toBe(404);
   });
 });

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { BoardImage, GroveApp } from "@grove/domain";
+import { boardImageCacheControl, type BoardImage, type GroveApp } from "@grove/domain";
 import { toCamel } from "@grove/protocol";
 import { optionalActor, requireActor, requireHuman, requireOperator } from "./auth.js";
 import { sendOk } from "./http.js";
@@ -31,22 +31,30 @@ const postId = (req: FastifyRequest) => (req.params as { id: string }).id;
 
 /**
  * Image bytes with headers that keep them bytes: the type the server sniffed
- * (never the uploader's), nosniff, a CSP that runs nothing, and a cache that
- * is private to this browser (an access check sits in front of every read, so
- * no shared cache may keep a copy). The sha256 ETag makes repeat views cheap.
+ * (never the uploader's), nosniff, a CSP that runs nothing.
+ *
+ * Caching (queue #53) is always `private`: an access check sits in front of
+ * every read, so no shared cache may keep a copy. A private space's image, a
+ * hidden post (only its holder or author reads it) and an operator's read are
+ * `no-store`. A public board's image may be reused for a minute and is then
+ * revalidated against its sha256 ETag, so a hide or delete reaches a browser
+ * that already loaded it within a minute (the board also gives it a new URL).
  */
-function sendImage(req: FastifyRequest, reply: FastifyReply, img: BoardImage, cache = "private, max-age=86400") {
-  const etag = `"${img.etag}"`;
+function sendImage(req: FastifyRequest, reply: FastifyReply, img: BoardImage) {
   reply
     .header("content-type", img.mime)
     .header("x-content-type-options", "nosniff")
     .header("content-security-policy", "default-src 'none'; sandbox")
     .header("cross-origin-resource-policy", "same-origin")
     .header("content-disposition", "inline")
-    .header("cache-control", cache)
-    .header("etag", etag);
-  const inm = req.headers["if-none-match"];
-  if (typeof inm === "string" && inm.split(",").some((t) => t.trim() === etag)) return reply.status(304).send();
+    .header("cache-control", boardImageCacheControl(img.cache))
+    .header("vary", "cookie, authorization");
+  if (img.cache === "revalidate") {
+    const etag = `"${img.etag}"`;
+    reply.header("etag", etag);
+    const inm = req.headers["if-none-match"];
+    if (typeof inm === "string" && inm.split(",").some((t) => t.trim() === etag)) return reply.status(304).send();
+  }
   return reply.status(200).send(img.bytes);
 }
 
@@ -103,7 +111,6 @@ export async function registerBoard(app: FastifyInstance, grove: GroveApp) {
   app.get("/api/v1/mod/board/posts/:id/image", async (req, reply) => {
     const human = await requireHuman(req, grove);
     requireOperator(human);
-    const img = await grove.board.imageForOperator(human, postId(req));
-    return sendImage(req, reply, img, "no-store");
+    return sendImage(req, reply, await grove.board.imageForOperator(human, postId(req)));
   });
 }

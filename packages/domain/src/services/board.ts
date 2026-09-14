@@ -37,7 +37,35 @@ export type BoardPostInput = {
   imageBase64?: unknown;
 };
 
-export type BoardImage = { mime: string; bytes: Buffer; etag: string };
+/**
+ * How a browser may keep an image (queue #53). `revalidate`: a post on a
+ * non-private board, visible to anyone who can see the space; the browser may
+ * reuse it briefly and must then ask again with its ETag. `no-store`: a
+ * private space's image, a hidden post read by its holder or author, or an
+ * operator's read; nothing is kept. Never a shared cache in either case.
+ */
+export type BoardImageCache = "revalidate" | "no-store";
+
+export type BoardImage = { mime: string; bytes: Buffer; etag: string; cache: BoardImageCache };
+
+/** Seconds a browser may reuse a public board image before it must revalidate. */
+export const BOARD_IMAGE_MAX_AGE = 60;
+
+/** The Cache-Control header for each cache class. `private` always: an access check sits in front of every read. */
+export function boardImageCacheControl(cache: BoardImageCache): string {
+  return cache === "revalidate" ? `private, max-age=${BOARD_IMAGE_MAX_AGE}, must-revalidate` : "private, no-store";
+}
+
+/**
+ * The version in an image's URL. It changes whenever moderation changes the
+ * post (a hide gets a new URL; a hide after an unhide a newer one), so a page
+ * that re-reads the board never points at a copy a browser kept from before.
+ * A delete removes the post, so its URL is gone from every board and answers 404.
+ */
+export function boardImageVersion(sha256: string, hiddenByMod: boolean, hiddenAt: unknown): string {
+  const at = hiddenAt ? new Date(String(hiddenAt)).getTime() : 0;
+  return createHash("sha256").update(`${sha256}|${hiddenByMod ? 1 : 0}|${at}`).digest("hex").slice(0, 12);
+}
 
 const NOT_FOUND = () => new GroveError("NOT_FOUND", "Not found.", { httpStatus: 404 });
 
@@ -82,7 +110,7 @@ const POST_FROM = `
 
 const POST_COLUMNS = `
   p.id, p.world_id, p.author_id, p.author_kind, p.kind, p.caption, p.link_url, p.link_preview,
-  p.image_mime, p.image_width, p.image_height, p.image_size, p.created_at, p.hidden_by_mod,
+  p.image_mime, p.image_width, p.image_height, p.image_size, p.image_sha256, p.created_at, p.hidden_by_mod, p.hidden_at,
   w.slug::text AS world_slug, w.owner_human_id AS world_owner,
   COALESCE(ph.display_name, pa.display_name, 'Someone') AS author_name,
   COALESCE(ph.handle::text, pa.slug::text) AS author_handle`;
@@ -173,7 +201,7 @@ export class BoardService {
       image:
         kind === "image" && r.image_mime
           ? {
-              url: `/api/v1/board/posts/${encodeURIComponent(id)}/image`,
+              url: `/api/v1/board/posts/${encodeURIComponent(id)}/image?v=${boardImageVersion(String(r.image_sha256 ?? ""), Boolean(r.hidden_by_mod), r.hidden_at)}`,
               mime: String(r.image_mime),
               width: Number(r.image_width),
               height: Number(r.image_height),
@@ -326,14 +354,23 @@ export class BoardService {
   /** The bytes of an image post, for a reader who may see the post. */
   async image(actor: BoardActor | null, postId: string): Promise<BoardImage> {
     const { rows } = await this.store.pg.query(
-      `SELECT p.image_mime, p.image_sha256, i.bytes ${POST_FROM}
+      `SELECT p.image_mime, p.image_sha256, i.bytes,
+              (w.policy_preset = 'private' OR p.hidden_by_mod
+                OR COALESCE(pa.claim_state = 'suspended', FALSE)
+                OR COALESCE(ph.suspended_at IS NOT NULL, FALSE)) AS no_store
+         ${POST_FROM}
          JOIN board_images i ON i.post_id = p.id
         WHERE p.id = $1 AND ${postVisibleSql("$2")}`,
       [postId, viewerIdOf(actor)],
     );
     const r = rows[0];
     if (!r) throw NOT_FOUND();
-    return { mime: String(r.image_mime), bytes: r.bytes as Buffer, etag: String(r.image_sha256) };
+    return {
+      mime: String(r.image_mime),
+      bytes: r.bytes as Buffer,
+      etag: String(r.image_sha256),
+      cache: r.no_store ? "no-store" : "revalidate",
+    };
   }
 
   /** The space's holder removes a post from their board. Anyone else: 404. */
@@ -425,6 +462,6 @@ export class BoardService {
     );
     const r = rows[0];
     if (!r) throw NOT_FOUND();
-    return { mime: String(r.image_mime), bytes: r.bytes as Buffer, etag: String(r.image_sha256) };
+    return { mime: String(r.image_mime), bytes: r.bytes as Buffer, etag: String(r.image_sha256), cache: "no-store" };
   }
 }

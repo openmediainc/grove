@@ -77,7 +77,16 @@ export {
 export { CardService, type CardView, type CardSource } from "./services/cards.js";
 export { BrandingService, normaliseSiteUrl } from "./services/branding.js";
 export { SpaceMoveService } from "./services/space-moves.js";
-export { BoardService, type BoardActor, type BoardPostInput, type BoardImage } from "./services/board.js";
+export {
+  BoardService,
+  BOARD_IMAGE_MAX_AGE,
+  boardImageCacheControl,
+  boardImageVersion,
+  type BoardActor,
+  type BoardPostInput,
+  type BoardImage,
+  type BoardImageCache,
+} from "./services/board.js";
 export { inspectBoardImage, sniffImageMime, type BoardImageResult } from "./board-image.js";
 export type { SpaceTransfer, TransferCandidates, RelocationPlan } from "./services/space-moves.js";
 export { SiteFetchSession, SiteFetchError, isBlockedAddress, SITE_FETCH_USER_AGENT } from "./site-fetch.js";
