@@ -1,0 +1,309 @@
+/* GENERATED from packages/ui/tokens/values.ts by css.ts. Do not edit by hand:
+   change values.ts, then run `UPDATE_BRAND=1 pnpm --filter @grove/ui test`. */
+
+:root {
+  --gh-text-xs: calc(0.75rem * var(--gh-type-scale, 1));
+  --gh-text-sm: calc(0.875rem * var(--gh-type-scale, 1));
+  --gh-text-base: calc(1rem * var(--gh-type-scale, 1));
+  --gh-text-lg: calc(1.125rem * var(--gh-type-scale, 1));
+  --gh-text-xl: calc(1.375rem * var(--gh-type-scale, 1));
+  --gh-text-2xl: calc(1.75rem * var(--gh-type-scale, 1));
+  --gh-text-3xl: calc(2.25rem * var(--gh-type-scale, 1));
+  --gh-text-4xl: calc(3rem * var(--gh-type-scale, 1));
+  --gh-space-0: 0;
+  --gh-space-1: 0.25rem;
+  --gh-space-2: 0.5rem;
+  --gh-space-3: 0.75rem;
+  --gh-space-4: 1rem;
+  --gh-space-5: 1.25rem;
+  --gh-space-6: 1.5rem;
+  --gh-space-8: 2rem;
+  --gh-space-10: 2.5rem;
+  --gh-space-12: 3rem;
+  --gh-space-16: 4rem;
+  --gh-radius-sm: 4px;
+  --gh-radius-md: 8px;
+  --gh-radius-lg: 12px;
+  --gh-radius-xl: 16px;
+  --gh-radius-pill: 999px;
+  --gh-font-sans: var(--gh-font-schibsted, "Schibsted Grotesk"), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --gh-font-mono: var(--gh-font-fragment, "Fragment Mono"), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --gh-label-size: calc(0.6875rem * var(--gh-type-scale, 1));
+  --gh-label-tracking: 0.08em;
+  --gh-ring: 0 0 0 2px var(--gh-ground), 0 0 0 4px var(--gh-focus);
+  --gh-duration-fast: 120ms;
+  --gh-duration-base: 180ms;
+  --gh-duration-slow: 280ms;
+  --gh-ease: cubic-bezier(0.2, 0, 0, 1);
+  --gh-ground: #F3F6F8;
+  --gh-ground-rgb: 243 246 248;
+  --gh-surface: #FBFCFD;
+  --gh-surface-rgb: 251 252 253;
+  --gh-surface-raised: #FFFFFF;
+  --gh-surface-raised-rgb: 255 255 255;
+  --gh-tint: #DCE6EE;
+  --gh-tint-rgb: 220 230 238;
+  --gh-frost: rgb(246 249 251 / 0.94);
+  --gh-frost-blur: rgb(246 249 251 / 0.8);
+  --gh-ink: #0E1B2B;
+  --gh-ink-rgb: 14 27 43;
+  --gh-muted: #4A5A6C;
+  --gh-muted-rgb: 74 90 108;
+  --gh-line: #C9D4DD;
+  --gh-line-rgb: 201 212 221;
+  --gh-line-strong: #6E7D8C;
+  --gh-line-strong-rgb: 110 125 140;
+  --gh-signal: #E2542B;
+  --gh-signal-rgb: 226 84 43;
+  --gh-signal-ink: #0E1B2B;
+  --gh-signal-ink-rgb: 14 27 43;
+  --gh-signal-text: #A8380F;
+  --gh-signal-text-rgb: 168 56 15;
+  --gh-sky: #3E7CB1;
+  --gh-sky-rgb: 62 124 177;
+  --gh-human: #8A5200;
+  --gh-human-rgb: 138 82 0;
+  --gh-agent: #0A6680;
+  --gh-agent-rgb: 10 102 128;
+  --gh-focus: #3E7CB1;
+  --gh-focus-rgb: 62 124 177;
+  --gh-danger: #f87171;
+  --gh-danger-rgb: 248 113 113;
+  --gh-danger-ink: #B42318;
+  --gh-danger-ink-rgb: 180 35 24;
+  --gh-success: #1A6B43;
+  --gh-success-rgb: 26 107 67;
+  --gh-elevation-1: 0 1px 2px rgb(14 27 43 / 0.08);
+  --gh-elevation-2: 0 4px 12px rgb(14 27 43 / 0.10), 0 1px 2px rgb(14 27 43 / 0.06);
+  --gh-elevation-3: 0 12px 32px rgb(14 27 43 / 0.16), 0 2px 6px rgb(14 27 43 / 0.08);
+  --gh-type-scale: 1;
+  --gh-mode: light;
+}
+
+/* No stored choice: follow the system. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode]) {
+    --gh-ground: #0A0B14;
+    --gh-ground-rgb: 10 11 20;
+    --gh-surface: #12142A;
+    --gh-surface-rgb: 18 20 42;
+    --gh-surface-raised: #1B1E3A;
+    --gh-surface-raised-rgb: 27 30 58;
+    --gh-tint: #232748;
+    --gh-tint-rgb: 35 39 72;
+    --gh-frost: rgb(16 18 31 / 0.94);
+    --gh-frost-blur: rgb(16 18 31 / 0.8);
+    --gh-ink: #E4E2F0;
+    --gh-ink-rgb: 228 226 240;
+    --gh-muted: #A9A6C0;
+    --gh-muted-rgb: 169 166 192;
+    --gh-line: #2A2E52;
+    --gh-line-rgb: 42 46 82;
+    --gh-line-strong: #7A7EA8;
+    --gh-line-strong-rgb: 122 126 168;
+    --gh-signal: #E2542B;
+    --gh-signal-rgb: 226 84 43;
+    --gh-signal-ink: #0A0B14;
+    --gh-signal-ink-rgb: 10 11 20;
+    --gh-signal-text: #F2794F;
+    --gh-signal-text-rgb: 242 121 79;
+    --gh-sky: #B7A6F2;
+    --gh-sky-rgb: 183 166 242;
+    --gh-human: #F4B860;
+    --gh-human-rgb: 244 184 96;
+    --gh-agent: #7FD1E8;
+    --gh-agent-rgb: 127 209 232;
+    --gh-focus: #B7A6F2;
+    --gh-focus-rgb: 183 166 242;
+    --gh-danger: #f87171;
+    --gh-danger-rgb: 248 113 113;
+    --gh-danger-ink: #f87171;
+    --gh-danger-ink-rgb: 248 113 113;
+    --gh-success: #6FD3A0;
+    --gh-success-rgb: 111 211 160;
+    --gh-elevation-1: 0 1px 2px rgb(0 0 0 / 0.4);
+    --gh-elevation-2: 0 4px 14px rgb(0 0 0 / 0.45);
+    --gh-elevation-3: 0 14px 36px rgb(0 0 0 / 0.55);
+    --gh-type-scale: 1;
+    --gh-mode: night;
+  }
+}
+
+/* A manual choice on <html>, or a scoped preview on any element. */
+[data-mode="light"] {
+  --gh-ground: #F3F6F8;
+  --gh-ground-rgb: 243 246 248;
+  --gh-surface: #FBFCFD;
+  --gh-surface-rgb: 251 252 253;
+  --gh-surface-raised: #FFFFFF;
+  --gh-surface-raised-rgb: 255 255 255;
+  --gh-tint: #DCE6EE;
+  --gh-tint-rgb: 220 230 238;
+  --gh-frost: rgb(246 249 251 / 0.94);
+  --gh-frost-blur: rgb(246 249 251 / 0.8);
+  --gh-ink: #0E1B2B;
+  --gh-ink-rgb: 14 27 43;
+  --gh-muted: #4A5A6C;
+  --gh-muted-rgb: 74 90 108;
+  --gh-line: #C9D4DD;
+  --gh-line-rgb: 201 212 221;
+  --gh-line-strong: #6E7D8C;
+  --gh-line-strong-rgb: 110 125 140;
+  --gh-signal: #E2542B;
+  --gh-signal-rgb: 226 84 43;
+  --gh-signal-ink: #0E1B2B;
+  --gh-signal-ink-rgb: 14 27 43;
+  --gh-signal-text: #A8380F;
+  --gh-signal-text-rgb: 168 56 15;
+  --gh-sky: #3E7CB1;
+  --gh-sky-rgb: 62 124 177;
+  --gh-human: #8A5200;
+  --gh-human-rgb: 138 82 0;
+  --gh-agent: #0A6680;
+  --gh-agent-rgb: 10 102 128;
+  --gh-focus: #3E7CB1;
+  --gh-focus-rgb: 62 124 177;
+  --gh-danger: #f87171;
+  --gh-danger-rgb: 248 113 113;
+  --gh-danger-ink: #B42318;
+  --gh-danger-ink-rgb: 180 35 24;
+  --gh-success: #1A6B43;
+  --gh-success-rgb: 26 107 67;
+  --gh-elevation-1: 0 1px 2px rgb(14 27 43 / 0.08);
+  --gh-elevation-2: 0 4px 12px rgb(14 27 43 / 0.10), 0 1px 2px rgb(14 27 43 / 0.06);
+  --gh-elevation-3: 0 12px 32px rgb(14 27 43 / 0.16), 0 2px 6px rgb(14 27 43 / 0.08);
+  --gh-type-scale: 1;
+  --gh-mode: light;
+}
+
+[data-mode="night"] {
+  --gh-ground: #0A0B14;
+  --gh-ground-rgb: 10 11 20;
+  --gh-surface: #12142A;
+  --gh-surface-rgb: 18 20 42;
+  --gh-surface-raised: #1B1E3A;
+  --gh-surface-raised-rgb: 27 30 58;
+  --gh-tint: #232748;
+  --gh-tint-rgb: 35 39 72;
+  --gh-frost: rgb(16 18 31 / 0.94);
+  --gh-frost-blur: rgb(16 18 31 / 0.8);
+  --gh-ink: #E4E2F0;
+  --gh-ink-rgb: 228 226 240;
+  --gh-muted: #A9A6C0;
+  --gh-muted-rgb: 169 166 192;
+  --gh-line: #2A2E52;
+  --gh-line-rgb: 42 46 82;
+  --gh-line-strong: #7A7EA8;
+  --gh-line-strong-rgb: 122 126 168;
+  --gh-signal: #E2542B;
+  --gh-signal-rgb: 226 84 43;
+  --gh-signal-ink: #0A0B14;
+  --gh-signal-ink-rgb: 10 11 20;
+  --gh-signal-text: #F2794F;
+  --gh-signal-text-rgb: 242 121 79;
+  --gh-sky: #B7A6F2;
+  --gh-sky-rgb: 183 166 242;
+  --gh-human: #F4B860;
+  --gh-human-rgb: 244 184 96;
+  --gh-agent: #7FD1E8;
+  --gh-agent-rgb: 127 209 232;
+  --gh-focus: #B7A6F2;
+  --gh-focus-rgb: 183 166 242;
+  --gh-danger: #f87171;
+  --gh-danger-rgb: 248 113 113;
+  --gh-danger-ink: #f87171;
+  --gh-danger-ink-rgb: 248 113 113;
+  --gh-success: #6FD3A0;
+  --gh-success-rgb: 111 211 160;
+  --gh-elevation-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --gh-elevation-2: 0 4px 14px rgb(0 0 0 / 0.45);
+  --gh-elevation-3: 0 14px 36px rgb(0 0 0 / 0.55);
+  --gh-type-scale: 1;
+  --gh-mode: night;
+}
+
+[data-mode="tv"] {
+  --gh-ground: #05060D;
+  --gh-ground-rgb: 5 6 13;
+  --gh-surface: #0E1022;
+  --gh-surface-rgb: 14 16 34;
+  --gh-surface-raised: #171A33;
+  --gh-surface-raised-rgb: 23 26 51;
+  --gh-tint: #20244A;
+  --gh-tint-rgb: 32 36 74;
+  --gh-frost: rgb(10 11 22 / 0.96);
+  --gh-frost-blur: rgb(10 11 22 / 0.86);
+  --gh-ink: #F4F3FA;
+  --gh-ink-rgb: 244 243 250;
+  --gh-muted: #C4C1DA;
+  --gh-muted-rgb: 196 193 218;
+  --gh-line: #3A3F6A;
+  --gh-line-rgb: 58 63 106;
+  --gh-line-strong: #8A8EB8;
+  --gh-line-strong-rgb: 138 142 184;
+  --gh-signal: #E2542B;
+  --gh-signal-rgb: 226 84 43;
+  --gh-signal-ink: #05060D;
+  --gh-signal-ink-rgb: 5 6 13;
+  --gh-signal-text: #F58A64;
+  --gh-signal-text-rgb: 245 138 100;
+  --gh-sky: #C9BCFA;
+  --gh-sky-rgb: 201 188 250;
+  --gh-human: #F7C77E;
+  --gh-human-rgb: 247 199 126;
+  --gh-agent: #96DCEE;
+  --gh-agent-rgb: 150 220 238;
+  --gh-focus: #D6CCFF;
+  --gh-focus-rgb: 214 204 255;
+  --gh-danger: #f87171;
+  --gh-danger-rgb: 248 113 113;
+  --gh-danger-ink: #FA8C8C;
+  --gh-danger-ink-rgb: 250 140 140;
+  --gh-success: #86DDB0;
+  --gh-success-rgb: 134 221 176;
+  --gh-elevation-1: 0 1px 2px rgb(0 0 0 / 0.5);
+  --gh-elevation-2: 0 4px 14px rgb(0 0 0 / 0.55);
+  --gh-elevation-3: 0 14px 36px rgb(0 0 0 / 0.65);
+  --gh-type-scale: 1.25;
+  --gh-mode: tv;
+}
+
+/* Chrome primitives. Scoped to .gh-chrome so nothing outside it changes. */
+.gh-chrome {
+  color-scheme: light;
+  background: var(--gh-ground);
+  color: var(--gh-ink);
+  font-family: var(--gh-font-sans);
+  font-size: var(--gh-text-base);
+  line-height: 1.5;
+}
+[data-mode="night"] .gh-chrome, [data-mode="tv"] .gh-chrome, .gh-chrome[data-mode="night"], .gh-chrome[data-mode="tv"] {
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode]) .gh-chrome:not([data-mode]) { color-scheme: dark; }
+}
+.gh-label {
+  font-family: var(--gh-font-mono);
+  font-size: var(--gh-label-size);
+  letter-spacing: var(--gh-label-tracking);
+  text-transform: uppercase;
+  font-weight: 400;
+}
+.gh-frost {
+  background: var(--gh-frost);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .gh-frost {
+    background: var(--gh-frost-blur);
+    -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    backdrop-filter: blur(12px) saturate(1.2);
+  }
+}
+.gh-chrome :focus-visible {
+  outline: 2px solid var(--gh-focus);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --gh-duration-fast: 0ms; --gh-duration-base: 0ms; --gh-duration-slow: 0ms; }
+}

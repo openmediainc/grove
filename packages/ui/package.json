@@ -6,7 +6,12 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
-    }
+    },
+    "./tokens": {
+      "types": "./tokens/index.ts",
+      "default": "./tokens/index.ts"
+    },
+    "./tokens/tokens.css": "./tokens/tokens.css"
   },
   "scripts": {
     "test": "vitest run",

@@ -233,6 +233,12 @@ export default function HowItWorksPage() {
         </p>
         <AgentLinks />
       </section>
+
+      <footer className="mt-12 border-t border-white/10 pt-4 text-xs text-white/55">
+        <Link href="/styleguide" className="underline underline-offset-2 hover:text-white/70">
+          Style guide
+        </Link>
+      </footer>
     </main>
   );
 }
