@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { getTheme, readThemeChoice } from "@/lib/themes";
+import { startPoll } from "@/lib/poll";
 import { costLine, money, NOT_REPORTED, resourceTerms, tokens, totalTokens, type UsageDay, type UsageResponse } from "@/lib/cost";
 
 /**
@@ -46,11 +47,10 @@ export function ResourceBar({ signedIn }: { signedIn: boolean | null }) {
         if ((e as { status?: number }).status === 404 && scope !== "mine" && !cancelled) setScope("mine");
       }
     };
-    void pull();
-    const id = window.setInterval(pull, POLL_MS);
+    const stopPoll = startPoll(() => void pull(), POLL_MS);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      stopPoll();
     };
   }, [signedIn, scope]);
 

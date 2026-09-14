@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 3510",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "perf:budget": "node scripts/perf-budget.mjs"
   },
   "dependencies": {
     "@grove/protocol": "workspace:*",

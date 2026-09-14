@@ -6,7 +6,6 @@
  * referees with — so the board a player clicks can never disagree with it.
  */
 import {
-  BOARD_GAME_NAMES,
   FOUR_COLS,
   FOUR_ROWS,
   boardEndWords,
@@ -19,6 +18,12 @@ import {
   type BoardGame,
   type BoardState,
 } from "@grove/protocol";
+import { gameName } from "./boards-map";
+
+// The map-side readers live in boards-map so the map can load without the
+// board UI's rules (#68); re-exported here for the drawer and the tests.
+export { gameName, playingMarks, tvGameMoments, TV_GAME_WINDOW_MS } from "./boards-map";
+export type { PlayingMark, PlayingWire, TvGameMoment } from "./boards-map";
 
 export type TablePlayerWire = { seat: 0 | 1; actor_id: string; kind: "human" | "agent"; display_name: string; slug: string | null };
 export type TableMoveWire = { seq: number; seat: 0 | 1; actor_id: string; move: string; notation: string; at: string };
@@ -47,22 +52,6 @@ export type TableWire = {
   legal_moves?: string[];
 };
 
-export type PlayingWire = {
-  tables?: Array<{
-    id: string;
-    game: BoardGame;
-    room_id: string;
-    status: "active" | "ended";
-    seats: [string | null, string | null];
-    turn: 0 | 1 | null;
-    last_move: { notation: string; actor_id: string; at: string } | null;
-    result: { winner: 0 | 1 | null; reason: string; at: string } | null;
-  }>;
-};
-
-export function gameName(game: BoardGame | string): string {
-  return (BOARD_GAME_NAMES as Record<string, string>)[game] ?? "board game";
-}
 
 export function boardOf(table: Pick<TableWire, "state" | "game">): BoardState | null {
   return isBoardState(table.state) ? table.state : null;
@@ -193,81 +182,6 @@ export function moveListLines(game: BoardGame, moves: readonly TableMoveWire[]):
     lines.push(`${Math.floor(i / 2) + 1}. ${white.notation}${black ? ` ${black.notation}` : ""}`);
   }
   return lines;
-}
-
-/** How the map reads a body at a table. */
-export type PlayingMark = { game: BoardGame; toMove: boolean };
-
-/** Bodies at active tables, by actor id. A body at two tables is "to move" if it is at either. */
-export function playingMarks(wire: PlayingWire | null | undefined): Map<string, PlayingMark> {
-  const out = new Map<string, PlayingMark>();
-  for (const t of wire?.tables ?? []) {
-    if (!t || t.status !== "active" || !Array.isArray(t.seats)) continue;
-    t.seats.forEach((id, seat) => {
-      if (typeof id !== "string") return;
-      const toMove = t.turn === seat;
-      const had = out.get(id);
-      out.set(id, { game: had && !toMove ? had.game : t.game, toMove: Boolean(had?.toMove || toMove) });
-    });
-  }
-  return out;
-}
-
-/** What Grove TV may cut to: a check, a mate, a game's end, in the last little while. */
-export type TvGameMoment = {
-  key: string;
-  /** The body to follow: the one who just moved, or the winner (seat 0 on a draw). */
-  actorId: string;
-  otherId: string | null;
-  game: BoardGame;
-  /** "chess", "four-in-a-row": for the caption. */
-  gameName: string;
-  kind: "check" | "end";
-  words: string;
-  at: number;
-};
-
-export const TV_GAME_WINDOW_MS = 60_000;
-
-export function tvGameMoments(wire: PlayingWire | null | undefined, now: number): TvGameMoment[] {
-  const out: TvGameMoment[] = [];
-  for (const t of wire?.tables ?? []) {
-    if (!t || !Array.isArray(t.seats)) continue;
-    if (t.status === "ended" && t.result) {
-      const at = Date.parse(t.result.at);
-      const winner = t.result.winner ?? 0;
-      const actorId = t.seats[winner];
-      if (!actorId || !Number.isFinite(at) || now - at > TV_GAME_WINDOW_MS) continue;
-      const how = boardEndWords(t.result.reason);
-      out.push({
-        key: `game:${t.id}:end`,
-        actorId,
-        otherId: t.seats[winner === 0 ? 1 : 0] ?? null,
-        game: t.game,
-        gameName: gameName(t.game),
-        kind: "end",
-        words: t.result.winner === null ? `drew (${how})` : `won (${how})`,
-        at,
-      });
-      continue;
-    }
-    const last = t.last_move;
-    if (t.status !== "active" || !last || !/[+#]$/.test(last.notation)) continue;
-    const at = Date.parse(last.at);
-    if (!Number.isFinite(at) || now - at > TV_GAME_WINDOW_MS) continue;
-    const seat = t.seats.indexOf(last.actor_id);
-    out.push({
-      key: `game:${t.id}:${last.notation}:${last.at}`,
-      actorId: last.actor_id,
-      otherId: seat < 0 ? null : t.seats[seat === 0 ? 1 : 0] ?? null,
-      game: t.game,
-      gameName: gameName(t.game),
-      kind: "check",
-      words: `gave check (${last.notation})`,
-      at,
-    });
-  }
-  return out;
 }
 
 /** Square name helper re-exported for the board component. */

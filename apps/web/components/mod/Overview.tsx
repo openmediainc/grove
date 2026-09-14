@@ -18,6 +18,7 @@ import { money } from "@/lib/cost";
 import { dmarcApplied } from "@/components/mod/EmailHealth";
 import { cohortPercent, countText, weekLabel } from "@/lib/analytics";
 import { ErrorNotice } from "@/components/ErrorNotice";
+import { startPoll } from "@/lib/poll";
 
 type Anomaly = {
   metric: string;
@@ -134,9 +135,7 @@ export function OverviewPanel() {
   }, []);
 
   useEffect(() => {
-    void load();
-    const t = setInterval(() => void load(), 60_000);
-    return () => clearInterval(t);
+    return startPoll(() => void load(), 60_000);
   }, [load]);
 
   if (err && !data) return <ErrorNotice error={err} onRetry={() => void load()} className="mt-4" />;

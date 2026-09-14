@@ -9,11 +9,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveSoundPreset, type SoundPreset } from "./presets";
 import { readSoundSettings, SOUND_BED_ONLY_KEY, SOUND_KEY, SOUND_VOLUME_KEY, type SoundSettings } from "./settings";
-import { Soundscape } from "./soundscape";
+import { LazySoundscape } from "./lazy-soundscape";
 import { useSoundMuted } from "./useSoundMuted";
 
 export interface SoundControls {
-  scape: Soundscape;
+  /** The soundscape; its synth is fetched only once sound is on (#68). */
+  scape: LazySoundscape;
   enabled: boolean;
   volume: number;
   bedOnly: boolean;
@@ -49,11 +50,16 @@ function audioContextCtor(): (new () => AudioContext) | null {
 export function useSoundscape({ kiosk, sound }: { kiosk: boolean; sound: Partial<SoundPreset> | undefined }): SoundControls {
   const [scape] = useState(
     () =>
-      new Soundscape(() => {
-        const Ctor = audioContextCtor();
-        if (!Ctor) throw new Error("no WebAudio");
-        return new Ctor();
-      }),
+      new LazySoundscape(() =>
+        import("./soundscape").then(
+          (m) =>
+            new m.Soundscape(() => {
+              const Ctor = audioContextCtor();
+              if (!Ctor) throw new Error("no WebAudio");
+              return new Ctor();
+            }),
+        ),
+      ),
   );
   const [supported, setSupported] = useState(true);
   const [settings, setSettings] = useState<SoundSettings>({ enabled: false, volume: 0.5, bedOnly: false });
@@ -85,25 +91,31 @@ export function useSoundscape({ kiosk, sound }: { kiosk: boolean; sound: Partial
   const begin = useCallback(() => {
     // Nothing starts while muted site-wide, not even from a tap.
     if (mutedRef.current || !audioContextCtor()) return;
-    const started = scape.start();
-    const ctx = scape.engine.context;
-    if (ctx) ctx.onstatechange = () => setPlaying(scape.engine.running);
-    started.then((ok) => setPlaying(ok)).catch(() => setPlaying(false));
+    scape
+      .start()
+      .then((ok) => {
+        const ctx = scape.context;
+        if (ctx) ctx.onstatechange = () => setPlaying(scape.running);
+        setPlaying(ok);
+      })
+      .catch(() => setPlaying(false));
   }, [scape]);
 
   // On: start at the first gesture (a menu click already is one). Off or muted: fade out.
   useEffect(() => {
     if (!loaded || !supported) return;
     if (!audible) {
-      if (scape.engine.context) void scape.stop();
+      if (scape.context) void scape.stop();
       setPlaying(false);
       return;
     }
+    // Fetch the synth now, ahead of the gesture, so the tap can start it at once.
+    void scape.load().catch(() => setSupported(false));
     // Without a gesture yet, creating a context only earns a console warning; wait for one.
     const nav = navigator as Navigator & { userActivation?: { hasBeenActive: boolean } };
     if (nav.userActivation?.hasBeenActive ?? true) begin();
     const onGesture = () => {
-      if (!scape.engine.running) begin();
+      if (!scape.running) begin();
     };
     window.addEventListener("pointerdown", onGesture, { passive: true });
     window.addEventListener("keydown", onGesture);
@@ -117,16 +129,16 @@ export function useSoundscape({ kiosk, sound }: { kiosk: boolean; sound: Partial
   useEffect(() => {
     if (!audible) return;
     const onVis = () => {
-      const ctx = scape.engine.context;
+      const ctx = scape.context;
       if (!ctx) return;
       if (document.hidden) void ctx.suspend().catch(() => {});
-      else void ctx.resume().then(() => setPlaying(scape.engine.running)).catch(() => {});
+      else void ctx.resume().then(() => setPlaying(scape.running)).catch(() => {});
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [audible, scape]);
 
-  useEffect(() => () => void scape.engine.close(), [scape]);
+  useEffect(() => () => scape.close(), [scape]);
 
   const setEnabled = useCallback((on: boolean) => {
     store(SOUND_KEY, on ? "1" : "0");

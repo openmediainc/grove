@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "./a11y";
 import { gp } from "@/lib/base";
+import { loginHref } from "@/lib/login-href";
 import { buildDeepLink } from "@/lib/deep-link";
 import { spaceHref } from "@/lib/space-page";
 import { walkOverTarget, type CardTarget } from "@/lib/card";
@@ -83,19 +84,8 @@ export type Peek =
       share: ShareTarget;
     };
 
-/**
- * A login link that knows why it was followed. `next` is where the person was
- * actually heading; the login page reads it back so the ask never arrives
- * unannounced.
- */
-export function loginHref(opts: { next?: string; why?: string; what?: string }): string {
-  const q = new URLSearchParams();
-  if (opts.next) q.set("next", opts.next);
-  if (opts.why) q.set("why", opts.why);
-  if (opts.what) q.set("what", opts.what);
-  const s = q.toString();
-  return gp(`/login${s ? `?${s}` : ""}`);
-}
+// Lives in lib so the map can build login links without loading this card (#68).
+export { loginHref };
 
 /**
  * Copy a deep link to what the card is showing. The link is built from the

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -28,19 +29,29 @@ import {
   type SpaceTab,
 } from "@/lib/space-page";
 import { hasSignedInHint } from "@/lib/unread";
-import { Activity } from "@/components/Activity";
 import { CardFields, CardPanel, useCard, useCardLex } from "@/components/Card";
-import { BrandingPanel, type WireBranding } from "@/components/Branding";
-import { EstatePanel } from "@/components/EstateName";
-import { DecorPanel } from "@/components/Decor";
-import { DefaultThemePanel } from "@/components/DefaultTheme";
+import type { WireBranding } from "@/components/Branding";
 import { visitHref } from "@/lib/visit-link";
 import { brandingDraft, checkDraft } from "@/lib/branding";
-import { RelocatePanel, TransferPanel } from "@/components/SpaceMoves";
 import { FollowButton } from "@/components/Follow";
-import { BoardSection } from "@/components/Board";
 import { Tabs, tabPanelProps } from "@/components/Tabs";
 import { ErrorNotice } from "@/components/ErrorNotice";
+
+/*
+ * Code-split (#68, docs/PERFORMANCE.md): the board (lightbox + composer), the
+ * Activity tab and every Manage panel (branding, estate, decor editor, default
+ * theme, relocate/transfer) load when they are first shown. This page already
+ * renders after its own fetch, so nothing here was on the first paint.
+ */
+const none = () => null;
+const Activity = dynamic(() => import("@/components/Activity").then((m) => m.Activity), { loading: none });
+const BoardSection = dynamic(() => import("@/components/Board").then((m) => m.BoardSection), { loading: none });
+const BrandingPanel = dynamic(() => import("@/components/Branding").then((m) => m.BrandingPanel), { loading: none });
+const EstatePanel = dynamic(() => import("@/components/EstateName").then((m) => m.EstatePanel), { loading: none });
+const DecorPanel = dynamic(() => import("@/components/Decor").then((m) => m.DecorPanel), { loading: none });
+const DefaultThemePanel = dynamic(() => import("@/components/DefaultTheme").then((m) => m.DefaultThemePanel), { loading: none });
+const RelocatePanel = dynamic(() => import("@/components/SpaceMoves").then((m) => m.RelocatePanel), { loading: none });
+const TransferPanel = dynamic(() => import("@/components/SpaceMoves").then((m) => m.TransferPanel), { loading: none });
 
 /**
  * One space, one page: About · Activity · Manage (`?tab=`).

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { startPoll } from "@/lib/poll";
 import { EMPTY_TOTALS, activityQuery } from "@/lib/activity";
 import {
   TROUBLE,
@@ -50,9 +51,7 @@ export function AgentDay({
       void api<{ bodies: Body[] }>("/api/v1/world/minimap")
         .then((r) => setBody(r.bodies.find((b) => b.id === agentId) ?? null))
         .catch(() => setBody(null));
-    load();
-    const t = setInterval(load, 20_000);
-    return () => clearInterval(t);
+    return startPoll(load, 20_000);
   }, [agentId]);
 
   useEffect(() => {

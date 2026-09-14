@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
@@ -10,9 +11,13 @@ import { exploreOrder, spaceHref, type DirectorySpace } from "@/lib/space-page";
 import { hasSignedInHint } from "@/lib/unread";
 import { GeoAvatar } from "@/components/Avatar";
 import { DiscoveryShelves } from "@/components/Discovery";
-import { CreateSpaceFlow } from "@/components/CreateSpaceFlow";
 import { roomHref } from "@/lib/world-url";
 import { ErrorNotice } from "@/components/ErrorNotice";
+
+/* The create-space flow and its preview canvas load when Create is pressed (#68). */
+const CreateSpaceFlow = dynamic(() => import("@/components/CreateSpaceFlow").then((m) => m.CreateSpaceFlow), {
+  loading: () => null,
+});
 
 /**
  * Explore: the discovery shelves (Busiest plots, Most-watched agents, Just

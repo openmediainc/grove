@@ -183,3 +183,6 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build
         run: pnpm build
+      # First-load JS of `/` may not grow more than 10% over apps/web/perf-budget.json (#68, docs/PERFORMANCE.md).
+      - name: Performance budget
+        run: pnpm perf:budget

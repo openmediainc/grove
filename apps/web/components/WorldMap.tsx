@@ -32,6 +32,7 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
 import { linkAtTile, viewedOwnerDefault, type ViewLink } from "@/lib/themes/owner-default";
 import { HAZARD_COLOUR, STALL_RING, type HazardTone } from "@/lib/themes/types";
 import { gp } from "@/lib/base";
+import { startPoll } from "@/lib/poll";
 import { themedAccess } from "@/lib/access";
 import { MotionDirector, mergeSpan, spanFromWire, OUTCOME_MARK_MS, type BodyFrame } from "@/lib/motion/director";
 import { bodyScreenRect, clearCentre, holeRuns, hoverCardSpot, type Rect as LayerRect } from "@/lib/layering";
@@ -65,7 +66,8 @@ import {
   worldBounds,
   type MapRegion,
 } from "@/lib/map-layout";
-import { SpectatorPeek, loginHref, type OrgBadge, type Peek } from "./SpectatorPeek";
+import type { OrgBadge, Peek } from "./SpectatorPeek";
+import { loginHref } from "@/lib/login-href";
 import { deepLinkApplies, parseDeepLink, resolveAt, type DeepLink } from "@/lib/deep-link";
 import {
   centreOn,
@@ -110,9 +112,8 @@ import { estatePerimeter, estateSignTile, readEstates, type MapEstate } from "@/
 import { WATCH_HEADER, formatHeadcount, makeWatchToken } from "@/lib/headcount";
 import { AttentionBell } from "./AttentionBell";
 import { FirstVisitCard, MAP_KEYS, MapMenu, MapPanel, MenuHeading, MenuItem, MenuLink } from "./MapMenu";
-import { RoomDrawer, type RoomPublicView } from "./RoomDrawer";
-import { HistoryDrawer } from "./HistoryDrawer";
-import { WalkInSheet, type Arrival } from "./WalkInSheet";
+import type { RoomPublicView } from "./RoomDrawer";
+import type { Arrival } from "./WalkInSheet";
 import { ArrivalToast } from "./ArrivalToast";
 import { readWorldUrl, roomHref, withHistory, withRoom, type WorldUrl } from "@/lib/world-url";
 import {
@@ -125,16 +126,16 @@ import {
   writeFlag,
 } from "@/lib/walk-in";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
-import { TvDirector, type TvActor, type TvShotKind, type TvStage } from "@/lib/tv/director";
+import type { TvActor, TvDirector, TvShotKind, TvStage } from "@/lib/tv/director";
 import { useSoundscape } from "@/lib/sound/useSoundscape";
 import { SoundMenuSection, TapForSound } from "./SoundControls";
-import { ReplayBadge, ReplayBar } from "./ReplayBar";
 import { ReplayController, startVisitClock, type LiveContext } from "@/lib/replay/controller";
 import { ReplayMotion } from "@/lib/replay/motion";
 import { ResourceBar } from "./ResourceBar";
 import { composePostcard, downloadBlob, nearestToCentre, postcardCaption, postcardFilename } from "@/lib/postcard";
 import { CostCarry } from "./costCarry";
-import { CinemaBars, SequenceRecorder } from "./CinemaChrome";
+// Code-split map chrome (#68): loaded the first time each is shown.
+import { CinemaBars, HistoryDrawer, ReplayBadge, ReplayBar, RoomDrawer, SequenceRecorder, SpectatorPeek, WalkInSheet, usePrefetchMapDrawers } from "./WorldMapLazy";
 import { SEQUENCE_QUERY, parseSequenceRef, toCamel, validateSequence, type CameraKey, type Sequence, type SequenceShotKind } from "@grove/protocol";
 import {
   addShot,
@@ -982,8 +983,8 @@ export function WorldMap() {
   /* Grove TV: kiosk mode with a director (lib/tv/director). */
   const [tv, setTv] = useState(false);
   const tvRef = useRef(false);
+  /** Loaded with TV itself (#68): null until TV is first switched on. */
   const tvDirectorRef = useRef<TvDirector | null>(null);
-  if (!tvDirectorRef.current) tvDirectorRef.current = new TvDirector();
   /** The live Stage event, if any, polled only while TV is on. */
   const tvStageRef = useRef<TvStage | null>(null);
   /** The open trial on the Stage (040): trial rings on entrants, and a TV shot. */
@@ -1000,6 +1001,7 @@ export function WorldMap() {
   const tvModeRef = useRef<(on: boolean) => void>(() => {});
   /* Ambient soundscape (#43, lib/sound): off by default, on in kiosk/TV after a tap. Stable `scape`. */
   const sound = useSoundscape({ kiosk, sound: theme.sound });
+  usePrefetchMapDrawers();
   const soundscape = sound.scape;
   /* --- cinematic sequences (#39, lib/sequence) ------------------------ *
    * A playing sequence owns the camera outright, the way TV does, and hides
@@ -1376,7 +1378,10 @@ export function WorldMap() {
         return;
       }
       tvRef.current = true;
-      tvDirectorRef.current = new TvDirector();
+      tvDirectorRef.current = null;
+      void import("@/lib/tv/director").then((m) => {
+        if (tvRef.current && !tvDirectorRef.current) tvDirectorRef.current = new m.TvDirector();
+      });
       tvAppliedRef.current = null;
       tvLastStepRef.current = 0;
       kioskYieldRef.current = 0;
@@ -1581,11 +1586,10 @@ export function WorldMap() {
         /* No schedule this time; the other shots still run. */
       }
     };
-    void load();
-    const timer = window.setInterval(() => void load(), TV_STAGE_POLL_MS);
+    const stopPoll = startPoll(() => void load(), TV_STAGE_POLL_MS);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      stopPoll();
     };
   }, [tv]);
 
@@ -2098,9 +2102,15 @@ export function WorldMap() {
     };
     pullRef.current = () => void pull();
     void pull();
-    const t = window.setInterval(() => {
-      if (!replay.view.active) void pull();
-    }, 8000);
+    // Positions only come from this poll (the SSE carries Plaza pulses and
+    // speech, not movement), so it keeps its 8 s while visible; hidden, it stops (#68).
+    const stopPoll = startPoll(
+      () => {
+        if (!replay.view.active) void pull();
+      },
+      8000,
+      { runNow: false },
+    );
     const es = new EventSource(gp("/api/v1/sse/plaza"));
     es.addEventListener("pulse", (ev) => {
       if (replay.view.active) return;
@@ -2166,7 +2176,7 @@ export function WorldMap() {
     return () => {
       cancelled = true;
       pullRef.current = () => {};
-      window.clearInterval(t);
+      stopPoll();
       es.close();
     };
   }, [replay]);
@@ -3947,9 +3957,9 @@ export function WorldMap() {
          * Under reduced motion it still directs — TV was asked for by name —
          * but every cut is instant and the holds are twice as long.
          * ---------------------------------------------------------------- */
-        if (tvRef.current && !replay.view.active && nowMs - tvLastStepRef.current >= TV_STEP_MS) {
+        if (tvRef.current && tvDirectorRef.current && !replay.view.active && nowMs - tvLastStepRef.current >= TV_STEP_MS) {
           tvLastStepRef.current = nowMs;
-          const director = tvDirectorRef.current!;
+          const director = tvDirectorRef.current;
           const tvActors: TvActor[] = actors.map((a) => ({
             id: a.id,
             name: a.name,

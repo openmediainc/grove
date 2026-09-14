@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { api } from "@/lib/api";
-import { playingMarks, tvGameMoments, type PlayingMark, type PlayingWire } from "@/lib/boards";
+import { playingMarks, tvGameMoments, type PlayingMark, type PlayingWire } from "@/lib/boards-map";
 import type { TvGame } from "@/lib/tv/director";
 
 /** Seats change on the scale of moves; the room drawer polls its own tables faster. */

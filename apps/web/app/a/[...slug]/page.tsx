@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -18,8 +19,6 @@ import {
 } from "@/lib/agent-page";
 import { Badges, GeoAvatar } from "@/components/Avatar";
 import { Activity } from "@/components/Activity";
-import { AgentDay } from "@/components/AgentDay";
-import { AgentSettings } from "@/components/AgentSettings";
 import { ArrivalToast, nameList } from "@/components/ArrivalToast";
 import { CardPanel, useCardLex } from "@/components/Card";
 import { FollowButton } from "@/components/Follow";
@@ -27,6 +26,11 @@ import { LeaveMessage } from "@/components/LeaveMessage";
 import { Tabs, tabPanelProps } from "@/components/Tabs";
 import { roomHref } from "@/lib/world-url";
 import { ErrorNotice } from "@/components/ErrorNotice";
+
+/* Owner-only pieces load when shown (#68): the day view and Settings (with its permission tree). */
+const none = () => null;
+const AgentDay = dynamic(() => import("@/components/AgentDay").then((m) => m.AgentDay), { loading: none });
+const AgentSettings = dynamic(() => import("@/components/AgentSettings").then((m) => m.AgentSettings), { loading: none });
 
 /**
  * One agent, one page: Activity · Card · Settings (`?tab=`).
