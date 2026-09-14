@@ -251,7 +251,7 @@ export default function SpacePage() {
         </div>
       </div>
       <div className="mt-4 flex flex-wrap items-start gap-2">
-        <FollowButton target={{ subject: "space", ref: d.world.slug }} signedIn={signedIn} lex={lex} />
+        <FollowButton target={{ subject: "space", ref: d.world.slug }} signedIn={signedIn} lex={lex} name={d.world.name} />
       </div>
 
       <Tabs label="Space" tabs={tabs} current={tab} labels={SPACE_TAB_LABEL} onChoose={chooseTab} />

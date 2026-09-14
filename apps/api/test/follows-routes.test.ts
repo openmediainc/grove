@@ -113,6 +113,79 @@ describe.skipIf(!hasDb)("follow routes", () => {
     expect(unsigned.statusCode).toBe(401);
   });
 
+  it("answers many hearts at once, omitting private and unknown subjects alike, for people, guests and nobody", async () => {
+    const owner = await signIn("folbatown");
+    const fan = await signIn("folbatfan");
+    const t = Math.random().toString(36).slice(2, 8);
+    const make = async (slug: string, preset: string) => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/worlds",
+        headers: { cookie: owner.cookie },
+        payload: { name: `Batch ${slug}`, slug, policy_preset: preset },
+      });
+      expect(created.statusCode).toBe(201);
+      const id = (created.json() as { world: { id: string } }).world.id;
+      fixtures.trackWorld(id);
+      return id;
+    };
+    const open = `batch-open-${t}`;
+    const shut = `batch-shut-${t}`;
+    await make(open, "public_view");
+    const shutId = await make(shut, "private");
+    expect((await app.inject({ method: "PUT", url: `/api/v1/follows/spaces/${open}`, headers: { cookie: fan.cookie } })).statusCode).toBe(200);
+
+    const q = (subjects: string) => `/api/v1/follows/state?subjects=${encodeURIComponent(subjects)}`;
+    const asks = `space:${open},space:${shut},space:${shutId},space:no-such-${t},agent:nobody-${t},human:${fan.handle},junk`;
+
+    // A signed-in outsider: the open space only. The private one is as absent as the missing one.
+    const outsider = await app.inject({ method: "GET", url: q(asks), headers: { cookie: fan.cookie } });
+    expect(outsider.statusCode).toBe(200);
+    expect(outsider.json()).toEqual({ ok: true, states: { [`space:${open}`]: { following: true, followers: 1 } } });
+    expect(outsider.body).not.toContain(shut);
+    const privateAlone = await app.inject({ method: "GET", url: q(`space:${shutId}`), headers: { cookie: fan.cookie } });
+    const missingAlone = await app.inject({ method: "GET", url: q(`space:no-such-${t}`), headers: { cookie: fan.cookie } });
+    expect([privateAlone.statusCode, missingAlone.statusCode]).toEqual([200, 200]);
+    expect(privateAlone.body).toBe(missingAlone.body);
+
+    // A member sees the private space, by slug and by id, under the key it asked with.
+    const member = await app.inject({ method: "GET", url: q(asks), headers: { cookie: owner.cookie } });
+    expect((member.json() as { states: unknown }).states).toEqual({
+      [`space:${open}`]: { following: false, followers: 1 },
+      [`space:${shut}`]: { following: false, followers: 0 },
+      [`space:${shutId}`]: { following: false, followers: 0 },
+    });
+
+    // Signed out: no error, nothing followed, public counts.
+    const nobody = await app.inject({ method: "GET", url: q(asks) });
+    expect(nobody.statusCode).toBe(200);
+    expect((nobody.json() as { states: unknown }).states).toEqual({ [`space:${open}`]: { following: false, followers: 1 } });
+    expect((await app.inject({ method: "GET", url: "/api/v1/follows/state" })).json()).toEqual({ ok: true, states: {} });
+
+    // A guest pass (#32) sees its own follow, and still nothing private.
+    const { guest, token } = await grove.guests.issue();
+    try {
+      await grove.follows.setFollow({ kind: "guest", guest }, "space", open, true);
+      const asGuest = await app.inject({ method: "GET", url: q(asks), headers: { cookie: `grove_guest=${token}` } });
+      expect((asGuest.json() as { states: unknown }).states).toEqual({ [`space:${open}`]: { following: true, followers: 2 } });
+    } finally {
+      await grove.guests.forget(guest.id);
+    }
+
+    // Limits: 50 subjects is fine, 51 is refused; the per-follower window refuses a loop.
+    const fifty = Array.from({ length: 50 }, (_, i) => `space:n${i}-${t}`).join(",");
+    expect((await app.inject({ method: "GET", url: q(fifty), headers: { cookie: fan.cookie } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: q(`${fifty},space:${open}`), headers: { cookie: fan.cookie } })).statusCode).toBe(400);
+    const windowKey = `ratelimit:${fan.id}:follow_state:min`;
+    await redis.set(windowKey, "120", "EX", 60);
+    try {
+      const limited = await app.inject({ method: "GET", url: q(`space:${open}`), headers: { cookie: fan.cookie } });
+      expect(limited.statusCode).toBe(429);
+    } finally {
+      await redis.del(windowKey);
+    }
+  });
+
   it("serves a human their own notices and marks them read", async () => {
     const me = await signIn("folnote");
     const empty = await app.inject({ method: "GET", url: "/api/v1/follows/notices", headers: { cookie: me.cookie } });

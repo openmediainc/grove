@@ -4,6 +4,7 @@ import {
   FOLLOW_NOTICE_COOLDOWN_SECONDS,
   WORLD_ID,
   isFollowNoticeKind,
+  type FollowSubjectRef,
   isFollowSubject,
   toolCallNoticeKind,
   type Agent,
@@ -106,6 +107,51 @@ export class FollowService implements FollowHooks {
   async state(follower: Follower | null, subjectKind: string, ref: string): Promise<FollowState> {
     const subject = await this.resolve(viewerOf(follower), subjectKind, ref);
     return this.stateOf(follower ? actorIdOf(follower) : null, subject);
+  }
+
+  /**
+   * Batch follow state (queue #55): many hearts in one read, keyed by
+   * `FollowSubjectRef.key`. Every subject goes through the SAME door as
+   * `state()`, and one that the door refuses is left out of the answer — a
+   * private space you are not in and a subject that never existed are both
+   * simply absent, never told apart. The counts are one grouped read over
+   * whatever made it through. Signed out (`follower` null): `following` is
+   * false everywhere, the counts are the public ones.
+   */
+  async states(
+    follower: Follower | null,
+    subjects: FollowSubjectRef[],
+  ): Promise<Record<string, { following: boolean; followers: number }>> {
+    const viewer = viewerOf(follower);
+    const resolved = await Promise.all(
+      subjects.map(async (s) => {
+        try {
+          return { key: s.key, subject: await this.resolve(viewer, s.kind, s.ref) };
+        } catch (err) {
+          if (err instanceof GroveError) return null;
+          throw err;
+        }
+      }),
+    );
+    const found = resolved.filter((r): r is { key: string; subject: Subject } => r !== null);
+    // Null prototype: the route's snake_case codec only rewrites plain objects,
+    // and these keys are slugs to echo back byte for byte, not field names.
+    const out = Object.create(null) as Record<string, { following: boolean; followers: number }>;
+    if (!found.length) return out;
+    const { rows } = await this.store.pg.query<{ subject_kind: string; subject_id: string; n: number; mine: boolean }>(
+      `SELECT f.subject_kind, f.subject_id, count(*)::int AS n,
+              bool_or($3::text IS NOT NULL AND f.follower_id = $3::text) AS mine
+         FROM follows f
+         JOIN unnest($1::text[], $2::text[]) AS t(kind, id) ON f.subject_kind = t.kind AND f.subject_id = t.id
+        GROUP BY f.subject_kind, f.subject_id`,
+      [found.map((r) => r.subject.kind), found.map((r) => r.subject.id), follower ? actorIdOf(follower) : null],
+    );
+    const counts = new Map(rows.map((r) => [`${r.subject_kind}:${r.subject_id}`, r]));
+    for (const { key, subject } of found) {
+      const row = counts.get(`${subject.kind}:${subject.id}`);
+      out[key] = { following: row?.mine === true, followers: row?.n ?? 0 };
+    }
+    return out;
   }
 
   /** `onNew` runs after a follow row was actually written (not on a re-follow or an unfollow). */

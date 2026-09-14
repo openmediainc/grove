@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { GroveError, type GroveApp } from "@grove/domain";
+import { FOLLOW_STATE_BATCH_MAX, parseFollowSubjects } from "@grove/protocol";
+import { GroveError, guestIpBucket, type GroveApp } from "@grove/domain";
 import { optionalActor, requireHuman } from "./auth.js";
 import { asGuest, currentGuest } from "./guests.js";
-import { sendOk } from "./http.js";
+import { clientIp, sendOk } from "./http.js";
 import { countAction } from "./analytics.js";
 
 /**
@@ -12,6 +13,9 @@ import { countAction } from "./analytics.js";
  *   PUT    /api/v1/follows/spaces/:ref   follow
  *   DELETE /api/v1/follows/spaces/:ref   unfollow
  *   GET|PUT|DELETE /api/v1/follows/agents/*   the same, by agent slug or id
+ *   GET    /api/v1/follows/state?subjects=space:<ref>,agent:<slug>,…
+ *                                        up to 50 hearts at once: { states: { "<subject>": { following, followers } } };
+ *                                        a subject behind a door (or unknown, or malformed) is OMITTED, never 404'd
  *   GET    /api/v1/follows               what I follow
  *   GET    /api/v1/follows/notices       my notices (humans; agents get mailbox items)
  *   POST   /api/v1/follows/notices/seen  mark read ({ ids? } — none = all)
@@ -51,6 +55,22 @@ export async function registerFollows(app: FastifyInstance, grove: GroveApp) {
     };
   const spaceRef = (req: Req) => (req.params as { ref: string }).ref;
 
+  // Batch state (queue #55). Same door as the single read; rate-limited per follower, or per network signed out.
+  app.get("/api/v1/follows/state", async (req, reply) => {
+    reply.header("cache-control", "private, no-store");
+    const { subjects, tooMany } = parseFollowSubjects((req.query as { subjects?: unknown }).subjects);
+    if (tooMany) throw new GroveError("INVALID", `Ask for at most ${FOLLOW_STATE_BATCH_MAX} subjects at once.`);
+    const actor = await optionalActor(req, grove);
+    const guest = actor ? null : await currentGuest(req, grove);
+    const follower = actor ?? (guest ? ({ kind: "guest", guest } as const) : null);
+    await grove.quota.consumeFollowState(
+      follower
+        ? { actorId: follower.kind === "human" ? follower.human.id : follower.kind === "agent" ? follower.agent.id : follower.guest.id }
+        : { ipBucket: guestIpBucket(clientIp(req)) },
+    );
+    const states = await grove.follows.states(follower, subjects);
+    return sendOk(reply, { states });
+  });
   app.get("/api/v1/follows/spaces/:ref", read("space", spaceRef));
   app.put("/api/v1/follows/spaces/:ref", write("space", spaceRef, true));
   app.delete("/api/v1/follows/spaces/:ref", write("space", spaceRef, false));

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  FOLLOW_STATE_BATCH_MAX,
+  parseFollowSubjectKey,
+  parseFollowSubjects,
   LONG_TOOL_CALL_MS,
   describeFollowNotice,
   isFollowNoticeKind,
@@ -49,5 +52,26 @@ describe("follows vocabulary", () => {
         stage: { title: "Opening night", startsAt: "2026-09-13T20:00:00Z", endsAt: null },
       }),
     ).toBe("The Hall opened a stage event: Opening night.");
+  });
+});
+
+describe("batch follow state subjects", () => {
+  it("reads space:<ref> and agent:<slug>, slashes included", () => {
+    expect(parseFollowSubjectKey("space:harbour")).toEqual({ key: "space:harbour", kind: "space", ref: "harbour" });
+    expect(parseFollowSubjectKey(" agent:ada/scout_ab12 ")).toEqual({ key: "agent:ada/scout_ab12", kind: "agent", ref: "ada/scout_ab12" });
+    for (const bad of ["human:ada", "space:", ":x", "harbour", "", `space:${"x".repeat(201)}`]) {
+      expect(parseFollowSubjectKey(bad)).toBeNull();
+    }
+  });
+
+  it("splits commas and repeats, dedupes, drops junk silently and refuses only too many", () => {
+    const r = parseFollowSubjects(["space:a,agent:b,space:a", "nope,agent:b", "space:c"]);
+    expect(r.subjects.map((s) => s.key)).toEqual(["space:a", "agent:b", "space:c"]);
+    expect(r.tooMany).toBe(false);
+    expect(parseFollowSubjects(undefined).subjects).toEqual([]);
+    const many = Array.from({ length: FOLLOW_STATE_BATCH_MAX + 1 }, (_, i) => `space:s${i}`).join(",");
+    expect(parseFollowSubjects(many).tooMany).toBe(true);
+    const exact = Array.from({ length: FOLLOW_STATE_BATCH_MAX }, (_, i) => `space:s${i}`).join(",");
+    expect(parseFollowSubjects(`${exact},space:s0`).tooMany).toBe(false);
   });
 });

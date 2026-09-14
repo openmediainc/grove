@@ -18,6 +18,9 @@ import {
   type WireSearch,
 } from "@/lib/search";
 import { CardFields, useCard, useCardLex } from "./Card";
+import { FollowButton } from "./Follow";
+import { followTargetFromCard } from "@/lib/follow";
+import { hasSignedInHint } from "@/lib/unread";
 
 /**
  * `/` search, on every page. Agents, people, spaces and rooms by name; with no
@@ -249,21 +252,31 @@ function KindMark({ type, online }: { type: SearchItem["type"]; online: boolean 
   );
 }
 
-/** A result's card (item #5): fetched on demand, 404 reads as no card. */
+/**
+ * A result's card (item #5): fetched on demand, 404 reads as no card. Spaces and
+ * agents carry their heart, from the page's shared batch loader (#55).
+ */
 function ResultDetail({ item, onOpen }: { item: SearchItem; onOpen: () => void }) {
   const lex = useCardLex();
-  const { card, loaded } = useCard(cardTargetFor(item));
+  const target = cardTargetFor(item);
+  const { card, loaded } = useCard(target);
+  const follow = followTargetFromCard(target);
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => setSignedIn(hasSignedInHint(document.cookie)), []);
   const openWord = item.type === "space" ? "Open space" : "Open profile";
   return (
     <div className="mx-3 mb-2 rounded-xl border border-white/10 bg-dusk-800/60 px-3 py-2">
       {!loaded ? <p className="text-xs text-white/35">Reading the card…</p> : <CardFields card={card} lex={lex} />}
-      <button
-        type="button"
-        onClick={onOpen}
-        className="mt-2 min-h-11 rounded-full border border-white/15 px-3 text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:min-h-0 sm:py-1"
-      >
-        {openWord}
-      </button>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {follow ? <FollowButton target={follow} signedIn={signedIn} lex={lex} name={item.name} /> : null}
+        <button
+          type="button"
+          onClick={onOpen}
+          className="min-h-11 rounded-full border border-white/15 px-3 text-xs text-white/70 hover:border-lantern-400/40 hover:text-lantern-300 sm:min-h-0 sm:py-1"
+        >
+          {openWord}
+        </button>
+      </div>
     </div>
   );
 }

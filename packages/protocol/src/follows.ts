@@ -56,6 +56,56 @@ export const FOLLOW_FANOUT_MAX = 500;
 export const FOLLOW_NOTICES_KEEP = 200;
 
 /**
+ * Batch follow state (queue #55): `GET /api/v1/follows/state?subjects=…` asks
+ * for up to this many hearts at once, so a shelf of cards is one request.
+ */
+export const FOLLOW_STATE_BATCH_MAX = 50;
+
+/** One requested subject: `space:<ref>` or `agent:<slug>`; `key` is the normalised spelling the answer is keyed by. */
+export interface FollowSubjectRef {
+  key: string;
+  kind: FollowSubject;
+  ref: string;
+}
+
+/** `space:harbour` → { kind, ref }. Null for anything else (unknown kind, empty or oversized ref). */
+export function parseFollowSubjectKey(raw: string): FollowSubjectRef | null {
+  const key = String(raw ?? "").trim();
+  const colon = key.indexOf(":");
+  if (colon <= 0) return null;
+  const kind = key.slice(0, colon);
+  const ref = key.slice(colon + 1).trim();
+  if (!isFollowSubject(kind) || !ref || ref.length > 200) return null;
+  return { key: followSubjectKey(kind, ref), kind, ref };
+}
+
+export function followSubjectKey(kind: FollowSubject, ref: string): string {
+  return `${kind}:${ref}`;
+}
+
+/**
+ * The `subjects` query, as a comma-separated string, repeated parameters, or
+ * both. Deduplicated in order. A malformed entry is dropped, not refused: the
+ * answer omits it exactly as it omits a private or missing subject, so nothing
+ * can be learned from the difference. More than FOLLOW_STATE_BATCH_MAX distinct
+ * entries is the only refusal (`tooMany`).
+ */
+export function parseFollowSubjects(raw: unknown): { subjects: FollowSubjectRef[]; tooMany: boolean } {
+  const parts = (Array.isArray(raw) ? raw : [raw])
+    .filter((v): v is string => typeof v === "string")
+    .flatMap((v) => v.split(","));
+  const seen = new Set<string>();
+  const subjects: FollowSubjectRef[] = [];
+  for (const p of parts) {
+    const s = parseFollowSubjectKey(p);
+    if (!s || seen.has(s.key)) continue;
+    seen.add(s.key);
+    subjects.push(s);
+  }
+  return { subjects, tooMany: subjects.length > FOLLOW_STATE_BATCH_MAX };
+}
+
+/**
  * What a notice carries. Nothing here is more than a reader of that room could
  * already see by standing in it: a name, a slug, the room, a tool name and how
  * long it took, the fault caption the map draws, a Stage bill.

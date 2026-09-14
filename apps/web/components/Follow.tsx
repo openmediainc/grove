@@ -4,10 +4,20 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { gp } from "@/lib/base";
 import { followApiPath, followTargetKey, heartLabel, type FollowTarget, type WireFollow } from "@/lib/follow";
+import { createFollowStateLoader, followStatePath, type HeartState } from "@/lib/follow-state";
 import { GUEST_EVENT } from "@/lib/guest";
 import type { ThemeLexicon } from "@/lib/themes/types";
 
 type CardLex = ThemeLexicon["card"];
+
+/**
+ * One loader for the whole page session (queue #55): every heart mounted in the
+ * same frame shares one batched request, and a follow here updates every other
+ * heart for the same subject.
+ */
+export const followStates = createFollowStateLoader({
+  fetchStates: async (keys) => (await api<{ states: Record<string, HeartState> }>(followStatePath(keys))).states ?? {},
+});
 
 /**
  * The heart. Follows a space or an agent so its errors, long tool calls and
@@ -23,15 +33,18 @@ export function FollowButton({
   target,
   signedIn,
   lex,
+  name,
   className,
 }: {
   target: FollowTarget | null;
   /** null while still finding out. */
   signedIn: boolean | null;
   lex: CardLex;
+  /** What the sign-in page says you were following, if it comes to that. */
+  name?: string;
   className?: string;
 }) {
-  const [state, setState] = useState<WireFollow | null>(null);
+  const [state, setState] = useState<HeartState | null>(null);
   const [hidden, setHidden] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -40,14 +53,27 @@ export function FollowButton({
   useEffect(() => {
     if (!target) return;
     let live = true;
-    setState(null);
-    setHidden(false);
+    const show = (v: HeartState | null) => {
+      if (!live) return;
+      setState(v);
+      setHidden(v === null);
+    };
+    const known = followStates.peek(target);
     setErr(null);
-    api<{ follow: WireFollow }>(followApiPath(target))
-      .then((r) => live && setState(r.follow))
-      .catch(() => live && setHidden(true));
+    if (known !== undefined) show(known);
+    else {
+      setState(null);
+      setHidden(false);
+      followStates
+        .load(target)
+        .then(show)
+        .catch(() => live && setHidden(true));
+    }
+    // Another heart for the same subject followed or unfollowed: say the same.
+    const off = followStates.subscribe(target, show);
     return () => {
       live = false;
+      off();
     };
     // Keyed on the target's identity, not the object.
   }, [key]);
@@ -59,29 +85,30 @@ export function FollowButton({
 
   const loginPath = () => {
     const next = typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : "/";
-    const q = new URLSearchParams({ next, why: "follow", what: state?.name ?? "" });
+    const q = new URLSearchParams({ next, why: "follow", what: name ?? "" });
     return gp(`/login?${q.toString()}`);
   };
 
   const asGuest = signedIn === false;
 
   const toggle = async () => {
-    if (!state || busy) return;
+    if (!state || busy || !target) return;
     const on = !state.following;
     setBusy(true);
     setErr(null);
     // Optimistic: the heart answers the tap at once, and the server's count wins.
-    setState({ ...state, following: on, followers: Math.max(0, state.followers + (on ? 1 : -1)) });
+    setState({ following: on, followers: Math.max(0, state.followers + (on ? 1 : -1)) });
     try {
       const r = await api<{ follow: WireFollow }>(followApiPath(target), {
         method: on ? "PUT" : "DELETE",
         body: "{}",
       });
-      setState(r.follow);
+      // The server's answer replaces the cached state, here and on every other heart for it.
+      followStates.set(target, { following: r.follow.following, followers: r.follow.followers });
       if (asGuest) window.dispatchEvent(new Event(GUEST_EVENT));
     } catch (e) {
       const status = (e as { status?: number }).status;
-      if (status === 404) setHidden(true);
+      if (status === 404) followStates.set(target, null);
       else if (status === 401) window.location.href = loginPath();
       else {
         setState(state);

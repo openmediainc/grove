@@ -296,7 +296,7 @@ export default function AgentPage() {
         >
           Watch on the map
         </Link>
-        <FollowButton target={{ subject: "agent", slug: a.slug }} signedIn={signedIn} lex={lex} />
+        <FollowButton target={{ subject: "agent", slug: a.slug }} signedIn={signedIn} lex={lex} name={a.display_name} />
         {!isOwner ? (
           <LeaveMessage target={{ kind: "agent", ref: a.slug, name: a.display_name }} label={lex.message} signedIn={signedIn} />
         ) : null}

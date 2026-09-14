@@ -395,6 +395,24 @@ export class QuotaService {
   }
 
   /**
+   * Batch follow state (queue #55): one read of up to 50 hearts. A page load
+   * makes one or two, so 120 a minute per person, agent or guest refuses only a
+   * loop. Signed out with no guest pass there is no actor, so the key is the
+   * truncated address hash (`guestIpBucket`), wide (600 a minute) because a
+   * whole office or carrier can share one. Browser-facing, so not in the
+   * agent-facing rate-limit table.
+   */
+  async consumeFollowState(key: { actorId: string } | { ipBucket: string }): Promise<void> {
+    const byActor = "actorId" in key;
+    const limit = byActor ? 120 : 600;
+    const k = byActor ? `ratelimit:${key.actorId}:follow_state:min` : `ratelimit:guestip:${key.ipBucket}:follow_state:min`;
+    const n = await this.limiter.incr(k, 60);
+    if (n > limit) {
+      await this.refuse("follow_state", k, limit, n, 60_000, `Follow state limiter exhausted (${limit} per minute).`);
+    }
+  }
+
+  /**
    * Reading a website for branding suggestions (queue #34): each call makes the
    * server fetch a page and up to three icons from the open internet, so it is
    * metered per person, 10 an hour. Failed reads count too. Human-only, so not

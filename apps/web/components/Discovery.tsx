@@ -196,6 +196,7 @@ function ShelfCard({
           target={item.kind === "space" ? { subject: "space", ref: item.slug } : { subject: "agent", slug: item.slug }}
           signedIn={signedIn}
           lex={lex}
+          name={item.name}
         />
       </div>
     </article>
