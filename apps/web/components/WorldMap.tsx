@@ -105,6 +105,8 @@ import {
 } from "@/lib/walk-in";
 import { KIOSK_ATTR, KioskChrome } from "./KioskChrome";
 import { TvDirector, type TvActor, type TvShotKind, type TvStage } from "@/lib/tv/director";
+import { useSoundscape } from "@/lib/sound/useSoundscape";
+import { SoundMenuSection, TapForSound } from "./SoundControls";
 import { ReplayBadge, ReplayBar } from "./ReplayBar";
 import { ReplayController, startVisitClock, type LiveContext } from "@/lib/replay/controller";
 import { ReplayMotion } from "@/lib/replay/motion";
@@ -949,6 +951,9 @@ export function WorldMap() {
   /** Public lines already handed to the director, so a poll never re-tells one. Null until the first poll. */
   const tvSpeechSeenRef = useRef<Set<string> | null>(null);
   const tvModeRef = useRef<(on: boolean) => void>(() => {});
+  /* Ambient soundscape (#43, lib/sound): off by default, on in kiosk/TV after a tap. Stable `scape`. */
+  const sound = useSoundscape({ kiosk, sound: theme.sound });
+  const soundscape = sound.scape;
   /* --- cinematic sequences (#39, lib/sequence) ------------------------ *
    * A playing sequence owns the camera outright, the way TV does, and hides
    * the chrome. Its clock is advanced by the draw loop: wall time live, and
@@ -1837,7 +1842,10 @@ export function WorldMap() {
             const sid = line.sender_id ?? line.senderId;
             const key = line.speech_id ?? line.speechId ?? `${sid}|${line.body}`;
             next.add(key);
-            if (seen && sid && !seen.has(key)) tvDirectorRef.current?.heard(sid, line.body, Date.now());
+            if (seen && sid && !seen.has(key)) {
+              tvDirectorRef.current?.heard(sid, line.body, Date.now());
+              soundscape.heard(sid, Date.now());
+            }
           }
           if (seen) for (const key of seen) if (next.size < 200) next.add(key);
           tvSpeechSeenRef.current = next;
@@ -3588,6 +3596,11 @@ export function WorldMap() {
           }
         }
 
+        // Ambient sound samples the same bodies; it rate-limits itself and is a no-op while off.
+        if (soundscape.active && !replay.view.active) {
+          soundscape.sample(actors.map((a) => ({ id: a.id, hazard: hazardOf(a), toolCalls: a.toolCalls })), nowMs);
+        }
+
         if (kioskRef.current && !tvRef.current && !reduceMotion.matches && nowMs > kioskYieldRef.current) {
           const stop = Math.floor(nowMs / KIOSK_STOP_MS) % KIOSK_STOPS.length;
           if (stop !== tourStopRef.current) {
@@ -3814,6 +3827,7 @@ export function WorldMap() {
         bare ? "min-h-[100svh]" : "min-h-[calc(100svh-56px)]"
       }`}
     >
+      {kiosk && !cinema ? <TapForSound sound={sound} /> : null}
       <KioskChrome
         active={kiosk}
         onLeave={() => setKioskMode(false)}
@@ -4230,6 +4244,7 @@ export function WorldMap() {
                   >
                     Legend
                   </MenuItem>
+                  <SoundMenuSection sound={sound} />
                   <MenuLink href="/how-it-works#agents" onSelect={close}>
                     Bring an agent
                   </MenuLink>

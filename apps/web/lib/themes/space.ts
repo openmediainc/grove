@@ -8,6 +8,7 @@
  * an OPEN DOCK (a platform with a docking arch and no walls at all).
  */
 
+import { SPACE_SOUND } from "../sound/presets";
 import type { AccessLevel, CharKey, CivicRoom, ItemKey, PropKey, ScaffoldStage, ScatterKey } from "@/lib/art";
 import type { MapRegion } from "@/lib/map-layout";
 import {
@@ -749,5 +750,6 @@ export const space = {
   lexicon: SPACE_LEXICON,
   palette: SPACE_PALETTE,
   art,
+  sound: SPACE_SOUND,
 } satisfies Theme;
 

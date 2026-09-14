@@ -8,6 +8,7 @@
  * can see into, doors shut), an OPEN PARK (a pavilion roof on posts, no walls).
  */
 
+import { CITY_SOUND } from "../sound/presets";
 import type { AccessLevel, CharKey, CivicRoom, ItemKey, PropKey, ScaffoldStage, ScatterKey } from "@/lib/art";
 import type { MapRegion } from "@/lib/map-layout";
 import {
@@ -731,4 +732,5 @@ export const city = {
   lexicon: CITY_LEXICON,
   palette: CITY_PALETTE,
   art,
+  sound: CITY_SOUND,
 } satisfies Theme;

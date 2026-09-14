@@ -8,6 +8,7 @@
  * is the theme every other one is measured against.
  */
 
+import { AOE_SOUND } from "../sound/presets";
 import {
   ANIMAL_KEYS,
   BUILDING,
@@ -358,4 +359,5 @@ export const aoe = {
   lexicon: AOE_LEXICON,
   palette: AOE_PALETTE,
   art,
+  sound: AOE_SOUND,
 } satisfies Theme;

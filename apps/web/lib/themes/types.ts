@@ -20,6 +20,7 @@
  */
 
 import type { AgentVerb } from "@/lib/agent-verbs";
+import type { SoundPreset } from "@/lib/sound/presets";
 import type { BrandEmblem, SpaceMark } from "@grove/protocol";
 import type {
   AccessLevel,
@@ -435,4 +436,10 @@ export interface Theme {
   lexicon: ThemeLexicon;
   palette: ThemePalette;
   art: ThemeArt;
+  /**
+   * The ambient soundscape's scale and timbre (#43, lib/sound). Optional:
+   * anything left out falls back to `DEFAULT_SOUND`. What an event means in
+   * sound is fixed; a theme only picks the material.
+   */
+  sound?: Partial<SoundPreset>;
 }

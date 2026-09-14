@@ -38,6 +38,29 @@ declared `satisfies Theme`, so leaving one out fails `pnpm -r typecheck`
 | `estateSign(board)` + `estateFence(segments, accent)` | an **estate** (#37): adjacent non-private plots sharing a primary org, else an owner (4-neighbour on the plot grid; grouped server-side in `@grove/protocol` estates.ts and published as the minimap's `estates`). ONE shared sign on a seam between member plots (`layoutEstateSign`, visible from 0.4x), and one continuous fence round the union's outer edge (`lib/estates` `estatePerimeter`) in the estate's accent (org colour, else the owner's branding accent) or the theme rail. Each member plot keeps its own tint, building and a smaller board (`layoutSignboard(..., { compact: true })`): **access stays per plot**. A private plot never joins, bridges or appears; lexicon `estate.label` / `estate.plots` name it. Optional name ≤ 24 chars (migration 038: `humans.estate_name`, `orgs.estate_name`) on the space's Manage tab | gable-crested timber mount, split-rail fence ("Estate · plots") | banner-crested hull mount, dashed lit walkway ("Station · modules") | dome-crested civic plaque, kerb + bollards ("Block · lots") | braced holo panel, dashed light wall ("Compound · nodes") |
 | `speechFont?` | font family the layout measures speech with | sans | sans | sans | mono |
 
+## Optional slot: `sound` (#43)
+
+`Theme.sound?: Partial<SoundPreset>` (`apps/web/lib/sound/presets.ts`) is the
+ambient soundscape's scale and timbre. It is the one optional slot: anything left
+out falls back to `DEFAULT_SOUND` (`resolveSoundPreset`). What an event MEANS in
+sound is theme-invariant, like hazard marks: a tool call starting or finishing is
+a soft pluck pitched by the tool's verb family (read / run / write / think), a
+public line is a breathy chime, an arrival is a rising two-note motif, a flag or
+fault is one low muted tone (at most one per 8 s, never an alarm), under a slow
+detuned pad whose low-pass opens with activity. A theme picks only the material:
+
+| | aoe | space | city | scifi |
+|---|---|---|---|---|
+| scale | major pentatonic | lydian | dorian | minor pentatonic |
+| timbre | `wood` (triangle) | `glass` (sine + high partial, long tail) | `keys` (warm electric piano) | `fm` (FM bells) |
+
+Pure WebAudio synthesis (oscillators, filters, a ConvolverNode on a generated
+impulse): no audio files, loops or requests. It reads only what the canvas already
+has, at most ~4 voices a second with bursts collapsed. Off by default; ON by
+default in kiosk/TV (after a tap, per autoplay policy); ⋯ Sound has the toggle,
+volume and "Reduce sound (bed only)". Sound never carries information the map
+does not draw.
+
 Plus `ThemePalette` (plot tints, fog, edges, nameplates, lamp glow, daylight
 colour, hover card, chrome tokens, display font) and `ThemeLexicon` (every UI word:
 heading, human/agent nouns, region names + bookmark sentences, access labels +

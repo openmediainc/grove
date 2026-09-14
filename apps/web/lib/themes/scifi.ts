@@ -12,6 +12,7 @@
  * over the one thing that is allowed to shout.
  */
 
+import { SCIFI_SOUND } from "../sound/presets";
 import type { AccessLevel, CharKey, CivicRoom, ItemKey, PropKey, ScaffoldStage, ScatterKey } from "@/lib/art";
 import type { MapRegion } from "@/lib/map-layout";
 import {
@@ -795,4 +796,5 @@ export const scifi = {
   lexicon: SCIFI_LEXICON,
   palette: SCIFI_PALETTE,
   art,
+  sound: SCIFI_SOUND,
 } satisfies Theme;
