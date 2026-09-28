@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Fragment_Mono, Schibsted_Grotesk } from "next/font/google";
 import { COLORS, NO_FLASH_SCRIPT } from "@grove/ui/tokens";
 import "@grove/ui/tokens/tokens.css";
@@ -83,6 +84,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SearchPalette />
         <VisitBeacon />
         <KeyboardInset />
+        <SpeedInsights />
       </body>
     </html>
   );
