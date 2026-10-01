@@ -5,7 +5,14 @@ import { worldRedirects } from "./lib/world-url";
 
 const api = process.env.VERCEL ? null : (process.env.GROVE_API_ORIGIN ?? "http://127.0.0.1:3511");
 const base = process.env.NEXT_PUBLIC_GROVE_BASE;
-const basePath = base && base !== "/" ? base : process.env.VERCEL ? undefined : "/grove";
+const basePath =
+  base && base !== "/"
+    ? base
+    : process.env.VERCEL
+      ? undefined
+      : process.env.GROVE_NO_BASE_PATH
+        ? undefined
+        : "/grove";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@grove/protocol", "@grove/ui", "@grove/policy"],
@@ -31,7 +38,14 @@ const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
   // Share-card routes (#76) read the vendored OG fonts at request time.
   outputFileTracingIncludes: { "/og/**": ["./lib/og/fonts/**"] },
-  allowedDevOrigins: ["q-ai.tail735569.ts.net", "127.0.0.1", "localhost"],
+  allowedDevOrigins: [
+    "q-ai.tail735569.ts.net",
+    "127.0.0.1",
+    "localhost",
+    ...(process.env.BASE44_PUBLIC_HOST_SUFFIX
+      ? [`3000-${process.env.BASE44_PUBLIC_HOST_SUFFIX}`]
+      : []),
+  ],
   // Old agent routes land on the agent page or /me, old space routes on Explore
   // or the space page (DECISIONS #5: never a 404).
   async redirects() {

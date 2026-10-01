@@ -1,0 +1,114 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: grove
+      POSTGRES_PASSWORD: grove
+      POSTGRES_DB: grove
+    volumes:
+      - grove_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grove -d grove"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+    restart: on-failure
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+    restart: on-failure
+
+  install:
+    build:
+      context: .
+      dockerfile: Dockerfile.base44
+    volumes:
+      - .:/app
+      - pnpm_store:/root/.local/share/pnpm
+    working_dir: /app
+    command: ["sh", "-ec", "CI=true pnpm install --frozen-lockfile"]
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.base44
+    volumes:
+      - .:/app
+      - pnpm_store:/root/.local/share/pnpm
+    working_dir: /app
+    environment:
+      - DATABASE_URL=postgres://grove:grove@postgres:5432/grove
+    command: ["pnpm", "migrate"]
+    depends_on:
+      install:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.base44
+    volumes:
+      - .:/app
+      - pnpm_store:/root/.local/share/pnpm
+    working_dir: /app
+    environment:
+      - DATABASE_URL=postgres://grove:grove@postgres:5432/grove
+      - REDIS_URL=redis://redis:6379
+      - GROVE_LISTEN_HOST=0.0.0.0
+      - GROVE_API_PORT=3511
+      - GROVE_WEB_ORIGIN=https://3000-${BASE44_PUBLIC_HOST_SUFFIX}
+      - GROVE_PUBLIC_URL=https://3000-${BASE44_PUBLIC_HOST_SUFFIX}
+      - GROVE_MAGIC_LINK_STDOUT=1
+      - INVITE_BOOTSTRAP=grove-alpha
+    command: ["sh", "-ec", "exec pnpm --filter @grove/api dev"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3511/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.base44
+    volumes:
+      - .:/app
+      - pnpm_store:/root/.local/share/pnpm
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    environment:
+      - GROVE_API_ORIGIN=http://api:3511
+      - GROVE_NO_BASE_PATH=1
+      - BASE44_PUBLIC_HOST_SUFFIX=${BASE44_PUBLIC_HOST_SUFFIX}
+    command: ["sh", "-ec", "exec pnpm --filter @grove/web exec next dev -H 0.0.0.0 -p 3000"]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+volumes:
+  grove_pg:
+  pnpm_store:

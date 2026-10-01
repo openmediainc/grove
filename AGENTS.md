@@ -32,3 +32,13 @@ pnpm install
 pnpm test:safe
 pnpm dev
 ```
+
+## Base44 (sandbox dev environment)
+
+- Compose: `docker compose -f docker-compose.base44.yml up -d`
+- Preview: port 3000 (Next.js dev server, single-origin — API proxied via rewrites to `http://api:3511`)
+- No external credentials required to boot. `XAI_API_KEY`, `RESEND_API_KEY`, `GROVE_SMTP_URL` are optional (AI brains and email delivery stay no-ops without them).
+- `GROVE_NO_BASE_PATH=1` disables the `/grove` basePath so the preview serves at `/`.
+- `allowedDevOrigins` in `apps/web/next.config.ts` includes the preview origin via `BASE44_PUBLIC_HOST_SUFFIX`.
+- Migrations run as a one-shot compose service (`migrate`) before the API starts; `GROVE_MIGRATE_ON_BOOT` stays off.
+- `pnpm install` runs as a one-shot compose service (`install`) before everything else; the pnpm store is shared via a named volume.
