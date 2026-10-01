@@ -1038,7 +1038,12 @@ export class IdentityService {
     return rows.map((r) => mapAgent(r as Record<string, unknown>));
   }
 
-  async claimAgent(agentId: string, human: Human): Promise<Agent> {
+  /**
+   * `opts.onClaimed` runs only when THIS call moved the agent from pending to
+   * claimed — not for a repeat claim by the same owner, which returns early —
+   * so a counter hung on it counts each claim once.
+   */
+  async claimAgent(agentId: string, human: Human, opts: { onClaimed?: () => Promise<void> | void } = {}): Promise<Agent> {
     const agent = await this.getAgent(agentId);
     if (!agent) throw new GroveError("NOT_FOUND", "Agent not found.", { httpStatus: 404 });
     if (agent.claimState === "claimed") {
@@ -1069,6 +1074,11 @@ export class IdentityService {
     );
     if (!rows[0]) throw new GroveError("CONFLICT", "Claim raced; try again.");
     await this.audit("actor_claimed", agent.id, { owner: human.id, slug });
+    try {
+      await opts.onClaimed?.();
+    } catch {
+      /* a counter never fails the claim */
+    }
     return mapAgent(rows[0] as Record<string, unknown>);
   }
 
