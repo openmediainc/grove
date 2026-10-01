@@ -13,6 +13,7 @@ import { createPool } from "../src/db.js";
 import { loadConfig } from "../src/config.js";
 import { migrate } from "../src/migrate.js";
 import {
+  AGENT_EVENTS,
   ANALYTICS_BUCKET_HEX,
   ANALYTICS_RETENTION_DAYS,
   bucketOf,
@@ -76,7 +77,24 @@ describe("analytics helpers", () => {
     expect(visit).toMatchObject({ today: 40, yesterday: 10, days: [40, 10, 12, 8, 0, 0, 0, 0] });
     expect(visit.median7).toBe(0); // [10,12,8,0,0,0,0]
     expect(s.find((x) => x.key === "sign_in")).toMatchObject({ today: 0, yesterday: 0, median7: 0 });
-    expect(s.map((x) => x.key)).toEqual(["visit", "unique_visitor", "sign_in", "walk_in", "follow", "message", "reaction"]);
+    expect(s.map((x) => x.key)).toEqual(["visit", "unique_visitor", "sign_in", "agent_registered", "agent_claimed", "walk_in", "follow", "message", "reaction"]);
+  });
+
+  it("series: the two agent counts sit next to Sign-ins, labelled, zero-filled when nothing happened", () => {
+    const s = seriesFromRows(
+      [
+        { day: "2026-09-13", event: "agent_registered", n: "3" },
+        { day: "2026-09-12", event: "agent_registered", n: 1 },
+        { day: "2026-09-13", event: "agent_claimed", n: "2" },
+      ],
+      "2026-09-13",
+    );
+    const at = s.findIndex((x) => x.key === "sign_in");
+    expect(s.slice(at, at + 3).map((x) => x.label)).toEqual(["Sign-ins", "Agents registered", "Agents claimed by a person"]);
+    expect(s.find((x) => x.key === "agent_registered")).toMatchObject({ today: 3, yesterday: 1 });
+    expect(s.find((x) => x.key === "agent_claimed")).toMatchObject({ today: 2, yesterday: 0 });
+    expect(seriesFromRows([], "2026-09-13").find((x) => x.key === "agent_claimed")).toMatchObject({ today: 0, yesterday: 0, median7: 0 });
+    expect([...AGENT_EVENTS]).toEqual(["agent_registered", "agent_claimed"]);
   });
 
   it("cohorts: newest first, only weeks that have begun, sizes from the humans count", () => {
@@ -183,6 +201,30 @@ describe.skipIf(!hasDb)("analytics store", () => {
     const s = await grove.analytics.summary(PAST);
     expect(s.series.find((x) => x.key === "walk_in")).toMatchObject({ today: 2 });
     expect(s.retentionDays).toBe(ANALYTICS_RETENTION_DAYS);
+  });
+
+  it("agent registrations and claims are day counters and nothing else", async () => {
+    await grove.analytics.record("agent_registered", { now: PAST });
+    await grove.analytics.record("agent_registered", { now: PAST });
+    await grove.analytics.record("agent_claimed", { now: PAST });
+    expect(await count(PAST_DAY, "agent_registered")).toBe(2);
+    expect(await count(PAST_DAY, "agent_claimed")).toBe(1);
+    const s = await grove.analytics.summary(PAST);
+    expect(s.series.find((x) => x.key === "agent_registered")).toMatchObject({ today: 2, label: "Agents registered" });
+    expect(s.series.find((x) => x.key === "agent_claimed")).toMatchObject({ today: 1, label: "Agents claimed by a person" });
+    // The only rows for the day are (day, event, n): no id column to fill.
+    const rows = (await pg.query(`SELECT * FROM analytics_daily WHERE day = $1::date AND event LIKE 'agent_%'`, [PAST_DAY])).rows;
+    for (const r of rows) expect(Object.keys(r).sort()).toEqual(["day", "event", "n"]);
+  });
+
+  it("an agent count never marks a person active, even if an id is handed over", async () => {
+    const email = `analytics-agent-${Math.random().toString(36).slice(2, 10)}@example.com`;
+    const { token } = await grove.identity.requestMagicLink({ email, inviteCode: "grove-alpha", ageAttested: true });
+    const { human } = await grove.identity.consumeMagicLink(token!);
+    fixtures.trackHuman(human.id);
+    await grove.analytics.record("agent_claimed", { humanId: human.id });
+    // Still unmarked this week: the first real mark succeeds.
+    expect(await grove.analytics.markActive(human.id)).toBe(true);
   });
 
   it("a person is active once per week, in the cell for the week they first signed in", async () => {

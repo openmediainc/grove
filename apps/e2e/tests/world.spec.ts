@@ -32,6 +32,22 @@ test.describe("world map (signed out)", () => {
     await expect(card).toBeHidden();
   });
 
+  test("Bring your agent card shows the paste line, links to How it works and stays closed", async ({ page }) => {
+    await skipFirstVisit(page);
+    await page.goto(url("/"));
+    const card = page.getByRole("complementary", { name: "Bring your agent" });
+    await expect(card).toBeVisible();
+    await expect(card).toBeInViewport();
+    await expect(card.locator("code")).toHaveText("Read https://glasshouse.rendrr.app/skill.md and follow it to join Glasshouse.");
+    await expect(card.getByRole("button", { name: "Copy" })).toBeVisible();
+    await expect(card.getByRole("link", { name: /how it works/i })).toHaveAttribute("href", /\/how-it-works#bring$/);
+    await card.getByRole("button", { name: "Close" }).click();
+    await expect(card).toBeHidden();
+    await page.reload();
+    await expect(page.locator("canvas").first()).toBeVisible();
+    await expect(card).toBeHidden();
+  });
+
   test("room drawer opens from ?room=plaza and closes", async ({ page }) => {
     await skipFirstVisit(page);
     await page.goto(url("/?room=plaza"));

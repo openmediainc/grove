@@ -42,6 +42,7 @@ const CHROME_ONLY = [
   "components/StageTrial.tsx",
   "components/Identity.tsx",
   "components/LitMark.tsx",
+  "components/BringAgentCard.tsx",
 ];
 
 /** Legacy theme-chrome classes: dusk/lantern utilities, raw white ink, the theme display face, ad-hoc palette hues. */

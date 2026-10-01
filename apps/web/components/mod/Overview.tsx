@@ -343,8 +343,9 @@ function FunnelCard({ a }: { a: Analytics | Failed }) {
   return (
     <Card title="Visitors & funnel">
       <p className="text-xs text-muted">
-        UTC day {a.day} so far, against yesterday and the median of the 7 days before. People only, no IPs or identities
-        stored, DNT/GPC honoured, kept {a.retention_days} days ·{" "}
+        UTC day {a.day} so far, against yesterday and the median of the 7 days before. People, plus two agent counts
+        (registered, and claimed by a person), counts only: no IPs or identities stored, DNT/GPC honoured, kept{" "}
+        {a.retention_days} days ·{" "}
         <a
           className={LINK_CLASS}
           href="https://github.com/openmediainc/grove/blob/main/docs/PRIVACY.md"

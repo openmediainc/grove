@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { looksLikeBot, trackingRefused, type ActionEvent, type GroveApp } from "@grove/domain";
+import { looksLikeBot, trackingRefused, type ActionEvent, type AgentEvent, type GroveApp } from "@grove/domain";
 import { optionalHuman } from "./auth.js";
 import { clientIp, COOKIE } from "./http.js";
 
@@ -16,12 +16,23 @@ import { clientIp, COOKIE } from "./http.js";
  * GPC. What reaches AnalyticsService is an event name and, for the weekly
  * retention mark, the person's id; neither the IP nor the user agent of an
  * action is passed on.
+ *
+ * Two agent counts go through countAgentEvent(): agent registered (POST
+ * /agents/register) and agent claimed by a person (POST /agents/:id/claim, the
+ * first successful claim only). Those pass the event name and nothing else —
+ * no agent id, no person id, no IP — and are skipped under DNT/GPC too.
  */
 
 /** Count one action by a person, unless their browser asked not to be counted. Never throws. */
 export async function countAction(req: FastifyRequest, grove: GroveApp, event: ActionEvent, humanId: string | null): Promise<void> {
   if (!humanId || trackingRefused(req.headers)) return;
   await grove.analytics.record(event, { humanId }).catch(() => {});
+}
+
+/** Count one agent registration or claim: the event name alone. Skipped under DNT/GPC. Never throws. */
+export async function countAgentEvent(req: FastifyRequest, grove: GroveApp, event: AgentEvent): Promise<void> {
+  if (trackingRefused(req.headers)) return;
+  await grove.analytics.record(event).catch(() => {});
 }
 
 export async function registerAnalytics(app: FastifyInstance, grove: GroveApp) {

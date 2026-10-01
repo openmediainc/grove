@@ -139,6 +139,7 @@ export const REGISTER_IPS = {
   integration: "10.99.24.1",
   toolCallRoutes: "10.99.25.1",
   guestsRoutes: "10.99.26.1",
+  analyticsRoutes: "10.99.27.1",
   replayCheckpoints: "10.99.63.1",
   mcpParity: "10.99.65.1",
 } as const;

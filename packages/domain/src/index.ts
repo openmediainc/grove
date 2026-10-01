@@ -251,6 +251,7 @@ export {
 export {
   AnalyticsService,
   ANALYTICS_EVENTS,
+  AGENT_EVENTS,
   ANALYTICS_RETENTION_DAYS,
   ANALYTICS_BUCKET_HEX,
   trackingRefused,
@@ -262,6 +263,7 @@ export {
   seriesFromRows,
   cohortsFromRows,
   type ActionEvent,
+  type AgentEvent,
   type AnalyticsEvent,
   type AnalyticsSummary,
   type AnalyticsSeries,

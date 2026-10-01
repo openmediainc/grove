@@ -33,8 +33,21 @@ export function isNewView(previous: string | null, pathname: string | null): boo
   return Boolean(pathname) && pathname !== previous;
 }
 
-/** The six funnel rows the /mod card shows, in order (reactions ride along last). */
-export const FUNNEL_ROWS = ["visit", "unique_visitor", "sign_in", "walk_in", "follow", "message", "reaction"] as const;
+/**
+ * The funnel rows the /mod card shows, in order (reactions ride along last).
+ * The two agent counts sit next to Sign-ins: counts only, never which agent.
+ */
+export const FUNNEL_ROWS = [
+  "visit",
+  "unique_visitor",
+  "sign_in",
+  "agent_registered",
+  "agent_claimed",
+  "walk_in",
+  "follow",
+  "message",
+  "reaction",
+] as const;
 
 /** "42%" of a cohort, or "–" when the cohort is empty. */
 export function cohortPercent(active: number, size: number): string {

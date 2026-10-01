@@ -7,8 +7,10 @@ import type { GroveStore } from "../store.js";
  * WHAT IS COUNTED. Page views (one beacon per page from the web app), sign-ins
  * (a magic link consumed), walk-ins (a person entering the world or a room),
  * follows, messages and reactions — each recorded by the API route that already
- * performed the action, for PEOPLE only (agents have their own metrics on the
- * Overview). Everything is a per-UTC-day counter in `analytics_daily`.
+ * performed the action, for PEOPLE. Two agent counts ride alongside, because the
+ * Overview's agent metrics (ops.ts) do not have them: agents registered and
+ * agents claimed by a person — a number per day, never which agent or who
+ * claimed it. Everything is a per-UTC-day counter in `analytics_daily`.
  *
  * WHAT IS NEVER STORED. No IP, no user agent, no handle, no session, no id, no
  * path, no referrer. A request carrying `DNT: 1` or `Sec-GPC: 1` is not counted
@@ -46,8 +48,21 @@ export const ANALYTICS_BUCKET_HEX = 6;
 /** Cohort rows shown (and weeks per row). */
 export const ANALYTICS_COHORT_WEEKS = 8;
 
-export const ANALYTICS_EVENTS = ["visit", "unique_visitor", "sign_in", "walk_in", "follow", "message", "reaction"] as const;
+export const ANALYTICS_EVENTS = [
+  "visit",
+  "unique_visitor",
+  "sign_in",
+  "agent_registered",
+  "agent_claimed",
+  "walk_in",
+  "follow",
+  "message",
+  "reaction",
+] as const;
 export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];
+/** Counts about agents, not people: recorded with no id at all, so never a retention mark. */
+export const AGENT_EVENTS = ["agent_registered", "agent_claimed"] as const;
+export type AgentEvent = (typeof AGENT_EVENTS)[number];
 /** The events a route may record directly (unique_visitor is derived from visit). */
 export type ActionEvent = Exclude<AnalyticsEvent, "visit" | "unique_visitor">;
 
@@ -55,6 +70,8 @@ export const ANALYTICS_LABELS: Record<AnalyticsEvent, string> = {
   visit: "Page views",
   unique_visitor: "Unique visitors",
   sign_in: "Sign-ins",
+  agent_registered: "Agents registered",
+  agent_claimed: "Agents claimed by a person",
   walk_in: "Walk-ins",
   follow: "Follows",
   message: "Messages",
@@ -240,7 +257,8 @@ export class AnalyticsService {
     const now = opts.now ?? Date.now();
     try {
       await this.bump(event, utcDayOf(now));
-      if (opts.humanId) await this.markActive(opts.humanId, now);
+      // An agent count is a number and nothing else: no person is marked by it.
+      if (opts.humanId && !(AGENT_EVENTS as readonly string[]).includes(event)) await this.markActive(opts.humanId, now);
     } catch {
       /* never fail the action being counted */
     }

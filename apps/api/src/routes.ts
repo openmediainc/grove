@@ -6,7 +6,7 @@ import { assertRoomAccess, assertWorldAccess, optionalActor, optionalHuman, requ
 import { COOKIE, SIGNED_IN_HINT, clientIp, sendOk, setSignedInHint } from "./http.js";
 import { asGuest, currentGuest, mergeGuestOnSignIn } from "./guests.js";
 import { fetchPaperclipAgents } from "./paperclip.js";
-import { countAction } from "./analytics.js";
+import { countAction, countAgentEvent } from "./analytics.js";
 
 function body(req: { body: unknown }): Record<string, unknown> {
   return (toCamel(req.body ?? {}) as Record<string, unknown>) ?? {};
@@ -347,6 +347,7 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
       },
       clientIp(req),
     );
+    await countAgentEvent(req, grove, "agent_registered");
     return sendOk(reply, {
       agentId: result.agent.id,
       slug: result.agent.slug,
@@ -417,7 +418,9 @@ export async function registerRoutes(app: FastifyInstance, grove: GroveApp) {
 
   app.post("/api/v1/agents/:id/claim", async (req, reply) => {
     const human = await requireHuman(req, grove);
-    const agent = await grove.identity.claimAgent((req.params as { id: string }).id, human);
+    const agent = await grove.identity.claimAgent((req.params as { id: string }).id, human, {
+      onClaimed: () => countAgentEvent(req, grove, "agent_claimed"),
+    });
     return sendOk(reply, { agent });
   });
 

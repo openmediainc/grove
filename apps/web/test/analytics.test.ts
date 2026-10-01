@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { cohortPercent, countText, isNewView, mayCountVisit, weekLabel } from "../lib/analytics";
+import { FUNNEL_ROWS, cohortPercent, countText, isNewView, mayCountVisit, weekLabel } from "../lib/analytics";
 
 describe("page-view beacon", () => {
   it("honours Do Not Track and Global Privacy Control", () => {
@@ -35,5 +37,21 @@ describe("funnel card formatting", () => {
     expect(countText(3)).toBe("3");
     expect(countText(2.5)).toBe("2.5");
     expect(weekLabel("2026-09-07")).toBe("7 Sep");
+  });
+});
+
+describe("funnel rows on the /mod Overview", () => {
+  it("puts agents registered and agents claimed right after Sign-ins", () => {
+    const i = FUNNEL_ROWS.indexOf("sign_in");
+    expect(FUNNEL_ROWS.slice(i, i + 3)).toEqual(["sign_in", "agent_registered", "agent_claimed"]);
+  });
+
+  it("is the same list, in the same order, as the server's counters", () => {
+    const domain = readFileSync(
+      fileURLToPath(new URL("../../../packages/domain/src/services/analytics.ts", import.meta.url)),
+      "utf8",
+    );
+    const list = /export const ANALYTICS_EVENTS = \[([^\]]*)\]/.exec(domain)![1]!;
+    expect([...list.matchAll(/"([a-z_]+)"/g)].map((m) => m[1])).toEqual([...FUNNEL_ROWS]);
   });
 });

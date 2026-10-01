@@ -121,6 +121,8 @@ import { FirstVisitCard, MAP_KEYS, MENU_ROW, MapMenu, MapPanel, MenuHeading, Men
 import type { RoomPublicView } from "./RoomDrawer";
 import type { Arrival } from "./WalkInSheet";
 import { ArrivalToast } from "./ArrivalToast";
+import { BringAgentCard } from "./BringAgentCard";
+import { BRING_AGENT_DISMISSED_KEY, bringAgentVisible, ownsAnAgent } from "@/lib/bring-agent";
 import { readWorldUrl, roomHref, withHistory, withRoom, type WorldUrl } from "@/lib/world-url";
 import {
   FIRST_VISIT_KEY,
@@ -1199,6 +1201,15 @@ export function WorldMap() {
     setFirstVisit(false);
     writeFlag(browserStore(), FIRST_VISIT_KEY);
   }, []);
+  /** "Bring your agent" (lib/bring-agent): closed for good in this browser. True until read, so it never flashes. */
+  const [bringAgentDismissed, setBringAgentDismissed] = useState(true);
+  useEffect(() => setBringAgentDismissed(readFlag(browserStore(), BRING_AGENT_DISMISSED_KEY)), []);
+  const dismissBringAgent = useCallback(() => {
+    setBringAgentDismissed(true);
+    writeFlag(browserStore(), BRING_AGENT_DISMISSED_KEY);
+  }, []);
+  /** Whether the signed-in viewer already owns an agent; null while unknown or signed out. */
+  const [ownsAgent, setOwnsAgent] = useState<boolean | null>(null);
   useEffect(() => {
     if (!arrival) return;
     const t = window.setTimeout(() => setArrival(null), 4000);
@@ -4279,6 +4290,23 @@ export function WorldMap() {
     };
   }, []);
 
+  // Only asked of a signed-in viewer who has not closed the card: an owner never sees it.
+  useEffect(() => {
+    if (signedIn !== true || bringAgentDismissed) return;
+    let cancelled = false;
+    void api<{ agents?: unknown[] }>("/api/v1/studio/agents")
+      .then((r) => {
+        if (!cancelled) setOwnsAgent(ownsAnAgent(r));
+      })
+      .catch(() => {
+        // Unknown stays hidden: better no card than one over an owner's map.
+        if (!cancelled) setOwnsAgent(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn, bringAgentDismissed]);
+
   const drawerOpen = Boolean(worldUrl.room || worldUrl.history);
   const cta = mapCta({ signedIn, inside: meInside === true, roomOpen: Boolean(worldUrl.room) });
   // Once after sign-in: the walk-in sheet opens by itself on a bare map.
@@ -4418,6 +4446,28 @@ export function WorldMap() {
         {firstVisit && !drawerOpen ? (
           <div className={`w-full max-w-sm ${insetCollapsed ? "" : "max-sm:hidden"}`}>
             <FirstVisitCard onDismiss={dismissFirstVisit} howHref="/how-it-works" />
+          </div>
+        ) : null}
+        {/* "Bring your agent": in the same column, under the pill and the first-visit
+            card, so it can never cover either. Like that card it waits while a phone's
+            minimap is open, and it is gone while a drawer or a map panel (Record a shot,
+            Legend, Keyboard) is open, since on a phone those sit where it would. On a
+            short screen (under 720px tall) the two cards stacked would reach the bottom
+            controls, so it also waits until the first-visit card is closed. */}
+        {bringAgentVisible({
+          signedIn,
+          ownsAgent,
+          dismissed: bringAgentDismissed,
+          drawerOpen,
+          panelOpen: Boolean(recorder) || panel !== null,
+          bare,
+        }) ? (
+          <div
+            className={`w-full max-w-sm ${insetCollapsed ? "" : "max-sm:hidden"} ${
+              firstVisit ? "[@media(max-height:719px)]:hidden" : ""
+            }`}
+          >
+            <BringAgentCard onDismiss={dismissBringAgent} />
           </div>
         ) : null}
       </div>
