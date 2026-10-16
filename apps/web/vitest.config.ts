@@ -3,6 +3,7 @@ import { defineConfig } from "vitest/config";
 
 // Pure map logic only (replay, motion adapters). No DOM, no Next.
 export default defineConfig({
+  esbuild: { jsx: "automatic" },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL(".", import.meta.url)),

@@ -26,6 +26,7 @@ export const BRANDED_ROUTES: readonly string[] = [
   "/me",
   "/inbox",
   "/how-it-works",
+  "/join",
   "/login",
   "/mod",
   "/spaces/join",

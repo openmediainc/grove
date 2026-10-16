@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { BRING_AGENT_HOW_HREF, BRING_AGENT_LEAD, BRING_AGENT_LINE, BRING_AGENT_TITLE } from "@/lib/bring-agent";
+import { BRING_AGENT_HOW_HREF, JOIN_PATH, BRING_AGENT_LEAD, BRING_AGENT_LINE, BRING_AGENT_TITLE } from "@/lib/bring-agent";
 
 /** navigator.clipboard where the page may use it, else the old select-and-copy. */
-async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -94,6 +94,12 @@ export function BringAgentCard({ onDismiss }: { onDismiss: () => void }) {
           How it works →
         </Link>
       </div>
+      <Link
+        href={JOIN_PATH}
+        className="mt-1 inline-flex min-h-11 items-center text-gh-xs font-medium text-muted underline decoration-line-strong underline-offset-2 hover:text-ink hover:decoration-ink sm:min-h-0"
+      >
+        Share this page
+      </Link>
     </aside>
   );
 }
