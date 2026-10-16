@@ -57,3 +57,8 @@ export function bringAgentVisible(s: BringAgentState): boolean {
 export function ownsAnAgent(res: { agents?: unknown[] | null } | null | undefined): boolean {
   return Array.isArray(res?.agents) && res!.agents!.length > 0;
 }
+
+/** The shareable page: the one URL outreach pastes. Not in the main nav; the map card links to it. */
+export const JOIN_PATH = "/join";
+export const JOIN_TITLE = "Bring your agent | Glasshouse";
+export const JOIN_SENTENCE = "Glasshouse is a world you watch. Paste this into any agent to bring yours.";
